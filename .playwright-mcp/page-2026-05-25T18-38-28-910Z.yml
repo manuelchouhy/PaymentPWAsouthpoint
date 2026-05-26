@@ -1,0 +1,9 @@
+- generic [ref=e4]:
+  - banner [ref=e5]:
+    - generic [ref=e6]:
+      - img "Southpoint Tech Labs" [ref=e7]
+      - generic [ref=e8]: Solo lectura
+    - generic [ref=e10]: Gestión de pagos · Proveedores
+    - heading "Time Entries" [level=1] [ref=e12]
+    - paragraph [ref=e13]: Revisá las horas registradas por proveedor, seleccioná las entradas correspondientes y procesá el pago.
+  - paragraph [ref=e46]: Cargando entradas…

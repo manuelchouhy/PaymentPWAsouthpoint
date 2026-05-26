@@ -1,0 +1,6 @@
+[     434ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5174/node_modules/.vite/deps/chunk-EJTTOCY5.js?v=41114b40:21550
+[  558133ms] [ERROR] Access to fetch at 'https://wefgryuyfaxvtdhvdosg.supabase.co/functions/v1/sync-time-logs' from origin 'http://localhost:5174' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource. @ http://localhost:5174/:0
+[  558134ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://wefgryuyfaxvtdhvdosg.supabase.co/functions/v1/sync-time-logs:0
+[  558134ms] [ERROR] No se pudo sincronizar: Error: Failed to send a request to the Edge Function
+    at triggerSync (http://localhost:5174/src/lib/data.js:327:20)
+    at async handleRefresh (http://localhost:5174/src/App.jsx:179:22) @ http://localhost:5174/src/App.jsx:198

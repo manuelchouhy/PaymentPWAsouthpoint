@@ -1,0 +1,9 @@
+- generic [ref=e4]:
+  - img "Southpoint Tech Labs" [ref=e6]
+  - generic [ref=e8]: Gestión de pagos · Proveedores
+  - heading "Iniciar sesión" [level=1] [ref=e10]
+  - paragraph [ref=e11]: Acceso restringido al equipo. Ingresá con tu cuenta corporativa de Microsoft para continuar.
+  - button "Iniciar sesión con Microsoft" [ref=e12] [cursor=pointer]:
+    - img [ref=e13]
+    - generic [ref=e18]: Iniciar sesión con Microsoft
+  - generic [ref=e19]: Sesión segura vía Supabase Auth · Azure / Entra ID

@@ -1,0 +1,2617 @@
+- generic [ref=e4]:
+  - banner [ref=e5]:
+    - generic [ref=e6]:
+      - img "Southpoint Tech Labs" [ref=e7]
+      - generic [ref=e8]: Solo lectura
+    - generic [ref=e10]: Gestión de pagos · Proveedores
+    - heading "Time Entries" [level=1] [ref=e12]
+    - paragraph [ref=e13]: Revisá las horas registradas por proveedor, seleccioná las entradas correspondientes y procesá el pago.
+  - generic [ref=e47]:
+    - region "Progreso de billing" [ref=e48]:
+      - generic [ref=e49]:
+        - generic [ref=e50]: Proceso de billing
+        - generic [ref=e51]:
+          - generic [ref=e52]: 0.0 de 93.5
+          - generic [ref=e53]: h pagadas
+      - list [ref=e55]:
+        - listitem [ref=e56]:
+          - img [ref=e58]
+          - generic [ref=e61]:
+            - generic [ref=e62]: Aprobadas
+            - generic [ref=e63]: 93.5 h
+            - generic [ref=e64]: Universo facturable
+        - listitem [ref=e65]:
+          - img [ref=e67]
+          - generic [ref=e73]:
+            - generic [ref=e74]: En selección
+            - generic [ref=e75]: 0.0 h
+            - generic [ref=e76]: Sin selección activa
+        - listitem [ref=e77]:
+          - img [ref=e79]
+          - generic [ref=e82]:
+            - generic [ref=e83]: Pagadas
+            - generic [ref=e84]: 0.0 h
+            - generic [ref=e85]: Sin pagos registrados
+    - generic [ref=e86]:
+      - generic [ref=e87]:
+        - generic [ref=e88]:
+          - generic [ref=e89]: Filtrar por proveedor
+          - generic [ref=e90]:
+            - img
+            - combobox "Filtrar entradas por proveedor" [ref=e91] [cursor=pointer]:
+              - option "All users" [selected]
+              - option "Claudio Riva"
+              - option "Eduardo Cardozo"
+              - option "Felipe Lenzi"
+              - option "Florencia Sarasua"
+              - option "Manuel Chouhy"
+              - option "Martin da Silva"
+              - option "Martin de Leon"
+            - img
+        - button "Sincronizando…" [disabled] [ref=e3067]:
+          - img [ref=e93]
+          - generic [ref=e98]: Sincronizando…
+      - generic [ref=e99]: 110 entradas
+    - generic [ref=e101]:
+      - generic [ref=e102]:
+        - generic [ref=e103]: Selected Hours
+        - generic [ref=e104]:
+          - generic [ref=e105]: "0.0"
+          - generic [ref=e106]: h
+      - paragraph [ref=e108]: Seleccioná filas para sumar horas y habilitar el pago.
+      - button "Pay" [disabled] [ref=e109]:
+        - img [ref=e110]
+        - text: Pay
+    - table [ref=e114]:
+      - rowgroup [ref=e115]:
+        - row "Seleccionar todas las filas pendientes visibles User Project Task Description Notes Date Hours Status Payment Invoice Transaction" [ref=e116]:
+          - columnheader "Seleccionar todas las filas pendientes visibles" [ref=e117]:
+            - checkbox "Seleccionar todas las filas pendientes visibles" [ref=e119] [cursor=pointer]
+          - columnheader "User" [ref=e121]
+          - columnheader "Project" [ref=e122]
+          - columnheader "Task" [ref=e123]
+          - columnheader "Description" [ref=e124]
+          - columnheader "Notes" [ref=e125]
+          - columnheader "Date" [ref=e126]
+          - columnheader "Hours" [ref=e127]
+          - columnheader "Status" [ref=e128]
+          - columnheader "Payment" [ref=e129]
+          - columnheader "Invoice" [ref=e130]
+          - columnheader "Transaction" [ref=e131]
+      - rowgroup [ref=e132]:
+        - 'row "Seleccionar entrada de Martin de Leon — Branch manager hierarchy fix — RVP fallback + same-tier name/email Martin de Leon KBS Order Form Branch manager hierarchy fix — RVP fallback + same-tier name/email Manager hierarchy fix: Domo PEOPLE dataset query + diagnosis (37 RVP-only branches blocked + Frankenstein name/email) + normalizePerson tiered walk Branch->Area->RDO->RVP + same-tier pairing + 4 unit tests + deploy + CDP live verify (DFW->Claudia Brancato, AR-Arkansas blocked w/ new copy) + PR #18 + push. Commit 838e391. Manager hierarchy fix: Domo PEOPLE dataset query + diagnosis (37 RVP-only branches blocked + Frankenstein name/email) + normalizePerson tiered walk Branch->Area->RDO->RVP + same-tier pairing + 4 unit tests + deploy + CDP live verify (DFW->Claudia Brancato, AR-Arkansas blocked w/ new copy) + PR #18 + push. Commit 838e391. 22 may 2026 2.0 Pending Pendiente — —" [ref=e133] [cursor=pointer]':
+          - cell "Seleccionar entrada de Martin de Leon — Branch manager hierarchy fix — RVP fallback + same-tier name/email" [ref=e134]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Branch manager hierarchy fix — RVP fallback + same-tier name/email" [ref=e136]
+          - cell "Martin de Leon" [ref=e138]:
+            - generic [ref=e139]:
+              - generic [ref=e140]: ML
+              - generic [ref=e141]: Martin de Leon
+          - cell "KBS Order Form" [ref=e142]
+          - cell "Branch manager hierarchy fix — RVP fallback + same-tier name/email" [ref=e143]
+          - 'cell "Manager hierarchy fix: Domo PEOPLE dataset query + diagnosis (37 RVP-only branches blocked + Frankenstein name/email) + normalizePerson tiered walk Branch->Area->RDO->RVP + same-tier pairing + 4 unit tests + deploy + CDP live verify (DFW->Claudia Brancato, AR-Arkansas blocked w/ new copy) + PR #18 + push. Commit 838e391." [ref=e144]'
+          - 'cell "Manager hierarchy fix: Domo PEOPLE dataset query + diagnosis (37 RVP-only branches blocked + Frankenstein name/email) + normalizePerson tiered walk Branch->Area->RDO->RVP + same-tier pairing + 4 unit tests + deploy + CDP live verify (DFW->Claudia Brancato, AR-Arkansas blocked w/ new copy) + PR #18 + push. Commit 838e391." [ref=e145]'
+          - cell "22 may 2026" [ref=e146]
+          - cell "2.0" [ref=e147]
+          - cell "Pending" [ref=e148]:
+            - generic [ref=e149]:
+              - img [ref=e150]
+              - text: Pending
+          - cell "Pendiente" [ref=e153]:
+            - generic [ref=e154]:
+              - img [ref=e155]
+              - text: Pendiente
+          - cell "—" [ref=e158]
+          - cell "—" [ref=e159]
+        - 'row "Seleccionar entrada de Martin de Leon — orders-app: tabs + ApproveSite/DenySite + 4th blocker + dispatch Martin de Leon KBS Order Form orders-app: tabs + ApproveSite/DenySite + 4th blocker + dispatch Manual E2E completo 6/6 escenarios via CDP: A submit new-site wizard (KBS-2026-00118) + B approve site live (00116) + C deny site live (00117) + D regular order no tabs + 4 blockers + E reuse approved kbs_id. Screenshots + REPORT.md. Manual E2E completo 6/6 escenarios via CDP: A submit new-site wizard (KBS-2026-00118) + B approve site live (00116) + C deny site live (00117) + D regular order no tabs + 4 blockers + E reuse approved kbs_id. Screenshots + REPORT.md. 22 may 2026 2.5 Pending Pendiente — —" [ref=e160] [cursor=pointer]':
+          - 'cell "Seleccionar entrada de Martin de Leon — orders-app: tabs + ApproveSite/DenySite + 4th blocker + dispatch" [ref=e161]':
+            - 'checkbox "Seleccionar entrada de Martin de Leon — orders-app: tabs + ApproveSite/DenySite + 4th blocker + dispatch" [ref=e163]'
+          - cell "Martin de Leon" [ref=e165]:
+            - generic [ref=e166]:
+              - generic [ref=e167]: ML
+              - generic [ref=e168]: Martin de Leon
+          - cell "KBS Order Form" [ref=e169]
+          - 'cell "orders-app: tabs + ApproveSite/DenySite + 4th blocker + dispatch" [ref=e170]'
+          - 'cell "Manual E2E completo 6/6 escenarios via CDP: A submit new-site wizard (KBS-2026-00118) + B approve site live (00116) + C deny site live (00117) + D regular order no tabs + 4 blockers + E reuse approved kbs_id. Screenshots + REPORT.md." [ref=e171]'
+          - 'cell "Manual E2E completo 6/6 escenarios via CDP: A submit new-site wizard (KBS-2026-00118) + B approve site live (00116) + C deny site live (00117) + D regular order no tabs + 4 blockers + E reuse approved kbs_id. Screenshots + REPORT.md." [ref=e172]'
+          - cell "22 may 2026" [ref=e173]
+          - cell "2.5" [ref=e174]
+          - cell "Pending" [ref=e175]:
+            - generic [ref=e176]:
+              - img [ref=e177]
+              - text: Pending
+          - cell "Pendiente" [ref=e180]:
+            - generic [ref=e181]:
+              - img [ref=e182]
+              - text: Pendiente
+          - cell "—" [ref=e185]
+          - cell "—" [ref=e186]
+        - row [ref=e187] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — MySQL migration — orders columns + approved_sites table" [ref=e188]:
+            - checkbox "Seleccionar entrada de Claudio Riva — MySQL migration — orders columns + approved_sites table" [ref=e190]
+          - cell "Claudio Riva" [ref=e192]:
+            - generic [ref=e193]:
+              - generic [ref=e194]: CR
+              - generic [ref=e195]: Claudio Riva
+          - cell "KBS Order Form" [ref=e196]
+          - cell "MySQL migration — orders columns + approved_sites table" [ref=e197]
+          - cell [ref=e198]
+          - cell [ref=e199]
+          - cell "22 may 2026" [ref=e200]
+          - cell "1.0" [ref=e201]
+          - cell "Approved" [ref=e202]:
+            - generic [ref=e203]:
+              - img [ref=e204]
+              - text: Approved
+          - cell "Pendiente" [ref=e206]:
+            - generic [ref=e207]:
+              - img [ref=e208]
+              - text: Pendiente
+          - cell "—" [ref=e211]
+          - cell "—" [ref=e212]
+        - row [ref=e213] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — /orders extended + approve_site/deny_site + GET endpoints + deny enum site_id_invalid" [ref=e214]:
+            - checkbox "Seleccionar entrada de Claudio Riva — /orders extended + approve_site/deny_site + GET endpoints + deny enum site_id_invalid" [ref=e216]
+          - cell "Claudio Riva" [ref=e218]:
+            - generic [ref=e219]:
+              - generic [ref=e220]: CR
+              - generic [ref=e221]: Claudio Riva
+          - cell "KBS Order Form" [ref=e222]
+          - cell "/orders extended + approve_site/deny_site + GET endpoints + deny enum site_id_invalid" [ref=e223]
+          - cell [ref=e224]
+          - cell [ref=e225]
+          - cell "22 may 2026" [ref=e226]
+          - cell "1.0" [ref=e227]
+          - cell "Approved" [ref=e228]:
+            - generic [ref=e229]:
+              - img [ref=e230]
+              - text: Approved
+          - cell "Pendiente" [ref=e232]:
+            - generic [ref=e233]:
+              - img [ref=e234]
+              - text: Pendiente
+          - cell "—" [ref=e237]
+          - cell "—" [ref=e238]
+        - 'row "Seleccionar entrada de Martin de Leon — Approver + Pipeline table layout polish Martin de Leon KBS Order Form Approver + Pipeline table layout polish Approver + Pipeline table layout polish: Branch column hidden in submitted (was 140px empty cells, 0/72 populated) + Submitted col 108->130px + Pipeline Site capped 320px + CDP live verify (Pending 7 cols, Approved 8 cols w/Branch, Pipeline balanced). Commit f9bef54, added to PR #18. Approver + Pipeline table layout polish: Branch column hidden in submitted (was 140px empty cells, 0/72 populated) + Submitted col 108->130px + Pipeline Site capped 320px + CDP live verify (Pending 7 cols, Approved 8 cols w/Branch, Pipeline balanced). Commit f9bef54, added to PR #18. 22 may 2026 1.5 Pending Pendiente — —" [ref=e239] [cursor=pointer]':
+          - cell "Seleccionar entrada de Martin de Leon — Approver + Pipeline table layout polish" [ref=e240]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Approver + Pipeline table layout polish" [ref=e242]
+          - cell "Martin de Leon" [ref=e244]:
+            - generic [ref=e245]:
+              - generic [ref=e246]: ML
+              - generic [ref=e247]: Martin de Leon
+          - cell "KBS Order Form" [ref=e248]
+          - cell "Approver + Pipeline table layout polish" [ref=e249]
+          - 'cell "Approver + Pipeline table layout polish: Branch column hidden in submitted (was 140px empty cells, 0/72 populated) + Submitted col 108->130px + Pipeline Site capped 320px + CDP live verify (Pending 7 cols, Approved 8 cols w/Branch, Pipeline balanced). Commit f9bef54, added to PR #18." [ref=e250]'
+          - 'cell "Approver + Pipeline table layout polish: Branch column hidden in submitted (was 140px empty cells, 0/72 populated) + Submitted col 108->130px + Pipeline Site capped 320px + CDP live verify (Pending 7 cols, Approved 8 cols w/Branch, Pipeline balanced). Commit f9bef54, added to PR #18." [ref=e251]'
+          - cell "22 may 2026" [ref=e252]
+          - cell "1.5" [ref=e253]
+          - cell "Pending" [ref=e254]:
+            - generic [ref=e255]:
+              - img [ref=e256]
+              - text: Pending
+          - cell "Pendiente" [ref=e259]:
+            - generic [ref=e260]:
+              - img [ref=e261]
+              - text: Pendiente
+          - cell "—" [ref=e264]
+          - cell "—" [ref=e265]
+        - 'row "Seleccionar entrada de Martin de Leon — Project Management Martin de Leon KBS Order Form Project Management Stage IV closure PM: PR #17 (push branch + gh pr create + body) + timesheet recuento Thu+Fri + Zoho task creation T68/T69 + status->Completed. Stage IV closure PM: PR #17 (push branch + gh pr create + body) + timesheet recuento Thu+Fri + Zoho task creation T68/T69 + status->Completed. 22 may 2026 0.5 Pending Pendiente — —" [ref=e266] [cursor=pointer]':
+          - cell "Seleccionar entrada de Martin de Leon — Project Management" [ref=e267]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Project Management" [ref=e269]
+          - cell "Martin de Leon" [ref=e271]:
+            - generic [ref=e272]:
+              - generic [ref=e273]: ML
+              - generic [ref=e274]: Martin de Leon
+          - cell "KBS Order Form" [ref=e275]
+          - cell "Project Management" [ref=e276]
+          - 'cell "Stage IV closure PM: PR #17 (push branch + gh pr create + body) + timesheet recuento Thu+Fri + Zoho task creation T68/T69 + status->Completed." [ref=e277]'
+          - 'cell "Stage IV closure PM: PR #17 (push branch + gh pr create + body) + timesheet recuento Thu+Fri + Zoho task creation T68/T69 + status->Completed." [ref=e278]'
+          - cell "22 may 2026" [ref=e279]
+          - cell "0.5" [ref=e280]
+          - cell "Pending" [ref=e281]:
+            - generic [ref=e282]:
+              - img [ref=e283]
+              - text: Pending
+          - cell "Pendiente" [ref=e286]:
+            - generic [ref=e287]:
+              - img [ref=e288]
+              - text: Pendiente
+          - cell "—" [ref=e291]
+          - cell "—" [ref=e292]
+        - row "Seleccionar entrada de Florencia Sarasua — Internal Meeting Florencia Sarasua HSS-DOMO IT Support Project Internal Meeting Zoho Project Zoho Project 21 may 2026 0.5 Pending Pendiente — —" [ref=e293] [cursor=pointer]:
+          - cell "Seleccionar entrada de Florencia Sarasua — Internal Meeting" [ref=e294]:
+            - checkbox "Seleccionar entrada de Florencia Sarasua — Internal Meeting" [ref=e296]
+          - cell "Florencia Sarasua" [ref=e298]:
+            - generic [ref=e299]:
+              - generic [ref=e300]: FS
+              - generic [ref=e301]: Florencia Sarasua
+          - cell "HSS-DOMO IT Support Project" [ref=e302]
+          - cell "Internal Meeting" [ref=e303]
+          - cell "Zoho Project" [ref=e304]
+          - cell "Zoho Project" [ref=e305]
+          - cell "21 may 2026" [ref=e306]
+          - cell "0.5" [ref=e307]
+          - cell "Pending" [ref=e308]:
+            - generic [ref=e309]:
+              - img [ref=e310]
+              - text: Pending
+          - cell "Pendiente" [ref=e313]:
+            - generic [ref=e314]:
+              - img [ref=e315]
+              - text: Pendiente
+          - cell "—" [ref=e318]
+          - cell "—" [ref=e319]
+        - row "Seleccionar entrada de Florencia Sarasua — Client Meeting Florencia Sarasua HSS-DOMO IT Support Project Client Meeting Open Items Meeting Open Items Meeting 21 may 2026 1.0 Pending Pendiente — —" [ref=e320] [cursor=pointer]:
+          - cell "Seleccionar entrada de Florencia Sarasua — Client Meeting" [ref=e321]:
+            - checkbox "Seleccionar entrada de Florencia Sarasua — Client Meeting" [ref=e323]
+          - cell "Florencia Sarasua" [ref=e325]:
+            - generic [ref=e326]:
+              - generic [ref=e327]: FS
+              - generic [ref=e328]: Florencia Sarasua
+          - cell "HSS-DOMO IT Support Project" [ref=e329]
+          - cell "Client Meeting" [ref=e330]
+          - cell "Open Items Meeting" [ref=e331]
+          - cell "Open Items Meeting" [ref=e332]
+          - cell "21 may 2026" [ref=e333]
+          - cell "1.0" [ref=e334]
+          - cell "Pending" [ref=e335]:
+            - generic [ref=e336]:
+              - img [ref=e337]
+              - text: Pending
+          - cell "Pendiente" [ref=e340]:
+            - generic [ref=e341]:
+              - img [ref=e342]
+              - text: Pendiente
+          - cell "—" [ref=e345]
+          - cell "—" [ref=e346]
+        - row [ref=e347] [cursor=pointer]:
+          - cell "Seleccionar entrada de Florencia Sarasua — General Maintenance" [ref=e348]:
+            - checkbox "Seleccionar entrada de Florencia Sarasua — General Maintenance" [ref=e350]
+          - cell "Florencia Sarasua" [ref=e352]:
+            - generic [ref=e353]:
+              - generic [ref=e354]: FS
+              - generic [ref=e355]: Florencia Sarasua
+          - cell "HSS-DOMO IT Support Project" [ref=e356]
+          - cell "General Maintenance" [ref=e357]
+          - cell "- Missing Avionte Company Activities - We are missing activities, especially in D&W (D & W Activities (including Business Cards collection) - Domo)- SALES QUOTA:We must consider the opportunities where we have Opp_Co-Owner (at SalesForceOppMASTER_ETL - Domo) and if not null, we need to distribute 50/50 the actual revenue generated. You will use customer code to identify allocation (Owner – Co-Onwer). Think about it and let me know options. SALES QUOTA MONTHLY DETAILS_DRILLDOWN - Domo - Open Orders cards are getting empty until 11:30 am everyday. Specifically the ones from ds PRO|ASSIGN AND ORDERS FULL DB - Domo." [ref=e358]
+          - cell "- Missing Avionte Company Activities - We are missing activities, especially in D&W (D & W Activities (including Business Cards collection) - Domo)- SALES QUOTA:We must consider the opportunities where we have Opp_Co-Owner (at SalesForceOppMASTER_ETL - Domo) and if not null, we need to distribute 50/50 the actual revenue generated. You will use customer code to identify allocation (Owner – Co-Onwer). Think about it and let me know options. SALES QUOTA MONTHLY DETAILS_DRILLDOWN - Domo - Open Orders cards are getting empty until 11:30 am everyday. Specifically the ones from ds PRO|ASSIGN AND ORDERS FULL DB - Domo." [ref=e359]
+          - cell "21 may 2026" [ref=e360]
+          - cell "6.5" [ref=e361]
+          - cell "Pending" [ref=e362]:
+            - generic [ref=e363]:
+              - img [ref=e364]
+              - text: Pending
+          - cell "Pendiente" [ref=e367]:
+            - generic [ref=e368]:
+              - img [ref=e369]
+              - text: Pendiente
+          - cell "—" [ref=e372]
+          - cell "—" [ref=e373]
+        - 'row "Seleccionar entrada de Martin da Silva — New Account Field: Service Type Martin da Silva SalesForce New Account Field: Service Type — 21 may 2026 1.0 Pending Pendiente — —" [ref=e374] [cursor=pointer]':
+          - 'cell "Seleccionar entrada de Martin da Silva — New Account Field: Service Type" [ref=e375]':
+            - 'checkbox "Seleccionar entrada de Martin da Silva — New Account Field: Service Type" [ref=e377]'
+          - cell "Martin da Silva" [ref=e379]:
+            - generic [ref=e380]:
+              - generic [ref=e381]: MS
+              - generic [ref=e382]: Martin da Silva
+          - cell "SalesForce" [ref=e383]
+          - 'cell "New Account Field: Service Type" [ref=e384]'
+          - cell [ref=e385]
+          - cell "—" [ref=e386]
+          - cell "21 may 2026" [ref=e387]
+          - cell "1.0" [ref=e388]
+          - cell "Pending" [ref=e389]:
+            - generic [ref=e390]:
+              - img [ref=e391]
+              - text: Pending
+          - cell "Pendiente" [ref=e394]:
+            - generic [ref=e395]:
+              - img [ref=e396]
+              - text: Pendiente
+          - cell "—" [ref=e399]
+          - cell "—" [ref=e400]
+        - 'row "Seleccionar entrada de Martin de Leon — NEW SITE section in submit + denied workflow emails Martin de Leon KBS Order Form NEW SITE section in submit + denied workflow emails NEW SITE section in submit + denied workflow emails. Commits: 3469d4d (fixtures), 16ec2bc (renderNewSiteSection), 04fd378 (apply to emails), 1bd9d18 (paste-manual handoff), d43f597 (snapshot + paste-ready). NEW SITE section in submit + denied workflow emails. Commits: 3469d4d (fixtures), 16ec2bc (renderNewSiteSection), 04fd378 (apply to emails), 1bd9d18 (paste-manual handoff), d43f597 (snapshot + paste-ready). 21 may 2026 0.8 Pending Pendiente — —" [ref=e401] [cursor=pointer]':
+          - cell "Seleccionar entrada de Martin de Leon — NEW SITE section in submit + denied workflow emails" [ref=e402]:
+            - checkbox "Seleccionar entrada de Martin de Leon — NEW SITE section in submit + denied workflow emails" [ref=e404]
+          - cell "Martin de Leon" [ref=e406]:
+            - generic [ref=e407]:
+              - generic [ref=e408]: ML
+              - generic [ref=e409]: Martin de Leon
+          - cell "KBS Order Form" [ref=e410]
+          - cell "NEW SITE section in submit + denied workflow emails" [ref=e411]
+          - 'cell "NEW SITE section in submit + denied workflow emails. Commits: 3469d4d (fixtures), 16ec2bc (renderNewSiteSection), 04fd378 (apply to emails), 1bd9d18 (paste-manual handoff), d43f597 (snapshot + paste-ready)." [ref=e412]'
+          - 'cell "NEW SITE section in submit + denied workflow emails. Commits: 3469d4d (fixtures), 16ec2bc (renderNewSiteSection), 04fd378 (apply to emails), 1bd9d18 (paste-manual handoff), d43f597 (snapshot + paste-ready)." [ref=e413]'
+          - cell "21 may 2026" [ref=e414]
+          - cell "0.8" [ref=e415]
+          - cell "Pending" [ref=e416]:
+            - generic [ref=e417]:
+              - img [ref=e418]
+              - text: Pending
+          - cell "Pendiente" [ref=e421]:
+            - generic [ref=e422]:
+              - img [ref=e423]
+              - text: Pendiente
+          - cell "—" [ref=e426]
+          - cell "—" [ref=e427]
+        - 'row "Seleccionar entrada de Martin de Leon — orders-app: tabs + ApproveSite/DenySite + 4th blocker + dispatch Martin de Leon KBS Order Form orders-app: tabs + ApproveSite/DenySite + 4th blocker + dispatch orders-app: tabs + ApproveSite/DenySite + 4th blocker + dispatch + browser E2E. Commits: 6403a01, c16885f, bd6dd30, 880c5da, 880523c, fdc6d2d, b1a03bf, b3ea6c7. Browser-validated end-to-end via CDP. orders-app: tabs + ApproveSite/DenySite + 4th blocker + dispatch + browser E2E. Commits: 6403a01, c16885f, bd6dd30, 880c5da, 880523c, fdc6d2d, b1a03bf, b3ea6c7. Browser-validated end-to-end via CDP. 21 may 2026 3.5 Pending Pendiente — —" [ref=e428] [cursor=pointer]':
+          - 'cell "Seleccionar entrada de Martin de Leon — orders-app: tabs + ApproveSite/DenySite + 4th blocker + dispatch" [ref=e429]':
+            - 'checkbox "Seleccionar entrada de Martin de Leon — orders-app: tabs + ApproveSite/DenySite + 4th blocker + dispatch" [ref=e431]'
+          - cell "Martin de Leon" [ref=e433]:
+            - generic [ref=e434]:
+              - generic [ref=e435]: ML
+              - generic [ref=e436]: Martin de Leon
+          - cell "KBS Order Form" [ref=e437]
+          - 'cell "orders-app: tabs + ApproveSite/DenySite + 4th blocker + dispatch" [ref=e438]'
+          - 'cell "orders-app: tabs + ApproveSite/DenySite + 4th blocker + dispatch + browser E2E. Commits: 6403a01, c16885f, bd6dd30, 880c5da, 880523c, fdc6d2d, b1a03bf, b3ea6c7. Browser-validated end-to-end via CDP." [ref=e439]'
+          - 'cell "orders-app: tabs + ApproveSite/DenySite + 4th blocker + dispatch + browser E2E. Commits: 6403a01, c16885f, bd6dd30, 880c5da, 880523c, fdc6d2d, b1a03bf, b3ea6c7. Browser-validated end-to-end via CDP." [ref=e440]'
+          - cell "21 may 2026" [ref=e441]
+          - cell "3.5" [ref=e442]
+          - cell "Pending" [ref=e443]:
+            - generic [ref=e444]:
+              - img [ref=e445]
+              - text: Pending
+          - cell "Pendiente" [ref=e448]:
+            - generic [ref=e449]:
+              - img [ref=e450]
+              - text: Pendiente
+          - cell "—" [ref=e453]
+          - cell "—" [ref=e454]
+        - 'row "Seleccionar entrada de Martin de Leon — Project Management Martin de Leon KBS Order Form Project Management Stage IV PM: b377958 backend handoff spec for Claudio (T62+T63) + a0f853f EOD handoff doc. Stage IV PM: b377958 backend handoff spec for Claudio (T62+T63) + a0f853f EOD handoff doc. 21 may 2026 0.5 Pending Pendiente — —" [ref=e455] [cursor=pointer]':
+          - cell "Seleccionar entrada de Martin de Leon — Project Management" [ref=e456]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Project Management" [ref=e458]
+          - cell "Martin de Leon" [ref=e460]:
+            - generic [ref=e461]:
+              - generic [ref=e462]: ML
+              - generic [ref=e463]: Martin de Leon
+          - cell "KBS Order Form" [ref=e464]
+          - cell "Project Management" [ref=e465]
+          - 'cell "Stage IV PM: b377958 backend handoff spec for Claudio (T62+T63) + a0f853f EOD handoff doc." [ref=e466]'
+          - 'cell "Stage IV PM: b377958 backend handoff spec for Claudio (T62+T63) + a0f853f EOD handoff doc." [ref=e467]'
+          - cell "21 may 2026" [ref=e468]
+          - cell "0.5" [ref=e469]
+          - cell "Pending" [ref=e470]:
+            - generic [ref=e471]:
+              - img [ref=e472]
+              - text: Pending
+          - cell "Pendiente" [ref=e475]:
+            - generic [ref=e476]:
+              - img [ref=e477]
+              - text: Pendiente
+          - cell "—" [ref=e480]
+          - cell "—" [ref=e481]
+        - 'row "Seleccionar entrada de Martin de Leon — /api/sites union AMAZONSITELIST + approved_sites + pending_sites Martin de Leon KBS Order Form /api/sites union AMAZONSITELIST + approved_sites + pending_sites CE getSites unions AMAZONSITELIST + approved_sites + pending_sites. Commits: e478327 (unionSites helper), eb6b5b3 (CE getSites union), 182e068 (submit-order client union), 23d971f (isNewSite guard). CE getSites unions AMAZONSITELIST + approved_sites + pending_sites. Commits: e478327 (unionSites helper), eb6b5b3 (CE getSites union), 182e068 (submit-order client union), 23d971f (isNewSite guard). 21 may 2026 0.8 Pending Pendiente — —" [ref=e482] [cursor=pointer]':
+          - cell "Seleccionar entrada de Martin de Leon — /api/sites union AMAZONSITELIST + approved_sites + pending_sites" [ref=e483]:
+            - checkbox "Seleccionar entrada de Martin de Leon — /api/sites union AMAZONSITELIST + approved_sites + pending_sites" [ref=e485]
+          - cell "Martin de Leon" [ref=e487]:
+            - generic [ref=e488]:
+              - generic [ref=e489]: ML
+              - generic [ref=e490]: Martin de Leon
+          - cell "KBS Order Form" [ref=e491]
+          - cell "/api/sites union AMAZONSITELIST + approved_sites + pending_sites" [ref=e492]
+          - 'cell "CE getSites unions AMAZONSITELIST + approved_sites + pending_sites. Commits: e478327 (unionSites helper), eb6b5b3 (CE getSites union), 182e068 (submit-order client union), 23d971f (isNewSite guard)." [ref=e493]'
+          - 'cell "CE getSites unions AMAZONSITELIST + approved_sites + pending_sites. Commits: e478327 (unionSites helper), eb6b5b3 (CE getSites union), 182e068 (submit-order client union), 23d971f (isNewSite guard)." [ref=e494]'
+          - cell "21 may 2026" [ref=e495]
+          - cell "0.8" [ref=e496]
+          - cell "Pending" [ref=e497]:
+            - generic [ref=e498]:
+              - img [ref=e499]
+              - text: Pending
+          - cell "Pendiente" [ref=e502]:
+            - generic [ref=e503]:
+              - img [ref=e504]
+              - text: Pendiente
+          - cell "—" [ref=e507]
+          - cell "—" [ref=e508]
+        - row "Seleccionar entrada de Claudio Riva — CRUD endpoints for the approvers list Claudio Riva KBS Order Form CRUD endpoints for the approvers list New endpoints created to fit new client requirements from node.js backend New endpoints created to fit new client requirements from node.js backend 21 may 2026 1.0 Approved Pendiente — —" [ref=e509] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — CRUD endpoints for the approvers list" [ref=e510]:
+            - checkbox "Seleccionar entrada de Claudio Riva — CRUD endpoints for the approvers list" [ref=e512]
+          - cell "Claudio Riva" [ref=e514]:
+            - generic [ref=e515]:
+              - generic [ref=e516]: CR
+              - generic [ref=e517]: Claudio Riva
+          - cell "KBS Order Form" [ref=e518]
+          - cell "CRUD endpoints for the approvers list" [ref=e519]
+          - cell "New endpoints created to fit new client requirements from node.js backend" [ref=e520]
+          - cell "New endpoints created to fit new client requirements from node.js backend" [ref=e521]
+          - cell "21 may 2026" [ref=e522]
+          - cell "1.0" [ref=e523]
+          - cell "Approved" [ref=e524]:
+            - generic [ref=e525]:
+              - img [ref=e526]
+              - text: Approved
+          - cell "Pendiente" [ref=e528]:
+            - generic [ref=e529]:
+              - img [ref=e530]
+              - text: Pendiente
+          - cell "—" [ref=e533]
+          - cell "—" [ref=e534]
+        - row "Seleccionar entrada de Claudio Riva — GET endpoint for the HSS user pool (Settings combobox) Claudio Riva KBS Order Form GET endpoint for the HSS user pool (Settings combobox) Done and tested from backend server Done and tested from backend server 21 may 2026 1.0 Approved Pendiente — —" [ref=e535] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — GET endpoint for the HSS user pool (Settings combobox)" [ref=e536]:
+            - checkbox "Seleccionar entrada de Claudio Riva — GET endpoint for the HSS user pool (Settings combobox)" [ref=e538]
+          - cell "Claudio Riva" [ref=e540]:
+            - generic [ref=e541]:
+              - generic [ref=e542]: CR
+              - generic [ref=e543]: Claudio Riva
+          - cell "KBS Order Form" [ref=e544]
+          - cell "GET endpoint for the HSS user pool (Settings combobox)" [ref=e545]
+          - cell "Done and tested from backend server" [ref=e546]
+          - cell "Done and tested from backend server" [ref=e547]
+          - cell "21 may 2026" [ref=e548]
+          - cell "1.0" [ref=e549]
+          - cell "Approved" [ref=e550]:
+            - generic [ref=e551]:
+              - img [ref=e552]
+              - text: Approved
+          - cell "Pendiente" [ref=e554]:
+            - generic [ref=e555]:
+              - img [ref=e556]
+              - text: Pendiente
+          - cell "—" [ref=e559]
+          - cell "—" [ref=e560]
+        - 'row "Seleccionar entrada de Martin de Leon — submit-order: CTA + 9-field form + pending tag + payload Martin de Leon KBS Order Form submit-order: CTA + 9-field form + pending tag + payload submit-order: CTA + 9-field form + pending tag + payload. Commits: 216204d (initial state), e20e651 (buildOrderPayload), 21c5746 (CTA + 9 fields), a3e657a (validate), 9c446ce (kbsId from newSiteData). submit-order: CTA + 9-field form + pending tag + payload. Commits: 216204d (initial state), e20e651 (buildOrderPayload), 21c5746 (CTA + 9 fields), a3e657a (validate), 9c446ce (kbsId from newSiteData). 21 may 2026 1.5 Pending Pendiente — —" [ref=e561] [cursor=pointer]':
+          - 'cell "Seleccionar entrada de Martin de Leon — submit-order: CTA + 9-field form + pending tag + payload" [ref=e562]':
+            - 'checkbox "Seleccionar entrada de Martin de Leon — submit-order: CTA + 9-field form + pending tag + payload" [ref=e564]'
+          - cell "Martin de Leon" [ref=e566]:
+            - generic [ref=e567]:
+              - generic [ref=e568]: ML
+              - generic [ref=e569]: Martin de Leon
+          - cell "KBS Order Form" [ref=e570]
+          - 'cell "submit-order: CTA + 9-field form + pending tag + payload" [ref=e571]'
+          - 'cell "submit-order: CTA + 9-field form + pending tag + payload. Commits: 216204d (initial state), e20e651 (buildOrderPayload), 21c5746 (CTA + 9 fields), a3e657a (validate), 9c446ce (kbsId from newSiteData)." [ref=e572]'
+          - 'cell "submit-order: CTA + 9-field form + pending tag + payload. Commits: 216204d (initial state), e20e651 (buildOrderPayload), 21c5746 (CTA + 9 fields), a3e657a (validate), 9c446ce (kbsId from newSiteData)." [ref=e573]'
+          - cell "21 may 2026" [ref=e574]
+          - cell "1.5" [ref=e575]
+          - cell "Pending" [ref=e576]:
+            - generic [ref=e577]:
+              - img [ref=e578]
+              - text: Pending
+          - cell "Pendiente" [ref=e581]:
+            - generic [ref=e582]:
+              - img [ref=e583]
+              - text: Pendiente
+          - cell "—" [ref=e586]
+          - cell "—" [ref=e587]
+        - row [ref=e588] [cursor=pointer]:
+          - cell "Seleccionar entrada de Florencia Sarasua — General Maintenance" [ref=e589]:
+            - checkbox "Seleccionar entrada de Florencia Sarasua — General Maintenance" [ref=e591]
+          - cell "Florencia Sarasua" [ref=e593]:
+            - generic [ref=e594]:
+              - generic [ref=e595]: FS
+              - generic [ref=e596]: Florencia Sarasua
+          - cell "HSS-DOMO IT Support Project" [ref=e597]
+          - cell "General Maintenance" [ref=e598]
+          - 'cell "- Wide growth:Wide Growth: Department to Region - Domo card is showing F&B variances instead of F&B. I already add those in the Dept Reallocated webform but is not fixing the issue.- SALES QUOTA:We must consider the opportunities where we have Opp_Co-Owner (at SalesForceOppMASTER_ETL - Domo) and if not null, we need to distribute 50/50 the actual revenue generated. You will use customer code to identify allocation (Owner – Co-Onwer). Think about it and let me know options. SALES QUOTA MONTHLY DETAILS_DRILLDOWN - Domo- Open Orders cards are getting empty until 11:30 am everyday. Specifically the ones from ds PRO|ASSIGN AND ORDERS FULL DB - Domo.- We are missing activities, especially in D&W (D & W Activities (including Business Cards collection) - Domo)- check why dallas is showing as Western in REGIONAL RECRUITING DIGITAL POST - Domo even if Is using OPS allocation file?" [ref=e599]'
+          - 'cell "- Wide growth:Wide Growth: Department to Region - Domo card is showing F&B variances instead of F&B. I already add those in the Dept Reallocated webform but is not fixing the issue.- SALES QUOTA:We must consider the opportunities where we have Opp_Co-Owner (at SalesForceOppMASTER_ETL - Domo) and if not null, we need to distribute 50/50 the actual revenue generated. You will use customer code to identify allocation (Owner – Co-Onwer). Think about it and let me know options. SALES QUOTA MONTHLY DETAILS_DRILLDOWN - Domo- Open Orders cards are getting empty until 11:30 am everyday. Specifically the ones from ds PRO|ASSIGN AND ORDERS FULL DB - Domo.- We are missing activities, especially in D&W (D & W Activities (including Business Cards collection) - Domo)- check why dallas is showing as Western in REGIONAL RECRUITING DIGITAL POST - Domo even if Is using OPS allocation file?" [ref=e600]'
+          - cell "20 may 2026" [ref=e601]
+          - cell "6.0" [ref=e602]
+          - cell "Pending" [ref=e603]:
+            - generic [ref=e604]:
+              - img [ref=e605]
+              - text: Pending
+          - cell "Pendiente" [ref=e608]:
+            - generic [ref=e609]:
+              - img [ref=e610]
+              - text: Pendiente
+          - cell "—" [ref=e613]
+          - cell "—" [ref=e614]
+        - row "Seleccionar entrada de Martin de Leon — Internal Meetings Martin de Leon Internal Hours Allocation Internal Meetings - Internal meeting - 11am - 40min- Project Management Meeting - 4:50pm - 1h - Internal meeting - 11am - 40min- Project Management Meeting - 4:50pm - 1h 20 may 2026 1.4 Pending Pendiente — —" [ref=e615] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Internal Meetings" [ref=e616]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Internal Meetings" [ref=e618]
+          - cell "Martin de Leon" [ref=e620]:
+            - generic [ref=e621]:
+              - generic [ref=e622]: ML
+              - generic [ref=e623]: Martin de Leon
+          - cell "Internal Hours Allocation" [ref=e624]
+          - cell "Internal Meetings" [ref=e625]
+          - cell "- Internal meeting - 11am - 40min- Project Management Meeting - 4:50pm - 1h" [ref=e626]
+          - cell "- Internal meeting - 11am - 40min- Project Management Meeting - 4:50pm - 1h" [ref=e627]
+          - cell "20 may 2026" [ref=e628]
+          - cell "1.4" [ref=e629]
+          - cell "Pending" [ref=e630]:
+            - generic [ref=e631]:
+              - img [ref=e632]
+              - text: Pending
+          - cell "Pendiente" [ref=e635]:
+            - generic [ref=e636]:
+              - img [ref=e637]
+              - text: Pendiente
+          - cell "—" [ref=e640]
+          - cell "—" [ref=e641]
+        - row "Seleccionar entrada de Florencia Sarasua — Client Meeting Florencia Sarasua HSS-DOMO IT Support Project Client Meeting — 20 may 2026 0.5 Pending Pendiente — —" [ref=e642] [cursor=pointer]:
+          - cell "Seleccionar entrada de Florencia Sarasua — Client Meeting" [ref=e643]:
+            - checkbox "Seleccionar entrada de Florencia Sarasua — Client Meeting" [ref=e645]
+          - cell "Florencia Sarasua" [ref=e647]:
+            - generic [ref=e648]:
+              - generic [ref=e649]: FS
+              - generic [ref=e650]: Florencia Sarasua
+          - cell "HSS-DOMO IT Support Project" [ref=e651]
+          - cell "Client Meeting" [ref=e652]
+          - cell [ref=e653]
+          - cell "—" [ref=e654]
+          - cell "20 may 2026" [ref=e655]
+          - cell "0.5" [ref=e656]
+          - cell "Pending" [ref=e657]:
+            - generic [ref=e658]:
+              - img [ref=e659]
+              - text: Pending
+          - cell "Pendiente" [ref=e662]:
+            - generic [ref=e663]:
+              - img [ref=e664]
+              - text: Pendiente
+          - cell "—" [ref=e667]
+          - cell "—" [ref=e668]
+        - row "Seleccionar entrada de Florencia Sarasua — Internal Meeting Florencia Sarasua HSS-DOMO IT Support Project Internal Meeting Weekly Meeting Weekly Meeting 20 may 2026 0.5 Pending Pendiente — —" [ref=e669] [cursor=pointer]:
+          - cell "Seleccionar entrada de Florencia Sarasua — Internal Meeting" [ref=e670]:
+            - checkbox "Seleccionar entrada de Florencia Sarasua — Internal Meeting" [ref=e672]
+          - cell "Florencia Sarasua" [ref=e674]:
+            - generic [ref=e675]:
+              - generic [ref=e676]: FS
+              - generic [ref=e677]: Florencia Sarasua
+          - cell "HSS-DOMO IT Support Project" [ref=e678]
+          - cell "Internal Meeting" [ref=e679]
+          - cell "Weekly Meeting" [ref=e680]
+          - cell "Weekly Meeting" [ref=e681]
+          - cell "20 may 2026" [ref=e682]
+          - cell "0.5" [ref=e683]
+          - cell "Pending" [ref=e684]:
+            - generic [ref=e685]:
+              - img [ref=e686]
+              - text: Pending
+          - cell "Pendiente" [ref=e689]:
+            - generic [ref=e690]:
+              - img [ref=e691]
+              - text: Pendiente
+          - cell "—" [ref=e694]
+          - cell "—" [ref=e695]
+        - row "Seleccionar entrada de Florencia Sarasua — Client Meeting Florencia Sarasua HSS-DOMO IT Support Project Client Meeting KBS Project Stage 3 Validation KBS Project Stage 3 Validation 20 may 2026 1.0 Pending Pendiente — —" [ref=e696] [cursor=pointer]:
+          - cell "Seleccionar entrada de Florencia Sarasua — Client Meeting" [ref=e697]:
+            - checkbox "Seleccionar entrada de Florencia Sarasua — Client Meeting" [ref=e699]
+          - cell "Florencia Sarasua" [ref=e701]:
+            - generic [ref=e702]:
+              - generic [ref=e703]: FS
+              - generic [ref=e704]: Florencia Sarasua
+          - cell "HSS-DOMO IT Support Project" [ref=e705]
+          - cell "Client Meeting" [ref=e706]
+          - cell "KBS Project Stage 3 Validation" [ref=e707]
+          - cell "KBS Project Stage 3 Validation" [ref=e708]
+          - cell "20 may 2026" [ref=e709]
+          - cell "1.0" [ref=e710]
+          - cell "Pending" [ref=e711]:
+            - generic [ref=e712]:
+              - img [ref=e713]
+              - text: Pending
+          - cell "Pendiente" [ref=e716]:
+            - generic [ref=e717]:
+              - img [ref=e718]
+              - text: Pendiente
+          - cell "—" [ref=e721]
+          - cell "—" [ref=e722]
+        - 'row "Seleccionar entrada de Martin de Leon — Research Martin de Leon Internal Hours Allocation Research 5 cross-project reusable skills built in ~/.claude/skills/: verify-downstream-arrival, scaffold-e2e-suite, pre-release-audit, debug-source-first, bootstrap-multistage-project (c35a75b, f5cf6b5, fbcb82c, 6c22ec3, 1a691d9) 5 cross-project reusable skills built in ~/.claude/skills/: verify-downstream-arrival, scaffold-e2e-suite, pre-release-audit, debug-source-first, bootstrap-multistage-project (c35a75b, f5cf6b5, fbcb82c, 6c22ec3, 1a691d9) 20 may 2026 3.0 Pending Pendiente — —" [ref=e723] [cursor=pointer]':
+          - cell "Seleccionar entrada de Martin de Leon — Research" [ref=e724]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Research" [ref=e726]
+          - cell "Martin de Leon" [ref=e728]:
+            - generic [ref=e729]:
+              - generic [ref=e730]: ML
+              - generic [ref=e731]: Martin de Leon
+          - cell "Internal Hours Allocation" [ref=e732]
+          - cell "Research" [ref=e733]
+          - 'cell "5 cross-project reusable skills built in ~/.claude/skills/: verify-downstream-arrival, scaffold-e2e-suite, pre-release-audit, debug-source-first, bootstrap-multistage-project (c35a75b, f5cf6b5, fbcb82c, 6c22ec3, 1a691d9)" [ref=e734]'
+          - 'cell "5 cross-project reusable skills built in ~/.claude/skills/: verify-downstream-arrival, scaffold-e2e-suite, pre-release-audit, debug-source-first, bootstrap-multistage-project (c35a75b, f5cf6b5, fbcb82c, 6c22ec3, 1a691d9)" [ref=e735]'
+          - cell "20 may 2026" [ref=e736]
+          - cell "3.0" [ref=e737]
+          - cell "Pending" [ref=e738]:
+            - generic [ref=e739]:
+              - img [ref=e740]
+              - text: Pending
+          - cell "Pendiente" [ref=e743]:
+            - generic [ref=e744]:
+              - img [ref=e745]
+              - text: Pendiente
+          - cell "—" [ref=e748]
+          - cell "—" [ref=e749]
+        - row "Seleccionar entrada de Martin de Leon — Research Martin de Leon Internal Hours Allocation Research Dev of cross-project skills and domo focused pluggin for future projects. Dev of cross-project skills and domo focused pluggin for future projects. 20 may 2026 2.0 Pending Pendiente — —" [ref=e750] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Research" [ref=e751]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Research" [ref=e753]
+          - cell "Martin de Leon" [ref=e755]:
+            - generic [ref=e756]:
+              - generic [ref=e757]: ML
+              - generic [ref=e758]: Martin de Leon
+          - cell "Internal Hours Allocation" [ref=e759]
+          - cell "Research" [ref=e760]
+          - cell "Dev of cross-project skills and domo focused pluggin for future projects." [ref=e761]
+          - cell "Dev of cross-project skills and domo focused pluggin for future projects." [ref=e762]
+          - cell "20 may 2026" [ref=e763]
+          - cell "2.0" [ref=e764]
+          - cell "Pending" [ref=e765]:
+            - generic [ref=e766]:
+              - img [ref=e767]
+              - text: Pending
+          - cell "Pendiente" [ref=e770]:
+            - generic [ref=e771]:
+              - img [ref=e772]
+              - text: Pendiente
+          - cell "—" [ref=e775]
+          - cell "—" [ref=e776]
+        - row "Seleccionar entrada de Felipe Lenzi — Branding Alignment and Template design Felipe Lenzi LinkedIn Branding Alignment and Template design — 20 may 2026 4.0 Approved Pendiente — —" [ref=e777] [cursor=pointer]:
+          - cell "Seleccionar entrada de Felipe Lenzi — Branding Alignment and Template design" [ref=e778]:
+            - checkbox "Seleccionar entrada de Felipe Lenzi — Branding Alignment and Template design" [ref=e780]
+          - cell "Felipe Lenzi" [ref=e782]:
+            - generic [ref=e783]:
+              - generic [ref=e784]: FL
+              - generic [ref=e785]: Felipe Lenzi
+          - cell "LinkedIn" [ref=e786]
+          - cell "Branding Alignment and Template design" [ref=e787]
+          - cell [ref=e788]
+          - cell "—" [ref=e789]
+          - cell "20 may 2026" [ref=e790]
+          - cell "4.0" [ref=e791]
+          - cell "Approved" [ref=e792]:
+            - generic [ref=e793]:
+              - img [ref=e794]
+              - text: Approved
+          - cell "Pendiente" [ref=e796]:
+            - generic [ref=e797]:
+              - img [ref=e798]
+              - text: Pendiente
+          - cell "—" [ref=e801]
+          - cell "—" [ref=e802]
+        - 'row "Seleccionar entrada de Martin de Leon — Project Management Martin de Leon KBS Order Form Project Management Stage IV new site ID flow: design spec (a4d253f) + 30-task implementation plan (db1ed49); Zoho admin: 6 new tasks T62-T67, 35 tasks renamed without [Type] prefix, Closed→Completed bulk migration, tag IDs captured to memory Stage IV new site ID flow: design spec (a4d253f) + 30-task implementation plan (db1ed49); Zoho admin: 6 new tasks T62-T67, 35 tasks renamed without [Type] prefix, Closed→Completed bulk migration, tag IDs captured to memory 20 may 2026 3.5 Pending Pendiente — —" [ref=e803] [cursor=pointer]':
+          - cell "Seleccionar entrada de Martin de Leon — Project Management" [ref=e804]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Project Management" [ref=e806]
+          - cell "Martin de Leon" [ref=e808]:
+            - generic [ref=e809]:
+              - generic [ref=e810]: ML
+              - generic [ref=e811]: Martin de Leon
+          - cell "KBS Order Form" [ref=e812]
+          - cell "Project Management" [ref=e813]
+          - 'cell "Stage IV new site ID flow: design spec (a4d253f) + 30-task implementation plan (db1ed49); Zoho admin: 6 new tasks T62-T67, 35 tasks renamed without [Type] prefix, Closed→Completed bulk migration, tag IDs captured to memory" [ref=e814]'
+          - 'cell "Stage IV new site ID flow: design spec (a4d253f) + 30-task implementation plan (db1ed49); Zoho admin: 6 new tasks T62-T67, 35 tasks renamed without [Type] prefix, Closed→Completed bulk migration, tag IDs captured to memory" [ref=e815]'
+          - cell "20 may 2026" [ref=e816]
+          - cell "3.5" [ref=e817]
+          - cell "Pending" [ref=e818]:
+            - generic [ref=e819]:
+              - img [ref=e820]
+              - text: Pending
+          - cell "Pendiente" [ref=e823]:
+            - generic [ref=e824]:
+              - img [ref=e825]
+              - text: Pendiente
+          - cell "—" [ref=e828]
+          - cell "—" [ref=e829]
+        - row "Seleccionar entrada de Claudio Riva — PATCH endpoint to update Market Status by order Claudio Riva KBS Order Form PATCH endpoint to update Market Status by order Endpoints were patched to include market_status field per order and tested from node.js server Endpoints were patched to include market_status field per order and tested from node.js server 20 may 2026 2.0 Approved Pendiente — —" [ref=e830] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — PATCH endpoint to update Market Status by order" [ref=e831]:
+            - checkbox "Seleccionar entrada de Claudio Riva — PATCH endpoint to update Market Status by order" [ref=e833]
+          - cell "Claudio Riva" [ref=e835]:
+            - generic [ref=e836]:
+              - generic [ref=e837]: CR
+              - generic [ref=e838]: Claudio Riva
+          - cell "KBS Order Form" [ref=e839]
+          - cell "PATCH endpoint to update Market Status by order" [ref=e840]
+          - cell "Endpoints were patched to include market_status field per order and tested from node.js server" [ref=e841]
+          - cell "Endpoints were patched to include market_status field per order and tested from node.js server" [ref=e842]
+          - cell "20 may 2026" [ref=e843]
+          - cell "2.0" [ref=e844]
+          - cell "Approved" [ref=e845]:
+            - generic [ref=e846]:
+              - img [ref=e847]
+              - text: Approved
+          - cell "Pendiente" [ref=e849]:
+            - generic [ref=e850]:
+              - img [ref=e851]
+              - text: Pendiente
+          - cell "—" [ref=e854]
+          - cell "—" [ref=e855]
+        - row "Seleccionar entrada de Martin de Leon — Research Martin de Leon Internal Hours Allocation Research - Research about skill creation for claude code.- Analize KBS Project tools and recurent flows for skill creation. - Research about skill creation for claude code.- Analize KBS Project tools and recurent flows for skill creation. 19 may 2026 2.0 Pending Pendiente — —" [ref=e856] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Research" [ref=e857]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Research" [ref=e859]
+          - cell "Martin de Leon" [ref=e861]:
+            - generic [ref=e862]:
+              - generic [ref=e863]: ML
+              - generic [ref=e864]: Martin de Leon
+          - cell "Internal Hours Allocation" [ref=e865]
+          - cell "Research" [ref=e866]
+          - cell "- Research about skill creation for claude code.- Analize KBS Project tools and recurent flows for skill creation." [ref=e867]
+          - cell "- Research about skill creation for claude code.- Analize KBS Project tools and recurent flows for skill creation." [ref=e868]
+          - cell "19 may 2026" [ref=e869]
+          - cell "2.0" [ref=e870]
+          - cell "Pending" [ref=e871]:
+            - generic [ref=e872]:
+              - img [ref=e873]
+              - text: Pending
+          - cell "Pendiente" [ref=e876]:
+            - generic [ref=e877]:
+              - img [ref=e878]
+              - text: Pendiente
+          - cell "—" [ref=e881]
+          - cell "—" [ref=e882]
+        - row "Seleccionar entrada de Martin de Leon — Internal Meetings Martin de Leon Internal Hours Allocation Internal Meetings SP + HSS Weekly Meeting SP + HSS Weekly Meeting 19 may 2026 0.7 Pending Pendiente — —" [ref=e883] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Internal Meetings" [ref=e884]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Internal Meetings" [ref=e886]
+          - cell "Martin de Leon" [ref=e888]:
+            - generic [ref=e889]:
+              - generic [ref=e890]: ML
+              - generic [ref=e891]: Martin de Leon
+          - cell "Internal Hours Allocation" [ref=e892]
+          - cell "Internal Meetings" [ref=e893]
+          - cell "SP + HSS Weekly Meeting" [ref=e894]
+          - cell "SP + HSS Weekly Meeting" [ref=e895]
+          - cell "19 may 2026" [ref=e896]
+          - cell "0.7" [ref=e897]
+          - cell "Pending" [ref=e898]:
+            - generic [ref=e899]:
+              - img [ref=e900]
+              - text: Pending
+          - cell "Pendiente" [ref=e903]:
+            - generic [ref=e904]:
+              - img [ref=e905]
+              - text: Pendiente
+          - cell "—" [ref=e908]
+          - cell "—" [ref=e909]
+        - row "Seleccionar entrada de Martin de Leon — Identity resolver + provider in submit-order (drop JWT/session) Martin de Leon KBS Order Form Identity resolver + provider in submit-order (drop JWT/session) Identity resolver + IdentityProvider hook; fetch USERS from iframe /data/v1 + pagination; wire identity into wizard; drop JWT/session (bfe51a8, a77e23b, c8f05ef, 2876469, bcc4d98, 6ad9f9b, 1cc83f8) Identity resolver + IdentityProvider hook; fetch USERS from iframe /data/v1 + pagination; wire identity into wizard; drop JWT/session (bfe51a8, a77e23b, c8f05ef, 2876469, bcc4d98, 6ad9f9b, 1cc83f8) 19 may 2026 1.5 Pending Pendiente — —" [ref=e910] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Identity resolver + provider in submit-order (drop JWT/session)" [ref=e911]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Identity resolver + provider in submit-order (drop JWT/session)" [ref=e913]
+          - cell "Martin de Leon" [ref=e915]:
+            - generic [ref=e916]:
+              - generic [ref=e917]: ML
+              - generic [ref=e918]: Martin de Leon
+          - cell "KBS Order Form" [ref=e919]
+          - cell "Identity resolver + provider in submit-order (drop JWT/session)" [ref=e920]
+          - cell "Identity resolver + IdentityProvider hook; fetch USERS from iframe /data/v1 + pagination; wire identity into wizard; drop JWT/session (bfe51a8, a77e23b, c8f05ef, 2876469, bcc4d98, 6ad9f9b, 1cc83f8)" [ref=e921]
+          - cell "Identity resolver + IdentityProvider hook; fetch USERS from iframe /data/v1 + pagination; wire identity into wizard; drop JWT/session (bfe51a8, a77e23b, c8f05ef, 2876469, bcc4d98, 6ad9f9b, 1cc83f8)" [ref=e922]
+          - cell "19 may 2026" [ref=e923]
+          - cell "1.5" [ref=e924]
+          - cell "Pending" [ref=e925]:
+            - generic [ref=e926]:
+              - img [ref=e927]
+              - text: Pending
+          - cell "Pendiente" [ref=e930]:
+            - generic [ref=e931]:
+              - img [ref=e932]
+              - text: Pendiente
+          - cell "—" [ref=e935]
+          - cell "—" [ref=e936]
+        - row "Seleccionar entrada de Martin de Leon — Strip /api/login, /api/order, KBS_Users; CORS for *.domoapps Martin de Leon KBS Order Form Strip /api/login, /api/order, KBS_Users; CORS for *.domoapps Proxy strip /api/login + /api/order + KBS_Users; CORS for *.domoapps.prod3.domo.com; remove Azure SWA GitHub Action (1e3feb1, 644a3bf, b80b777, 8b33e11) Proxy strip /api/login + /api/order + KBS_Users; CORS for *.domoapps.prod3.domo.com; remove Azure SWA GitHub Action (1e3feb1, 644a3bf, b80b777, 8b33e11) 19 may 2026 0.5 Pending Pendiente — —" [ref=e937] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Strip /api/login, /api/order, KBS_Users; CORS for *.domoapps" [ref=e938]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Strip /api/login, /api/order, KBS_Users; CORS for *.domoapps" [ref=e940]
+          - cell "Martin de Leon" [ref=e942]:
+            - generic [ref=e943]:
+              - generic [ref=e944]: ML
+              - generic [ref=e945]: Martin de Leon
+          - cell "KBS Order Form" [ref=e946]
+          - cell "Strip /api/login, /api/order, KBS_Users; CORS for *.domoapps" [ref=e947]
+          - cell "Proxy strip /api/login + /api/order + KBS_Users; CORS for *.domoapps.prod3.domo.com; remove Azure SWA GitHub Action (1e3feb1, 644a3bf, b80b777, 8b33e11)" [ref=e948]
+          - cell "Proxy strip /api/login + /api/order + KBS_Users; CORS for *.domoapps.prod3.domo.com; remove Azure SWA GitHub Action (1e3feb1, 644a3bf, b80b777, 8b33e11)" [ref=e949]
+          - cell "19 may 2026" [ref=e950]
+          - cell "0.5" [ref=e951]
+          - cell "Pending" [ref=e952]:
+            - generic [ref=e953]:
+              - img [ref=e954]
+              - text: Pending
+          - cell "Pendiente" [ref=e957]:
+            - generic [ref=e958]:
+              - img [ref=e959]
+              - text: Pendiente
+          - cell "—" [ref=e962]
+          - cell "—" [ref=e963]
+        - row "Seleccionar entrada de Martin de Leon — Port submit-order E2E to identity-mock (drop auth.spec) Martin de Leon KBS Order Form Port submit-order E2E to identity-mock (drop auth.spec) identity-mock helper + runtime-flag override; port submit-order e2e specs; remove auth.spec.js; drop Worker /api/login from E2E driver (9a36ed0, 4b0476a, 9f4428f, f6fe59b) identity-mock helper + runtime-flag override; port submit-order e2e specs; remove auth.spec.js; drop Worker /api/login from E2E driver (9a36ed0, 4b0476a, 9f4428f, f6fe59b) 19 may 2026 0.5 Pending Pendiente — —" [ref=e964] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Port submit-order E2E to identity-mock (drop auth.spec)" [ref=e965]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Port submit-order E2E to identity-mock (drop auth.spec)" [ref=e967]
+          - cell "Martin de Leon" [ref=e969]:
+            - generic [ref=e970]:
+              - generic [ref=e971]: ML
+              - generic [ref=e972]: Martin de Leon
+          - cell "KBS Order Form" [ref=e973]
+          - cell "Port submit-order E2E to identity-mock (drop auth.spec)" [ref=e974]
+          - cell "identity-mock helper + runtime-flag override; port submit-order e2e specs; remove auth.spec.js; drop Worker /api/login from E2E driver (9a36ed0, 4b0476a, 9f4428f, f6fe59b)" [ref=e975]
+          - cell "identity-mock helper + runtime-flag override; port submit-order e2e specs; remove auth.spec.js; drop Worker /api/login from E2E driver (9a36ed0, 4b0476a, 9f4428f, f6fe59b)" [ref=e976]
+          - cell "19 may 2026" [ref=e977]
+          - cell "0.5" [ref=e978]
+          - cell "Pending" [ref=e979]:
+            - generic [ref=e980]:
+              - img [ref=e981]
+              - text: Pending
+          - cell "Pendiente" [ref=e984]:
+            - generic [ref=e985]:
+              - img [ref=e986]
+              - text: Pendiente
+          - cell "—" [ref=e989]
+          - cell "—" [ref=e990]
+        - row "Seleccionar entrada de Martin de Leon — Move kbs-landing-sample to domo/submit-order (repo + deploy + manifest) Martin de Leon KBS Order Form Move kbs-landing-sample to domo/submit-order (repo + deploy + manifest) git mv kbs-landing-sample → domo/submit-order + clone deploy.ps1 + manifest.json (1551eae, 4fb7083, 63f2fe9) git mv kbs-landing-sample → domo/submit-order + clone deploy.ps1 + manifest.json (1551eae, 4fb7083, 63f2fe9) 19 may 2026 0.5 Pending Pendiente — —" [ref=e991] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Move kbs-landing-sample to domo/submit-order (repo + deploy + manifest)" [ref=e992]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Move kbs-landing-sample to domo/submit-order (repo + deploy + manifest)" [ref=e994]
+          - cell "Martin de Leon" [ref=e996]:
+            - generic [ref=e997]:
+              - generic [ref=e998]: ML
+              - generic [ref=e999]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1000]
+          - cell "Move kbs-landing-sample to domo/submit-order (repo + deploy + manifest)" [ref=e1001]
+          - cell "git mv kbs-landing-sample → domo/submit-order + clone deploy.ps1 + manifest.json (1551eae, 4fb7083, 63f2fe9)" [ref=e1002]
+          - cell "git mv kbs-landing-sample → domo/submit-order + clone deploy.ps1 + manifest.json (1551eae, 4fb7083, 63f2fe9)" [ref=e1003]
+          - cell "19 may 2026" [ref=e1004]
+          - cell "0.5" [ref=e1005]
+          - cell "Pending" [ref=e1006]:
+            - generic [ref=e1007]:
+              - img [ref=e1008]
+              - text: Pending
+          - cell "Pendiente" [ref=e1011]:
+            - generic [ref=e1012]:
+              - img [ref=e1013]
+              - text: Pendiente
+          - cell "—" [ref=e1016]
+          - cell "—" [ref=e1017]
+        - 'row "Seleccionar entrada de Martin de Leon — Spec + plan: move landing into a Domo Pro Code App Martin de Leon KBS Order Form Spec + plan: move landing into a Domo Pro Code App Stage 3.5 design spec + impl plan for landing → Domo Pro Code App migration (bb35372, 64b6d53) Stage 3.5 design spec + impl plan for landing → Domo Pro Code App migration (bb35372, 64b6d53) 19 may 2026 0.8 Pending Pendiente — —" [ref=e1018] [cursor=pointer]':
+          - 'cell "Seleccionar entrada de Martin de Leon — Spec + plan: move landing into a Domo Pro Code App" [ref=e1019]':
+            - 'checkbox "Seleccionar entrada de Martin de Leon — Spec + plan: move landing into a Domo Pro Code App" [ref=e1021]'
+          - cell "Martin de Leon" [ref=e1023]:
+            - generic [ref=e1024]:
+              - generic [ref=e1025]: ML
+              - generic [ref=e1026]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1027]
+          - 'cell "Spec + plan: move landing into a Domo Pro Code App" [ref=e1028]'
+          - cell "Stage 3.5 design spec + impl plan for landing → Domo Pro Code App migration (bb35372, 64b6d53)" [ref=e1029]
+          - cell "Stage 3.5 design spec + impl plan for landing → Domo Pro Code App migration (bb35372, 64b6d53)" [ref=e1030]
+          - cell "19 may 2026" [ref=e1031]
+          - cell "0.8" [ref=e1032]
+          - cell "Pending" [ref=e1033]:
+            - generic [ref=e1034]:
+              - img [ref=e1035]
+              - text: Pending
+          - cell "Pendiente" [ref=e1038]:
+            - generic [ref=e1039]:
+              - img [ref=e1040]
+              - text: Pendiente
+          - cell "—" [ref=e1043]
+          - cell "—" [ref=e1044]
+        - row "Seleccionar entrada de Martin de Leon — Fix VITE_USE_DUMMY_DATA prod default + manifest overwrite-in-place Martin de Leon KBS Order Form Fix VITE_USE_DUMMY_DATA prod default + manifest overwrite-in-place Force VITE_USE_DUMMY_DATA=false in prod; keep manifest version at 0.1.0 (overwrite-in-place) (ee739c1, d195c05) Force VITE_USE_DUMMY_DATA=false in prod; keep manifest version at 0.1.0 (overwrite-in-place) (ee739c1, d195c05) 19 may 2026 0.3 Pending Pendiente — —" [ref=e1045] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Fix VITE_USE_DUMMY_DATA prod default + manifest overwrite-in-place" [ref=e1046]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Fix VITE_USE_DUMMY_DATA prod default + manifest overwrite-in-place" [ref=e1048]
+          - cell "Martin de Leon" [ref=e1050]:
+            - generic [ref=e1051]:
+              - generic [ref=e1052]: ML
+              - generic [ref=e1053]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1054]
+          - cell "Fix VITE_USE_DUMMY_DATA prod default + manifest overwrite-in-place" [ref=e1055]
+          - cell "Force VITE_USE_DUMMY_DATA=false in prod; keep manifest version at 0.1.0 (overwrite-in-place) (ee739c1, d195c05)" [ref=e1056]
+          - cell "Force VITE_USE_DUMMY_DATA=false in prod; keep manifest version at 0.1.0 (overwrite-in-place) (ee739c1, d195c05)" [ref=e1057]
+          - cell "19 may 2026" [ref=e1058]
+          - cell "0.3" [ref=e1059]
+          - cell "Pending" [ref=e1060]:
+            - generic [ref=e1061]:
+              - img [ref=e1062]
+              - text: Pending
+          - cell "Pendiente" [ref=e1065]:
+            - generic [ref=e1066]:
+              - img [ref=e1067]
+              - text: Pendiente
+          - cell "—" [ref=e1070]
+          - cell "—" [ref=e1071]
+        - 'row "Seleccionar entrada de Martin de Leon — Project Management Martin de Leon KBS Order Form Project Management Stage 3.5 wrap-up: proxy README + env-file comments refresh (d1408c4); session log writeup PR #16 (373159d); general PM Stage 3.5 wrap-up: proxy README + env-file comments refresh (d1408c4); session log writeup PR #16 (373159d); general PM 19 may 2026 1.0 Pending Pendiente — —" [ref=e1072] [cursor=pointer]':
+          - cell "Seleccionar entrada de Martin de Leon — Project Management" [ref=e1073]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Project Management" [ref=e1075]
+          - cell "Martin de Leon" [ref=e1077]:
+            - generic [ref=e1078]:
+              - generic [ref=e1079]: ML
+              - generic [ref=e1080]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1081]
+          - cell "Project Management" [ref=e1082]
+          - 'cell "Stage 3.5 wrap-up: proxy README + env-file comments refresh (d1408c4); session log writeup PR #16 (373159d); general PM" [ref=e1083]'
+          - 'cell "Stage 3.5 wrap-up: proxy README + env-file comments refresh (d1408c4); session log writeup PR #16 (373159d); general PM" [ref=e1084]'
+          - cell "19 may 2026" [ref=e1085]
+          - cell "1.0" [ref=e1086]
+          - cell "Pending" [ref=e1087]:
+            - generic [ref=e1088]:
+              - img [ref=e1089]
+              - text: Pending
+          - cell "Pendiente" [ref=e1092]:
+            - generic [ref=e1093]:
+              - img [ref=e1094]
+              - text: Pendiente
+          - cell "—" [ref=e1097]
+          - cell "—" [ref=e1098]
+        - row "Seleccionar entrada de Claudio Riva — Add market_status and fill_count columns to MySQL orders schema Claudio Riva KBS Order Form Add market_status and fill_count columns to MySQL orders schema Node.js endpoints were modificated as requested to fit client needs Node.js endpoints were modificated as requested to fit client needs 19 may 2026 2.0 Approved Pendiente — —" [ref=e1099] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — Add market_status and fill_count columns to MySQL orders schema" [ref=e1100]:
+            - checkbox "Seleccionar entrada de Claudio Riva — Add market_status and fill_count columns to MySQL orders schema" [ref=e1102]
+          - cell "Claudio Riva" [ref=e1104]:
+            - generic [ref=e1105]:
+              - generic [ref=e1106]: CR
+              - generic [ref=e1107]: Claudio Riva
+          - cell "KBS Order Form" [ref=e1108]
+          - cell "Add market_status and fill_count columns to MySQL orders schema" [ref=e1109]
+          - cell "Node.js endpoints were modificated as requested to fit client needs" [ref=e1110]
+          - cell "Node.js endpoints were modificated as requested to fit client needs" [ref=e1111]
+          - cell "19 may 2026" [ref=e1112]
+          - cell "2.0" [ref=e1113]
+          - cell "Approved" [ref=e1114]:
+            - generic [ref=e1115]:
+              - img [ref=e1116]
+              - text: Approved
+          - cell "Pendiente" [ref=e1118]:
+            - generic [ref=e1119]:
+              - img [ref=e1120]
+              - text: Pendiente
+          - cell "—" [ref=e1123]
+          - cell "—" [ref=e1124]
+        - row "Seleccionar entrada de Martin de Leon — Wire the Home dashboard to live data (Claudio API) Martin de Leon KBS Order Form Wire the Home dashboard to live data (Claudio API) call_date as real date + recommendations required (d9446f1) call_date as real date + recommendations required (d9446f1) 18 may 2026 1.0 Pending Pendiente — —" [ref=e1125] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Wire the Home dashboard to live data (Claudio API)" [ref=e1126]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Wire the Home dashboard to live data (Claudio API)" [ref=e1128]
+          - cell "Martin de Leon" [ref=e1130]:
+            - generic [ref=e1131]:
+              - generic [ref=e1132]: ML
+              - generic [ref=e1133]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1134]
+          - cell "Wire the Home dashboard to live data (Claudio API)" [ref=e1135]
+          - cell "call_date as real date + recommendations required (d9446f1)" [ref=e1136]
+          - cell "call_date as real date + recommendations required (d9446f1)" [ref=e1137]
+          - cell "18 may 2026" [ref=e1138]
+          - cell "1.0" [ref=e1139]
+          - cell "Pending" [ref=e1140]:
+            - generic [ref=e1141]:
+              - img [ref=e1142]
+              - text: Pending
+          - cell "Pendiente" [ref=e1145]:
+            - generic [ref=e1146]:
+              - img [ref=e1147]
+              - text: Pendiente
+          - cell "—" [ref=e1150]
+          - cell "—" [ref=e1151]
+        - row "Seleccionar entrada de Martin de Leon — Integrate it into the Vite Pro Code App Martin de Leon KBS Order Form Integrate it into the Vite Pro Code App Bake design + asset orphan audits into deploy.ps1 (2706033) Bake design + asset orphan audits into deploy.ps1 (2706033) 18 may 2026 1.0 Pending Pendiente — —" [ref=e1152] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Integrate it into the Vite Pro Code App" [ref=e1153]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Integrate it into the Vite Pro Code App" [ref=e1155]
+          - cell "Martin de Leon" [ref=e1157]:
+            - generic [ref=e1158]:
+              - generic [ref=e1159]: ML
+              - generic [ref=e1160]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1161]
+          - cell "Integrate it into the Vite Pro Code App" [ref=e1162]
+          - cell "Bake design + asset orphan audits into deploy.ps1 (2706033)" [ref=e1163]
+          - cell "Bake design + asset orphan audits into deploy.ps1 (2706033)" [ref=e1164]
+          - cell "18 may 2026" [ref=e1165]
+          - cell "1.0" [ref=e1166]
+          - cell "Pending" [ref=e1167]:
+            - generic [ref=e1168]:
+              - img [ref=e1169]
+              - text: Pending
+          - cell "Pendiente" [ref=e1172]:
+            - generic [ref=e1173]:
+              - img [ref=e1174]
+              - text: Pendiente
+          - cell "—" [ref=e1177]
+          - cell "—" [ref=e1178]
+        - row "Seleccionar entrada de Martin de Leon — Workflow Review Martin de Leon KBS Order Form Workflow Review Scripted E2E for email workflow (e0e3c33) + enable auto-fire of workflow trigger from Worker cron (d3d93a1) Scripted E2E for email workflow (e0e3c33) + enable auto-fire of workflow trigger from Worker cron (d3d93a1) 18 may 2026 4.0 Pending Pendiente — —" [ref=e1179] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e1180]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e1182]
+          - cell "Martin de Leon" [ref=e1184]:
+            - generic [ref=e1185]:
+              - generic [ref=e1186]: ML
+              - generic [ref=e1187]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1188]
+          - cell "Workflow Review" [ref=e1189]
+          - cell "Scripted E2E for email workflow (e0e3c33) + enable auto-fire of workflow trigger from Worker cron (d3d93a1)" [ref=e1190]
+          - cell "Scripted E2E for email workflow (e0e3c33) + enable auto-fire of workflow trigger from Worker cron (d3d93a1)" [ref=e1191]
+          - cell "18 may 2026" [ref=e1192]
+          - cell "4.0" [ref=e1193]
+          - cell "Pending" [ref=e1194]:
+            - generic [ref=e1195]:
+              - img [ref=e1196]
+              - text: Pending
+          - cell "Pendiente" [ref=e1199]:
+            - generic [ref=e1200]:
+              - img [ref=e1201]
+              - text: Pendiente
+          - cell "—" [ref=e1204]
+          - cell "—" [ref=e1205]
+        - 'row "Seleccionar entrada de Martin de Leon — Project Management Martin de Leon KBS Order Form Project Management Project management: timesheet load via Zoho MCP + Stage 3 task structure setup in project Project management: timesheet load via Zoho MCP + Stage 3 task structure setup in project 18 may 2026 1.0 Pending Pendiente — —" [ref=e1206] [cursor=pointer]':
+          - cell "Seleccionar entrada de Martin de Leon — Project Management" [ref=e1207]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Project Management" [ref=e1209]
+          - cell "Martin de Leon" [ref=e1211]:
+            - generic [ref=e1212]:
+              - generic [ref=e1213]: ML
+              - generic [ref=e1214]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1215]
+          - cell "Project Management" [ref=e1216]
+          - 'cell "Project management: timesheet load via Zoho MCP + Stage 3 task structure setup in project" [ref=e1217]'
+          - 'cell "Project management: timesheet load via Zoho MCP + Stage 3 task structure setup in project" [ref=e1218]'
+          - cell "18 may 2026" [ref=e1219]
+          - cell "1.0" [ref=e1220]
+          - cell "Pending" [ref=e1221]:
+            - generic [ref=e1222]:
+              - img [ref=e1223]
+              - text: Pending
+          - cell "Pendiente" [ref=e1226]:
+            - generic [ref=e1227]:
+              - img [ref=e1228]
+              - text: Pendiente
+          - cell "—" [ref=e1231]
+          - cell "—" [ref=e1232]
+        - row "Seleccionar entrada de Claudio Riva — Requirement Gathering Meeting Claudio Riva KBS Order Form Requirement Gathering Meeting Meeting with client to get requierements and build related documentation Meeting with client to get requierements and build related documentation 18 may 2026 2.0 Approved Pendiente — —" [ref=e1233] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — Requirement Gathering Meeting" [ref=e1234]:
+            - checkbox "Seleccionar entrada de Claudio Riva — Requirement Gathering Meeting" [ref=e1236]
+          - cell "Claudio Riva" [ref=e1238]:
+            - generic [ref=e1239]:
+              - generic [ref=e1240]: CR
+              - generic [ref=e1241]: Claudio Riva
+          - cell "KBS Order Form" [ref=e1242]
+          - cell "Requirement Gathering Meeting" [ref=e1243]
+          - cell "Meeting with client to get requierements and build related documentation" [ref=e1244]
+          - cell "Meeting with client to get requierements and build related documentation" [ref=e1245]
+          - cell "18 may 2026" [ref=e1246]
+          - cell "2.0" [ref=e1247]
+          - cell "Approved" [ref=e1248]:
+            - generic [ref=e1249]:
+              - img [ref=e1250]
+              - text: Approved
+          - cell "Pendiente" [ref=e1252]:
+            - generic [ref=e1253]:
+              - img [ref=e1254]
+              - text: Pendiente
+          - cell "—" [ref=e1257]
+          - cell "—" [ref=e1258]
+        - 'row "Seleccionar entrada de Martin de Leon — Wire the Home dashboard to live data (Claudio API) Martin de Leon KBS Order Form Wire the Home dashboard to live data (Claudio API) Phase C wireup: orders-app reads+writes through Claudio backend (6efcba9). Fix approve/deny form bugs + stop iframe auto-reload (8ed3b05) Phase C wireup: orders-app reads+writes through Claudio backend (6efcba9). Fix approve/deny form bugs + stop iframe auto-reload (8ed3b05) 17 may 2026 3.0 Pending Pendiente — —" [ref=e1259] [cursor=pointer]':
+          - cell "Seleccionar entrada de Martin de Leon — Wire the Home dashboard to live data (Claudio API)" [ref=e1260]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Wire the Home dashboard to live data (Claudio API)" [ref=e1262]
+          - cell "Martin de Leon" [ref=e1264]:
+            - generic [ref=e1265]:
+              - generic [ref=e1266]: ML
+              - generic [ref=e1267]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1268]
+          - cell "Wire the Home dashboard to live data (Claudio API)" [ref=e1269]
+          - 'cell "Phase C wireup: orders-app reads+writes through Claudio backend (6efcba9). Fix approve/deny form bugs + stop iframe auto-reload (8ed3b05)" [ref=e1270]'
+          - 'cell "Phase C wireup: orders-app reads+writes through Claudio backend (6efcba9). Fix approve/deny form bugs + stop iframe auto-reload (8ed3b05)" [ref=e1271]'
+          - cell "17 may 2026" [ref=e1272]
+          - cell "3.0" [ref=e1273]
+          - cell "Pending" [ref=e1274]:
+            - generic [ref=e1275]:
+              - img [ref=e1276]
+              - text: Pending
+          - cell "Pendiente" [ref=e1279]:
+            - generic [ref=e1280]:
+              - img [ref=e1281]
+              - text: Pendiente
+          - cell "—" [ref=e1284]
+          - cell "—" [ref=e1285]
+        - row "Seleccionar entrada de Martin de Leon — Workflow Review Martin de Leon KBS Order Form Workflow Review Repoint Worker cron at Stage 3 connector; mute workflow fire (3aaf5e2) Repoint Worker cron at Stage 3 connector; mute workflow fire (3aaf5e2) 17 may 2026 1.0 Pending Pendiente — —" [ref=e1286] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e1287]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e1289]
+          - cell "Martin de Leon" [ref=e1291]:
+            - generic [ref=e1292]:
+              - generic [ref=e1293]: ML
+              - generic [ref=e1294]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1295]
+          - cell "Workflow Review" [ref=e1296]
+          - cell "Repoint Worker cron at Stage 3 connector; mute workflow fire (3aaf5e2)" [ref=e1297]
+          - cell "Repoint Worker cron at Stage 3 connector; mute workflow fire (3aaf5e2)" [ref=e1298]
+          - cell "17 may 2026" [ref=e1299]
+          - cell "1.0" [ref=e1300]
+          - cell "Pending" [ref=e1301]:
+            - generic [ref=e1302]:
+              - img [ref=e1303]
+              - text: Pending
+          - cell "Pendiente" [ref=e1306]:
+            - generic [ref=e1307]:
+              - img [ref=e1308]
+              - text: Pendiente
+          - cell "—" [ref=e1311]
+          - cell "—" [ref=e1312]
+        - 'row "Seleccionar entrada de Martin de Leon — Workflow Review Martin de Leon KBS Order Form Workflow Review market_status workflow emails: design spec + plan + TDD cycle (subject/status section/fill summary/body composition) + full buildMarketStatusEmail impl + paste-ready CE file market_status workflow emails: design spec + plan + TDD cycle (subject/status section/fill summary/body composition) + full buildMarketStatusEmail impl + paste-ready CE file 17 may 2026 3.0 Pending Pendiente — —" [ref=e1313] [cursor=pointer]':
+          - cell "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e1314]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e1316]
+          - cell "Martin de Leon" [ref=e1318]:
+            - generic [ref=e1319]:
+              - generic [ref=e1320]: ML
+              - generic [ref=e1321]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1322]
+          - cell "Workflow Review" [ref=e1323]
+          - 'cell "market_status workflow emails: design spec + plan + TDD cycle (subject/status section/fill summary/body composition) + full buildMarketStatusEmail impl + paste-ready CE file" [ref=e1324]'
+          - 'cell "market_status workflow emails: design spec + plan + TDD cycle (subject/status section/fill summary/body composition) + full buildMarketStatusEmail impl + paste-ready CE file" [ref=e1325]'
+          - cell "17 may 2026" [ref=e1326]
+          - cell "3.0" [ref=e1327]
+          - cell "Pending" [ref=e1328]:
+            - generic [ref=e1329]:
+              - img [ref=e1330]
+              - text: Pending
+          - cell "Pendiente" [ref=e1333]:
+            - generic [ref=e1334]:
+              - img [ref=e1335]
+              - text: Pendiente
+          - cell "—" [ref=e1338]
+          - cell "—" [ref=e1339]
+        - row "Seleccionar entrada de Martin de Leon — Wire the Home dashboard to live data (Claudio API) Martin de Leon KBS Order Form Wire the Home dashboard to live data (Claudio API) KPI/CHART menu catalogs, TimeSeriesExpanded live filters, OrdersTable tri-state sort + clearable Input, StatusChips + SuccessToast, Approver Stage 2 parity, Pipeline parity, Cumulative multi-key sort KPI/CHART menu catalogs, TimeSeriesExpanded live filters, OrdersTable tri-state sort + clearable Input, StatusChips + SuccessToast, Approver Stage 2 parity, Pipeline parity, Cumulative multi-key sort 16 may 2026 2.0 Pending Pendiente — —" [ref=e1340] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Wire the Home dashboard to live data (Claudio API)" [ref=e1341]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Wire the Home dashboard to live data (Claudio API)" [ref=e1343]
+          - cell "Martin de Leon" [ref=e1345]:
+            - generic [ref=e1346]:
+              - generic [ref=e1347]: ML
+              - generic [ref=e1348]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1349]
+          - cell "Wire the Home dashboard to live data (Claudio API)" [ref=e1350]
+          - cell "KPI/CHART menu catalogs, TimeSeriesExpanded live filters, OrdersTable tri-state sort + clearable Input, StatusChips + SuccessToast, Approver Stage 2 parity, Pipeline parity, Cumulative multi-key sort" [ref=e1351]
+          - cell "KPI/CHART menu catalogs, TimeSeriesExpanded live filters, OrdersTable tri-state sort + clearable Input, StatusChips + SuccessToast, Approver Stage 2 parity, Pipeline parity, Cumulative multi-key sort" [ref=e1352]
+          - cell "16 may 2026" [ref=e1353]
+          - cell "2.0" [ref=e1354]
+          - cell "Pending" [ref=e1355]:
+            - generic [ref=e1356]:
+              - img [ref=e1357]
+              - text: Pending
+          - cell "Pendiente" [ref=e1360]:
+            - generic [ref=e1361]:
+              - img [ref=e1362]
+              - text: Pendiente
+          - cell "—" [ref=e1365]
+          - cell "—" [ref=e1366]
+        - 'row "Seleccionar entrada de Martin de Leon — Implement dashboard Export to PDF (2 pages) Martin de Leon KBS Order Form Implement dashboard Export to PDF (2 pages) Export overhaul: KBS-prefix, lazy XLSX swap to exceljs, full-height PDF, R3 card-aware page break, page slice, all rows no scrollbars Export overhaul: KBS-prefix, lazy XLSX swap to exceljs, full-height PDF, R3 card-aware page break, page slice, all rows no scrollbars 16 may 2026 2.0 Pending Pendiente — —" [ref=e1367] [cursor=pointer]':
+          - cell "Seleccionar entrada de Martin de Leon — Implement dashboard Export to PDF (2 pages)" [ref=e1368]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Implement dashboard Export to PDF (2 pages)" [ref=e1370]
+          - cell "Martin de Leon" [ref=e1372]:
+            - generic [ref=e1373]:
+              - generic [ref=e1374]: ML
+              - generic [ref=e1375]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1376]
+          - cell "Implement dashboard Export to PDF (2 pages)" [ref=e1377]
+          - 'cell "Export overhaul: KBS-prefix, lazy XLSX swap to exceljs, full-height PDF, R3 card-aware page break, page slice, all rows no scrollbars" [ref=e1378]'
+          - 'cell "Export overhaul: KBS-prefix, lazy XLSX swap to exceljs, full-height PDF, R3 card-aware page break, page slice, all rows no scrollbars" [ref=e1379]'
+          - cell "16 may 2026" [ref=e1380]
+          - cell "2.0" [ref=e1381]
+          - cell "Pending" [ref=e1382]:
+            - generic [ref=e1383]:
+              - img [ref=e1384]
+              - text: Pending
+          - cell "Pendiente" [ref=e1387]:
+            - generic [ref=e1388]:
+              - img [ref=e1389]
+              - text: Pendiente
+          - cell "—" [ref=e1392]
+          - cell "—" [ref=e1393]
+        - row "Seleccionar entrada de Martin de Leon — Round 2 iteration in Claude Design Martin de Leon KBS Order Form Round 2 iteration in Claude Design UI polish design spec + plan, R3 portaled modals + Clear All, deploy safeguard + design management utilities UI polish design spec + plan, R3 portaled modals + Clear All, deploy safeguard + design management utilities 16 may 2026 1.0 Pending Pendiente — —" [ref=e1394] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Round 2 iteration in Claude Design" [ref=e1395]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Round 2 iteration in Claude Design" [ref=e1397]
+          - cell "Martin de Leon" [ref=e1399]:
+            - generic [ref=e1400]:
+              - generic [ref=e1401]: ML
+              - generic [ref=e1402]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1403]
+          - cell "Round 2 iteration in Claude Design" [ref=e1404]
+          - cell "UI polish design spec + plan, R3 portaled modals + Clear All, deploy safeguard + design management utilities" [ref=e1405]
+          - cell "UI polish design spec + plan, R3 portaled modals + Clear All, deploy safeguard + design management utilities" [ref=e1406]
+          - cell "16 may 2026" [ref=e1407]
+          - cell "1.0" [ref=e1408]
+          - cell "Pending" [ref=e1409]:
+            - generic [ref=e1410]:
+              - img [ref=e1411]
+              - text: Pending
+          - cell "Pendiente" [ref=e1414]:
+            - generic [ref=e1415]:
+              - img [ref=e1416]
+              - text: Pendiente
+          - cell "—" [ref=e1419]
+          - cell "—" [ref=e1420]
+        - row "Seleccionar entrada de Martin de Leon — Sync Domo connector schema with new fields Martin de Leon KBS Order Form Sync Domo connector schema with new fields Repoint ORDERS to new Stage 3 connector dataset + Claudio schema doc (3f9e76b, f61f02b) Repoint ORDERS to new Stage 3 connector dataset + Claudio schema doc (3f9e76b, f61f02b) 16 may 2026 1.0 Pending Pendiente — —" [ref=e1421] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Sync Domo connector schema with new fields" [ref=e1422]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Sync Domo connector schema with new fields" [ref=e1424]
+          - cell "Martin de Leon" [ref=e1426]:
+            - generic [ref=e1427]:
+              - generic [ref=e1428]: ML
+              - generic [ref=e1429]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1430]
+          - cell "Sync Domo connector schema with new fields" [ref=e1431]
+          - cell "Repoint ORDERS to new Stage 3 connector dataset + Claudio schema doc (3f9e76b, f61f02b)" [ref=e1432]
+          - cell "Repoint ORDERS to new Stage 3 connector dataset + Claudio schema doc (3f9e76b, f61f02b)" [ref=e1433]
+          - cell "16 may 2026" [ref=e1434]
+          - cell "1.0" [ref=e1435]
+          - cell "Pending" [ref=e1436]:
+            - generic [ref=e1437]:
+              - img [ref=e1438]
+              - text: Pending
+          - cell "Pendiente" [ref=e1441]:
+            - generic [ref=e1442]:
+              - img [ref=e1443]
+              - text: Pendiente
+          - cell "—" [ref=e1446]
+          - cell "—" [ref=e1447]
+        - 'row "Seleccionar entrada de Martin de Leon — Role-based nav visibility (based on backend) Martin de Leon KBS Order Form Role-based nav visibility (based on backend) UserChip persona switcher: spec, hook, dropdown, dev gate, tests UserChip persona switcher: spec, hook, dropdown, dev gate, tests 16 may 2026 2.0 Pending Pendiente — —" [ref=e1448] [cursor=pointer]':
+          - cell "Seleccionar entrada de Martin de Leon — Role-based nav visibility (based on backend)" [ref=e1449]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Role-based nav visibility (based on backend)" [ref=e1451]
+          - cell "Martin de Leon" [ref=e1453]:
+            - generic [ref=e1454]:
+              - generic [ref=e1455]: ML
+              - generic [ref=e1456]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1457]
+          - cell "Role-based nav visibility (based on backend)" [ref=e1458]
+          - 'cell "UserChip persona switcher: spec, hook, dropdown, dev gate, tests" [ref=e1459]'
+          - 'cell "UserChip persona switcher: spec, hook, dropdown, dev gate, tests" [ref=e1460]'
+          - cell "16 may 2026" [ref=e1461]
+          - cell "2.0" [ref=e1462]
+          - cell "Pending" [ref=e1463]:
+            - generic [ref=e1464]:
+              - img [ref=e1465]
+              - text: Pending
+          - cell "Pendiente" [ref=e1468]:
+            - generic [ref=e1469]:
+              - img [ref=e1470]
+              - text: Pendiente
+          - cell "—" [ref=e1473]
+          - cell "—" [ref=e1474]
+        - row [ref=e1475] [cursor=pointer]:
+          - cell "Seleccionar entrada de Manuel Chouhy — Connector Development" [ref=e1476]:
+            - checkbox "Seleccionar entrada de Manuel Chouhy — Connector Development" [ref=e1478]
+          - cell "Manuel Chouhy" [ref=e1480]:
+            - generic [ref=e1481]:
+              - generic [ref=e1482]: MC
+              - generic [ref=e1483]: Manuel Chouhy
+          - cell "DOMO + Zoho Dashboard Reports" [ref=e1484]
+          - cell "Connector Development" [ref=e1485]
+          - 'cell "set up the JSON No Code OAuth connector in DOMO to pull data from Zoho Projects API, generated OAuth credentials (Server-based Client), and confirmed SouthPoint''s Portal ID (839398163). We built and validated the first Projects dataset, which is bringing real data. Pending: confirm with Eduardo that the projects pulled are the correct ones before saving the dataset." [ref=e1486]'
+          - 'cell "set up the JSON No Code OAuth connector in DOMO to pull data from Zoho Projects API, generated OAuth credentials (Server-based Client), and confirmed SouthPoint''s Portal ID (839398163). We built and validated the first Projects dataset, which is bringing real data. Pending: confirm with Eduardo that the projects pulled are the correct ones before saving the dataset." [ref=e1487]'
+          - cell "15 may 2026" [ref=e1488]
+          - cell "2.0" [ref=e1489]
+          - cell "Pending" [ref=e1490]:
+            - generic [ref=e1491]:
+              - img [ref=e1492]
+              - text: Pending
+          - cell "Pendiente" [ref=e1495]:
+            - generic [ref=e1496]:
+              - img [ref=e1497]
+              - text: Pendiente
+          - cell "—" [ref=e1500]
+          - cell "—" [ref=e1501]
+        - row "Seleccionar entrada de Claudio Riva — Backend fixes and problem solving. Claudio Riva KBS Order Form Backend fixes and problem solving. — 15 may 2026 2.0 Approved Pendiente — —" [ref=e1502] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — Backend fixes and problem solving." [ref=e1503]:
+            - checkbox "Seleccionar entrada de Claudio Riva — Backend fixes and problem solving." [ref=e1505]
+          - cell "Claudio Riva" [ref=e1507]:
+            - generic [ref=e1508]:
+              - generic [ref=e1509]: CR
+              - generic [ref=e1510]: Claudio Riva
+          - cell "KBS Order Form" [ref=e1511]
+          - cell "Backend fixes and problem solving." [ref=e1512]
+          - cell [ref=e1513]
+          - cell "—" [ref=e1514]
+          - cell "15 may 2026" [ref=e1515]
+          - cell "2.0" [ref=e1516]
+          - cell "Approved" [ref=e1517]:
+            - generic [ref=e1518]:
+              - img [ref=e1519]
+              - text: Approved
+          - cell "Pendiente" [ref=e1521]:
+            - generic [ref=e1522]:
+              - img [ref=e1523]
+              - text: Pendiente
+          - cell "—" [ref=e1526]
+          - cell "—" [ref=e1527]
+        - row "Seleccionar entrada de Martin de Leon — Meetings Martin de Leon KBS Order Form Meetings — 15 may 2026 1.0 Pending Pendiente — —" [ref=e1528] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Meetings" [ref=e1529]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Meetings" [ref=e1531]
+          - cell "Martin de Leon" [ref=e1533]:
+            - generic [ref=e1534]:
+              - generic [ref=e1535]: ML
+              - generic [ref=e1536]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1537]
+          - cell "Meetings" [ref=e1538]
+          - cell [ref=e1539]
+          - cell "—" [ref=e1540]
+          - cell "15 may 2026" [ref=e1541]
+          - cell "1.0" [ref=e1542]
+          - cell "Pending" [ref=e1543]:
+            - generic [ref=e1544]:
+              - img [ref=e1545]
+              - text: Pending
+          - cell "Pendiente" [ref=e1548]:
+            - generic [ref=e1549]:
+              - img [ref=e1550]
+              - text: Pendiente
+          - cell "—" [ref=e1553]
+          - cell "—" [ref=e1554]
+        - row "Seleccionar entrada de Felipe Lenzi — Profile Redisigning Felipe Lenzi LinkedIn Profile Redisigning — 14 may 2026 2.0 Approved Pendiente — —" [ref=e1555] [cursor=pointer]:
+          - cell "Seleccionar entrada de Felipe Lenzi — Profile Redisigning" [ref=e1556]:
+            - checkbox "Seleccionar entrada de Felipe Lenzi — Profile Redisigning" [ref=e1558]
+          - cell "Felipe Lenzi" [ref=e1560]:
+            - generic [ref=e1561]:
+              - generic [ref=e1562]: FL
+              - generic [ref=e1563]: Felipe Lenzi
+          - cell "LinkedIn" [ref=e1564]
+          - cell "Profile Redisigning" [ref=e1565]
+          - cell [ref=e1566]
+          - cell "—" [ref=e1567]
+          - cell "14 may 2026" [ref=e1568]
+          - cell "2.0" [ref=e1569]
+          - cell "Approved" [ref=e1570]:
+            - generic [ref=e1571]:
+              - img [ref=e1572]
+              - text: Approved
+          - cell "Pendiente" [ref=e1574]:
+            - generic [ref=e1575]:
+              - img [ref=e1576]
+              - text: Pendiente
+          - cell "—" [ref=e1579]
+          - cell "—" [ref=e1580]
+        - row "Seleccionar entrada de Felipe Lenzi — Rewriting the About section Felipe Lenzi LinkedIn Rewriting the About section — 14 may 2026 1.0 Approved Pendiente — —" [ref=e1581] [cursor=pointer]:
+          - cell "Seleccionar entrada de Felipe Lenzi — Rewriting the About section" [ref=e1582]:
+            - checkbox "Seleccionar entrada de Felipe Lenzi — Rewriting the About section" [ref=e1584]
+          - cell "Felipe Lenzi" [ref=e1586]:
+            - generic [ref=e1587]:
+              - generic [ref=e1588]: FL
+              - generic [ref=e1589]: Felipe Lenzi
+          - cell "LinkedIn" [ref=e1590]
+          - cell "Rewriting the About section" [ref=e1591]
+          - cell [ref=e1592]
+          - cell "—" [ref=e1593]
+          - cell "14 may 2026" [ref=e1594]
+          - cell "1.0" [ref=e1595]
+          - cell "Approved" [ref=e1596]:
+            - generic [ref=e1597]:
+              - img [ref=e1598]
+              - text: Approved
+          - cell "Pendiente" [ref=e1600]:
+            - generic [ref=e1601]:
+              - img [ref=e1602]
+              - text: Pendiente
+          - cell "—" [ref=e1605]
+          - cell "—" [ref=e1606]
+        - row "Seleccionar entrada de Felipe Lenzi — Complete Missing Information Felipe Lenzi LinkedIn Complete Missing Information — 14 may 2026 1.0 Approved Pendiente — —" [ref=e1607] [cursor=pointer]:
+          - cell "Seleccionar entrada de Felipe Lenzi — Complete Missing Information" [ref=e1608]:
+            - checkbox "Seleccionar entrada de Felipe Lenzi — Complete Missing Information" [ref=e1610]
+          - cell "Felipe Lenzi" [ref=e1612]:
+            - generic [ref=e1613]:
+              - generic [ref=e1614]: FL
+              - generic [ref=e1615]: Felipe Lenzi
+          - cell "LinkedIn" [ref=e1616]
+          - cell "Complete Missing Information" [ref=e1617]
+          - cell [ref=e1618]
+          - cell "—" [ref=e1619]
+          - cell "14 may 2026" [ref=e1620]
+          - cell "1.0" [ref=e1621]
+          - cell "Approved" [ref=e1622]:
+            - generic [ref=e1623]:
+              - img [ref=e1624]
+              - text: Approved
+          - cell "Pendiente" [ref=e1626]:
+            - generic [ref=e1627]:
+              - img [ref=e1628]
+              - text: Pendiente
+          - cell "—" [ref=e1631]
+          - cell "—" [ref=e1632]
+        - row "Seleccionar entrada de Manuel Chouhy — Connector Development Manuel Chouhy DOMO + Zoho Dashboard Reports Connector Development — 14 may 2026 2.0 Pending Pendiente — —" [ref=e1633] [cursor=pointer]:
+          - cell "Seleccionar entrada de Manuel Chouhy — Connector Development" [ref=e1634]:
+            - checkbox "Seleccionar entrada de Manuel Chouhy — Connector Development" [ref=e1636]
+          - cell "Manuel Chouhy" [ref=e1638]:
+            - generic [ref=e1639]:
+              - generic [ref=e1640]: MC
+              - generic [ref=e1641]: Manuel Chouhy
+          - cell "DOMO + Zoho Dashboard Reports" [ref=e1642]
+          - cell "Connector Development" [ref=e1643]
+          - cell [ref=e1644]
+          - cell "—" [ref=e1645]
+          - cell "14 may 2026" [ref=e1646]
+          - cell "2.0" [ref=e1647]
+          - cell "Pending" [ref=e1648]:
+            - generic [ref=e1649]:
+              - img [ref=e1650]
+              - text: Pending
+          - cell "Pendiente" [ref=e1653]:
+            - generic [ref=e1654]:
+              - img [ref=e1655]
+              - text: Pendiente
+          - cell "—" [ref=e1658]
+          - cell "—" [ref=e1659]
+        - row "Seleccionar entrada de Claudio Riva — Backend fixes and problem solving. Claudio Riva KBS Order Form Backend fixes and problem solving. — 14 may 2026 2.0 Approved Pendiente — —" [ref=e1660] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — Backend fixes and problem solving." [ref=e1661]:
+            - checkbox "Seleccionar entrada de Claudio Riva — Backend fixes and problem solving." [ref=e1663]
+          - cell "Claudio Riva" [ref=e1665]:
+            - generic [ref=e1666]:
+              - generic [ref=e1667]: CR
+              - generic [ref=e1668]: Claudio Riva
+          - cell "KBS Order Form" [ref=e1669]
+          - cell "Backend fixes and problem solving." [ref=e1670]
+          - cell [ref=e1671]
+          - cell "—" [ref=e1672]
+          - cell "14 may 2026" [ref=e1673]
+          - cell "2.0" [ref=e1674]
+          - cell "Approved" [ref=e1675]:
+            - generic [ref=e1676]:
+              - img [ref=e1677]
+              - text: Approved
+          - cell "Pendiente" [ref=e1679]:
+            - generic [ref=e1680]:
+              - img [ref=e1681]
+              - text: Pendiente
+          - cell "—" [ref=e1684]
+          - cell "—" [ref=e1685]
+        - row "Seleccionar entrada de Martin de Leon — Workflow and Approver View Development Martin de Leon KBS Order Form Workflow and Approver View Development — 14 may 2026 3.0 Pending Pendiente — —" [ref=e1686] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Workflow and Approver View Development" [ref=e1687]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Workflow and Approver View Development" [ref=e1689]
+          - cell "Martin de Leon" [ref=e1691]:
+            - generic [ref=e1692]:
+              - generic [ref=e1693]: ML
+              - generic [ref=e1694]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1695]
+          - cell "Workflow and Approver View Development" [ref=e1696]
+          - cell [ref=e1697]
+          - cell "—" [ref=e1698]
+          - cell "14 may 2026" [ref=e1699]
+          - cell "3.0" [ref=e1700]
+          - cell "Pending" [ref=e1701]:
+            - generic [ref=e1702]:
+              - img [ref=e1703]
+              - text: Pending
+          - cell "Pendiente" [ref=e1706]:
+            - generic [ref=e1707]:
+              - img [ref=e1708]
+              - text: Pendiente
+          - cell "—" [ref=e1711]
+          - cell "—" [ref=e1712]
+        - row "Seleccionar entrada de Martin de Leon — Workflow Review Martin de Leon KBS Order Form Workflow Review — 14 may 2026 3.0 Pending Pendiente — —" [ref=e1713] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e1714]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e1716]
+          - cell "Martin de Leon" [ref=e1718]:
+            - generic [ref=e1719]:
+              - generic [ref=e1720]: ML
+              - generic [ref=e1721]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1722]
+          - cell "Workflow Review" [ref=e1723]
+          - cell [ref=e1724]
+          - cell "—" [ref=e1725]
+          - cell "14 may 2026" [ref=e1726]
+          - cell "3.0" [ref=e1727]
+          - cell "Pending" [ref=e1728]:
+            - generic [ref=e1729]:
+              - img [ref=e1730]
+              - text: Pending
+          - cell "Pendiente" [ref=e1733]:
+            - generic [ref=e1734]:
+              - img [ref=e1735]
+              - text: Pendiente
+          - cell "—" [ref=e1738]
+          - cell "—" [ref=e1739]
+        - row "Seleccionar entrada de Martin de Leon — Backend coonection to Domo Martin de Leon KBS Order Form Backend coonection to Domo — 14 may 2026 1.0 Pending Pendiente — —" [ref=e1740] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Backend coonection to Domo" [ref=e1741]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Backend coonection to Domo" [ref=e1743]
+          - cell "Martin de Leon" [ref=e1745]:
+            - generic [ref=e1746]:
+              - generic [ref=e1747]: ML
+              - generic [ref=e1748]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1749]
+          - cell "Backend coonection to Domo" [ref=e1750]
+          - cell [ref=e1751]
+          - cell "—" [ref=e1752]
+          - cell "14 may 2026" [ref=e1753]
+          - cell "1.0" [ref=e1754]
+          - cell "Pending" [ref=e1755]:
+            - generic [ref=e1756]:
+              - img [ref=e1757]
+              - text: Pending
+          - cell "Pendiente" [ref=e1760]:
+            - generic [ref=e1761]:
+              - img [ref=e1762]
+              - text: Pendiente
+          - cell "—" [ref=e1765]
+          - cell "—" [ref=e1766]
+        - row "Seleccionar entrada de Martin de Leon — Review SMTP email sender credentials provided by the Client. Martin de Leon KBS Order Form Review SMTP email sender credentials provided by the Client. — 14 may 2026 1.0 Pending Pendiente — —" [ref=e1767] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Review SMTP email sender credentials provided by the Client." [ref=e1768]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Review SMTP email sender credentials provided by the Client." [ref=e1770]
+          - cell "Martin de Leon" [ref=e1772]:
+            - generic [ref=e1773]:
+              - generic [ref=e1774]: ML
+              - generic [ref=e1775]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1776]
+          - cell "Review SMTP email sender credentials provided by the Client." [ref=e1777]
+          - cell [ref=e1778]
+          - cell "—" [ref=e1779]
+          - cell "14 may 2026" [ref=e1780]
+          - cell "1.0" [ref=e1781]
+          - cell "Pending" [ref=e1782]:
+            - generic [ref=e1783]:
+              - img [ref=e1784]
+              - text: Pending
+          - cell "Pendiente" [ref=e1787]:
+            - generic [ref=e1788]:
+              - img [ref=e1789]
+              - text: Pendiente
+          - cell "—" [ref=e1792]
+          - cell "—" [ref=e1793]
+        - row "Seleccionar entrada de Martin de Leon — Meetings Martin de Leon KBS Order Form Meetings — 14 may 2026 1.0 Pending Pendiente — —" [ref=e1794] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Meetings" [ref=e1795]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Meetings" [ref=e1797]
+          - cell "Martin de Leon" [ref=e1799]:
+            - generic [ref=e1800]:
+              - generic [ref=e1801]: ML
+              - generic [ref=e1802]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1803]
+          - cell "Meetings" [ref=e1804]
+          - cell [ref=e1805]
+          - cell "—" [ref=e1806]
+          - cell "14 may 2026" [ref=e1807]
+          - cell "1.0" [ref=e1808]
+          - cell "Pending" [ref=e1809]:
+            - generic [ref=e1810]:
+              - img [ref=e1811]
+              - text: Pending
+          - cell "Pendiente" [ref=e1814]:
+            - generic [ref=e1815]:
+              - img [ref=e1816]
+              - text: Pendiente
+          - cell "—" [ref=e1819]
+          - cell "—" [ref=e1820]
+        - row "Seleccionar entrada de Manuel Chouhy — Investigate ZOHO API Manuel Chouhy DOMO + Zoho Dashboard Reports Investigate ZOHO API — 13 may 2026 2.0 Pending Pendiente — —" [ref=e1821] [cursor=pointer]:
+          - cell "Seleccionar entrada de Manuel Chouhy — Investigate ZOHO API" [ref=e1822]:
+            - checkbox "Seleccionar entrada de Manuel Chouhy — Investigate ZOHO API" [ref=e1824]
+          - cell "Manuel Chouhy" [ref=e1826]:
+            - generic [ref=e1827]:
+              - generic [ref=e1828]: MC
+              - generic [ref=e1829]: Manuel Chouhy
+          - cell "DOMO + Zoho Dashboard Reports" [ref=e1830]
+          - cell "Investigate ZOHO API" [ref=e1831]
+          - cell [ref=e1832]
+          - cell "—" [ref=e1833]
+          - cell "13 may 2026" [ref=e1834]
+          - cell "2.0" [ref=e1835]
+          - cell "Pending" [ref=e1836]:
+            - generic [ref=e1837]:
+              - img [ref=e1838]
+              - text: Pending
+          - cell "Pendiente" [ref=e1841]:
+            - generic [ref=e1842]:
+              - img [ref=e1843]
+              - text: Pendiente
+          - cell "—" [ref=e1846]
+          - cell "—" [ref=e1847]
+        - row "Seleccionar entrada de Claudio Riva — Backend fixes and problem solving. Claudio Riva KBS Order Form Backend fixes and problem solving. — 13 may 2026 2.0 Approved Pendiente — —" [ref=e1848] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — Backend fixes and problem solving." [ref=e1849]:
+            - checkbox "Seleccionar entrada de Claudio Riva — Backend fixes and problem solving." [ref=e1851]
+          - cell "Claudio Riva" [ref=e1853]:
+            - generic [ref=e1854]:
+              - generic [ref=e1855]: CR
+              - generic [ref=e1856]: Claudio Riva
+          - cell "KBS Order Form" [ref=e1857]
+          - cell "Backend fixes and problem solving." [ref=e1858]
+          - cell [ref=e1859]
+          - cell "—" [ref=e1860]
+          - cell "13 may 2026" [ref=e1861]
+          - cell "2.0" [ref=e1862]
+          - cell "Approved" [ref=e1863]:
+            - generic [ref=e1864]:
+              - img [ref=e1865]
+              - text: Approved
+          - cell "Pendiente" [ref=e1867]:
+            - generic [ref=e1868]:
+              - img [ref=e1869]
+              - text: Pendiente
+          - cell "—" [ref=e1872]
+          - cell "—" [ref=e1873]
+        - row "Seleccionar entrada de Martin de Leon — Connect the view with backend Martin de Leon KBS Order Form Connect the view with backend — 13 may 2026 4.0 Pending Pendiente — —" [ref=e1874] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Connect the view with backend" [ref=e1875]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Connect the view with backend" [ref=e1877]
+          - cell "Martin de Leon" [ref=e1879]:
+            - generic [ref=e1880]:
+              - generic [ref=e1881]: ML
+              - generic [ref=e1882]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1883]
+          - cell "Connect the view with backend" [ref=e1884]
+          - cell [ref=e1885]
+          - cell "—" [ref=e1886]
+          - cell "13 may 2026" [ref=e1887]
+          - cell "4.0" [ref=e1888]
+          - cell "Pending" [ref=e1889]:
+            - generic [ref=e1890]:
+              - img [ref=e1891]
+              - text: Pending
+          - cell "Pendiente" [ref=e1894]:
+            - generic [ref=e1895]:
+              - img [ref=e1896]
+              - text: Pendiente
+          - cell "—" [ref=e1899]
+          - cell "—" [ref=e1900]
+        - row "Seleccionar entrada de Martin de Leon — Backend coonection to Domo Martin de Leon KBS Order Form Backend coonection to Domo — 13 may 2026 4.0 Pending Pendiente — —" [ref=e1901] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Backend coonection to Domo" [ref=e1902]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Backend coonection to Domo" [ref=e1904]
+          - cell "Martin de Leon" [ref=e1906]:
+            - generic [ref=e1907]:
+              - generic [ref=e1908]: ML
+              - generic [ref=e1909]: Martin de Leon
+          - cell "KBS Order Form" [ref=e1910]
+          - cell "Backend coonection to Domo" [ref=e1911]
+          - cell [ref=e1912]
+          - cell "—" [ref=e1913]
+          - cell "13 may 2026" [ref=e1914]
+          - cell "4.0" [ref=e1915]
+          - cell "Pending" [ref=e1916]:
+            - generic [ref=e1917]:
+              - img [ref=e1918]
+              - text: Pending
+          - cell "Pendiente" [ref=e1921]:
+            - generic [ref=e1922]:
+              - img [ref=e1923]
+              - text: Pendiente
+          - cell "—" [ref=e1926]
+          - cell "—" [ref=e1927]
+        - row "Seleccionar entrada de Martin da Silva — Investigate Area Manager Bianca Corrales Martin da Silva SalesForce Investigate Area Manager Bianca Corrales — 12 may 2026 1.0 Approved Pendiente — —" [ref=e1928] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin da Silva — Investigate Area Manager Bianca Corrales" [ref=e1929]:
+            - checkbox "Seleccionar entrada de Martin da Silva — Investigate Area Manager Bianca Corrales" [ref=e1931]
+          - cell "Martin da Silva" [ref=e1933]:
+            - generic [ref=e1934]:
+              - generic [ref=e1935]: MS
+              - generic [ref=e1936]: Martin da Silva
+          - cell "SalesForce" [ref=e1937]
+          - cell "Investigate Area Manager Bianca Corrales" [ref=e1938]
+          - cell [ref=e1939]
+          - cell "—" [ref=e1940]
+          - cell "12 may 2026" [ref=e1941]
+          - cell "1.0" [ref=e1942]
+          - cell "Approved" [ref=e1943]:
+            - generic [ref=e1944]:
+              - img [ref=e1945]
+              - text: Approved
+          - cell "Pendiente" [ref=e1947]:
+            - generic [ref=e1948]:
+              - img [ref=e1949]
+              - text: Pendiente
+          - cell "—" [ref=e1952]
+          - cell "—" [ref=e1953]
+        - row "Seleccionar entrada de Martin da Silva — Revenue Formulas Update Martin da Silva SalesForce Revenue Formulas Update — 12 may 2026 1.0 Approved Pendiente — —" [ref=e1954] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin da Silva — Revenue Formulas Update" [ref=e1955]:
+            - checkbox "Seleccionar entrada de Martin da Silva — Revenue Formulas Update" [ref=e1957]
+          - cell "Martin da Silva" [ref=e1959]:
+            - generic [ref=e1960]:
+              - generic [ref=e1961]: MS
+              - generic [ref=e1962]: Martin da Silva
+          - cell "SalesForce" [ref=e1963]
+          - cell "Revenue Formulas Update" [ref=e1964]
+          - cell [ref=e1965]
+          - cell "—" [ref=e1966]
+          - cell "12 may 2026" [ref=e1967]
+          - cell "1.0" [ref=e1968]
+          - cell "Approved" [ref=e1969]:
+            - generic [ref=e1970]:
+              - img [ref=e1971]
+              - text: Approved
+          - cell "Pendiente" [ref=e1973]:
+            - generic [ref=e1974]:
+              - img [ref=e1975]
+              - text: Pendiente
+          - cell "—" [ref=e1978]
+          - cell "—" [ref=e1979]
+        - row "Seleccionar entrada de Claudio Riva — Backend fixes and problem solving. Claudio Riva KBS Order Form Backend fixes and problem solving. — 12 may 2026 2.0 Approved Pendiente — —" [ref=e1980] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — Backend fixes and problem solving." [ref=e1981]:
+            - checkbox "Seleccionar entrada de Claudio Riva — Backend fixes and problem solving." [ref=e1983]
+          - cell "Claudio Riva" [ref=e1985]:
+            - generic [ref=e1986]:
+              - generic [ref=e1987]: CR
+              - generic [ref=e1988]: Claudio Riva
+          - cell "KBS Order Form" [ref=e1989]
+          - cell "Backend fixes and problem solving." [ref=e1990]
+          - cell [ref=e1991]
+          - cell "—" [ref=e1992]
+          - cell "12 may 2026" [ref=e1993]
+          - cell "2.0" [ref=e1994]
+          - cell "Approved" [ref=e1995]:
+            - generic [ref=e1996]:
+              - img [ref=e1997]
+              - text: Approved
+          - cell "Pendiente" [ref=e1999]:
+            - generic [ref=e2000]:
+              - img [ref=e2001]
+              - text: Pendiente
+          - cell "—" [ref=e2004]
+          - cell "—" [ref=e2005]
+        - row "Seleccionar entrada de Martin de Leon — Develop the Approver View frontend. Martin de Leon KBS Order Form Develop the Approver View frontend. — 12 may 2026 5.0 Pending Pendiente — —" [ref=e2006] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Develop the Approver View frontend." [ref=e2007]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Develop the Approver View frontend." [ref=e2009]
+          - cell "Martin de Leon" [ref=e2011]:
+            - generic [ref=e2012]:
+              - generic [ref=e2013]: ML
+              - generic [ref=e2014]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2015]
+          - cell "Develop the Approver View frontend." [ref=e2016]
+          - cell [ref=e2017]
+          - cell "—" [ref=e2018]
+          - cell "12 may 2026" [ref=e2019]
+          - cell "5.0" [ref=e2020]
+          - cell "Pending" [ref=e2021]:
+            - generic [ref=e2022]:
+              - img [ref=e2023]
+              - text: Pending
+          - cell "Pendiente" [ref=e2026]:
+            - generic [ref=e2027]:
+              - img [ref=e2028]
+              - text: Pendiente
+          - cell "—" [ref=e2031]
+          - cell "—" [ref=e2032]
+        - row "Seleccionar entrada de Martin de Leon — Connect the view with backend Martin de Leon KBS Order Form Connect the view with backend — 12 may 2026 3.0 Pending Pendiente — —" [ref=e2033] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Connect the view with backend" [ref=e2034]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Connect the view with backend" [ref=e2036]
+          - cell "Martin de Leon" [ref=e2038]:
+            - generic [ref=e2039]:
+              - generic [ref=e2040]: ML
+              - generic [ref=e2041]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2042]
+          - cell "Connect the view with backend" [ref=e2043]
+          - cell [ref=e2044]
+          - cell "—" [ref=e2045]
+          - cell "12 may 2026" [ref=e2046]
+          - cell "3.0" [ref=e2047]
+          - cell "Pending" [ref=e2048]:
+            - generic [ref=e2049]:
+              - img [ref=e2050]
+              - text: Pending
+          - cell "Pendiente" [ref=e2053]:
+            - generic [ref=e2054]:
+              - img [ref=e2055]
+              - text: Pendiente
+          - cell "—" [ref=e2058]
+          - cell "—" [ref=e2059]
+        - row "Seleccionar entrada de Claudio Riva — Backend fixes and problem solving. Claudio Riva KBS Order Form Backend fixes and problem solving. — 11 may 2026 2.0 Approved Pendiente — —" [ref=e2060] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — Backend fixes and problem solving." [ref=e2061]:
+            - checkbox "Seleccionar entrada de Claudio Riva — Backend fixes and problem solving." [ref=e2063]
+          - cell "Claudio Riva" [ref=e2065]:
+            - generic [ref=e2066]:
+              - generic [ref=e2067]: CR
+              - generic [ref=e2068]: Claudio Riva
+          - cell "KBS Order Form" [ref=e2069]
+          - cell "Backend fixes and problem solving." [ref=e2070]
+          - cell [ref=e2071]
+          - cell "—" [ref=e2072]
+          - cell "11 may 2026" [ref=e2073]
+          - cell "2.0" [ref=e2074]
+          - cell "Approved" [ref=e2075]:
+            - generic [ref=e2076]:
+              - img [ref=e2077]
+              - text: Approved
+          - cell "Pendiente" [ref=e2079]:
+            - generic [ref=e2080]:
+              - img [ref=e2081]
+              - text: Pendiente
+          - cell "—" [ref=e2084]
+          - cell "—" [ref=e2085]
+        - row "Seleccionar entrada de Martin de Leon — Workflow Review Martin de Leon KBS Order Form Workflow Review — 11 may 2026 1.0 Pending Pendiente — —" [ref=e2086] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e2087]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e2089]
+          - cell "Martin de Leon" [ref=e2091]:
+            - generic [ref=e2092]:
+              - generic [ref=e2093]: ML
+              - generic [ref=e2094]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2095]
+          - cell "Workflow Review" [ref=e2096]
+          - cell [ref=e2097]
+          - cell "—" [ref=e2098]
+          - cell "11 may 2026" [ref=e2099]
+          - cell "1.0" [ref=e2100]
+          - cell "Pending" [ref=e2101]:
+            - generic [ref=e2102]:
+              - img [ref=e2103]
+              - text: Pending
+          - cell "Pendiente" [ref=e2106]:
+            - generic [ref=e2107]:
+              - img [ref=e2108]
+              - text: Pendiente
+          - cell "—" [ref=e2111]
+          - cell "—" [ref=e2112]
+        - row "Seleccionar entrada de Martin de Leon — Modify landing page to send order to backend. Martin de Leon KBS Order Form Modify landing page to send order to backend. — 11 may 2026 2.0 Pending Pendiente — —" [ref=e2113] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Modify landing page to send order to backend." [ref=e2114]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Modify landing page to send order to backend." [ref=e2116]
+          - cell "Martin de Leon" [ref=e2118]:
+            - generic [ref=e2119]:
+              - generic [ref=e2120]: ML
+              - generic [ref=e2121]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2122]
+          - cell "Modify landing page to send order to backend." [ref=e2123]
+          - cell [ref=e2124]
+          - cell "—" [ref=e2125]
+          - cell "11 may 2026" [ref=e2126]
+          - cell "2.0" [ref=e2127]
+          - cell "Pending" [ref=e2128]:
+            - generic [ref=e2129]:
+              - img [ref=e2130]
+              - text: Pending
+          - cell "Pendiente" [ref=e2133]:
+            - generic [ref=e2134]:
+              - img [ref=e2135]
+              - text: Pendiente
+          - cell "—" [ref=e2138]
+          - cell "—" [ref=e2139]
+        - row "Seleccionar entrada de Martin de Leon — Define endpoints Martin de Leon KBS Order Form Define endpoints — 11 may 2026 1.0 Pending Pendiente — —" [ref=e2140] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Define endpoints" [ref=e2141]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Define endpoints" [ref=e2143]
+          - cell "Martin de Leon" [ref=e2145]:
+            - generic [ref=e2146]:
+              - generic [ref=e2147]: ML
+              - generic [ref=e2148]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2149]
+          - cell "Define endpoints" [ref=e2150]
+          - cell [ref=e2151]
+          - cell "—" [ref=e2152]
+          - cell "11 may 2026" [ref=e2153]
+          - cell "1.0" [ref=e2154]
+          - cell "Pending" [ref=e2155]:
+            - generic [ref=e2156]:
+              - img [ref=e2157]
+              - text: Pending
+          - cell "Pendiente" [ref=e2160]:
+            - generic [ref=e2161]:
+              - img [ref=e2162]
+              - text: Pendiente
+          - cell "—" [ref=e2165]
+          - cell "—" [ref=e2166]
+        - row "Seleccionar entrada de Martin de Leon — Define Approver View requirements for backend Martin de Leon KBS Order Form Define Approver View requirements for backend — 11 may 2026 1.0 Pending Pendiente — —" [ref=e2167] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Define Approver View requirements for backend" [ref=e2168]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Define Approver View requirements for backend" [ref=e2170]
+          - cell "Martin de Leon" [ref=e2172]:
+            - generic [ref=e2173]:
+              - generic [ref=e2174]: ML
+              - generic [ref=e2175]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2176]
+          - cell "Define Approver View requirements for backend" [ref=e2177]
+          - cell [ref=e2178]
+          - cell "—" [ref=e2179]
+          - cell "11 may 2026" [ref=e2180]
+          - cell "1.0" [ref=e2181]
+          - cell "Pending" [ref=e2182]:
+            - generic [ref=e2183]:
+              - img [ref=e2184]
+              - text: Pending
+          - cell "Pendiente" [ref=e2187]:
+            - generic [ref=e2188]:
+              - img [ref=e2189]
+              - text: Pendiente
+          - cell "—" [ref=e2192]
+          - cell "—" [ref=e2193]
+        - row "Seleccionar entrada de Martin de Leon — Develop the Approver View frontend. Martin de Leon KBS Order Form Develop the Approver View frontend. — 11 may 2026 3.0 Pending Pendiente — —" [ref=e2194] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Develop the Approver View frontend." [ref=e2195]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Develop the Approver View frontend." [ref=e2197]
+          - cell "Martin de Leon" [ref=e2199]:
+            - generic [ref=e2200]:
+              - generic [ref=e2201]: ML
+              - generic [ref=e2202]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2203]
+          - cell "Develop the Approver View frontend." [ref=e2204]
+          - cell [ref=e2205]
+          - cell "—" [ref=e2206]
+          - cell "11 may 2026" [ref=e2207]
+          - cell "3.0" [ref=e2208]
+          - cell "Pending" [ref=e2209]:
+            - generic [ref=e2210]:
+              - img [ref=e2211]
+              - text: Pending
+          - cell "Pendiente" [ref=e2214]:
+            - generic [ref=e2215]:
+              - img [ref=e2216]
+              - text: Pendiente
+          - cell "—" [ref=e2219]
+          - cell "—" [ref=e2220]
+        - row "Seleccionar entrada de Martin de Leon — Meetings Martin de Leon KBS Order Form Meetings — 11 may 2026 1.0 Pending Pendiente — —" [ref=e2221] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Meetings" [ref=e2222]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Meetings" [ref=e2224]
+          - cell "Martin de Leon" [ref=e2226]:
+            - generic [ref=e2227]:
+              - generic [ref=e2228]: ML
+              - generic [ref=e2229]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2230]
+          - cell "Meetings" [ref=e2231]
+          - cell [ref=e2232]
+          - cell "—" [ref=e2233]
+          - cell "11 may 2026" [ref=e2234]
+          - cell "1.0" [ref=e2235]
+          - cell "Pending" [ref=e2236]:
+            - generic [ref=e2237]:
+              - img [ref=e2238]
+              - text: Pending
+          - cell "Pendiente" [ref=e2241]:
+            - generic [ref=e2242]:
+              - img [ref=e2243]
+              - text: Pendiente
+          - cell "—" [ref=e2246]
+          - cell "—" [ref=e2247]
+        - row "Seleccionar entrada de Martin de Leon — Modify landing page to send order to backend. Martin de Leon KBS Order Form Modify landing page to send order to backend. — 10 may 2026 1.0 Pending Pendiente — —" [ref=e2248] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Modify landing page to send order to backend." [ref=e2249]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Modify landing page to send order to backend." [ref=e2251]
+          - cell "Martin de Leon" [ref=e2253]:
+            - generic [ref=e2254]:
+              - generic [ref=e2255]: ML
+              - generic [ref=e2256]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2257]
+          - cell "Modify landing page to send order to backend." [ref=e2258]
+          - cell [ref=e2259]
+          - cell "—" [ref=e2260]
+          - cell "10 may 2026" [ref=e2261]
+          - cell "1.0" [ref=e2262]
+          - cell "Pending" [ref=e2263]:
+            - generic [ref=e2264]:
+              - img [ref=e2265]
+              - text: Pending
+          - cell "Pendiente" [ref=e2268]:
+            - generic [ref=e2269]:
+              - img [ref=e2270]
+              - text: Pendiente
+          - cell "—" [ref=e2273]
+          - cell "—" [ref=e2274]
+        - row "Seleccionar entrada de Martin de Leon — Workflow and Approver View Development Martin de Leon KBS Order Form Workflow and Approver View Development — 10 may 2026 4.0 Pending Pendiente — —" [ref=e2275] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Workflow and Approver View Development" [ref=e2276]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Workflow and Approver View Development" [ref=e2278]
+          - cell "Martin de Leon" [ref=e2280]:
+            - generic [ref=e2281]:
+              - generic [ref=e2282]: ML
+              - generic [ref=e2283]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2284]
+          - cell "Workflow and Approver View Development" [ref=e2285]
+          - cell [ref=e2286]
+          - cell "—" [ref=e2287]
+          - cell "10 may 2026" [ref=e2288]
+          - cell "4.0" [ref=e2289]
+          - cell "Pending" [ref=e2290]:
+            - generic [ref=e2291]:
+              - img [ref=e2292]
+              - text: Pending
+          - cell "Pendiente" [ref=e2295]:
+            - generic [ref=e2296]:
+              - img [ref=e2297]
+              - text: Pendiente
+          - cell "—" [ref=e2300]
+          - cell "—" [ref=e2301]
+        - row "Seleccionar entrada de Martin de Leon — Workflow Review Martin de Leon KBS Order Form Workflow Review — 10 may 2026 2.0 Pending Pendiente — —" [ref=e2302] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e2303]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e2305]
+          - cell "Martin de Leon" [ref=e2307]:
+            - generic [ref=e2308]:
+              - generic [ref=e2309]: ML
+              - generic [ref=e2310]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2311]
+          - cell "Workflow Review" [ref=e2312]
+          - cell [ref=e2313]
+          - cell "—" [ref=e2314]
+          - cell "10 may 2026" [ref=e2315]
+          - cell "2.0" [ref=e2316]
+          - cell "Pending" [ref=e2317]:
+            - generic [ref=e2318]:
+              - img [ref=e2319]
+              - text: Pending
+          - cell "Pendiente" [ref=e2322]:
+            - generic [ref=e2323]:
+              - img [ref=e2324]
+              - text: Pendiente
+          - cell "—" [ref=e2327]
+          - cell "—" [ref=e2328]
+        - row "Seleccionar entrada de Martin da Silva — Revenue Formulas Update Martin da Silva SalesForce Revenue Formulas Update — 08 may 2026 2.0 Approved Pendiente — —" [ref=e2329] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin da Silva — Revenue Formulas Update" [ref=e2330]:
+            - checkbox "Seleccionar entrada de Martin da Silva — Revenue Formulas Update" [ref=e2332]
+          - cell "Martin da Silva" [ref=e2334]:
+            - generic [ref=e2335]:
+              - generic [ref=e2336]: MS
+              - generic [ref=e2337]: Martin da Silva
+          - cell "SalesForce" [ref=e2338]
+          - cell "Revenue Formulas Update" [ref=e2339]
+          - cell [ref=e2340]
+          - cell "—" [ref=e2341]
+          - cell "08 may 2026" [ref=e2342]
+          - cell "2.0" [ref=e2343]
+          - cell "Approved" [ref=e2344]:
+            - generic [ref=e2345]:
+              - img [ref=e2346]
+              - text: Approved
+          - cell "Pendiente" [ref=e2348]:
+            - generic [ref=e2349]:
+              - img [ref=e2350]
+              - text: Pendiente
+          - cell "—" [ref=e2353]
+          - cell "—" [ref=e2354]
+        - row "Seleccionar entrada de Claudio Riva — Backend Development Claudio Riva KBS Order Form Backend Development — 08 may 2026 2.0 Approved Pendiente — —" [ref=e2355] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — Backend Development" [ref=e2356]:
+            - checkbox "Seleccionar entrada de Claudio Riva — Backend Development" [ref=e2358]
+          - cell "Claudio Riva" [ref=e2360]:
+            - generic [ref=e2361]:
+              - generic [ref=e2362]: CR
+              - generic [ref=e2363]: Claudio Riva
+          - cell "KBS Order Form" [ref=e2364]
+          - cell "Backend Development" [ref=e2365]
+          - cell [ref=e2366]
+          - cell "—" [ref=e2367]
+          - cell "08 may 2026" [ref=e2368]
+          - cell "2.0" [ref=e2369]
+          - cell "Approved" [ref=e2370]:
+            - generic [ref=e2371]:
+              - img [ref=e2372]
+              - text: Approved
+          - cell "Pendiente" [ref=e2374]:
+            - generic [ref=e2375]:
+              - img [ref=e2376]
+              - text: Pendiente
+          - cell "—" [ref=e2379]
+          - cell "—" [ref=e2380]
+        - row "Seleccionar entrada de Martin da Silva — Revenue Formulas Update Martin da Silva SalesForce Revenue Formulas Update — 07 may 2026 2.0 Approved Pendiente — —" [ref=e2381] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin da Silva — Revenue Formulas Update" [ref=e2382]:
+            - checkbox "Seleccionar entrada de Martin da Silva — Revenue Formulas Update" [ref=e2384]
+          - cell "Martin da Silva" [ref=e2386]:
+            - generic [ref=e2387]:
+              - generic [ref=e2388]: MS
+              - generic [ref=e2389]: Martin da Silva
+          - cell "SalesForce" [ref=e2390]
+          - cell "Revenue Formulas Update" [ref=e2391]
+          - cell [ref=e2392]
+          - cell "—" [ref=e2393]
+          - cell "07 may 2026" [ref=e2394]
+          - cell "2.0" [ref=e2395]
+          - cell "Approved" [ref=e2396]:
+            - generic [ref=e2397]:
+              - img [ref=e2398]
+              - text: Approved
+          - cell "Pendiente" [ref=e2400]:
+            - generic [ref=e2401]:
+              - img [ref=e2402]
+              - text: Pendiente
+          - cell "—" [ref=e2405]
+          - cell "—" [ref=e2406]
+        - row "Seleccionar entrada de Claudio Riva — Backend Development Claudio Riva KBS Order Form Backend Development — 07 may 2026 2.0 Approved Pendiente — —" [ref=e2407] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — Backend Development" [ref=e2408]:
+            - checkbox "Seleccionar entrada de Claudio Riva — Backend Development" [ref=e2410]
+          - cell "Claudio Riva" [ref=e2412]:
+            - generic [ref=e2413]:
+              - generic [ref=e2414]: CR
+              - generic [ref=e2415]: Claudio Riva
+          - cell "KBS Order Form" [ref=e2416]
+          - cell "Backend Development" [ref=e2417]
+          - cell [ref=e2418]
+          - cell "—" [ref=e2419]
+          - cell "07 may 2026" [ref=e2420]
+          - cell "2.0" [ref=e2421]
+          - cell "Approved" [ref=e2422]:
+            - generic [ref=e2423]:
+              - img [ref=e2424]
+              - text: Approved
+          - cell "Pendiente" [ref=e2426]:
+            - generic [ref=e2427]:
+              - img [ref=e2428]
+              - text: Pendiente
+          - cell "—" [ref=e2431]
+          - cell "—" [ref=e2432]
+        - row "Seleccionar entrada de Martin de Leon — Workflow Review Martin de Leon KBS Order Form Workflow Review - Backend fixes and problem solving. - Help with backend coonection to Domo.- Review SMTP email sender credentials provided by Guillermo. - Backend fixes and problem solving. - Help with backend coonection to Domo.- Review SMTP email sender credentials provided by Guillermo. 07 may 2026 4.0 Pending Pendiente — —" [ref=e2433] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e2434]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e2436]
+          - cell "Martin de Leon" [ref=e2438]:
+            - generic [ref=e2439]:
+              - generic [ref=e2440]: ML
+              - generic [ref=e2441]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2442]
+          - cell "Workflow Review" [ref=e2443]
+          - cell "- Backend fixes and problem solving. - Help with backend coonection to Domo.- Review SMTP email sender credentials provided by Guillermo." [ref=e2444]
+          - cell "- Backend fixes and problem solving. - Help with backend coonection to Domo.- Review SMTP email sender credentials provided by Guillermo." [ref=e2445]
+          - cell "07 may 2026" [ref=e2446]
+          - cell "4.0" [ref=e2447]
+          - cell "Pending" [ref=e2448]:
+            - generic [ref=e2449]:
+              - img [ref=e2450]
+              - text: Pending
+          - cell "Pendiente" [ref=e2453]:
+            - generic [ref=e2454]:
+              - img [ref=e2455]
+              - text: Pendiente
+          - cell "—" [ref=e2458]
+          - cell "—" [ref=e2459]
+        - row "Seleccionar entrada de Eduardo Cardozo — Project Management Eduardo Cardozo KBS Order Form Project Management - Discuss Zoho features with Eduardo. - Learn Zoho with Eduardo.- Migrate portal tasks to Zoho and input hours. - Discuss Zoho features with Eduardo. - Learn Zoho with Eduardo.- Migrate portal tasks to Zoho and input hours. 07 may 2026 1.0 Approved Pendiente — —" [ref=e2460] [cursor=pointer]:
+          - cell "Seleccionar entrada de Eduardo Cardozo — Project Management" [ref=e2461]:
+            - checkbox "Seleccionar entrada de Eduardo Cardozo — Project Management" [ref=e2463]
+          - cell "Eduardo Cardozo" [ref=e2465]:
+            - generic [ref=e2466]:
+              - generic [ref=e2467]: EC
+              - generic [ref=e2468]: Eduardo Cardozo
+          - cell "KBS Order Form" [ref=e2469]
+          - cell "Project Management" [ref=e2470]
+          - cell "- Discuss Zoho features with Eduardo. - Learn Zoho with Eduardo.- Migrate portal tasks to Zoho and input hours." [ref=e2471]
+          - cell "- Discuss Zoho features with Eduardo. - Learn Zoho with Eduardo.- Migrate portal tasks to Zoho and input hours." [ref=e2472]
+          - cell "07 may 2026" [ref=e2473]
+          - cell "1.0" [ref=e2474]
+          - cell "Approved" [ref=e2475]:
+            - generic [ref=e2476]:
+              - img [ref=e2477]
+              - text: Approved
+          - cell "Pendiente" [ref=e2479]:
+            - generic [ref=e2480]:
+              - img [ref=e2481]
+              - text: Pendiente
+          - cell "—" [ref=e2484]
+          - cell "—" [ref=e2485]
+        - row "Seleccionar entrada de Martin da Silva — Revenue Formulas Update Martin da Silva SalesForce Revenue Formulas Update — 06 may 2026 2.0 Approved Pendiente — —" [ref=e2486] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin da Silva — Revenue Formulas Update" [ref=e2487]:
+            - checkbox "Seleccionar entrada de Martin da Silva — Revenue Formulas Update" [ref=e2489]
+          - cell "Martin da Silva" [ref=e2491]:
+            - generic [ref=e2492]:
+              - generic [ref=e2493]: MS
+              - generic [ref=e2494]: Martin da Silva
+          - cell "SalesForce" [ref=e2495]
+          - cell "Revenue Formulas Update" [ref=e2496]
+          - cell [ref=e2497]
+          - cell "—" [ref=e2498]
+          - cell "06 may 2026" [ref=e2499]
+          - cell "2.0" [ref=e2500]
+          - cell "Approved" [ref=e2501]:
+            - generic [ref=e2502]:
+              - img [ref=e2503]
+              - text: Approved
+          - cell "Pendiente" [ref=e2505]:
+            - generic [ref=e2506]:
+              - img [ref=e2507]
+              - text: Pendiente
+          - cell "—" [ref=e2510]
+          - cell "—" [ref=e2511]
+        - row "Seleccionar entrada de Claudio Riva — Backend Development Claudio Riva KBS Order Form Backend Development — 06 may 2026 2.0 Approved Pendiente — —" [ref=e2512] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — Backend Development" [ref=e2513]:
+            - checkbox "Seleccionar entrada de Claudio Riva — Backend Development" [ref=e2515]
+          - cell "Claudio Riva" [ref=e2517]:
+            - generic [ref=e2518]:
+              - generic [ref=e2519]: CR
+              - generic [ref=e2520]: Claudio Riva
+          - cell "KBS Order Form" [ref=e2521]
+          - cell "Backend Development" [ref=e2522]
+          - cell [ref=e2523]
+          - cell "—" [ref=e2524]
+          - cell "06 may 2026" [ref=e2525]
+          - cell "2.0" [ref=e2526]
+          - cell "Approved" [ref=e2527]:
+            - generic [ref=e2528]:
+              - img [ref=e2529]
+              - text: Approved
+          - cell "Pendiente" [ref=e2531]:
+            - generic [ref=e2532]:
+              - img [ref=e2533]
+              - text: Pendiente
+          - cell "—" [ref=e2536]
+          - cell "—" [ref=e2537]
+        - row "Seleccionar entrada de Martin de Leon — Workflow Review Martin de Leon KBS Order Form Workflow Review - Create the Approver View frontend. - Start connecting the view with backend. - Create the Approver View frontend. - Start connecting the view with backend. 06 may 2026 8.0 Pending Pendiente — —" [ref=e2538] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e2539]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e2541]
+          - cell "Martin de Leon" [ref=e2543]:
+            - generic [ref=e2544]:
+              - generic [ref=e2545]: ML
+              - generic [ref=e2546]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2547]
+          - cell "Workflow Review" [ref=e2548]
+          - cell "- Create the Approver View frontend. - Start connecting the view with backend." [ref=e2549]
+          - cell "- Create the Approver View frontend. - Start connecting the view with backend." [ref=e2550]
+          - cell "06 may 2026" [ref=e2551]
+          - cell "8.0" [ref=e2552]
+          - cell "Pending" [ref=e2553]:
+            - generic [ref=e2554]:
+              - img [ref=e2555]
+              - text: Pending
+          - cell "Pendiente" [ref=e2558]:
+            - generic [ref=e2559]:
+              - img [ref=e2560]
+              - text: Pendiente
+          - cell "—" [ref=e2563]
+          - cell "—" [ref=e2564]
+        - row "Seleccionar entrada de Martin da Silva — Account Upload - Strategic Target True Martin da Silva SalesForce Account Upload - Strategic Target True — 05 may 2026 2.0 Approved Pendiente — —" [ref=e2565] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin da Silva — Account Upload - Strategic Target True" [ref=e2566]:
+            - checkbox "Seleccionar entrada de Martin da Silva — Account Upload - Strategic Target True" [ref=e2568]
+          - cell "Martin da Silva" [ref=e2570]:
+            - generic [ref=e2571]:
+              - generic [ref=e2572]: MS
+              - generic [ref=e2573]: Martin da Silva
+          - cell "SalesForce" [ref=e2574]
+          - cell "Account Upload - Strategic Target True" [ref=e2575]
+          - cell [ref=e2576]
+          - cell "—" [ref=e2577]
+          - cell "05 may 2026" [ref=e2578]
+          - cell "2.0" [ref=e2579]
+          - cell "Approved" [ref=e2580]:
+            - generic [ref=e2581]:
+              - img [ref=e2582]
+              - text: Approved
+          - cell "Pendiente" [ref=e2584]:
+            - generic [ref=e2585]:
+              - img [ref=e2586]
+              - text: Pendiente
+          - cell "—" [ref=e2589]
+          - cell "—" [ref=e2590]
+        - row "Seleccionar entrada de Martin de Leon — Workflow and Approver View Development Martin de Leon KBS Order Form Workflow and Approver View Development — 05 may 2026 6.0 Approved Pendiente — —" [ref=e2591] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Workflow and Approver View Development" [ref=e2592]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Workflow and Approver View Development" [ref=e2594]
+          - cell "Martin de Leon" [ref=e2596]:
+            - generic [ref=e2597]:
+              - generic [ref=e2598]: ML
+              - generic [ref=e2599]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2600]
+          - cell "Workflow and Approver View Development" [ref=e2601]
+          - cell [ref=e2602]
+          - cell "—" [ref=e2603]
+          - cell "05 may 2026" [ref=e2604]
+          - cell "6.0" [ref=e2605]
+          - cell "Approved" [ref=e2606]:
+            - generic [ref=e2607]:
+              - img [ref=e2608]
+              - text: Approved
+          - cell "Pendiente" [ref=e2610]:
+            - generic [ref=e2611]:
+              - img [ref=e2612]
+              - text: Pendiente
+          - cell "—" [ref=e2615]
+          - cell "—" [ref=e2616]
+        - row "Seleccionar entrada de Claudio Riva — Backend Development Claudio Riva KBS Order Form Backend Development — 05 may 2026 2.0 Approved Pendiente — —" [ref=e2617] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — Backend Development" [ref=e2618]:
+            - checkbox "Seleccionar entrada de Claudio Riva — Backend Development" [ref=e2620]
+          - cell "Claudio Riva" [ref=e2622]:
+            - generic [ref=e2623]:
+              - generic [ref=e2624]: CR
+              - generic [ref=e2625]: Claudio Riva
+          - cell "KBS Order Form" [ref=e2626]
+          - cell "Backend Development" [ref=e2627]
+          - cell [ref=e2628]
+          - cell "—" [ref=e2629]
+          - cell "05 may 2026" [ref=e2630]
+          - cell "2.0" [ref=e2631]
+          - cell "Approved" [ref=e2632]:
+            - generic [ref=e2633]:
+              - img [ref=e2634]
+              - text: Approved
+          - cell "Pendiente" [ref=e2636]:
+            - generic [ref=e2637]:
+              - img [ref=e2638]
+              - text: Pendiente
+          - cell "—" [ref=e2641]
+          - cell "—" [ref=e2642]
+        - row "Seleccionar entrada de Martin de Leon — Develop Order Form Martin de Leon KBS Order Form Develop Order Form - Workflow edits with custom HTML Email and trigger when row is added in dataset. - Workflow edits with custom HTML Email and trigger when row is added in dataset. 05 may 2026 1.0 Pending Pendiente — —" [ref=e2643] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Develop Order Form" [ref=e2644]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Develop Order Form" [ref=e2646]
+          - cell "Martin de Leon" [ref=e2648]:
+            - generic [ref=e2649]:
+              - generic [ref=e2650]: ML
+              - generic [ref=e2651]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2652]
+          - cell "Develop Order Form" [ref=e2653]
+          - cell "- Workflow edits with custom HTML Email and trigger when row is added in dataset." [ref=e2654]
+          - cell "- Workflow edits with custom HTML Email and trigger when row is added in dataset." [ref=e2655]
+          - cell "05 may 2026" [ref=e2656]
+          - cell "1.0" [ref=e2657]
+          - cell "Pending" [ref=e2658]:
+            - generic [ref=e2659]:
+              - img [ref=e2660]
+              - text: Pending
+          - cell "Pendiente" [ref=e2663]:
+            - generic [ref=e2664]:
+              - img [ref=e2665]
+              - text: Pendiente
+          - cell "—" [ref=e2668]
+          - cell "—" [ref=e2669]
+        - row "Seleccionar entrada de Martin de Leon — Workflow Review Martin de Leon KBS Order Form Workflow Review - Modify landing page to send order to backend. - Define endpoints and Approver View requirements for backend.- Create the Approver View frontend. - Start connecting the view with backend.- Backend fixes and problem solving. - Help with backend coonection to Domo.- Review SMTP email sender credentials provided by Guillermo. - Modify landing page to send order to backend. - Define endpoints and Approver View requirements for backend.- Create the Approver View frontend. - Start connecting the view with backend.- Backend fixes and problem solving. - Help with backend coonection to Domo.- Review SMTP email sender credentials provided by Guillermo. 05 may 2026 4.0 Pending Pendiente — —" [ref=e2670] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e2671]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Workflow Review" [ref=e2673]
+          - cell "Martin de Leon" [ref=e2675]:
+            - generic [ref=e2676]:
+              - generic [ref=e2677]: ML
+              - generic [ref=e2678]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2679]
+          - cell "Workflow Review" [ref=e2680]
+          - cell "- Modify landing page to send order to backend. - Define endpoints and Approver View requirements for backend.- Create the Approver View frontend. - Start connecting the view with backend.- Backend fixes and problem solving. - Help with backend coonection to Domo.- Review SMTP email sender credentials provided by Guillermo." [ref=e2681]
+          - cell "- Modify landing page to send order to backend. - Define endpoints and Approver View requirements for backend.- Create the Approver View frontend. - Start connecting the view with backend.- Backend fixes and problem solving. - Help with backend coonection to Domo.- Review SMTP email sender credentials provided by Guillermo." [ref=e2682]
+          - cell "05 may 2026" [ref=e2683]
+          - cell "4.0" [ref=e2684]
+          - cell "Pending" [ref=e2685]:
+            - generic [ref=e2686]:
+              - img [ref=e2687]
+              - text: Pending
+          - cell "Pendiente" [ref=e2690]:
+            - generic [ref=e2691]:
+              - img [ref=e2692]
+              - text: Pendiente
+          - cell "—" [ref=e2695]
+          - cell "—" [ref=e2696]
+        - row "Seleccionar entrada de Eduardo Cardozo — Software Requirements Specification (SRS) Development Eduardo Cardozo KBS Order Form Software Requirements Specification (SRS) Development - Modify the requirements proposal with the latest features discussed in the meeting with Claudio. - Modify the requirements proposal with the latest features discussed in the meeting with Claudio. 05 may 2026 2.0 Approved Pendiente — —" [ref=e2697] [cursor=pointer]:
+          - cell "Seleccionar entrada de Eduardo Cardozo — Software Requirements Specification (SRS) Development" [ref=e2698]:
+            - checkbox "Seleccionar entrada de Eduardo Cardozo — Software Requirements Specification (SRS) Development" [ref=e2700]
+          - cell "Eduardo Cardozo" [ref=e2702]:
+            - generic [ref=e2703]:
+              - generic [ref=e2704]: EC
+              - generic [ref=e2705]: Eduardo Cardozo
+          - cell "KBS Order Form" [ref=e2706]
+          - cell "Software Requirements Specification (SRS) Development" [ref=e2707]
+          - cell "- Modify the requirements proposal with the latest features discussed in the meeting with Claudio." [ref=e2708]
+          - cell "- Modify the requirements proposal with the latest features discussed in the meeting with Claudio." [ref=e2709]
+          - cell "05 may 2026" [ref=e2710]
+          - cell "2.0" [ref=e2711]
+          - cell "Approved" [ref=e2712]:
+            - generic [ref=e2713]:
+              - img [ref=e2714]
+              - text: Approved
+          - cell "Pendiente" [ref=e2716]:
+            - generic [ref=e2717]:
+              - img [ref=e2718]
+              - text: Pendiente
+          - cell "—" [ref=e2721]
+          - cell "—" [ref=e2722]
+        - row "Seleccionar entrada de Martin da Silva — Account Upload - Strategic Target True Martin da Silva SalesForce Account Upload - Strategic Target True — 04 may 2026 3.0 Approved Pendiente — —" [ref=e2723] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin da Silva — Account Upload - Strategic Target True" [ref=e2724]:
+            - checkbox "Seleccionar entrada de Martin da Silva — Account Upload - Strategic Target True" [ref=e2726]
+          - cell "Martin da Silva" [ref=e2728]:
+            - generic [ref=e2729]:
+              - generic [ref=e2730]: MS
+              - generic [ref=e2731]: Martin da Silva
+          - cell "SalesForce" [ref=e2732]
+          - cell "Account Upload - Strategic Target True" [ref=e2733]
+          - cell [ref=e2734]
+          - cell "—" [ref=e2735]
+          - cell "04 may 2026" [ref=e2736]
+          - cell "3.0" [ref=e2737]
+          - cell "Approved" [ref=e2738]:
+            - generic [ref=e2739]:
+              - img [ref=e2740]
+              - text: Approved
+          - cell "Pendiente" [ref=e2742]:
+            - generic [ref=e2743]:
+              - img [ref=e2744]
+              - text: Pendiente
+          - cell "—" [ref=e2747]
+          - cell "—" [ref=e2748]
+        - row "Seleccionar entrada de Martin da Silva — Revenue Formulas Update Martin da Silva SalesForce Revenue Formulas Update — 04 may 2026 2.0 Approved Pendiente — —" [ref=e2749] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin da Silva — Revenue Formulas Update" [ref=e2750]:
+            - checkbox "Seleccionar entrada de Martin da Silva — Revenue Formulas Update" [ref=e2752]
+          - cell "Martin da Silva" [ref=e2754]:
+            - generic [ref=e2755]:
+              - generic [ref=e2756]: MS
+              - generic [ref=e2757]: Martin da Silva
+          - cell "SalesForce" [ref=e2758]
+          - cell "Revenue Formulas Update" [ref=e2759]
+          - cell [ref=e2760]
+          - cell "—" [ref=e2761]
+          - cell "04 may 2026" [ref=e2762]
+          - cell "2.0" [ref=e2763]
+          - cell "Approved" [ref=e2764]:
+            - generic [ref=e2765]:
+              - img [ref=e2766]
+              - text: Approved
+          - cell "Pendiente" [ref=e2768]:
+            - generic [ref=e2769]:
+              - img [ref=e2770]
+              - text: Pendiente
+          - cell "—" [ref=e2773]
+          - cell "—" [ref=e2774]
+        - row "Seleccionar entrada de Claudio Riva — Backend Development Claudio Riva KBS Order Form Backend Development — 04 may 2026 2.0 Approved Pendiente — —" [ref=e2775] [cursor=pointer]:
+          - cell "Seleccionar entrada de Claudio Riva — Backend Development" [ref=e2776]:
+            - checkbox "Seleccionar entrada de Claudio Riva — Backend Development" [ref=e2778]
+          - cell "Claudio Riva" [ref=e2780]:
+            - generic [ref=e2781]:
+              - generic [ref=e2782]: CR
+              - generic [ref=e2783]: Claudio Riva
+          - cell "KBS Order Form" [ref=e2784]
+          - cell "Backend Development" [ref=e2785]
+          - cell [ref=e2786]
+          - cell "—" [ref=e2787]
+          - cell "04 may 2026" [ref=e2788]
+          - cell "2.0" [ref=e2789]
+          - cell "Approved" [ref=e2790]:
+            - generic [ref=e2791]:
+              - img [ref=e2792]
+              - text: Approved
+          - cell "Pendiente" [ref=e2794]:
+            - generic [ref=e2795]:
+              - img [ref=e2796]
+              - text: Pendiente
+          - cell "—" [ref=e2799]
+          - cell "—" [ref=e2800]
+        - row "Seleccionar entrada de Martin de Leon — Develop Order Form Martin de Leon KBS Order Form Develop Order Form - Playwright E2E testing suite. - Frontend hosting on Azure Static Web Apps.- Log in feature.- End-to-end verificatio - Playwright E2E testing suite. - Frontend hosting on Azure Static Web Apps.- Log in feature.- End-to-end verificatio 04 may 2026 7.0 Pending Pendiente — —" [ref=e2801] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Develop Order Form" [ref=e2802]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Develop Order Form" [ref=e2804]
+          - cell "Martin de Leon" [ref=e2806]:
+            - generic [ref=e2807]:
+              - generic [ref=e2808]: ML
+              - generic [ref=e2809]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2810]
+          - cell "Develop Order Form" [ref=e2811]
+          - cell "- Playwright E2E testing suite. - Frontend hosting on Azure Static Web Apps.- Log in feature.- End-to-end verificatio" [ref=e2812]
+          - cell "- Playwright E2E testing suite. - Frontend hosting on Azure Static Web Apps.- Log in feature.- End-to-end verificatio" [ref=e2813]
+          - cell "04 may 2026" [ref=e2814]
+          - cell "7.0" [ref=e2815]
+          - cell "Pending" [ref=e2816]:
+            - generic [ref=e2817]:
+              - img [ref=e2818]
+              - text: Pending
+          - cell "Pendiente" [ref=e2821]:
+            - generic [ref=e2822]:
+              - img [ref=e2823]
+              - text: Pendiente
+          - cell "—" [ref=e2826]
+          - cell "—" [ref=e2827]
+        - row "Seleccionar entrada de Martin da Silva — Contract Agreements Update Martin da Silva SalesForce Contract Agreements Update — 01 may 2026 10.0 Approved Pendiente — —" [ref=e2828] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin da Silva — Contract Agreements Update" [ref=e2829]:
+            - checkbox "Seleccionar entrada de Martin da Silva — Contract Agreements Update" [ref=e2831]
+          - cell "Martin da Silva" [ref=e2833]:
+            - generic [ref=e2834]:
+              - generic [ref=e2835]: MS
+              - generic [ref=e2836]: Martin da Silva
+          - cell "SalesForce" [ref=e2837]
+          - cell "Contract Agreements Update" [ref=e2838]
+          - cell [ref=e2839]
+          - cell "—" [ref=e2840]
+          - cell "01 may 2026" [ref=e2841]
+          - cell "10.0" [ref=e2842]
+          - cell "Approved" [ref=e2843]:
+            - generic [ref=e2844]:
+              - img [ref=e2845]
+              - text: Approved
+          - cell "Pendiente" [ref=e2847]:
+            - generic [ref=e2848]:
+              - img [ref=e2849]
+              - text: Pendiente
+          - cell "—" [ref=e2852]
+          - cell "—" [ref=e2853]
+        - row "Seleccionar entrada de Martin da Silva — Revenue Formulas Update Martin da Silva SalesForce Revenue Formulas Update — 01 may 2026 1.0 Approved Pendiente — —" [ref=e2854] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin da Silva — Revenue Formulas Update" [ref=e2855]:
+            - checkbox "Seleccionar entrada de Martin da Silva — Revenue Formulas Update" [ref=e2857]
+          - cell "Martin da Silva" [ref=e2859]:
+            - generic [ref=e2860]:
+              - generic [ref=e2861]: MS
+              - generic [ref=e2862]: Martin da Silva
+          - cell "SalesForce" [ref=e2863]
+          - cell "Revenue Formulas Update" [ref=e2864]
+          - cell [ref=e2865]
+          - cell "—" [ref=e2866]
+          - cell "01 may 2026" [ref=e2867]
+          - cell "1.0" [ref=e2868]
+          - cell "Approved" [ref=e2869]:
+            - generic [ref=e2870]:
+              - img [ref=e2871]
+              - text: Approved
+          - cell "Pendiente" [ref=e2873]:
+            - generic [ref=e2874]:
+              - img [ref=e2875]
+              - text: Pendiente
+          - cell "—" [ref=e2878]
+          - cell "—" [ref=e2879]
+        - row "Seleccionar entrada de Eduardo Cardozo — Software Requirements Specification (SRS) Development Eduardo Cardozo KBS Order Form Software Requirements Specification (SRS) Development — 01 may 2026 2.0 Approved Pendiente — —" [ref=e2880] [cursor=pointer]:
+          - cell "Seleccionar entrada de Eduardo Cardozo — Software Requirements Specification (SRS) Development" [ref=e2881]:
+            - checkbox "Seleccionar entrada de Eduardo Cardozo — Software Requirements Specification (SRS) Development" [ref=e2883]
+          - cell "Eduardo Cardozo" [ref=e2885]:
+            - generic [ref=e2886]:
+              - generic [ref=e2887]: EC
+              - generic [ref=e2888]: Eduardo Cardozo
+          - cell "KBS Order Form" [ref=e2889]
+          - cell "Software Requirements Specification (SRS) Development" [ref=e2890]
+          - cell [ref=e2891]
+          - cell "—" [ref=e2892]
+          - cell "01 may 2026" [ref=e2893]
+          - cell "2.0" [ref=e2894]
+          - cell "Approved" [ref=e2895]:
+            - generic [ref=e2896]:
+              - img [ref=e2897]
+              - text: Approved
+          - cell "Pendiente" [ref=e2899]:
+            - generic [ref=e2900]:
+              - img [ref=e2901]
+              - text: Pendiente
+          - cell "—" [ref=e2904]
+          - cell "—" [ref=e2905]
+        - row "Seleccionar entrada de Martin de Leon — Develop Order Form Martin de Leon KBS Order Form Develop Order Form — 01 may 2026 6.0 Approved Pendiente — —" [ref=e2906] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Develop Order Form" [ref=e2907]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Develop Order Form" [ref=e2909]
+          - cell "Martin de Leon" [ref=e2911]:
+            - generic [ref=e2912]:
+              - generic [ref=e2913]: ML
+              - generic [ref=e2914]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2915]
+          - cell "Develop Order Form" [ref=e2916]
+          - cell [ref=e2917]
+          - cell "—" [ref=e2918]
+          - cell "01 may 2026" [ref=e2919]
+          - cell "6.0" [ref=e2920]
+          - cell "Approved" [ref=e2921]:
+            - generic [ref=e2922]:
+              - img [ref=e2923]
+              - text: Approved
+          - cell "Pendiente" [ref=e2925]:
+            - generic [ref=e2926]:
+              - img [ref=e2927]
+              - text: Pendiente
+          - cell "—" [ref=e2930]
+          - cell "—" [ref=e2931]
+        - row "Seleccionar entrada de Martin da Silva — Revenue Formulas Update Martin da Silva SalesForce Revenue Formulas Update — 30 abr 2026 2.0 Approved Pendiente — —" [ref=e2932] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin da Silva — Revenue Formulas Update" [ref=e2933]:
+            - checkbox "Seleccionar entrada de Martin da Silva — Revenue Formulas Update" [ref=e2935]
+          - cell "Martin da Silva" [ref=e2937]:
+            - generic [ref=e2938]:
+              - generic [ref=e2939]: MS
+              - generic [ref=e2940]: Martin da Silva
+          - cell "SalesForce" [ref=e2941]
+          - cell "Revenue Formulas Update" [ref=e2942]
+          - cell [ref=e2943]
+          - cell "—" [ref=e2944]
+          - cell "30 abr 2026" [ref=e2945]
+          - cell "2.0" [ref=e2946]
+          - cell "Approved" [ref=e2947]:
+            - generic [ref=e2948]:
+              - img [ref=e2949]
+              - text: Approved
+          - cell "Pendiente" [ref=e2951]:
+            - generic [ref=e2952]:
+              - img [ref=e2953]
+              - text: Pendiente
+          - cell "—" [ref=e2956]
+          - cell "—" [ref=e2957]
+        - row "Seleccionar entrada de Martin de Leon — Software Requirements Specification (SRS) Development Martin de Leon KBS Order Form Software Requirements Specification (SRS) Development — 30 abr 2026 4.0 Approved Pendiente — —" [ref=e2958] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Software Requirements Specification (SRS) Development" [ref=e2959]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Software Requirements Specification (SRS) Development" [ref=e2961]
+          - cell "Martin de Leon" [ref=e2963]:
+            - generic [ref=e2964]:
+              - generic [ref=e2965]: ML
+              - generic [ref=e2966]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2967]
+          - cell "Software Requirements Specification (SRS) Development" [ref=e2968]
+          - cell [ref=e2969]
+          - cell "—" [ref=e2970]
+          - cell "30 abr 2026" [ref=e2971]
+          - cell "4.0" [ref=e2972]
+          - cell "Approved" [ref=e2973]:
+            - generic [ref=e2974]:
+              - img [ref=e2975]
+              - text: Approved
+          - cell "Pendiente" [ref=e2977]:
+            - generic [ref=e2978]:
+              - img [ref=e2979]
+              - text: Pendiente
+          - cell "—" [ref=e2982]
+          - cell "—" [ref=e2983]
+        - row "Seleccionar entrada de Martin de Leon — Develop Order Form Martin de Leon KBS Order Form Develop Order Form — 30 abr 2026 4.0 Approved Pendiente — —" [ref=e2984] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Develop Order Form" [ref=e2985]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Develop Order Form" [ref=e2987]
+          - cell "Martin de Leon" [ref=e2989]:
+            - generic [ref=e2990]:
+              - generic [ref=e2991]: ML
+              - generic [ref=e2992]: Martin de Leon
+          - cell "KBS Order Form" [ref=e2993]
+          - cell "Develop Order Form" [ref=e2994]
+          - cell [ref=e2995]
+          - cell "—" [ref=e2996]
+          - cell "30 abr 2026" [ref=e2997]
+          - cell "4.0" [ref=e2998]
+          - cell "Approved" [ref=e2999]:
+            - generic [ref=e3000]:
+              - img [ref=e3001]
+              - text: Approved
+          - cell "Pendiente" [ref=e3003]:
+            - generic [ref=e3004]:
+              - img [ref=e3005]
+              - text: Pendiente
+          - cell "—" [ref=e3008]
+          - cell "—" [ref=e3009]
+        - row "Seleccionar entrada de Martin da Silva — Training Session Department Head Improvement Martin da Silva SalesForce Training Session Department Head Improvement — 29 abr 2026 1.0 Approved Pendiente — —" [ref=e3010] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin da Silva — Training Session Department Head Improvement" [ref=e3011]:
+            - checkbox "Seleccionar entrada de Martin da Silva — Training Session Department Head Improvement" [ref=e3013]
+          - cell "Martin da Silva" [ref=e3015]:
+            - generic [ref=e3016]:
+              - generic [ref=e3017]: MS
+              - generic [ref=e3018]: Martin da Silva
+          - cell "SalesForce" [ref=e3019]
+          - cell "Training Session Department Head Improvement" [ref=e3020]
+          - cell [ref=e3021]
+          - cell "—" [ref=e3022]
+          - cell "29 abr 2026" [ref=e3023]
+          - cell "1.0" [ref=e3024]
+          - cell "Approved" [ref=e3025]:
+            - generic [ref=e3026]:
+              - img [ref=e3027]
+              - text: Approved
+          - cell "Pendiente" [ref=e3029]:
+            - generic [ref=e3030]:
+              - img [ref=e3031]
+              - text: Pendiente
+          - cell "—" [ref=e3034]
+          - cell "—" [ref=e3035]
+        - row "Seleccionar entrada de Martin de Leon — Requirement Gathering Meeting Martin de Leon KBS Order Form Requirement Gathering Meeting — 28 abr 2026 1.5 Approved Pendiente — —" [ref=e3036] [cursor=pointer]:
+          - cell "Seleccionar entrada de Martin de Leon — Requirement Gathering Meeting" [ref=e3037]:
+            - checkbox "Seleccionar entrada de Martin de Leon — Requirement Gathering Meeting" [ref=e3039]
+          - cell "Martin de Leon" [ref=e3041]:
+            - generic [ref=e3042]:
+              - generic [ref=e3043]: ML
+              - generic [ref=e3044]: Martin de Leon
+          - cell "KBS Order Form" [ref=e3045]
+          - cell "Requirement Gathering Meeting" [ref=e3046]
+          - cell [ref=e3047]
+          - cell "—" [ref=e3048]
+          - cell "28 abr 2026" [ref=e3049]
+          - cell "1.5" [ref=e3050]
+          - cell "Approved" [ref=e3051]:
+            - generic [ref=e3052]:
+              - img [ref=e3053]
+              - text: Approved
+          - cell "Pendiente" [ref=e3055]:
+            - generic [ref=e3056]:
+              - img [ref=e3057]
+              - text: Pendiente
+          - cell "—" [ref=e3060]
+          - cell "—" [ref=e3061]
+    - contentinfo [ref=e3062]:
+      - paragraph [ref=e3063]:
+        - text: Los pagos se procesan en el sistema contable. Esta app es una vista de consulta y registro — todo el acceso a datos está aislado en
+        - code [ref=e3064]: src/lib/data.js
+        - text: .
+      - img "Southpoint Tech Labs" [ref=e3066]
