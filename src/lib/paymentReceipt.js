@@ -1,0 +1,86 @@
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
+import { formatDate, formatDateTime } from './format'
+
+function fmtAmount(value) {
+  return Number(value || 0).toLocaleString('es-AR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+/**
+ * Genera y descarga un PDF de comprobante de pago al contractor (FR-10).
+ *
+ * @param {{ invoice: object, payment: object, generatedBy?: string }} data
+ */
+export function downloadPaymentReceipt({ invoice, payment, generatedBy }) {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+  const pageW = doc.internal.pageSize.getWidth()
+  const accent = [124, 58, 237] // violeta
+
+  // --- Header ---
+  doc.setFillColor(10, 10, 10)
+  doc.rect(0, 0, pageW, 76, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(18)
+  doc.text('SOUTHPOINT TECH LABS', 40, 38)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10)
+  doc.setTextColor(180, 180, 185)
+  doc.text('Comprobante de pago a proveedor', 40, 56)
+
+  // --- Título / nº ---
+  doc.setTextColor(20, 20, 20)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(15)
+  doc.text('Payment Receipt', 40, 116)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10)
+  doc.setTextColor(110, 110, 115)
+  doc.text(`Factura ${invoice.supplierInvoiceNumber}`, 40, 134)
+
+  // --- Tabla de detalle ---
+  autoTable(doc, {
+    startY: 156,
+    theme: 'plain',
+    styles: { fontSize: 10, cellPadding: 6, textColor: [30, 30, 30] },
+    columnStyles: {
+      0: { fontStyle: 'bold', textColor: [110, 110, 115], cellWidth: 170 },
+      1: { textColor: [20, 20, 20] },
+    },
+    body: [
+      ['Contractor', invoice.userName],
+      ['Factura proveedor', invoice.supplierInvoiceNumber],
+      ['Fecha de factura', formatDate(invoice.invoiceDate)],
+      ['Monto pagado', `$ ${fmtAmount(payment.amountPaid)}`],
+      ['Fecha de pago', formatDate(payment.paymentDate) + (payment.backDated ? '  (back-dated)' : '')],
+      ['Banco / método', payment.bankMethod || '—'],
+      ['Referencia de transferencia', payment.transferReference || '—'],
+      ['Notas', payment.notes || '—'],
+    ],
+  })
+
+  // --- Monto destacado ---
+  const afterTable = doc.lastAutoTable.finalY + 24
+  doc.setDrawColor(230, 230, 232)
+  doc.line(40, afterTable, pageW - 40, afterTable)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(13)
+  doc.setTextColor(accent[0], accent[1], accent[2])
+  doc.text(`TOTAL PAGADO:  $ ${fmtAmount(payment.amountPaid)}`, 40, afterTable + 28)
+
+  // --- Footer ---
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(150, 150, 155)
+  doc.text(
+    `Generado por ${generatedBy || '—'} el ${formatDateTime(new Date().toISOString())}`,
+    40,
+    doc.internal.pageSize.getHeight() - 40,
+  )
+
+  const safeNum = String(invoice.supplierInvoiceNumber).replace(/[^\w-]/g, '_')
+  doc.save(`recibo-pago-${safeNum}.pdf`)
+}

@@ -1,0 +1,291 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
+import { FileText, X } from 'lucide-react'
+import { Avatar } from './Avatar'
+import { formatHours } from '../lib/format'
+
+// Fecha de hoy en formato ISO YYYY-MM-DD (para el default del date picker).
+function todayISO() {
+  const now = new Date()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${mm}-${dd}`
+}
+
+/**
+ * Modal "Emitir factura" (FR-05). Reemplaza al modal de pago: en lugar de
+ * registrar invoice + transaction juntos, EMITE una factura (status Invoiced).
+ *
+ * @param {{
+ *   user: string,
+ *   entries: import('../lib/data').TimeEntry[],
+ *   hours: number,
+ *   onClose: () => void,
+ *   onConfirm: (data: { supplierInvoiceNumber: string, invoiceDate: string, totalAmount: number, notes: string }) => Promise<void>,
+ * }} props
+ */
+export function BillModal({ user, entries, hours, onClose, onConfirm }) {
+  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('')
+  const [invoiceDate, setInvoiceDate] = useState(todayISO)
+  const [totalAmount, setTotalAmount] = useState('')
+  const [notes, setNotes] = useState('')
+  const [touched, setTouched] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  const dialogRef = useRef(null)
+  const firstFieldRef = useRef(null)
+
+  const invoiceValid = supplierInvoiceNumber.trim().length > 0
+  const dateValid = Boolean(invoiceDate)
+  const amountNumber = Number(totalAmount)
+  const amountValid = totalAmount !== '' && Number.isFinite(amountNumber) && amountNumber > 0
+  const formValid = invoiceValid && dateValid && amountValid
+
+  // No hay tarifa por contractor disponible todavía, así que el monto se ingresa
+  // manualmente. Cuando exista (Supplier Contracts, Fase 3) se podrá auto-calcular.
+  const estimatedLabel = useMemo(
+    () => (amountValid ? `$${amountNumber.toFixed(2)}` : '—'),
+    [amountValid, amountNumber],
+  )
+
+  useEffect(() => {
+    firstFieldRef.current?.focus()
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [])
+
+  useEffect(() => {
+    function onKeyDown(event) {
+      if (event.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusables = dialogRef.current?.querySelectorAll(
+        'button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])',
+      )
+      if (!focusables || focusables.length === 0) return
+      const list = [...focusables].filter((el) => !el.disabled)
+      const first = list[0]
+      const last = list[list.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setTouched(true)
+    if (!formValid || submitting) {
+      if (!invoiceValid) firstFieldRef.current?.focus()
+      return
+    }
+    setSubmitError('')
+    setSubmitting(true)
+    try {
+      await onConfirm({
+        supplierInvoiceNumber: supplierInvoiceNumber.trim(),
+        invoiceDate,
+        totalAmount: amountNumber,
+        notes: notes.trim(),
+      })
+    } catch (error) {
+      setSubmitting(false)
+      setSubmitError(
+        error?.message ?? 'No se pudo emitir la factura. Intentá nuevamente.',
+      )
+    }
+  }
+
+  return (
+    <motion.div
+      className="modal-backdrop"
+      onClick={onClose}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      <motion.div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bill-modal-title"
+        ref={dialogRef}
+        onClick={(event) => event.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.92, y: 24 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 12 }}
+        transition={{ type: 'spring', damping: 26, stiffness: 320, mass: 0.8 }}
+      >
+        <div className="modal__head">
+          <div>
+            <span className="modal__kicker">Facturación a proveedor</span>
+            <h2 className="modal__title" id="bill-modal-title">
+              Emitir factura
+            </h2>
+          </div>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={onClose}
+            aria-label="Cerrar"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="modal__summary">
+          <Avatar name={user} size="md" />
+          <div className="modal__summary-id">
+            <span className="modal__summary-user">{user}</span>
+            <span className="modal__summary-meta">
+              {entries.length}{' '}
+              {entries.length === 1 ? 'entrada seleccionada' : 'entradas seleccionadas'}
+              {' · '}
+              monto {estimatedLabel}
+            </span>
+          </div>
+          <div className="modal__summary-hours">
+            <span className="modal__summary-hours-value">{formatHours(hours)}</span>
+            <span className="modal__summary-hours-label">Horas</span>
+          </div>
+        </div>
+
+        <form className="modal__form" onSubmit={handleSubmit} noValidate>
+          <div className="field">
+            <label className="field__label" htmlFor="supplier-invoice-number">
+              Supplier invoice number
+              <span className="field__req">requerido</span>
+            </label>
+            <input
+              id="supplier-invoice-number"
+              ref={firstFieldRef}
+              className={`field__input${
+                touched && !invoiceValid ? ' field__input--error' : ''
+              }`}
+              value={supplierInvoiceNumber}
+              onChange={(event) => setSupplierInvoiceNumber(event.target.value)}
+              onBlur={() => setTouched(true)}
+              placeholder="Ej. FA-0001-00012345"
+              autoComplete="off"
+              aria-invalid={touched && !invoiceValid}
+            />
+            {touched && !invoiceValid && (
+              <span className="field__error">
+                Ingresá el número de factura del proveedor.
+              </span>
+            )}
+          </div>
+
+          <div className="modal__form-row">
+            <div className="field">
+              <label className="field__label" htmlFor="invoice-date">
+                Invoice date
+                <span className="field__req">requerido</span>
+              </label>
+              <input
+                id="invoice-date"
+                type="date"
+                className={`field__input${
+                  touched && !dateValid ? ' field__input--error' : ''
+                }`}
+                value={invoiceDate}
+                onChange={(event) => setInvoiceDate(event.target.value)}
+                aria-invalid={touched && !dateValid}
+              />
+            </div>
+
+            <div className="field">
+              <label className="field__label" htmlFor="total-amount">
+                Total amount
+                <span className="field__req">requerido</span>
+              </label>
+              <input
+                id="total-amount"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                className={`field__input${
+                  touched && !amountValid ? ' field__input--error' : ''
+                }`}
+                value={totalAmount}
+                onChange={(event) => setTotalAmount(event.target.value)}
+                placeholder="0.00"
+                aria-invalid={touched && !amountValid}
+              />
+            </div>
+          </div>
+          {touched && !amountValid && (
+            <span className="field__error">
+              Ingresá un monto válido mayor a cero.
+            </span>
+          )}
+
+          <div className="field">
+            <label className="field__label" htmlFor="invoice-notes">
+              Notes
+              <span className="field__opt">opcional</span>
+            </label>
+            <textarea
+              id="invoice-notes"
+              className="field__input field__textarea"
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              placeholder="Detalle o referencia de la factura…"
+              rows={3}
+            />
+          </div>
+
+          <p className="modal__note">
+            <FileText size={14} aria-hidden="true" />
+            La factura se emite con estado <strong>Invoiced</strong>. El cobro y
+            el pago al contractor son pasos posteriores.
+          </p>
+
+          {submitError && (
+            <p className="modal__submit-error" role="alert">
+              {submitError}
+            </p>
+          )}
+
+          <div className="modal__actions">
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={onClose}
+              disabled={submitting}
+            >
+              Cancelar
+            </button>
+            <motion.button
+              type="submit"
+              className="btn btn--pay"
+              disabled={!formValid || submitting}
+              whileTap={formValid && !submitting ? { scale: 0.97 } : undefined}
+            >
+              {submitting ? (
+                <span className="spinner" aria-hidden="true" />
+              ) : (
+                <FileText size={16} strokeWidth={2.2} aria-hidden="true" />
+              )}
+              {submitting ? 'Emitiendo…' : 'Emitir factura'}
+            </motion.button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
+  )
+}

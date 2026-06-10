@@ -1,0 +1,239 @@
+import { useEffect, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
+import { CircleDollarSign, X } from 'lucide-react'
+
+function todayISO() {
+  const now = new Date()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${mm}-${dd}`
+}
+
+function formatAmount(value) {
+  return Number(value || 0).toLocaleString('es-AR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+/**
+ * Modal "Register Collection" (FR-09). Registra un cobro (total o parcial)
+ * contra una factura. El monto no puede superar el saldo pendiente.
+ *
+ * @param {{
+ *   invoice: object,
+ *   outstanding: number,
+ *   collected: number,
+ *   onClose: () => void,
+ *   onConfirm: (data: { amountReceived:number, collectionDate:string, bankReference:string, notes:string }) => Promise<void>,
+ * }} props
+ */
+export function RegisterCollectionModal({ invoice, outstanding, collected, onClose, onConfirm }) {
+  const [amount, setAmount] = useState(String(outstanding))
+  const [collectionDate, setCollectionDate] = useState(todayISO)
+  const [bankReference, setBankReference] = useState('')
+  const [notes, setNotes] = useState('')
+  const [touched, setTouched] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const dialogRef = useRef(null)
+  const firstRef = useRef(null)
+
+  const amountNum = Number(amount)
+  const amountValid =
+    amount !== '' && Number.isFinite(amountNum) && amountNum > 0 && amountNum <= outstanding + 0.005
+  const dateValid = Boolean(collectionDate)
+  const valid = amountValid && dateValid
+
+  useEffect(() => {
+    firstRef.current?.focus()
+    firstRef.current?.select()
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setTouched(true)
+    if (!valid || submitting) return
+    setSubmitError('')
+    setSubmitting(true)
+    try {
+      await onConfirm({
+        amountReceived: amountNum,
+        collectionDate,
+        bankReference: bankReference.trim(),
+        notes: notes.trim(),
+      })
+    } catch (error) {
+      setSubmitting(false)
+      setSubmitError(error?.message ?? 'No se pudo registrar el cobro.')
+    }
+  }
+
+  const willComplete = amountValid && amountNum >= outstanding - 0.005
+
+  return (
+    <motion.div
+      className="modal-backdrop"
+      onClick={onClose}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      <motion.div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="collection-modal-title"
+        ref={dialogRef}
+        onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.92, y: 24 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 12 }}
+        transition={{ type: 'spring', damping: 26, stiffness: 320, mass: 0.8 }}
+      >
+        <div className="modal__head">
+          <div>
+            <span className="modal__kicker">Collections · Cobro</span>
+            <h2 className="modal__title" id="collection-modal-title">
+              Register Collection
+            </h2>
+          </div>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Cerrar">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="modal__summary">
+          <div className="modal__summary-id">
+            <span className="modal__summary-user">{invoice.supplierInvoiceNumber}</span>
+            <span className="modal__summary-meta">
+              {invoice.userName} · cobrado ${formatAmount(collected)} de ${formatAmount(invoice.totalAmount)}
+            </span>
+          </div>
+          <div className="modal__summary-hours">
+            <span className="modal__summary-hours-value">${formatAmount(outstanding)}</span>
+            <span className="modal__summary-hours-label">Saldo</span>
+          </div>
+        </div>
+
+        <form className="modal__form" onSubmit={handleSubmit} noValidate>
+          <div className="modal__form-row">
+            <div className="field">
+              <label className="field__label" htmlFor="col-amount">
+                Amount received
+                <span className="field__req">requerido</span>
+              </label>
+              <input
+                id="col-amount"
+                ref={firstRef}
+                type="number"
+                inputMode="decimal"
+                min="0"
+                max={outstanding}
+                step="0.01"
+                className={`field__input${touched && !amountValid ? ' field__input--error' : ''}`}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                aria-invalid={touched && !amountValid}
+              />
+            </div>
+            <div className="field">
+              <label className="field__label" htmlFor="col-date">
+                Collection date
+                <span className="field__req">requerido</span>
+              </label>
+              <input
+                id="col-date"
+                type="date"
+                className={`field__input${touched && !dateValid ? ' field__input--error' : ''}`}
+                value={collectionDate}
+                onChange={(e) => setCollectionDate(e.target.value)}
+              />
+            </div>
+          </div>
+          {touched && !amountValid && (
+            <span className="field__error">
+              Ingresá un monto entre 0 y el saldo (${formatAmount(outstanding)}).
+            </span>
+          )}
+
+          <div className="field">
+            <label className="field__label" htmlFor="col-ref">
+              Bank reference
+              <span className="field__opt">opcional</span>
+            </label>
+            <input
+              id="col-ref"
+              type="text"
+              className="field__input"
+              value={bankReference}
+              onChange={(e) => setBankReference(e.target.value)}
+              placeholder="Ej. BBVA-558210"
+              autoComplete="off"
+            />
+          </div>
+
+          <div className="field">
+            <label className="field__label" htmlFor="col-notes">
+              Notes
+              <span className="field__opt">opcional</span>
+            </label>
+            <textarea
+              id="col-notes"
+              className="field__input field__textarea"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+            />
+          </div>
+
+          <p className="modal__note">
+            <CircleDollarSign size={14} aria-hidden="true" />
+            {willComplete
+              ? 'Este cobro completa la factura → pasa a Collected.'
+              : 'Cobro parcial: la factura queda en Partial Collection.'}
+          </p>
+
+          {submitError && (
+            <p className="modal__submit-error" role="alert">
+              {submitError}
+            </p>
+          )}
+
+          <div className="modal__actions">
+            <button type="button" className="btn btn--ghost" onClick={onClose} disabled={submitting}>
+              Cancelar
+            </button>
+            <motion.button
+              type="submit"
+              className="btn btn--pay"
+              disabled={!valid || submitting}
+              whileTap={valid && !submitting ? { scale: 0.97 } : undefined}
+            >
+              {submitting ? (
+                <span className="spinner" aria-hidden="true" />
+              ) : (
+                <CircleDollarSign size={16} strokeWidth={2.2} aria-hidden="true" />
+              )}
+              {submitting ? 'Registrando…' : 'Register Collection'}
+            </motion.button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
+  )
+}

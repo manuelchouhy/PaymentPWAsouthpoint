@@ -1,16 +1,29 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import confetti from 'canvas-confetti'
-import { AlertTriangle, LogOut, RefreshCw } from 'lucide-react'
-import { createPayment, getPayments, getTimeEntries, triggerSync } from './lib/data'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
+import {
+  createInvoice,
+  getInvoices,
+  getSyncStatus,
+  getTimeEntries,
+  triggerSync,
+  updateInvoiceStatus,
+} from './lib/data'
 import { useMediaQuery } from './lib/useMediaQuery'
 import { formatHours } from './lib/format'
-import { UserFilter } from './components/UserFilter'
+import { useEntryFilters, applyEntryFilters } from './lib/useEntryFilters'
+import { FilterBar } from './components/FilterBar'
+import { ViewTabs } from './components/ViewTabs'
 import { SelectionBar } from './components/SelectionBar'
 import { Stepper } from './components/Stepper'
 import { EntriesTable } from './components/EntriesTable'
 import { EntriesCards } from './components/EntriesCards'
-import { PaymentModal } from './components/PaymentModal'
+import { BillModal } from './components/BillModal'
+import { InvoiceDetailDrawer } from './components/InvoiceDetailDrawer'
+import { SyncStatus } from './components/SyncStatus'
+import { SyncLogModal } from './components/SyncLogModal'
 import { Toast } from './components/Toast'
 
 const VIOLET_CONFETTI = ['#A78BFA', '#C4B5FD', '#8B5CF6', '#DDD6FE', '#7C3AED']
@@ -51,29 +64,37 @@ function fireConfetti() {
   )
 }
 
-export default function App({ user, onSignOut }) {
+export default function App() {
+  const { user } = useOutletContext()
   const [entries, setEntries] = useState([])
-  const [payments, setPayments] = useState([])
+  const [invoices, setInvoices] = useState([])
   const [status, setStatus] = useState('loading') // 'loading' | 'ready' | 'error'
   const [reloadKey, setReloadKey] = useState(0)
 
-  const [userFilter, setUserFilter] = useState('all')
+  // FR-03 · estado de filtros centralizado en un hook.
+  const { filters, toggleValue, setField, clear, isActive } = useEntryFilters()
+  // FR-04 · vista activa. Default "Pendientes de facturar"; al refrescar la
+  // página vuelve a la default (es estado de sesión, no se persiste en URL).
+  const [activeTab, setActiveTab] = useState('pending') // 'pending' | 'all'
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [modalOpen, setModalOpen] = useState(false)
+  const [openInvoiceId, setOpenInvoiceId] = useState(null) // FR-06 · detalle
   const [toast, setToast] = useState(null)
   const [syncing, setSyncing] = useState(false)
+  const [syncStatus, setSyncStatus] = useState(null)
+  const [syncLogOpen, setSyncLogOpen] = useState(false)
 
   const isMobile = useMediaQuery('(max-width: 720px)')
 
-  // --- Carga de datos (entries + payments en paralelo) ----------------------
+  // --- Carga de datos (entries + invoices en paralelo) ----------------------
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
-    Promise.all([getTimeEntries(), getPayments()])
-      .then(([entriesData, paymentsData]) => {
+    Promise.all([getTimeEntries(), getInvoices()])
+      .then(([entriesData, invoicesData]) => {
         if (cancelled) return
         setEntries(entriesData)
-        setPayments(paymentsData)
+        setInvoices(invoicesData)
         setStatus('ready')
       })
       .catch((error) => {
@@ -81,46 +102,111 @@ export default function App({ user, onSignOut }) {
         console.error('No se pudieron cargar las entradas:', error)
         setStatus('error')
       })
+    // El estado del último sync se carga aparte: si falla, no rompe la grilla.
+    getSyncStatus()
+      .then((data) => {
+        if (!cancelled) setSyncStatus(data)
+      })
+      .catch((error) => {
+        console.warn('No se pudo cargar el estado de sync:', error)
+      })
     return () => {
       cancelled = true
     }
   }, [reloadKey])
 
-  // --- Mapa entryId -> info de pago (recalculado cuando cambian payments) ---
-  const paymentByEntryId = useMemo(() => {
+  // --- Mapa entryId -> factura asociada (recalculado al cambiar invoices) ---
+  const invoiceByEntryId = useMemo(() => {
     const map = new Map()
-    for (const payment of payments) {
-      for (const entryId of payment.entryIds) {
+    for (const invoice of invoices) {
+      for (const entryId of invoice.entryIds) {
         map.set(entryId, {
-          invoiceNumber: payment.invoiceNumber,
-          transactionNumber: payment.transactionNumber,
+          invoiceId: invoice.id,
+          supplierInvoiceNumber: invoice.supplierInvoiceNumber,
+          status: invoice.status,
         })
       }
     }
     return map
-  }, [payments])
+  }, [invoices])
 
-  const getPayment = useCallback(
-    (entryId) => paymentByEntryId.get(entryId) ?? null,
-    [paymentByEntryId],
+  const getInvoice = useCallback(
+    (entryId) => invoiceByEntryId.get(entryId) ?? null,
+    [invoiceByEntryId],
   )
 
+  // FR-06 · factura abierta en el drawer de detalle + sus time entries.
+  const openInvoice = useMemo(
+    () => invoices.find((inv) => inv.id === openInvoiceId) ?? null,
+    [invoices, openInvoiceId],
+  )
+  const openInvoiceEntries = useMemo(() => {
+    if (!openInvoice) return []
+    const ids = new Set(openInvoice.entryIds.map(String))
+    return entries.filter((entry) => ids.has(String(entry.id)))
+  }, [openInvoice, entries])
+
   // --- Derivados ------------------------------------------------------------
+  // Opciones para los multi-selects de filtros (orden alfabético es-AR).
+  const sortedUnique = (values) =>
+    [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
+
   const users = useMemo(
-    () =>
-      [...new Set(entries.map((entry) => entry.user))].sort((a, b) =>
-        a.localeCompare(b, 'es'),
-      ),
+    () => sortedUnique(entries.map((entry) => entry.user)),
+    [entries],
+  )
+  const clients = useMemo(
+    () => sortedUnique(entries.map((entry) => entry.client)),
+    [entries],
+  )
+  const projects = useMemo(
+    () => sortedUnique(entries.map((entry) => entry.project)),
     [entries],
   )
 
+  const isInvoiced = useCallback(
+    (entry) => invoiceByEntryId.has(entry.id),
+    [invoiceByEntryId],
+  )
+
+  // Billing Status de 4 estados: "Pending" si no está en ninguna factura; si no,
+  // el status de la factura asociada (Invoiced | Collected | Paid).
+  const getBillingStatus = useCallback(
+    (entry) => invoiceByEntryId.get(entry.id)?.status ?? 'Pending',
+    [invoiceByEntryId],
+  )
+
+  // FR-03 · entradas tras aplicar todos los filtros (sin la tab todavía).
+  const filteredEntries = useMemo(
+    () => applyEntryFilters(entries, filters, getBillingStatus),
+    [entries, filters, getBillingStatus],
+  )
+
+  // FR-04 · "Pendiente de facturar" = todavía no está en ninguna factura. Los
+  // contadores se recalculan solos cuando cambian filtros o facturas.
+  const pendingCount = useMemo(
+    () => filteredEntries.filter((entry) => !isInvoiced(entry)).length,
+    [filteredEntries, isInvoiced],
+  )
+  const allCount = filteredEntries.length
+
+  // Vista final: la tab se aplica ENCIMA de los filtros.
   const visibleEntries = useMemo(
     () =>
-      userFilter === 'all'
-        ? entries
-        : entries.filter((entry) => entry.user === userFilter),
-    [entries, userFilter],
+      activeTab === 'pending'
+        ? filteredEntries.filter((entry) => !isInvoiced(entry))
+        : filteredEntries,
+    [filteredEntries, activeTab, isInvoiced],
   )
+
+  // FR-03 · contadores de los 4 estados sobre el resultado actualmente visible.
+  const statusCounts = useMemo(() => {
+    const counts = { Pending: 0, Invoiced: 0, Collected: 0, Paid: 0 }
+    for (const entry of visibleEntries) {
+      counts[getBillingStatus(entry)] += 1
+    }
+    return counts
+  }, [visibleEntries, getBillingStatus])
 
   const selectedEntries = useMemo(
     () => entries.filter((entry) => selectedIds.has(entry.id)),
@@ -137,25 +223,30 @@ export default function App({ user, onSignOut }) {
     [selectedEntries],
   )
 
-  // --- Métricas del stepper (sobre TODAS las entries, no las filtradas) -----
+  // --- Métricas del stepper de 4 estados (sobre TODAS las entries) ----------
   const stepperMetrics = useMemo(() => {
     let approvedHours = 0
+    let invoicedHours = 0
+    let collectedHours = 0
     let paidHours = 0
     for (const entry of entries) {
       if (entry.status !== 'Approved') continue
       approvedHours += entry.hours
-      if (paymentByEntryId.has(entry.id)) paidHours += entry.hours
+      const billing = invoiceByEntryId.get(entry.id)?.status
+      if (billing === 'Invoiced') invoicedHours += entry.hours
+      else if (billing === 'Collected') collectedHours += entry.hours
+      else if (billing === 'Paid') paidHours += entry.hours
     }
-    return { approvedHours, paidHours }
-  }, [entries, paymentByEntryId])
+    return { approvedHours, invoicedHours, collectedHours, paidHours }
+  }, [entries, invoiceByEntryId])
 
-  // Regla clave: sólo se puede pagar si hay selección y de un único proveedor.
-  const canPay = selectedEntries.length > 0 && selectedUsers.length === 1
+  // Regla clave: sólo se puede facturar si hay selección y de un único proveedor.
+  const canBill = selectedEntries.length > 0 && selectedUsers.length === 1
 
-  // "Seleccionable" = no está pagada ya
+  // "Seleccionable" = no está facturada ya
   const isSelectable = useCallback(
-    (entry) => !paymentByEntryId.has(entry.id),
-    [paymentByEntryId],
+    (entry) => !invoiceByEntryId.has(entry.id),
+    [invoiceByEntryId],
   )
 
   const visibleSelectable = useMemo(
@@ -172,8 +263,8 @@ export default function App({ user, onSignOut }) {
 
   // --- Acciones -------------------------------------------------------------
   function toggleEntry(id) {
-    // Defensa extra: nunca togglear una entrada ya pagada.
-    if (paymentByEntryId.has(id)) return
+    // Defensa extra: nunca togglear una entrada ya facturada.
+    if (invoiceByEntryId.has(id)) return
     setSelectedIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -199,12 +290,14 @@ export default function App({ user, onSignOut }) {
     setSyncing(true)
     try {
       const result = await triggerSync()
-      const [entriesData, paymentsData] = await Promise.all([
+      const [entriesData, invoicesData, syncData] = await Promise.all([
         getTimeEntries(),
-        getPayments(),
+        getInvoices(),
+        getSyncStatus(),
       ])
       setEntries(entriesData)
-      setPayments(paymentsData)
+      setInvoices(invoicesData)
+      setSyncStatus(syncData)
       // Mantener la selección de filas que sigan existiendo tras el refresh.
       setSelectedIds((prev) => {
         const stillExisting = new Set(entriesData.map((entry) => entry.id))
@@ -228,57 +321,79 @@ export default function App({ user, onSignOut }) {
         tone: 'error',
         message: 'No se pudo actualizar, intentá de nuevo',
       })
+      // La Edge Function registró el estado 'Error': reflejarlo en la barra.
+      getSyncStatus()
+        .then((data) => setSyncStatus(data))
+        .catch(() => {})
     } finally {
       setSyncing(false)
     }
   }
 
-  async function handleConfirmPayment({ invoiceNumber, transactionNumber }) {
-    const paidCount = selectedEntries.length
-    const paidUser = selectedUsers[0]
-    const paidHoursFmt = formatHours(selectedHours)
+  async function handleConfirmBill({
+    supplierInvoiceNumber,
+    invoiceDate,
+    totalAmount,
+    notes,
+  }) {
+    const billedCount = selectedEntries.length
+    const billedUser = selectedUsers[0]
+    const billedHoursFmt = formatHours(selectedHours)
 
-    const { payment } = await createPayment({
-      userName: paidUser,
-      totalHours: selectedHours,
-      invoiceNumber,
-      transactionNumber,
+    const { invoice } = await createInvoice({
+      supplierInvoiceNumber,
+      invoiceDate,
+      totalAmount,
+      notes,
+      userName: billedUser,
       entryIds: selectedEntries.map((entry) => entry.id),
+      createdBy: user?.email ?? null,
     })
 
-    // Sumar el nuevo pago al estado local → las filas pagadas se marcan en vivo.
-    setPayments((prev) => [payment, ...prev])
+    // Sumar la factura al estado local → las filas facturadas se marcan en vivo.
+    setInvoices((prev) => [invoice, ...prev])
     setModalOpen(false)
     setSelectedIds(new Set())
     setToast({
       id: Date.now(),
-      message: `Pago registrado — ${paidCount} ${
-        paidCount === 1 ? 'entrada' : 'entradas'
-      } de ${paidUser} · ${paidHoursFmt} h · Factura ${invoiceNumber}`,
+      message: `Factura emitida — ${billedCount} ${
+        billedCount === 1 ? 'entrada' : 'entradas'
+      } de ${billedUser} · ${billedHoursFmt} h · ${supplierInvoiceNumber}`,
     })
     fireConfetti()
   }
 
+  // FR-06 · avanzar el estado de una factura desde el drawer (transición validada).
+  async function handleChangeInvoiceStatus(toStatus) {
+    if (!openInvoice) return null
+    const { historyEntry } = await updateInvoiceStatus({
+      invoiceId: openInvoice.id,
+      fromStatus: openInvoice.status,
+      toStatus,
+      changedBy: user?.email ?? null,
+      note: null,
+    })
+    // Reflejar el nuevo estado en el estado local → badges/stepper/drawer en vivo.
+    setInvoices((prev) =>
+      prev.map((inv) =>
+        inv.id === openInvoice.id ? { ...inv, status: toStatus } : inv,
+      ),
+    )
+    setToast({
+      id: Date.now(),
+      message: `Factura ${openInvoice.supplierInvoiceNumber} → ${toStatus}`,
+    })
+    return historyEntry
+  }
+
   return (
-    <div className="app">
-      <div className="app__inner">
+    <>
         <motion.header
           className="masthead"
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         >
-          <div className="masthead__brand">
-            <img
-              src="/logo-southpoint.png"
-              alt="Southpoint Tech Labs"
-              className="masthead__logo"
-            />
-            <div className="masthead__brand-right">
-              <span className="masthead__badge">Solo lectura</span>
-              {user && <UserPill user={user} onSignOut={onSignOut} />}
-            </div>
-          </div>
           <div className="masthead__top">
             <span className="masthead__kicker">Gestión de pagos · Proveedores</span>
             <span className="masthead__rule" aria-hidden="true" />
@@ -304,17 +419,33 @@ export default function App({ user, onSignOut }) {
           >
             <Stepper
               approvedHours={stepperMetrics.approvedHours}
-              selectedHours={selectedHours}
+              invoicedHours={stepperMetrics.invoicedHours}
+              collectedHours={stepperMetrics.collectedHours}
               paidHours={stepperMetrics.paidHours}
+            />
+
+            <ViewTabs
+              active={activeTab}
+              onChange={setActiveTab}
+              pendingCount={pendingCount}
+              allCount={allCount}
+            />
+
+            <FilterBar
+              contractors={users}
+              clients={clients}
+              projects={projects}
+              filters={filters}
+              toggleValue={toggleValue}
+              setField={setField}
+              clear={clear}
+              isActive={isActive}
+              counts={statusCounts}
+              isMobile={isMobile}
             />
 
             <div className="toolbar">
               <div className="toolbar__left">
-                <UserFilter
-                  users={users}
-                  value={userFilter}
-                  onChange={setUserFilter}
-                />
                 <button
                   type="button"
                   className="btn btn--ghost btn--refresh"
@@ -331,6 +462,10 @@ export default function App({ user, onSignOut }) {
                   />
                   <span>{syncing ? 'Sincronizando…' : 'Actualizar ahora'}</span>
                 </button>
+                <SyncStatus
+                  status={syncStatus}
+                  onOpenLog={() => setSyncLogOpen(true)}
+                />
               </div>
               <span className="toolbar__count">
                 {visibleEntries.length}{' '}
@@ -343,19 +478,20 @@ export default function App({ user, onSignOut }) {
                 count={selectedEntries.length}
                 hours={selectedHours}
                 users={selectedUsers}
-                canPay={canPay}
-                onPay={() => setModalOpen(true)}
+                canBill={canBill}
+                onBill={() => setModalOpen(true)}
               />
             </div>
 
             {visibleEntries.length === 0 ? (
-              <EmptyState />
+              <EmptyState tab={activeTab} />
             ) : isMobile ? (
               <EntriesCards
                 entries={visibleEntries}
                 selectedIds={selectedIds}
                 onToggle={toggleEntry}
-                getPayment={getPayment}
+                getInvoice={getInvoice}
+                onOpenInvoice={setOpenInvoiceId}
               />
             ) : (
               <EntriesTable
@@ -365,7 +501,8 @@ export default function App({ user, onSignOut }) {
                 onToggleAll={toggleAllVisible}
                 headerChecked={allVisibleSelected}
                 headerIndeterminate={someVisibleSelected && !allVisibleSelected}
-                getPayment={getPayment}
+                getInvoice={getInvoice}
+                onOpenInvoice={setOpenInvoiceId}
               />
             )}
 
@@ -385,17 +522,37 @@ export default function App({ user, onSignOut }) {
             </footer>
           </motion.div>
         )}
-      </div>
 
       <AnimatePresence>
-        {modalOpen && canPay && (
-          <PaymentModal
-            key="payment-modal"
+        {modalOpen && canBill && (
+          <BillModal
+            key="bill-modal"
             user={selectedUsers[0]}
             entries={selectedEntries}
             hours={selectedHours}
             onClose={() => setModalOpen(false)}
-            onConfirm={handleConfirmPayment}
+            onConfirm={handleConfirmBill}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {openInvoice && (
+          <InvoiceDetailDrawer
+            key={`invoice-${openInvoice.id}`}
+            invoice={openInvoice}
+            entries={openInvoiceEntries}
+            onClose={() => setOpenInvoiceId(null)}
+            onChangeStatus={handleChangeInvoiceStatus}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {syncLogOpen && (
+          <SyncLogModal
+            key="synclog-modal"
+            onClose={() => setSyncLogOpen(false)}
           />
         )}
       </AnimatePresence>
@@ -410,7 +567,7 @@ export default function App({ user, onSignOut }) {
           />
         )}
       </AnimatePresence>
-    </div>
+    </>
   )
 }
 
@@ -448,51 +605,12 @@ function ErrorState({ onRetry }) {
   )
 }
 
-function EmptyState() {
+function EmptyState({ tab }) {
   return (
-    <div className="empty">No hay entradas de tiempo para este proveedor.</div>
-  )
-}
-
-function UserPill({ user, onSignOut }) {
-  const [busy, setBusy] = useState(false)
-  const label =
-    user?.user_metadata?.name ||
-    user?.user_metadata?.full_name ||
-    user?.email ||
-    'Usuario'
-  const initial = label.trim().charAt(0).toUpperCase() || '?'
-
-  async function handleSignOut() {
-    if (busy) return
-    setBusy(true)
-    try {
-      await onSignOut?.()
-    } catch (error) {
-      console.error('No se pudo cerrar sesión:', error)
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="user-pill">
-      <span className="user-pill__avatar" aria-hidden="true">
-        {initial}
-      </span>
-      <span className="user-pill__label" title={label}>
-        {label}
-      </span>
-      <button
-        type="button"
-        className="user-pill__logout"
-        onClick={handleSignOut}
-        disabled={busy}
-        aria-label="Cerrar sesión"
-        title="Cerrar sesión"
-      >
-        <LogOut size={14} aria-hidden="true" />
-        <span>Salir</span>
-      </button>
+    <div className="empty">
+      {tab === 'pending'
+        ? 'No hay entradas pendientes de facturar.'
+        : 'No hay entradas de tiempo para este proveedor.'}
     </div>
   )
 }

@@ -1,9 +1,11 @@
 import { motion } from 'framer-motion'
+import { FileText, StickyNote } from 'lucide-react'
 import { Avatar } from './Avatar'
 import { Checkbox } from './Checkbox'
 import { StatusBadge } from './StatusBadge'
-import { PaymentBadge } from './PaymentBadge'
-import { formatDate, formatHours } from '../lib/format'
+import { BillingBadge } from './BillingBadge'
+import { CellPopButton } from './CellPopButton'
+import { formatDate, formatHours, formatWeek } from '../lib/format'
 
 const rowVariants = {
   hidden: { opacity: 0, y: 8 },
@@ -24,7 +26,7 @@ const rowVariants = {
  *   onToggleAll: () => void,
  *   headerChecked: boolean,
  *   headerIndeterminate: boolean,
- *   getPayment: (id: string|number) => ({ invoiceNumber: string, transactionNumber: ?string } | null)
+ *   getInvoice: (id: string|number) => ({ supplierInvoiceNumber: string, status: string } | null)
  * }} props
  */
 export function EntriesTable({
@@ -34,7 +36,8 @@ export function EntriesTable({
   onToggleAll,
   headerChecked,
   headerIndeterminate,
-  getPayment,
+  getInvoice,
+  onOpenInvoice,
 }) {
   return (
     <div className="table-wrap">
@@ -49,27 +52,30 @@ export function EntriesTable({
                 ariaLabel="Seleccionar todas las filas pendientes visibles"
               />
             </th>
-            <th scope="col">User</th>
-            <th scope="col">Project</th>
-            <th scope="col">Task</th>
-            <th scope="col">Description</th>
-            <th scope="col">Notes</th>
-            <th scope="col">Date</th>
-            <th className="col-num" scope="col">Hours</th>
-            <th scope="col">Status</th>
-            <th scope="col">Payment</th>
-            <th scope="col" className="col-narrow">Invoice</th>
-            <th scope="col" className="col-narrow">Transaction</th>
+            <th scope="col" className="col-user">User</th>
+            <th scope="col" className="col-project">Project</th>
+            <th scope="col" className="col-client col-optional">Client</th>
+            <th scope="col" className="col-task">Task</th>
+            <th scope="col" className="col-tasknum col-optional">Task #</th>
+            <th scope="col" className="col-pop">Desc.</th>
+            <th scope="col" className="col-pop">Notes</th>
+            <th scope="col" className="col-date">Date</th>
+            <th scope="col" className="col-week col-optional">Week</th>
+            <th className="col-num col-hours" scope="col">Hours</th>
+            <th scope="col" className="col-status">Status</th>
+            <th scope="col" className="col-billing">Billing</th>
+            <th scope="col" className="col-invoice">Invoice</th>
           </tr>
         </thead>
         <tbody>
           {entries.map((entry, index) => {
-            const payment = getPayment(entry.id)
-            const isPaid = payment !== null
+            const invoice = getInvoice(entry.id)
+            const isInvoiced = invoice !== null
+            const billingStatus = invoice ? invoice.status : 'Pending'
             const selected = selectedIds.has(entry.id)
             const rowClass = [
               selected ? 'is-selected' : '',
-              isPaid ? 'is-paid' : '',
+              isInvoiced ? 'is-paid' : '',
             ]
               .filter(Boolean)
               .join(' ')
@@ -82,14 +88,21 @@ export function EntriesTable({
                 variants={rowVariants}
                 className={rowClass}
                 onClick={(event) => {
-                  if (isPaid) return
                   if (event.target.closest('.checkbox')) return
+                  if (isInvoiced) {
+                    onOpenInvoice?.(invoice.invoiceId)
+                    return
+                  }
                   onToggle(entry.id)
                 }}
-                aria-disabled={isPaid || undefined}
+                title={
+                  isInvoiced
+                    ? `Ver factura ${invoice.supplierInvoiceNumber}`
+                    : undefined
+                }
               >
                 <td className="col-check">
-                  {isPaid ? (
+                  {isInvoiced ? (
                     <Checkbox checked={false} readOnly disabled />
                   ) : (
                     <Checkbox
@@ -99,29 +112,61 @@ export function EntriesTable({
                     />
                   )}
                 </td>
-                <td>
+                <td className="col-user">
                   <span className="user-cell">
                     <Avatar name={entry.user} size="sm" />
-                    <span className="user-cell__name">{entry.user}</span>
+                    <span className="user-cell__name" title={entry.user}>
+                      {entry.user}
+                    </span>
                   </span>
                 </td>
-                <td>{entry.project}</td>
-                <td className="cell-strong">{entry.task}</td>
-                <td className="cell-soft">{entry.description}</td>
-                <td className="cell-note">{entry.notes || '—'}</td>
-                <td className="cell-mono">{formatDate(entry.date)}</td>
-                <td className="col-num cell-hours">{formatHours(entry.hours)}</td>
-                <td>
+                <td className="col-project" title={entry.project}>
+                  {entry.project}
+                </td>
+                <td
+                  className="col-client col-optional cell-soft"
+                  title={entry.client || undefined}
+                >
+                  {entry.client || '—'}
+                </td>
+                <td className="col-task cell-strong" title={entry.task}>
+                  {entry.task}
+                </td>
+                <td className="col-tasknum col-optional cell-mono">
+                  {entry.taskNumber || '—'}
+                </td>
+                <td className="col-pop">
+                  <CellPopButton
+                    label="Descripción"
+                    text={entry.description}
+                    icon={FileText}
+                  />
+                </td>
+                <td className="col-pop">
+                  <CellPopButton
+                    label="Notes"
+                    text={entry.notes}
+                    icon={StickyNote}
+                  />
+                </td>
+                <td className="col-date cell-mono">{formatDate(entry.date)}</td>
+                <td className="col-week col-optional cell-mono">
+                  {formatWeek(entry.date)}
+                </td>
+                <td className="col-num col-hours cell-hours">
+                  {formatHours(entry.hours)}
+                </td>
+                <td className="col-status">
                   <StatusBadge status={entry.status} />
                 </td>
-                <td>
-                  <PaymentBadge paid={isPaid} />
+                <td className="col-billing">
+                  <BillingBadge status={billingStatus} />
                 </td>
-                <td className="cell-mono col-narrow">
-                  {payment?.invoiceNumber ?? '—'}
-                </td>
-                <td className="cell-mono col-narrow">
-                  {payment?.transactionNumber ?? '—'}
+                <td
+                  className="col-invoice cell-mono"
+                  title={invoice?.supplierInvoiceNumber ?? undefined}
+                >
+                  {invoice?.supplierInvoiceNumber ?? '—'}
                 </td>
               </motion.tr>
             )

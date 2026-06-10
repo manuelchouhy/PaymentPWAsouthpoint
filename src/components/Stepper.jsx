@@ -1,47 +1,63 @@
 import { motion } from 'framer-motion'
-import { CheckCircle2, Circle, MousePointerClick, Wallet } from 'lucide-react'
+import {
+  BadgeCheck,
+  CheckCircle2,
+  Circle,
+  CircleDollarSign,
+  FileCheck2,
+} from 'lucide-react'
 import { formatHours } from '../lib/format'
 
 /**
- * Stepper de proceso de billing. Refleja datos reales (no decorativo):
- *  - Aprobadas: horas con status Approved (universo facturable).
- *  - En selección: horas actualmente seleccionadas en la UI.
- *  - Pagadas: horas pagadas (suma de hours de entries presentes en algún payment).
- *
- * El progreso visual se calcula sobre paid / approved.
+ * Stepper del proceso de billing — 4 etapas con datos reales (no decorativo):
+ *  Approved → Invoiced → Collected → Paid.
+ * Cada nodo muestra cuántas horas están en ese estado. La barra de progreso
+ * representa la fracción facturada (Invoiced + Collected + Paid) sobre el
+ * universo aprobado.
  */
-export function Stepper({ approvedHours, selectedHours, paidHours }) {
+export function Stepper({
+  approvedHours,
+  invoicedHours,
+  collectedHours,
+  paidHours,
+}) {
+  const billedHours = invoicedHours + collectedHours + paidHours
   const safeDen = approvedHours > 0 ? approvedHours : 1
+  const billedPct = Math.min(100, (billedHours / safeDen) * 100)
   const paidPct = Math.min(100, (paidHours / safeDen) * 100)
-  const selectedPct = Math.min(100, (selectedHours / safeDen) * 100)
 
   const stages = [
     {
       key: 'approved',
-      label: 'Aprobadas',
+      label: 'Approved',
       hint: 'Universo facturable',
       icon: Circle,
+      tone: 'approved',
       value: approvedHours,
-      done: approvedHours > 0,
-      active: false,
     },
     {
-      key: 'selected',
-      label: 'En selección',
-      hint: selectedHours > 0 ? 'Listas para pagar' : 'Sin selección activa',
-      icon: MousePointerClick,
-      value: selectedHours,
-      done: false,
-      active: selectedHours > 0,
+      key: 'invoiced',
+      label: 'Invoiced',
+      hint: invoicedHours > 0 ? 'Facturas emitidas' : 'Sin facturas',
+      icon: FileCheck2,
+      tone: 'invoiced',
+      value: invoicedHours,
+    },
+    {
+      key: 'collected',
+      label: 'Collected',
+      hint: collectedHours > 0 ? 'Cobradas al cliente' : 'Sin cobros',
+      icon: CircleDollarSign,
+      tone: 'collected',
+      value: collectedHours,
     },
     {
       key: 'paid',
-      label: 'Pagadas',
-      hint: paidHours > 0 ? `${paidPct.toFixed(0)}% del aprobado` : 'Sin pagos registrados',
-      icon: Wallet,
+      label: 'Paid',
+      hint: paidHours > 0 ? 'Pagadas al contractor' : 'Sin pagos',
+      icon: BadgeCheck,
+      tone: 'paid',
       value: paidHours,
-      done: paidHours > 0 && paidHours >= approvedHours,
-      active: paidHours > 0,
     },
   ]
 
@@ -51,41 +67,40 @@ export function Stepper({ approvedHours, selectedHours, paidHours }) {
         <span className="stepper__title">Proceso de billing</span>
         <span className="stepper__totals">
           <span className="stepper__totals-num">
-            {formatHours(paidHours)} <span className="stepper__totals-of">de</span>{' '}
+            {formatHours(billedHours)}{' '}
+            <span className="stepper__totals-of">de</span>{' '}
             {formatHours(approvedHours)}
           </span>
-          <span className="stepper__totals-unit">h pagadas</span>
+          <span className="stepper__totals-unit">h facturadas</span>
         </span>
       </div>
 
       <div className="stepper__track" role="presentation">
         <div className="stepper__track-bg" />
         <motion.div
+          className="stepper__track-selected"
+          initial={false}
+          animate={{ width: `${billedPct}%` }}
+          transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+        />
+        <motion.div
           className="stepper__track-fill"
           initial={false}
           animate={{ width: `${paidPct}%` }}
           transition={{ type: 'spring', damping: 28, stiffness: 220 }}
         />
-        <motion.div
-          className="stepper__track-selected"
-          initial={false}
-          animate={{
-            width: `${Math.max(paidPct, Math.min(100, paidPct + selectedPct))}%`,
-          }}
-          transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-        />
       </div>
 
-      <ol className="stepper__nodes">
+      <ol className="stepper__nodes stepper__nodes--four">
         {stages.map((stage) => {
-          const Icon = stage.done ? CheckCircle2 : stage.icon
-          const stateClass = stage.done
-            ? 'is-done'
-            : stage.active
-              ? 'is-active'
-              : 'is-idle'
+          const active = stage.value > 0
+          const Icon = active && stage.key !== 'approved' ? CheckCircle2 : stage.icon
+          const stateClass = active ? 'is-active' : 'is-idle'
           return (
-            <li key={stage.key} className={`stepper__node ${stateClass}`}>
+            <li
+              key={stage.key}
+              className={`stepper__node ${stateClass} stepper__node--${stage.tone}`}
+            >
               <span className="stepper__node-icon" aria-hidden="true">
                 <Icon size={15} strokeWidth={2.2} />
               </span>

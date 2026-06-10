@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { AlertTriangle, Wallet } from 'lucide-react'
+import { AlertTriangle, FileText } from 'lucide-react'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { formatHours } from '../lib/format'
 import { Avatar } from './Avatar'
@@ -22,12 +22,12 @@ function AnimatedHours({ value }) {
 
 /**
  * Barra de selección (sticky). Muestra las horas seleccionadas en vivo como
- * pieza visual destacada y contiene el botón Pay.
+ * pieza visual destacada y contiene el botón Bill (emitir factura).
  *
- * Regla clave: sólo se puede pagar un proveedor por vez. Si la selección
+ * Regla clave: sólo se puede facturar un proveedor por vez. Si la selección
  * abarca varios proveedores, el botón se deshabilita y aparece el aviso.
  */
-export function SelectionBar({ count, hours, users, canPay, onPay }) {
+export function SelectionBar({ count, hours, users, canBill, onBill }) {
   const multipleProviders = users.length > 1
 
   return (
@@ -43,7 +43,7 @@ export function SelectionBar({ count, hours, users, canPay, onPay }) {
       <div className="selbar__detail">
         {count === 0 && (
           <p className="selbar__hint">
-            Seleccioná filas para sumar horas y habilitar el pago.
+            Seleccioná filas para sumar horas y habilitar la facturación.
           </p>
         )}
 
@@ -54,7 +54,7 @@ export function SelectionBar({ count, hours, users, canPay, onPay }) {
               <span className="selbar__user">{users[0]}</span>
             </span>
             <span className="selbar__count">
-              {count} {count === 1 ? 'entrada lista para pagar' : 'entradas listas para pagar'}
+              {count} {count === 1 ? 'entrada lista para facturar' : 'entradas listas para facturar'}
             </span>
           </div>
         )}
@@ -65,7 +65,7 @@ export function SelectionBar({ count, hours, users, canPay, onPay }) {
             <span>
               <strong>Un proveedor por vez.</strong> Seleccionaste filas de{' '}
               {users.length} proveedores ({users.join(', ')}). Dejá filas de uno
-              solo para poder pagar.
+              solo para poder facturar.
             </span>
           </p>
         )}
@@ -74,19 +74,19 @@ export function SelectionBar({ count, hours, users, canPay, onPay }) {
       <motion.button
         type="button"
         className="btn btn--pay"
-        onClick={onPay}
-        disabled={!canPay}
-        whileTap={canPay ? { scale: 0.96 } : undefined}
+        onClick={onBill}
+        disabled={!canBill}
+        whileTap={canBill ? { scale: 0.96 } : undefined}
         title={
           multipleProviders
-            ? 'Sólo se puede pagar un proveedor por vez'
+            ? 'Sólo se puede facturar un proveedor por vez'
             : count === 0
               ? 'Seleccioná al menos una fila'
-              : 'Procesar pago'
+              : 'Emitir factura'
         }
       >
-        <Wallet size={16} strokeWidth={2.2} aria-hidden="true" />
-        Pay
+        <FileText size={16} strokeWidth={2.2} aria-hidden="true" />
+        Bill
       </motion.button>
     </div>
   )

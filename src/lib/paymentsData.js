@@ -1,0 +1,235 @@
+/**
+ * Capa de datos del módulo Payments al contractor (FR-10).
+ * Un payment se vincula a una invoice que YA está en estado 'Collected'.
+ *
+ * @typedef {Object} ContractorPayment
+ * @property {string|number} id
+ * @property {string|number} invoiceId
+ * @property {number} amountPaid
+ * @property {string} paymentDate          ISO YYYY-MM-DD
+ * @property {?string} transferReference
+ * @property {?string} bankMethod
+ * @property {?string} notes
+ * @property {boolean} backDated
+ * @property {string} createdAt
+ * @property {?string} createdBy
+ */
+
+import { supabase, isSupabaseConfigured } from './supabase'
+import { updateInvoiceStatus } from './data'
+
+export const BANK_METHODS = ['BBVA', 'Itaú', 'Santander', 'Other']
+
+/**
+ * Nivel de alerta de pago al contractor (FR-13).
+ *   overdue : days_until_due < 0
+ *   warning : days_until_due <= warning_days_before_due
+ *   on_time : el resto
+ * @returns {'overdue'|'warning'|'on_time'}
+ */
+export function paymentAlertLevel(daysUntilDue, warningDaysBeforeDue) {
+  if (daysUntilDue < 0) return 'overdue'
+  if (daysUntilDue <= (warningDaysBeforeDue ?? 3)) return 'warning'
+  return 'on_time'
+}
+
+let demoPaymentAlertSettings = {
+  warningDaysBeforeDue: 3,
+  emailRecipients: ['pagos@southpoint.local'],
+  emailFrequency: 'daily',
+  updatedAt: null,
+  updatedBy: null,
+}
+
+function rowToPaymentAlertSettings(row) {
+  return {
+    warningDaysBeforeDue: row.warning_days_before_due,
+    emailRecipients: row.email_recipients ?? [],
+    emailFrequency: row.email_frequency,
+    updatedAt: row.updated_at,
+    updatedBy: row.updated_by,
+  }
+}
+
+export async function getPaymentAlertSettings() {
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 150))
+    return { ...demoPaymentAlertSettings }
+  }
+  const { data, error } = await supabase
+    .from('payment_alert_settings')
+    .select('*')
+    .eq('id', 1)
+    .maybeSingle()
+  if (error || !data) return { ...demoPaymentAlertSettings }
+  return rowToPaymentAlertSettings(data)
+}
+
+export async function updatePaymentAlertSettings(settings, updatedBy) {
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 250))
+    demoPaymentAlertSettings = {
+      ...demoPaymentAlertSettings,
+      ...settings,
+      updatedAt: new Date().toISOString(),
+      updatedBy: updatedBy || null,
+    }
+    return { ...demoPaymentAlertSettings }
+  }
+  const { data, error } = await supabase
+    .from('payment_alert_settings')
+    .update({
+      warning_days_before_due: settings.warningDaysBeforeDue,
+      email_recipients: settings.emailRecipients,
+      email_frequency: settings.emailFrequency,
+      updated_by: updatedBy || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', 1)
+    .select()
+    .single()
+  if (error) throw new Error(error.message)
+  return rowToPaymentAlertSettings(data)
+}
+
+function todayISO() {
+  const now = new Date()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${mm}-${dd}`
+}
+
+/** @type {ContractorPayment[]} — pago demo de la factura inv-mock-2 (Paid). */
+const MOCK_PAYMENTS = [
+  {
+    id: 'pay-1',
+    invoiceId: 'inv-mock-2',
+    amountPaid: 800,
+    paymentDate: '2026-05-25',
+    transferReference: 'TRX-77120',
+    bankMethod: 'Itaú',
+    notes: null,
+    backDated: false,
+    createdAt: '2026-05-25T16:00:00.000Z',
+    createdBy: 'demo@southpoint.local',
+  },
+]
+
+let demoPayments = MOCK_PAYMENTS.map((p) => ({ ...p }))
+
+function rowToPayment(row) {
+  return {
+    id: row.id,
+    invoiceId: row.invoice_id,
+    amountPaid: Number(row.amount_paid),
+    paymentDate: row.payment_date,
+    transferReference: row.transfer_reference ?? null,
+    bankMethod: row.bank_method ?? null,
+    notes: row.notes ?? null,
+    backDated: Boolean(row.back_dated),
+    createdAt: row.created_at,
+    createdBy: row.created_by ?? null,
+  }
+}
+
+/** @returns {Promise<ContractorPayment[]>} */
+export async function getPayments() {
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 200))
+    return demoPayments.map((p) => ({ ...p }))
+  }
+  const { data, error } = await supabase
+    .from('payments')
+    .select('id, invoice_id, amount_paid, payment_date, transfer_reference, bank_method, notes, back_dated, created_at, created_by')
+    .order('payment_date', { ascending: false })
+  if (error) {
+    console.warn('[payments] getPayments falló —', error.message)
+    return demoPayments.map((p) => ({ ...p }))
+  }
+  return data.map(rowToPayment)
+}
+
+/** El pago asociado a una factura (o null). */
+export async function getPaymentByInvoice(invoiceId) {
+  if (!isSupabaseConfigured) {
+    return demoPayments.find((p) => p.invoiceId === invoiceId) ?? null
+  }
+  const { data, error } = await supabase
+    .from('payments')
+    .select('id, invoice_id, amount_paid, payment_date, transfer_reference, bank_method, notes, back_dated, created_at, created_by')
+    .eq('invoice_id', invoiceId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  if (error || !data || !data.length) return null
+  return rowToPayment(data[0])
+}
+
+/**
+ * Registra un pago al contractor. VALIDACIÓN DURA: la invoice debe estar en
+ * 'Collected'. Al confirmar, avanza la invoice a 'Paid' (+ historial).
+ *
+ * @param {{ id, status, totalAmount }} invoice
+ * @param {{ amountPaid:number, paymentDate:string, transferReference?:string, bankMethod?:string, notes?:string }} payload
+ * @param {?string} createdBy
+ * @returns {Promise<{ payment: ContractorPayment }>}
+ */
+export async function createPayment(invoice, payload, createdBy) {
+  if (invoice.status !== 'Collected') {
+    const err = new Error('Invoice must be Collected before payment')
+    err.code = 'not_collected'
+    throw err
+  }
+
+  const backDated = payload.paymentDate < todayISO()
+
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 300))
+    const payment = {
+      id: `pay-demo-${Date.now()}`,
+      invoiceId: invoice.id,
+      amountPaid: Number(payload.amountPaid),
+      paymentDate: payload.paymentDate,
+      transferReference: payload.transferReference || null,
+      bankMethod: payload.bankMethod || null,
+      notes: payload.notes || null,
+      backDated,
+      createdAt: new Date().toISOString(),
+      createdBy: createdBy || null,
+    }
+    demoPayments = [payment, ...demoPayments]
+    await updateInvoiceStatus({
+      invoiceId: invoice.id,
+      fromStatus: 'Collected',
+      toStatus: 'Paid',
+      changedBy: createdBy ?? null,
+      note: 'Pago al contractor registrado',
+    })
+    return { payment }
+  }
+
+  const { data, error } = await supabase
+    .from('payments')
+    .insert({
+      invoice_id: invoice.id,
+      amount_paid: Number(payload.amountPaid),
+      payment_date: payload.paymentDate,
+      transfer_reference: payload.transferReference || null,
+      bank_method: payload.bankMethod || null,
+      notes: payload.notes || null,
+      back_dated: backDated,
+      created_by: createdBy || null,
+    })
+    .select()
+    .single()
+  if (error) throw new Error(error.message)
+
+  await updateInvoiceStatus({
+    invoiceId: invoice.id,
+    fromStatus: 'Collected',
+    toStatus: 'Paid',
+    changedBy: createdBy ?? null,
+    note: 'Pago al contractor registrado',
+  })
+
+  return { payment: rowToPayment(data) }
+}

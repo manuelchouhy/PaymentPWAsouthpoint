@@ -2,8 +2,8 @@ import { motion } from 'framer-motion'
 import { Avatar } from './Avatar'
 import { Checkbox } from './Checkbox'
 import { StatusBadge } from './StatusBadge'
-import { PaymentBadge } from './PaymentBadge'
-import { formatDate, formatHours } from '../lib/format'
+import { BillingBadge } from './BillingBadge'
+import { formatDate, formatHours, formatWeek } from '../lib/format'
 
 const cardVariants = {
   hidden: { opacity: 0, y: 12 },
@@ -17,17 +17,24 @@ const cardVariants = {
 /**
  * Lista de entradas en formato tarjeta (vista móvil).
  */
-export function EntriesCards({ entries, selectedIds, onToggle, getPayment }) {
+export function EntriesCards({
+  entries,
+  selectedIds,
+  onToggle,
+  getInvoice,
+  onOpenInvoice,
+}) {
   return (
     <ul className="cards">
       {entries.map((entry, index) => {
-        const payment = getPayment(entry.id)
-        const isPaid = payment !== null
+        const invoice = getInvoice(entry.id)
+        const isInvoiced = invoice !== null
+        const billingStatus = invoice ? invoice.status : 'Pending'
         const selected = selectedIds.has(entry.id)
         const cardClass = [
           'card',
           selected ? 'is-selected' : '',
-          isPaid ? 'is-paid' : '',
+          isInvoiced ? 'is-paid' : '',
         ]
           .filter(Boolean)
           .join(' ')
@@ -41,29 +48,31 @@ export function EntriesCards({ entries, selectedIds, onToggle, getPayment }) {
           >
             <div
               className={cardClass}
-              role={isPaid ? undefined : 'button'}
-              tabIndex={isPaid ? -1 : 0}
-              aria-pressed={isPaid ? undefined : selected}
-              aria-disabled={isPaid || undefined}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isInvoiced ? undefined : selected}
               aria-label={
-                isPaid
-                  ? `Entrada ya pagada de ${entry.user}: ${entry.task}`
+                isInvoiced
+                  ? `Ver factura ${invoice.supplierInvoiceNumber} de ${entry.user}`
                   : `Entrada de ${entry.user}: ${entry.task}, ${formatHours(entry.hours)} horas`
               }
               onClick={() => {
-                if (isPaid) return
+                if (isInvoiced) {
+                  onOpenInvoice?.(invoice.invoiceId)
+                  return
+                }
                 onToggle(entry.id)
               }}
               onKeyDown={(event) => {
-                if (isPaid) return
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault()
-                  onToggle(entry.id)
+                  if (isInvoiced) onOpenInvoice?.(invoice.invoiceId)
+                  else onToggle(entry.id)
                 }
               }}
             >
               <div className="card__top">
-                {isPaid ? (
+                {isInvoiced ? (
                   <Checkbox checked={false} disabled />
                 ) : (
                   <Checkbox checked={selected} readOnly />
@@ -83,27 +92,47 @@ export function EntriesCards({ entries, selectedIds, onToggle, getPayment }) {
                 <p className="card__task">{entry.task}</p>
                 <p className="card__desc">{entry.description}</p>
                 {entry.notes && <p className="card__notes">{entry.notes}</p>}
+                <div className="card__meta">
+                  {entry.client && (
+                    <span className="card__meta-item">
+                      <span className="card__meta-label">Cliente</span>
+                      {entry.client}
+                    </span>
+                  )}
+                  {entry.taskNumber && (
+                    <span className="card__meta-item">
+                      <span className="card__meta-label">Task #</span>
+                      {entry.taskNumber}
+                    </span>
+                  )}
+                  <span className="card__meta-item">
+                    <span className="card__meta-label">Semana</span>
+                    {formatWeek(entry.date)}
+                  </span>
+                </div>
               </div>
 
-              {isPaid && (
+              {isInvoiced && (
                 <div className="card__payment">
                   <div className="card__payment-row">
                     <span className="card__payment-label">Invoice</span>
-                    <span className="card__payment-value">{payment.invoiceNumber}</span>
+                    <span className="card__payment-value">
+                      {invoice.supplierInvoiceNumber}
+                    </span>
                   </div>
-                  {payment.transactionNumber && (
-                    <div className="card__payment-row">
-                      <span className="card__payment-label">Transaction</span>
-                      <span className="card__payment-value">{payment.transactionNumber}</span>
-                    </div>
-                  )}
+                  <div className="card__payment-row">
+                    <span className="card__payment-label">Fecha</span>
+                    <span className="card__payment-value">
+                      {formatDate(invoice.invoiceDate)}
+                    </span>
+                  </div>
                 </div>
               )}
 
               <div className="card__foot">
                 <span className="card__date">{formatDate(entry.date)}</span>
                 <div className="card__foot-badges">
-                  <PaymentBadge paid={isPaid} />
+                  <BillingBadge status={billingStatus} />
                   <StatusBadge status={entry.status} />
                 </div>
               </div>
