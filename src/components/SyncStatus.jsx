@@ -28,26 +28,26 @@ export function SyncStatus({ status, onOpenLog }) {
         className={`sync-status__text${hadError ? ' sync-status__text--error' : ''}`}
         title={
           hadError && status?.lastErrorMessage
-            ? `Último sync con error: ${status.lastErrorMessage}`
+            ? `Last sync error: ${status.lastErrorMessage}`
             : undefined
         }
       >
         {relative ? (
           <>
-            Última actualización:{' '}
+            Last updated:{' '}
             <strong className="sync-status__value">{relative}</strong>
-            {hadError && ' · con error'}
+            {hadError && ' · with error'}
           </>
         ) : (
-          'Sin sincronizaciones aún'
+          'No syncs yet'
         )}
       </span>
       <button
         type="button"
         className="icon-btn sync-status__history"
         onClick={onOpenLog}
-        aria-label="Ver historial de sincronizaciones"
-        title="Ver historial de sincronizaciones"
+        aria-label="View sync history"
+        title="View sync history"
       >
         <History size={16} aria-hidden="true" />
       </button>

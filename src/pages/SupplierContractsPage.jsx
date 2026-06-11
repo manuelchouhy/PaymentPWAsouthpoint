@@ -105,7 +105,7 @@ export function SupplierContractsPage() {
     const created = await createSupplierContract(payload, user?.email ?? null)
     setContracts((prev) => sortByExp([created, ...prev]))
     setForm(null)
-    setToast({ id: Date.now(), message: `Contrato creado — ${created.contractNumber}` })
+    setToast({ id: Date.now(), message: `Contract created — ${created.contractNumber}` })
   }
 
   async function handleUpdate(payload, pdfFile) {
@@ -113,7 +113,7 @@ export function SupplierContractsPage() {
     const updated = await updateSupplierContract(form.contract, payload, user?.email ?? null)
     setContracts((prev) => sortByExp(prev.map((c) => (c.id === updated.id ? updated : c))))
     setForm(null)
-    setToast({ id: Date.now(), message: `Contrato actualizado — ${updated.contractNumber}` })
+    setToast({ id: Date.now(), message: `Contract updated — ${updated.contractNumber}` })
   }
 
   async function handleRenew(payload, pdfFile) {
@@ -127,7 +127,7 @@ export function SupplierContractsPage() {
       sortByExp([created, ...prev.map((c) => (c.id === archived.id ? archived : c))].filter((c) => !c.archived)),
     )
     setRenewing(null)
-    setToast({ id: Date.now(), message: `Contrato renovado — ${created.contractNumber}` })
+    setToast({ id: Date.now(), message: `Contract renewed — ${created.contractNumber}` })
   }
 
   async function handleMarkRenewal(contract) {
@@ -136,7 +136,7 @@ export function SupplierContractsPage() {
     setDetail(null)
     setToast({
       id: Date.now(),
-      message: `Renovación en curso — silenciado ${SNOOZE_DAYS} días`,
+      message: `Renewal in progress — snoozed for ${SNOOZE_DAYS} days`,
     })
   }
 
@@ -149,13 +149,13 @@ export function SupplierContractsPage() {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="masthead__top">
-          <span className="masthead__kicker">Contratos · Proveedor</span>
+          <span className="masthead__kicker">Contracts · Supplier</span>
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Supplier Contracts</h1>
         <p className="masthead__sub">
-          Contratos con proveedores (contractors), ordenados por vencimiento.
-          southpointlabs tiene tratamiento prioritario.
+          Supplier (contractor) contracts, sorted by expiration date.
+          southpointlabs receives priority treatment.
         </p>
       </motion.header>
 
@@ -169,11 +169,11 @@ export function SupplierContractsPage() {
         )}
       </AnimatePresence>
 
-      {status === 'loading' && <p className="state__hint">Cargando contratos…</p>}
+      {status === 'loading' && <p className="state__hint">Loading contracts…</p>}
       {status === 'error' && (
         <div className="state state--error">
           <AlertTriangle size={28} strokeWidth={1.8} />
-          <h2 className="state__title">No pudimos cargar los contratos</h2>
+          <h2 className="state__title">Could not load contracts</h2>
         </div>
       )}
 
@@ -183,9 +183,9 @@ export function SupplierContractsPage() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.05 }}
         >
-          <section className="filterbar" aria-label="Filtros">
+          <section className="filterbar" aria-label="Filters">
             <div className="filterbar__head">
-              <span className="filterbar__title">Filtros</span>
+              <span className="filterbar__title">Filters</span>
               <div className="filterbar__head-actions">
                 <Link to="/supplier-alerts" className="btn btn--ghost proj-alerts-link">
                   <BellRing size={15} aria-hidden="true" />
@@ -200,7 +200,7 @@ export function SupplierContractsPage() {
             <div className="filterbar__controls">
               <div className="filterfield">
                 <span className="filterfield__label">Supplier</span>
-                <input type="text" className="filterfield__input" placeholder="Buscar…"
+                <input type="text" className="filterfield__input" placeholder="Search…"
                   value={filters.supplier}
                   onChange={(e) => setFilters((p) => ({ ...p, supplier: e.target.value }))} />
               </div>
@@ -209,13 +209,13 @@ export function SupplierContractsPage() {
               <MultiSelectDropdown label="Renewal Type" options={RENEWAL_TYPES}
                 selected={filters.renewalTypes} onToggle={(v) => toggle('renewalTypes', v)} />
               <div className="filterfield">
-                <span className="filterfield__label">Vence desde</span>
+                <span className="filterfield__label">Due from</span>
                 <input type="date" className="filterfield__input" value={filters.expFrom}
                   max={filters.expTo || undefined}
                   onChange={(e) => setFilters((p) => ({ ...p, expFrom: e.target.value }))} />
               </div>
               <div className="filterfield">
-                <span className="filterfield__label">Vence hasta</span>
+                <span className="filterfield__label">Due to</span>
                 <input type="date" className="filterfield__input" value={filters.expTo}
                   min={filters.expFrom || undefined}
                   onChange={(e) => setFilters((p) => ({ ...p, expTo: e.target.value }))} />
@@ -225,12 +225,12 @@ export function SupplierContractsPage() {
 
           <div className="toolbar">
             <span className="toolbar__count">
-              {rows.length} {rows.length === 1 ? 'contrato' : 'contratos'}
+              {rows.length} {rows.length === 1 ? 'contract' : 'contracts'}
             </span>
           </div>
 
           {rows.length === 0 ? (
-            <div className="empty">No hay contratos para mostrar.</div>
+            <div className="empty">No contracts to display.</div>
           ) : (
             <div className="table-wrap table-wrap--scroll">
               <table className="table proj-table">
@@ -265,7 +265,7 @@ export function SupplierContractsPage() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: Math.min(index * 0.02, 0.3) }}
                         onClick={() => setDetail(c)}
-                        title={`Ver ${c.supplierName}`}
+                        title={`View ${c.supplierName}`}
                       >
                         <td className="cell-strong">
                           {c.isPrioritySupplier && (
@@ -282,7 +282,7 @@ export function SupplierContractsPage() {
                         <td><SupplierStatusBadge status={st} /></td>
                         <td>
                           {c.pdfUrl ? (
-                            <span className="sc-pdf-badge" title="Descargar desde el detalle">
+                            <span className="sc-pdf-badge" title="Download from detail view">
                               <FileText size={14} aria-hidden="true" /> PDF
                             </span>
                           ) : '—'}

@@ -43,7 +43,7 @@ export function SelectionBar({ count, hours, users, canBill, onBill }) {
       <div className="selbar__detail">
         {count === 0 && (
           <p className="selbar__hint">
-            Seleccioná filas para sumar horas y habilitar la facturación.
+            Select rows to add up hours and enable billing.
           </p>
         )}
 
@@ -54,7 +54,7 @@ export function SelectionBar({ count, hours, users, canBill, onBill }) {
               <span className="selbar__user">{users[0]}</span>
             </span>
             <span className="selbar__count">
-              {count} {count === 1 ? 'entrada lista para facturar' : 'entradas listas para facturar'}
+              {count} {count === 1 ? 'entry ready to bill' : 'entries ready to bill'}
             </span>
           </div>
         )}
@@ -63,9 +63,9 @@ export function SelectionBar({ count, hours, users, canBill, onBill }) {
           <p className="selbar__warn" role="alert">
             <AlertTriangle size={16} strokeWidth={2.4} aria-hidden="true" />
             <span>
-              <strong>Un proveedor por vez.</strong> Seleccionaste filas de{' '}
-              {users.length} proveedores ({users.join(', ')}). Dejá filas de uno
-              solo para poder facturar.
+              <strong>One contractor at a time.</strong> You have selected rows from{' '}
+              {users.length} contractors ({users.join(', ')}). Keep rows from only
+              one to proceed with billing.
             </span>
           </p>
         )}
@@ -79,10 +79,10 @@ export function SelectionBar({ count, hours, users, canBill, onBill }) {
         whileTap={canBill ? { scale: 0.96 } : undefined}
         title={
           multipleProviders
-            ? 'Sólo se puede facturar un proveedor por vez'
+            ? 'Only one contractor can be billed at a time'
             : count === 0
-              ? 'Seleccioná al menos una fila'
-              : 'Emitir factura'
+              ? 'Select at least one row'
+              : 'Issue invoice'
         }
       >
         <FileText size={16} strokeWidth={2.2} aria-hidden="true" />

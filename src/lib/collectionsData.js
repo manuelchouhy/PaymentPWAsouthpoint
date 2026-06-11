@@ -217,7 +217,7 @@ export async function createCollection(invoice, payload, alreadyCollected, creat
         fromStatus: 'Invoiced',
         toStatus: 'Collected',
         changedBy: createdBy ?? null,
-        note: 'Cobro completo registrado',
+        note: 'Full collection registered',
       })
     }
     return { collection, becameCollected }
@@ -243,7 +243,7 @@ export async function createCollection(invoice, payload, alreadyCollected, creat
       fromStatus: 'Invoiced',
       toStatus: 'Collected',
       changedBy: createdBy ?? null,
-      note: 'Cobro completo registrado',
+      note: 'Full collection registered',
     })
   }
 

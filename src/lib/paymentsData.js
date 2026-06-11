@@ -202,7 +202,7 @@ export async function createPayment(invoice, payload, createdBy) {
       fromStatus: 'Collected',
       toStatus: 'Paid',
       changedBy: createdBy ?? null,
-      note: 'Pago al contractor registrado',
+      note: 'Contractor payment registered',
     })
     return { payment }
   }
@@ -228,7 +228,7 @@ export async function createPayment(invoice, payload, createdBy) {
     fromStatus: 'Collected',
     toStatus: 'Paid',
     changedBy: createdBy ?? null,
-    note: 'Pago al contractor registrado',
+    note: 'Contractor payment registered',
   })
 
   return { payment: rowToPayment(data) }

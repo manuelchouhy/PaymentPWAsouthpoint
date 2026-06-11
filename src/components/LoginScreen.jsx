@@ -10,7 +10,7 @@ export function LoginScreen() {
   async function handleMicrosoftLogin() {
     if (!isSupabaseConfigured) {
       setError(
-        'Supabase no está configurado en este entorno. Definí VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.',
+        'Supabase is not configured in this environment. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.',
       )
       return
     }
@@ -28,7 +28,7 @@ export function LoginScreen() {
       // El navegador hace redirect al IdP — no llegamos a "loading=false" en éxito.
     } catch (err) {
       console.error('No se pudo iniciar sesión:', err)
-      setError('No pudimos iniciar sesión. Probá nuevamente en unos segundos.')
+      setError('Could not sign in. Please try again in a few seconds.')
       setLoading(false)
     }
   }
@@ -50,14 +50,14 @@ export function LoginScreen() {
         </div>
 
         <div className="login__kicker-row">
-          <span className="login__kicker">Gestión de pagos · Proveedores</span>
+          <span className="login__kicker">Payment management · Contractors</span>
           <span className="login__rule" aria-hidden="true" />
         </div>
 
-        <h1 className="login__title">Iniciar sesión</h1>
+        <h1 className="login__title">Sign in</h1>
         <p className="login__sub">
-          Acceso restringido al equipo. Ingresá con tu cuenta corporativa de
-          Microsoft para continuar.
+          Restricted access. Sign in with your Microsoft corporate account
+          to continue.
         </p>
 
         <button
@@ -70,12 +70,12 @@ export function LoginScreen() {
           {loading ? (
             <>
               <Loader2 size={16} className="icon-spin" aria-hidden="true" />
-              <span>Redirigiendo a Microsoft…</span>
+              <span>Redirecting to Microsoft…</span>
             </>
           ) : (
             <>
               <MicrosoftLogo />
-              <span>Iniciar sesión con Microsoft</span>
+              <span>Sign in with Microsoft</span>
             </>
           )}
         </button>
@@ -88,7 +88,7 @@ export function LoginScreen() {
         )}
 
         <div className="login__footnote">
-          Sesión segura vía Supabase Auth · Azure / Entra ID
+          Secure session via Supabase Auth · Azure / Entra ID
         </div>
       </motion.div>
     </div>

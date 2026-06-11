@@ -47,9 +47,9 @@ export function PaymentAlertSettingsPage() {
         },
         user?.email ?? null,
       )
-      setToast({ id: Date.now(), message: 'Configuración guardada' })
+      setToast({ id: Date.now(), message: 'Settings saved' })
     } catch (error) {
-      setToast({ id: Date.now(), tone: 'error', message: error?.message ?? 'No se pudo guardar' })
+      setToast({ id: Date.now(), tone: 'error', message: error?.message ?? 'Could not save settings' })
     } finally {
       setSaving(false)
     }
@@ -69,15 +69,14 @@ export function PaymentAlertSettingsPage() {
           </Link>
           <span className="masthead__rule" aria-hidden="true" />
         </div>
-        <h1 className="masthead__title">Alertas de pago</h1>
+        <h1 className="masthead__title">Payment Alerts</h1>
         <p className="masthead__sub">
-          Umbral de aviso y destinatarios de las alertas de pagos al contractor
-          vencidos.
+          Warning threshold and recipients for overdue contractor payment alerts.
         </p>
       </motion.header>
 
-      {status === 'loading' && <p className="state__hint">Cargando configuración…</p>}
-      {status === 'error' && <div className="empty">No se pudo cargar la configuración.</div>}
+      {status === 'loading' && <p className="state__hint">Loading settings…</p>}
+      {status === 'error' && <div className="empty">Could not load settings.</div>}
 
       {status === 'ready' && form && (
         <motion.form
@@ -90,7 +89,7 @@ export function PaymentAlertSettingsPage() {
           <div className="settings-section">
             <div className="field">
               <label className="field__label" htmlFor="warn">
-                Días de aviso antes del vencimiento (warning)
+                Warning days before due date
               </label>
               <input id="warn" type="number" min="0" className="field__input"
                 value={form.warningDaysBeforeDue}
@@ -101,24 +100,24 @@ export function PaymentAlertSettingsPage() {
           <div className="settings-section">
             <div className="field">
               <label className="field__label" htmlFor="recipients">
-                Destinatarios (emails separados por coma)
+                Recipients (comma-separated emails)
               </label>
               <input id="recipients" type="text" className="field__input"
                 value={form.recipientsText}
-                placeholder="pagos@empresa.com, finanzas@empresa.com"
+                placeholder="payments@company.com, finance@company.com"
                 onChange={(e) => set('recipientsText', e.target.value)} />
             </div>
           </div>
 
           <div className="settings-section">
-            <p className="settings-note">Frecuencia de email: <strong>diaria</strong>.</p>
+            <p className="settings-note">Email frequency: <strong>daily</strong>.</p>
           </div>
 
           <div className="settings-actions">
             <motion.button type="submit" className="btn btn--pay" disabled={saving}
               whileTap={saving ? undefined : { scale: 0.97 }}>
               {saving ? <span className="spinner" aria-hidden="true" /> : <Save size={16} strokeWidth={2.2} />}
-              {saving ? 'Guardando…' : 'Guardar'}
+              {saving ? 'Saving…' : 'Save'}
             </motion.button>
           </div>
         </motion.form>

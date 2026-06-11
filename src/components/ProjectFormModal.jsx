@@ -85,9 +85,9 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
       setSubmitting(false)
       if (error?.code === 'duplicate') {
         setDupError(true)
-        setSubmitError('Ese Project Number ya existe. Usá uno distinto.')
+        setSubmitError('That Project Number already exists. Please use a different one.')
       } else {
-        setSubmitError(error?.message ?? 'No se pudo guardar. Intentá nuevamente.')
+        setSubmitError(error?.message ?? 'Could not save. Please try again.')
       }
     }
   }
@@ -117,10 +117,10 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
           <div>
             <span className="modal__kicker">Projects &amp; Contracts</span>
             <h2 className="modal__title" id="project-form-title">
-              {isEdit ? 'Editar proyecto' : 'Nuevo proyecto'}
+              {isEdit ? 'Edit project' : 'New project'}
             </h2>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Cerrar">
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </div>
@@ -135,7 +135,7 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
                 <div className="field" key={field.key}>
                   <label className="field__label" htmlFor={`pf-${field.key}`}>
                     {field.label}
-                    {field.required && <span className="field__req">requerido</span>}
+                    {field.required && <span className="field__req">required</span>}
                   </label>
                   <input
                     id={`pf-${field.key}`}
@@ -148,7 +148,7 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
                     autoComplete="off"
                     aria-invalid={isMissing || showDup}
                   />
-                  {isMissing && <span className="field__error">Campo requerido.</span>}
+                  {isMissing && <span className="field__error">This field is required.</span>}
                 </div>
               )
             })}
@@ -162,7 +162,7 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
 
           <div className="modal__actions">
             <button type="button" className="btn btn--ghost" onClick={onClose} disabled={submitting}>
-              Cancelar
+              Cancel
             </button>
             <motion.button
               type="submit"
@@ -177,7 +177,7 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
               ) : (
                 <FolderPlus size={16} strokeWidth={2.2} aria-hidden="true" />
               )}
-              {submitting ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Crear proyecto'}
+              {submitting ? 'Saving…' : isEdit ? 'Save changes' : 'Create project'}
             </motion.button>
           </div>
         </form>

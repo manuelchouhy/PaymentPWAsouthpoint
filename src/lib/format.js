@@ -1,12 +1,12 @@
 // Utilidades de formato para fechas y horas.
 
-const MONTHS_ES = [
-  'ene', 'feb', 'mar', 'abr', 'may', 'jun',
-  'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+const MONTHS_EN = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ]
 
 /**
- * Formatea una fecha ISO (YYYY-MM-DD) como "04 may 2026".
+ * Formatea una fecha ISO (YYYY-MM-DD) como "04 May 2026".
  * Se parsea a mano para evitar corrimientos por zona horaria.
  * @param {string} iso
  * @returns {string}
@@ -15,7 +15,7 @@ export function formatDate(iso = '') {
   if (!iso) return ''
   const [year, month, day] = iso.split('-').map(Number)
   if (!year || !month || !day) return iso
-  return `${String(day).padStart(2, '0')} ${MONTHS_ES[month - 1]} ${year}`
+  return `${String(day).padStart(2, '0')} ${MONTHS_EN[month - 1]} ${year}`
 }
 
 /**
@@ -43,16 +43,16 @@ export function formatRelativeTime(iso) {
   if (Number.isNaN(then)) return null
 
   const diffMin = Math.floor((Date.now() - then) / 60000)
-  if (diffMin < 1) return 'hace instantes'
-  if (diffMin < 60) return `hace ${diffMin} min`
+  if (diffMin < 1) return 'just now'
+  if (diffMin < 60) return `${diffMin} min ago`
 
   const date = new Date(iso)
   const sameDay = new Date().toDateString() === date.toDateString()
   if (sameDay) {
-    return date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+    return date.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })
   }
   const diffHours = Math.floor(diffMin / 60)
-  if (diffHours < 24) return `hace ${diffHours} h`
+  if (diffHours < 24) return `${diffHours} h ago`
   return formatDate(iso.slice(0, 10))
 }
 
@@ -100,6 +100,6 @@ export function formatDateTime(iso = '') {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return iso
   const day = formatDate(iso.slice(0, 10))
-  const time = date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
+  const time = date.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })
   return `${day} · ${time}`
 }

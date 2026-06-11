@@ -40,7 +40,7 @@ export function PriorityContractBanner({ contracts, onRenew, onMarkRenewal }) {
         </p>
         {extra > 0 && (
           <p className="priority-banner__more">
-            +{extra} {extra === 1 ? 'otro contrato priority' : 'contratos priority'} en alerta.
+            +{extra} {extra === 1 ? 'other priority contract' : 'priority contracts'} on alert.
           </p>
         )}
       </div>

@@ -30,7 +30,7 @@ export function Stepper({
     {
       key: 'approved',
       label: 'Approved',
-      hint: 'Universo facturable',
+      hint: 'Billable universe',
       icon: Circle,
       tone: 'approved',
       value: approvedHours,
@@ -38,7 +38,7 @@ export function Stepper({
     {
       key: 'invoiced',
       label: 'Invoiced',
-      hint: invoicedHours > 0 ? 'Facturas emitidas' : 'Sin facturas',
+      hint: invoicedHours > 0 ? 'Invoices issued' : 'No invoices',
       icon: FileCheck2,
       tone: 'invoiced',
       value: invoicedHours,
@@ -46,7 +46,7 @@ export function Stepper({
     {
       key: 'collected',
       label: 'Collected',
-      hint: collectedHours > 0 ? 'Cobradas al cliente' : 'Sin cobros',
+      hint: collectedHours > 0 ? 'Collected from client' : 'No collections',
       icon: CircleDollarSign,
       tone: 'collected',
       value: collectedHours,
@@ -54,7 +54,7 @@ export function Stepper({
     {
       key: 'paid',
       label: 'Paid',
-      hint: paidHours > 0 ? 'Pagadas al contractor' : 'Sin pagos',
+      hint: paidHours > 0 ? 'Paid to contractor' : 'No payments',
       icon: BadgeCheck,
       tone: 'paid',
       value: paidHours,
@@ -62,16 +62,16 @@ export function Stepper({
   ]
 
   return (
-    <section className="stepper" aria-label="Progreso de billing">
+    <section className="stepper" aria-label="Billing progress">
       <div className="stepper__header">
-        <span className="stepper__title">Proceso de billing</span>
+        <span className="stepper__title">Billing process</span>
         <span className="stepper__totals">
           <span className="stepper__totals-num">
             {formatHours(billedHours)}{' '}
-            <span className="stepper__totals-of">de</span>{' '}
+            <span className="stepper__totals-of">of</span>{' '}
             {formatHours(approvedHours)}
           </span>
-          <span className="stepper__totals-unit">h facturadas</span>
+          <span className="stepper__totals-unit">h billed</span>
         </span>
       </div>
 

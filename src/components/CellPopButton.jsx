@@ -86,8 +86,8 @@ export function CellPopButton({ label, text, icon: Icon }) {
         }}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`Ver ${label.toLowerCase()}`}
-        title={`Ver ${label.toLowerCase()}`}
+        aria-label={`View ${label.toLowerCase()}`}
+        title={`View ${label.toLowerCase()}`}
       >
         <Icon size={15} aria-hidden="true" />
       </button>

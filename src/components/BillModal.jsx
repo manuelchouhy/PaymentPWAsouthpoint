@@ -103,7 +103,7 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
     } catch (error) {
       setSubmitting(false)
       setSubmitError(
-        error?.message ?? 'No se pudo emitir la factura. Intentá nuevamente.',
+        error?.message ?? 'Could not issue the invoice. Please try again.',
       )
     }
   }
@@ -131,16 +131,16 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
       >
         <div className="modal__head">
           <div>
-            <span className="modal__kicker">Facturación a proveedor</span>
+            <span className="modal__kicker">Contractor billing</span>
             <h2 className="modal__title" id="bill-modal-title">
-              Emitir factura
+              Issue invoice
             </h2>
           </div>
           <button
             type="button"
             className="icon-btn"
             onClick={onClose}
-            aria-label="Cerrar"
+            aria-label="Close"
           >
             <X size={18} />
           </button>
@@ -152,14 +152,14 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
             <span className="modal__summary-user">{user}</span>
             <span className="modal__summary-meta">
               {entries.length}{' '}
-              {entries.length === 1 ? 'entrada seleccionada' : 'entradas seleccionadas'}
+              {entries.length === 1 ? 'entry selected' : 'entries selected'}
               {' · '}
-              monto {estimatedLabel}
+              amount {estimatedLabel}
             </span>
           </div>
           <div className="modal__summary-hours">
             <span className="modal__summary-hours-value">{formatHours(hours)}</span>
-            <span className="modal__summary-hours-label">Horas</span>
+            <span className="modal__summary-hours-label">Hours</span>
           </div>
         </div>
 
@@ -167,7 +167,7 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
           <div className="field">
             <label className="field__label" htmlFor="supplier-invoice-number">
               Supplier invoice number
-              <span className="field__req">requerido</span>
+              <span className="field__req">required</span>
             </label>
             <input
               id="supplier-invoice-number"
@@ -184,7 +184,7 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
             />
             {touched && !invoiceValid && (
               <span className="field__error">
-                Ingresá el número de factura del proveedor.
+                Please enter the supplier invoice number.
               </span>
             )}
           </div>
@@ -193,7 +193,7 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
             <div className="field">
               <label className="field__label" htmlFor="invoice-date">
                 Invoice date
-                <span className="field__req">requerido</span>
+                <span className="field__req">required</span>
               </label>
               <input
                 id="invoice-date"
@@ -210,7 +210,7 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
             <div className="field">
               <label className="field__label" htmlFor="total-amount">
                 Total amount
-                <span className="field__req">requerido</span>
+                <span className="field__req">required</span>
               </label>
               <input
                 id="total-amount"
@@ -230,29 +230,29 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
           </div>
           {touched && !amountValid && (
             <span className="field__error">
-              Ingresá un monto válido mayor a cero.
+              Please enter a valid amount greater than zero.
             </span>
           )}
 
           <div className="field">
             <label className="field__label" htmlFor="invoice-notes">
               Notes
-              <span className="field__opt">opcional</span>
+              <span className="field__opt">optional</span>
             </label>
             <textarea
               id="invoice-notes"
               className="field__input field__textarea"
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
-              placeholder="Detalle o referencia de la factura…"
+              placeholder="Invoice details or reference…"
               rows={3}
             />
           </div>
 
           <p className="modal__note">
             <FileText size={14} aria-hidden="true" />
-            La factura se emite con estado <strong>Invoiced</strong>. El cobro y
-            el pago al contractor son pasos posteriores.
+            The invoice is issued with status <strong>Invoiced</strong>. Collection and
+            contractor payment are subsequent steps.
           </p>
 
           {submitError && (
@@ -268,7 +268,7 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
               onClick={onClose}
               disabled={submitting}
             >
-              Cancelar
+              Cancel
             </button>
             <motion.button
               type="submit"
@@ -281,7 +281,7 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
               ) : (
                 <FileText size={16} strokeWidth={2.2} aria-hidden="true" />
               )}
-              {submitting ? 'Emitiendo…' : 'Emitir factura'}
+              {submitting ? 'Issuing…' : 'Issue invoice'}
             </motion.button>
           </div>
         </form>

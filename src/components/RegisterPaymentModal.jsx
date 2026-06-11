@@ -84,8 +84,8 @@ export function RegisterPaymentModal({ invoice, onClose, onConfirm }) {
       setSubmitting(false)
       setSubmitError(
         error?.code === 'not_collected'
-          ? 'La factura debe estar Collected antes de pagar.'
-          : error?.message ?? 'No se pudo registrar el pago.',
+          ? 'The invoice must be in Collected status before registering a payment.'
+          : error?.message ?? 'Could not register the payment.',
       )
     }
   }
@@ -113,12 +113,12 @@ export function RegisterPaymentModal({ invoice, onClose, onConfirm }) {
       >
         <div className="modal__head">
           <div>
-            <span className="modal__kicker">Payments · Pago al contractor</span>
+            <span className="modal__kicker">Payments · Contractor Payment</span>
             <h2 className="modal__title" id="payment-modal-title">
               Register Payment
             </h2>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Cerrar">
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </div>
@@ -132,7 +132,7 @@ export function RegisterPaymentModal({ invoice, onClose, onConfirm }) {
           </div>
           <div className="modal__summary-hours">
             <span className="modal__summary-hours-value">${fmtAmount(invoice.totalAmount)}</span>
-            <span className="modal__summary-hours-label">Monto</span>
+            <span className="modal__summary-hours-label">Amount</span>
           </div>
         </div>
 
@@ -140,7 +140,7 @@ export function RegisterPaymentModal({ invoice, onClose, onConfirm }) {
           <div className="modal__form-row">
             <div className="field">
               <label className="field__label" htmlFor="pay-amount">
-                Amount paid<span className="field__req">requerido</span>
+                Amount paid<span className="field__req">required</span>
               </label>
               <input
                 id="pay-amount"
@@ -156,7 +156,7 @@ export function RegisterPaymentModal({ invoice, onClose, onConfirm }) {
             </div>
             <div className="field">
               <label className="field__label" htmlFor="pay-date">
-                Payment date<span className="field__req">requerido</span>
+                Payment date<span className="field__req">required</span>
               </label>
               <input
                 id="pay-date"
@@ -185,7 +185,7 @@ export function RegisterPaymentModal({ invoice, onClose, onConfirm }) {
             </div>
             <div className="field">
               <label className="field__label" htmlFor="pay-ref">
-                Transfer reference<span className="field__opt">recomendado</span>
+                Transfer reference<span className="field__opt">recommended</span>
               </label>
               <input
                 id="pay-ref"
@@ -193,7 +193,7 @@ export function RegisterPaymentModal({ invoice, onClose, onConfirm }) {
                 className="field__input"
                 value={transferReference}
                 onChange={(e) => setTransferReference(e.target.value)}
-                placeholder="Ej. TRX-99821"
+                placeholder="e.g. TRX-99821"
                 autoComplete="off"
               />
             </div>
@@ -203,9 +203,9 @@ export function RegisterPaymentModal({ invoice, onClose, onConfirm }) {
             <label className="field__label" htmlFor="pay-notes">
               Notes
               {isBackDated ? (
-                <span className="field__req">requerido (back-dated)</span>
+                <span className="field__req">required (back-dated)</span>
               ) : (
-                <span className="field__opt">opcional</span>
+                <span className="field__opt">optional</span>
               )}
             </label>
             <textarea
@@ -214,19 +214,19 @@ export function RegisterPaymentModal({ invoice, onClose, onConfirm }) {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              placeholder={isBackDated ? 'Justificá la fecha pasada (auditoría)…' : ''}
+              placeholder={isBackDated ? 'Justify the back-dated payment (audit)…' : ''}
             />
             {touched && !noteOk && (
               <span className="field__error">
-                La nota es obligatoria para pagos con fecha pasada.
+                A note is required for back-dated payments.
               </span>
             )}
           </div>
 
           <p className="modal__note">
             <Banknote size={14} aria-hidden="true" />
-            Al confirmar, la factura pasa a <strong>Paid</strong>.
-            {isBackDated && ' Este pago se marca como back-dated.'}
+            On confirmation, the invoice will move to <strong>Paid</strong>.
+            {isBackDated && ' This payment will be marked as back-dated.'}
           </p>
 
           {submitError && (
@@ -237,7 +237,7 @@ export function RegisterPaymentModal({ invoice, onClose, onConfirm }) {
 
           <div className="modal__actions">
             <button type="button" className="btn btn--ghost" onClick={onClose} disabled={submitting}>
-              Cancelar
+              Cancel
             </button>
             <motion.button
               type="submit"
@@ -250,7 +250,7 @@ export function RegisterPaymentModal({ invoice, onClose, onConfirm }) {
               ) : (
                 <Banknote size={16} strokeWidth={2.2} aria-hidden="true" />
               )}
-              {submitting ? 'Registrando…' : 'Register Payment'}
+              {submitting ? 'Registering…' : 'Register Payment'}
             </motion.button>
           </div>
         </form>

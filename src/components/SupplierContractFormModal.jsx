@@ -61,12 +61,12 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
       return
     }
     if (file.type !== 'application/pdf') {
-      setPdfError('El archivo debe ser un PDF.')
+      setPdfError('The file must be a PDF.')
       setPdfFile(null)
       return
     }
     if (file.size > 20 * 1024 * 1024) {
-      setPdfError('El PDF no puede superar 20 MB.')
+      setPdfError('The PDF cannot exceed 20 MB.')
       setPdfFile(null)
       return
     }
@@ -129,9 +129,9 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
       setSubmitting(false)
       if (error?.code === 'duplicate') {
         setDupError(true)
-        setSubmitError('Ese Contract # ya existe. Usá uno distinto.')
+        setSubmitError('That Contract # already exists. Please use a different one.')
       } else {
-        setSubmitError(error?.message ?? 'No se pudo guardar.')
+        setSubmitError(error?.message ?? 'Could not save.')
       }
     }
   }
@@ -161,10 +161,10 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
           <div>
             <span className="modal__kicker">Supplier Contracts</span>
             <h2 className="modal__title" id="sc-form-title">
-              {isEdit ? 'Editar contrato' : 'Nuevo contrato'}
+              {isEdit ? 'Edit contract' : 'New contract'}
             </h2>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Cerrar">
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </div>
@@ -179,7 +179,7 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
                 <div className="field" key={field.key}>
                   <label className="field__label" htmlFor={`sc-${field.key}`}>
                     {field.label}
-                    {field.required && <span className="field__req">requerido</span>}
+                    {field.required && <span className="field__req">required</span>}
                   </label>
                   <input
                     id={`sc-${field.key}`}
@@ -191,7 +191,7 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
                     onBlur={() => setTouched(true)}
                     autoComplete="off"
                   />
-                  {isMissing && <span className="field__error">Campo requerido.</span>}
+                  {isMissing && <span className="field__error">This field is required.</span>}
                 </div>
               )
             })}
@@ -217,7 +217,7 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
           <div className="field">
             <label className="field__label" htmlFor="sc-pdf">
               Contract PDF
-              <span className="field__hint">opcional · PDF · máx 20 MB</span>
+              <span className="field__hint">optional · PDF · max 20 MB</span>
             </label>
             <input
               id="sc-pdf"
@@ -231,7 +231,7 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
             )}
             {isEdit && initial?.pdfUrl && !pdfFile && (
               <span className="field__filename field__filename--muted">
-                Ya hay un PDF cargado. Subir uno nuevo lo reemplaza.
+                A PDF is already uploaded. Uploading a new one will replace it.
               </span>
             )}
             {pdfError && <span className="field__error">{pdfError}</span>}
@@ -249,7 +249,7 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
 
           <div className="modal__actions">
             <button type="button" className="btn btn--ghost" onClick={onClose} disabled={submitting}>
-              Cancelar
+              Cancel
             </button>
             <motion.button type="submit" className="btn btn--pay"
               disabled={!valid || submitting}
@@ -257,7 +257,7 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
               {submitting ? <span className="spinner" aria-hidden="true" />
                 : isEdit ? <Save size={16} strokeWidth={2.2} />
                   : <FilePlus2 size={16} strokeWidth={2.2} />}
-              {submitting ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Crear contrato'}
+              {submitting ? 'Saving…' : isEdit ? 'Save changes' : 'Create contract'}
             </motion.button>
           </div>
         </form>

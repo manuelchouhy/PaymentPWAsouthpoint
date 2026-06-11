@@ -89,12 +89,12 @@ export function ProjectDetailDrawer({ project, onClose, onEdit }) {
       >
         <div className="drawer__head">
           <div>
-            <span className="drawer__kicker">Proyecto</span>
+            <span className="drawer__kicker">Project</span>
             <h2 className="drawer__title" id="project-drawer-title">
               {project.projectName}
             </h2>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Cerrar">
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </div>
@@ -105,10 +105,10 @@ export function ProjectDetailDrawer({ project, onClose, onEdit }) {
             <span className="drawer__provider-meta">
               {project.projectNumber}
               {project.contractExpirationDate
-                ? ` · vence ${formatDate(project.contractExpirationDate)}`
-                : ' · sin contrato'}
+                ? ` · expires ${formatDate(project.contractExpirationDate)}`
+                : ' · no contract'}
               {days != null && (
-                <> · {days < 0 ? `${Math.abs(days)} d vencido` : `${days} d`}</>
+                <> · {days < 0 ? `${Math.abs(days)} d overdue` : `${days} d`}</>
               )}
             </span>
           </div>
@@ -116,7 +116,7 @@ export function ProjectDetailDrawer({ project, onClose, onEdit }) {
         </div>
 
         <div className="drawer__section">
-          <span className="drawer__section-label">Datos del proyecto</span>
+          <span className="drawer__section-label">Project details</span>
           <dl className="drawer__facts">
             {FIELDS.map((field) => (
               <div className="drawer__fact" key={field.key}>
@@ -142,9 +142,9 @@ export function ProjectDetailDrawer({ project, onClose, onEdit }) {
         <div className="drawer__section">
           <span className="drawer__section-label">Audit log</span>
           {loading ? (
-            <p className="drawer__empty">Cargando historial…</p>
+            <p className="drawer__empty">Loading history…</p>
           ) : history.length === 0 ? (
-            <p className="drawer__empty">Sin cambios registrados.</p>
+            <p className="drawer__empty">No changes recorded.</p>
           ) : (
             <ul className="drawer__history">
               {history.map((row) => (

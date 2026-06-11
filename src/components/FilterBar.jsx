@@ -61,7 +61,7 @@ export function FilterBar({
   const showPanel = !isMobile || expanded
 
   return (
-    <section className="filterbar" aria-label="Filtros">
+    <section className="filterbar" aria-label="Filters">
       <div className="filterbar__head">
         {isMobile ? (
           <button
@@ -71,7 +71,7 @@ export function FilterBar({
             aria-expanded={expanded}
           >
             <ListFilter size={15} aria-hidden="true" />
-            <span>Filtros</span>
+            <span>Filters</span>
             {activeCount > 0 && (
               <span className="filterbar__toggle-badge">{activeCount}</span>
             )}
@@ -79,7 +79,7 @@ export function FilterBar({
         ) : (
           <span className="filterbar__title">
             <ListFilter size={14} aria-hidden="true" />
-            Filtros
+            Filters
           </span>
         )}
 
@@ -122,7 +122,7 @@ export function FilterBar({
           />
 
           <div className="filterfield">
-            <span className="filterfield__label">Desde</span>
+            <span className="filterfield__label">From</span>
             <input
               type="date"
               className="filterfield__input"
@@ -132,7 +132,7 @@ export function FilterBar({
             />
           </div>
           <div className="filterfield">
-            <span className="filterfield__label">Hasta</span>
+            <span className="filterfield__label">To</span>
             <input
               type="date"
               className="filterfield__input"
@@ -143,13 +143,13 @@ export function FilterBar({
           </div>
 
           <div className="filterfield filterfield--week">
-            <span className="filterfield__label">Semana</span>
+            <span className="filterfield__label">Week</span>
             <input
               type="number"
               inputMode="numeric"
               min="1"
               max="53"
-              placeholder="ej. 23"
+              placeholder="e.g. 23"
               className="filterfield__input"
               value={weekDraft}
               onChange={(event) => setWeekDraft(event.target.value)}
@@ -163,7 +163,7 @@ export function FilterBar({
             disabled={!isActive}
           >
             <X size={14} aria-hidden="true" />
-            Limpiar filtros
+            Clear filters
           </button>
         </div>
       )}

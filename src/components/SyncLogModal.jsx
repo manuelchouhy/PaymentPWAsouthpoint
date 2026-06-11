@@ -72,16 +72,16 @@ export function SyncLogModal({ onClose }) {
       >
         <div className="modal__head">
           <div>
-            <span className="modal__kicker">Sincronización · Zoho</span>
+            <span className="modal__kicker">Sync · Zoho</span>
             <h2 className="modal__title" id="synclog-title">
-              Historial de sync
+              Sync history
             </h2>
           </div>
           <button
             type="button"
             className="icon-btn"
             onClick={onClose}
-            aria-label="Cerrar"
+            aria-label="Close"
           >
             <X size={18} />
           </button>
@@ -89,17 +89,17 @@ export function SyncLogModal({ onClose }) {
 
         <div className="synclog">
           {state === 'loading' && (
-            <p className="synclog__hint">Cargando historial…</p>
+            <p className="synclog__hint">Loading history…</p>
           )}
 
           {state === 'error' && (
             <p className="synclog__hint synclog__hint--error">
-              No se pudo cargar el historial.
+              Could not load the sync history.
             </p>
           )}
 
           {state === 'ready' && entries.length === 0 && (
-            <p className="synclog__hint">Todavía no hay corridas registradas.</p>
+            <p className="synclog__hint">No runs recorded yet.</p>
           )}
 
           {state === 'ready' && entries.length > 0 && (
@@ -125,7 +125,7 @@ export function SyncLogModal({ onClose }) {
                     </span>
                     <span className="synclog__count">
                       {entry.recordsCount ?? 0}{' '}
-                      {entry.recordsCount === 1 ? 'registro' : 'registros'}
+                      {entry.recordsCount === 1 ? 'record' : 'records'}
                     </span>
                     {entry.errorMessage && (
                       <span

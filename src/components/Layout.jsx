@@ -3,7 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Time Entries', end: true },
+  { to: '/', label: 'Payment', end: true },
   { to: '/projects', label: 'Projects & Contracts' },
   { to: '/collections', label: 'Collections' },
   { to: '/payments', label: 'Payments' },
@@ -25,7 +25,7 @@ export function Layout({ user, onSignOut }) {
             alt="Southpoint Tech Labs"
             className="topbar__logo"
           />
-          <nav className="topnav" aria-label="Secciones">
+          <nav className="topnav" aria-label="Sections">
             {NAV_ITEMS.map((item) => (
               <NavLink
                 key={item.to}
@@ -40,7 +40,7 @@ export function Layout({ user, onSignOut }) {
             ))}
           </nav>
           <div className="topbar__right">
-            <span className="masthead__badge">Solo lectura</span>
+            <span className="masthead__badge">Read only</span>
             {user && <UserPill user={user} onSignOut={onSignOut} />}
           </div>
         </header>
@@ -57,7 +57,7 @@ function UserPill({ user, onSignOut }) {
     user?.user_metadata?.name ||
     user?.user_metadata?.full_name ||
     user?.email ||
-    'Usuario'
+    'User'
   const initial = label.trim().charAt(0).toUpperCase() || '?'
 
   async function handleSignOut() {
@@ -84,11 +84,11 @@ function UserPill({ user, onSignOut }) {
         className="user-pill__logout"
         onClick={handleSignOut}
         disabled={busy}
-        aria-label="Cerrar sesión"
-        title="Cerrar sesión"
+        aria-label="Sign out"
+        title="Sign out"
       >
         <LogOut size={14} aria-hidden="true" />
-        <span>Salir</span>
+        <span>Sign out</span>
       </button>
     </div>
   )

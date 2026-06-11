@@ -78,7 +78,7 @@ export function RegisterCollectionModal({ invoice, outstanding, collected, onClo
       })
     } catch (error) {
       setSubmitting(false)
-      setSubmitError(error?.message ?? 'No se pudo registrar el cobro.')
+      setSubmitError(error?.message ?? 'Could not register the collection.')
     }
   }
 
@@ -107,12 +107,12 @@ export function RegisterCollectionModal({ invoice, outstanding, collected, onClo
       >
         <div className="modal__head">
           <div>
-            <span className="modal__kicker">Collections · Cobro</span>
+            <span className="modal__kicker">Collections · Payment</span>
             <h2 className="modal__title" id="collection-modal-title">
               Register Collection
             </h2>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Cerrar">
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </div>
@@ -121,12 +121,12 @@ export function RegisterCollectionModal({ invoice, outstanding, collected, onClo
           <div className="modal__summary-id">
             <span className="modal__summary-user">{invoice.supplierInvoiceNumber}</span>
             <span className="modal__summary-meta">
-              {invoice.userName} · cobrado ${formatAmount(collected)} de ${formatAmount(invoice.totalAmount)}
+              {invoice.userName} · collected ${formatAmount(collected)} of ${formatAmount(invoice.totalAmount)}
             </span>
           </div>
           <div className="modal__summary-hours">
             <span className="modal__summary-hours-value">${formatAmount(outstanding)}</span>
-            <span className="modal__summary-hours-label">Saldo</span>
+            <span className="modal__summary-hours-label">Balance</span>
           </div>
         </div>
 
@@ -135,7 +135,7 @@ export function RegisterCollectionModal({ invoice, outstanding, collected, onClo
             <div className="field">
               <label className="field__label" htmlFor="col-amount">
                 Amount received
-                <span className="field__req">requerido</span>
+                <span className="field__req">required</span>
               </label>
               <input
                 id="col-amount"
@@ -154,7 +154,7 @@ export function RegisterCollectionModal({ invoice, outstanding, collected, onClo
             <div className="field">
               <label className="field__label" htmlFor="col-date">
                 Collection date
-                <span className="field__req">requerido</span>
+                <span className="field__req">required</span>
               </label>
               <input
                 id="col-date"
@@ -167,14 +167,14 @@ export function RegisterCollectionModal({ invoice, outstanding, collected, onClo
           </div>
           {touched && !amountValid && (
             <span className="field__error">
-              Ingresá un monto entre 0 y el saldo (${formatAmount(outstanding)}).
+              Enter an amount between 0 and the outstanding balance (${formatAmount(outstanding)}).
             </span>
           )}
 
           <div className="field">
             <label className="field__label" htmlFor="col-ref">
               Bank reference
-              <span className="field__opt">opcional</span>
+              <span className="field__opt">optional</span>
             </label>
             <input
               id="col-ref"
@@ -190,7 +190,7 @@ export function RegisterCollectionModal({ invoice, outstanding, collected, onClo
           <div className="field">
             <label className="field__label" htmlFor="col-notes">
               Notes
-              <span className="field__opt">opcional</span>
+              <span className="field__opt">optional</span>
             </label>
             <textarea
               id="col-notes"
@@ -204,8 +204,8 @@ export function RegisterCollectionModal({ invoice, outstanding, collected, onClo
           <p className="modal__note">
             <CircleDollarSign size={14} aria-hidden="true" />
             {willComplete
-              ? 'Este cobro completa la factura → pasa a Collected.'
-              : 'Cobro parcial: la factura queda en Partial Collection.'}
+              ? 'This collection completes the invoice → moves to Collected.'
+              : 'Partial collection: the invoice remains in Partial Collection.'}
           </p>
 
           {submitError && (
@@ -216,7 +216,7 @@ export function RegisterCollectionModal({ invoice, outstanding, collected, onClo
 
           <div className="modal__actions">
             <button type="button" className="btn btn--ghost" onClick={onClose} disabled={submitting}>
-              Cancelar
+              Cancel
             </button>
             <motion.button
               type="submit"
@@ -229,7 +229,7 @@ export function RegisterCollectionModal({ invoice, outstanding, collected, onClo
               ) : (
                 <CircleDollarSign size={16} strokeWidth={2.2} aria-hidden="true" />
               )}
-              {submitting ? 'Registrando…' : 'Register Collection'}
+              {submitting ? 'Registering…' : 'Register Collection'}
             </motion.button>
           </div>
         </form>

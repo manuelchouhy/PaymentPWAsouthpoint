@@ -24,19 +24,19 @@ const FIELD_LABELS = {
 }
 
 const ACTION_LABELS = {
-  renew: 'Renovado',
-  renew_in_progress: 'Marcado Renewal in Progress',
-  manual_dismiss: 'Descartado manualmente',
+  renew: 'Renewed',
+  renew_in_progress: 'Marked as Renewal in Progress',
+  manual_dismiss: 'Manually dismissed',
 }
 
 /** Texto de una entrada del alert log: email enviado o acción tomada. */
 function alertLabel(a) {
   if (a.actionTaken) return ACTION_LABELS[a.actionTaken] ?? a.actionTaken
   if (a.emailSentAt) {
-    const band = a.thresholdCrossed === 0 ? 'vencido' : `${a.thresholdCrossed} días`
-    return `Email enviado (umbral ${band})`
+    const band = a.thresholdCrossed === 0 ? 'overdue' : `${a.thresholdCrossed} days`
+    return `Email sent (threshold ${band})`
   }
-  return 'Alerta'
+  return 'Alert'
 }
 
 /**
@@ -63,14 +63,14 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
   async function openPdf() {
     setPdfMsg('')
     if (isDemoPdf) {
-      setPdfMsg('Modo demo: el PDF no se descarga (se guardó solo el nombre).')
+      setPdfMsg('Demo mode: the PDF cannot be downloaded (only the filename was saved).')
       return
     }
     setPdfBusy(true)
     try {
       const url = await getContractPdfUrl(contract.pdfUrl)
       if (url) window.open(url, '_blank', 'noopener')
-      else setPdfMsg('No se pudo generar el enlace de descarga.')
+      else setPdfMsg('Could not generate the download link.')
     } finally {
       setPdfBusy(false)
     }
@@ -151,7 +151,7 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
               {contract.supplierName}
             </h2>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Cerrar">
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </div>
@@ -160,9 +160,9 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
           <div className="drawer__provider-id">
             <span className="drawer__provider-name">{contract.contractNumber}</span>
             <span className="drawer__provider-meta">
-              vence {formatDate(contract.expirationDate)}
+              expires {formatDate(contract.expirationDate)}
               {days != null && (
-                <> · {days < 0 ? `${Math.abs(days)} d vencido` : `${days} d`}</>
+                <> · {days < 0 ? `${Math.abs(days)} d overdue` : `${days} d`}</>
               )}
             </span>
           </div>
@@ -170,7 +170,7 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
         </div>
 
         <div className="drawer__section">
-          <span className="drawer__section-label">Datos del contrato</span>
+          <span className="drawer__section-label">Contract details</span>
           <dl className="drawer__facts">
             {facts.map(([label, value]) => (
               <div className="drawer__fact" key={label}>
@@ -182,14 +182,14 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
         </div>
 
         <div className="drawer__section">
-          <span className="drawer__section-label">PDF del contrato</span>
+          <span className="drawer__section-label">Contract PDF</span>
           {contract.pdfUrl ? (
             <button type="button" className="sc-pdf-link" onClick={openPdf} disabled={pdfBusy}>
               {pdfBusy ? <span className="spinner" aria-hidden="true" /> : <Download size={15} aria-hidden="true" />}
-              {pdfBusy ? 'Generando enlace…' : 'Descargar PDF'}
+              {pdfBusy ? 'Generating link…' : 'Download PDF'}
             </button>
           ) : (
-            <p className="drawer__empty">Sin PDF cargado. Subí uno desde Edit.</p>
+            <p className="drawer__empty">No PDF uploaded. Add one via Edit.</p>
           )}
           {pdfMsg && <p className="drawer__empty">{pdfMsg}</p>}
         </div>
@@ -197,9 +197,9 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
         <div className="drawer__section">
           <span className="drawer__section-label">Renewal History</span>
           {loading ? (
-            <p className="drawer__empty">Cargando…</p>
+            <p className="drawer__empty">Loading…</p>
           ) : renewals.length === 0 ? (
-            <p className="drawer__empty">Sin versiones anteriores.</p>
+            <p className="drawer__empty">No previous versions.</p>
           ) : (
             <ul className="drawer__history">
               {renewals.map((r) => (
@@ -209,7 +209,7 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
                   </span>
                   <span className="drawer__history-meta">
                     {formatDate(r.startDate)} → {formatDate(r.expirationDate)}
-                    {r.pdfUrl ? ' · PDF disponible' : ''}
+                    {r.pdfUrl ? ' · PDF available' : ''}
                   </span>
                 </li>
               ))}
@@ -220,9 +220,9 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
         <div className="drawer__section">
           <span className="drawer__section-label">Audit log</span>
           {loading ? (
-            <p className="drawer__empty">Cargando…</p>
+            <p className="drawer__empty">Loading…</p>
           ) : history.length === 0 ? (
-            <p className="drawer__empty">Sin cambios registrados.</p>
+            <p className="drawer__empty">No changes recorded.</p>
           ) : (
             <ul className="drawer__history">
               {history.map((row) => (
@@ -248,9 +248,9 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
         <div className="drawer__section">
           <span className="drawer__section-label">Alert history</span>
           {loading ? (
-            <p className="drawer__empty">Cargando…</p>
+            <p className="drawer__empty">Loading…</p>
           ) : alerts.length === 0 ? (
-            <p className="drawer__empty">Sin alertas registradas.</p>
+            <p className="drawer__empty">No alerts recorded.</p>
           ) : (
             <ul className="drawer__history">
               {alerts.map((a) => (
@@ -272,7 +272,7 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
           {isRenewing && contract.snoozeUntil && (
             <p className="sc-snooze-note">
               <BellOff size={13} aria-hidden="true" />
-              Renovación en curso · silenciado hasta {formatDate(String(contract.snoozeUntil).slice(0, 10))}
+              Renewal in progress · snoozed until {formatDate(String(contract.snoozeUntil).slice(0, 10))}
             </p>
           )}
           <div className="drawer__actions-row">

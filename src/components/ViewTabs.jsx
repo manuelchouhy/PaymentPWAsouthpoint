@@ -11,12 +11,12 @@
  */
 export function ViewTabs({ active, onChange, pendingCount, allCount }) {
   const tabs = [
-    { key: 'pending', label: 'Pendientes de facturar', count: pendingCount },
-    { key: 'all', label: 'Todas', count: allCount },
+    { key: 'pending', label: 'Pending to bill', count: pendingCount },
+    { key: 'all', label: 'All', count: allCount },
   ]
 
   return (
-    <div className="viewtabs" role="tablist" aria-label="Vista de facturación">
+    <div className="viewtabs" role="tablist" aria-label="Billing view">
       {tabs.map((tab) => {
         const selected = active === tab.key
         return (

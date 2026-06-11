@@ -327,7 +327,7 @@ export async function createProject(payload, createdBy) {
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 300))
     if (demoProjects.some((p) => p.projectNumber === payload.projectNumber)) {
-      const err = new Error('El Project Number ya existe.')
+      const err = new Error('Project Number already exists.')
       err.code = 'duplicate'
       throw err
     }
@@ -349,7 +349,7 @@ export async function createProject(payload, createdBy) {
     .single()
   if (error) {
     if (error.code === '23505') {
-      const err = new Error('El Project Number ya existe.')
+      const err = new Error('Project Number already exists.')
       err.code = 'duplicate'
       throw err
     }
@@ -385,7 +385,7 @@ export async function updateProject(current, updates, changedBy) {
       updates.projectNumber !== current.projectNumber &&
       demoProjects.some((p) => p.projectNumber === updates.projectNumber)
     ) {
-      const err = new Error('El Project Number ya existe.')
+      const err = new Error('Project Number already exists.')
       err.code = 'duplicate'
       throw err
     }
@@ -411,7 +411,7 @@ export async function updateProject(current, updates, changedBy) {
     .single()
   if (error) {
     if (error.code === '23505') {
-      const err = new Error('El Project Number ya existe.')
+      const err = new Error('Project Number already exists.')
       err.code = 'duplicate'
       throw err
     }

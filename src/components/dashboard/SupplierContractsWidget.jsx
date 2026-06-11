@@ -46,12 +46,12 @@ export function SupplierContractsWidget() {
           Supplier Contracts
         </span>
         <Link to="/supplier-contracts" className="dash-widget__link">
-          Ver todos <ChevronRight size={14} aria-hidden="true" />
+          View all <ChevronRight size={14} aria-hidden="true" />
         </Link>
       </div>
 
       {loading ? (
-        <p className="dash-widget__empty">Cargando…</p>
+        <p className="dash-widget__empty">Loading…</p>
       ) : (
         <>
           {priority.length > 0 && (
@@ -59,7 +59,7 @@ export function SupplierContractsWidget() {
               <Star size={13} aria-hidden="true" className="sc-priority-star" />
               <span className="dash-widget__priority-name">{priority[0].supplierName}</span>
               <span className="dash-widget__priority-meta">
-                vence {formatDate(priority[0].expirationDate)} ·{' '}
+                expires {formatDate(priority[0].expirationDate)} ·{' '}
                 {daysRemaining(priority[0].expirationDate)} d
               </span>
             </div>

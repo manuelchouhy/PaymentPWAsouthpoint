@@ -153,7 +153,7 @@ export function PaymentsPage() {
   function handleDownload(row) {
     const payment = row.payment ?? paymentByInvoice.get(row.inv.id)
     if (!payment) {
-      setToast({ id: Date.now(), tone: 'error', message: 'No se encontró el pago de esta factura.' })
+      setToast({ id: Date.now(), tone: 'error', message: 'Payment record not found for this invoice.' })
       return
     }
     downloadPaymentReceipt({ invoice: row.inv, payment, generatedBy: user?.email ?? null })
@@ -168,21 +168,21 @@ export function PaymentsPage() {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="masthead__top">
-          <span className="masthead__kicker">Pagos · Contractor</span>
+          <span className="masthead__kicker">Payments · Contractor</span>
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Payments</h1>
         <p className="masthead__sub">
-          Pago al contractor de facturas ya cobradas (Collected). Solo se puede
-          pagar una factura en estado Collected; al pagar pasa a Paid.
+          Contractor payment for already-collected invoices (Collected). Only
+          invoices in Collected status can be paid; once paid, they move to Paid.
         </p>
       </motion.header>
 
-      {status === 'loading' && <p className="state__hint">Cargando facturas…</p>}
+      {status === 'loading' && <p className="state__hint">Loading invoices…</p>}
       {status === 'error' && (
         <div className="state state--error">
           <AlertTriangle size={28} strokeWidth={1.8} />
-          <h2 className="state__title">No pudimos cargar Payments</h2>
+          <h2 className="state__title">Could not load Payments</h2>
         </div>
       )}
 
@@ -193,7 +193,7 @@ export function PaymentsPage() {
           transition={{ duration: 0.4, delay: 0.05 }}
         >
           <div className="proj-kpis">
-            <div className="proj-kpis__chips" role="group" aria-label="Alertas de pago">
+            <div className="proj-kpis__chips" role="group" aria-label="Payment alerts">
               <button
                 type="button"
                 className={`proj-kpi proj-kpi--overdue${alertFilter === 'overdue' ? ' is-active' : ''}`}
@@ -233,12 +233,12 @@ export function PaymentsPage() {
               Show paid
             </label>
             <span className="toolbar__count">
-              {rows.length} {rows.length === 1 ? 'factura' : 'facturas'}
+              {rows.length} {rows.length === 1 ? 'invoice' : 'invoices'}
             </span>
           </div>
 
           {rows.length === 0 ? (
-            <div className="empty">No hay facturas pendientes de pago al contractor.</div>
+            <div className="empty">No pending contractor invoices to pay.</div>
           ) : (
             <div className="table-wrap table-wrap--scroll">
               <table className="table proj-table coll-table">

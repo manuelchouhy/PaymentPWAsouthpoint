@@ -53,8 +53,8 @@ export function EntriesCards({
               aria-pressed={isInvoiced ? undefined : selected}
               aria-label={
                 isInvoiced
-                  ? `Ver factura ${invoice.supplierInvoiceNumber} de ${entry.user}`
-                  : `Entrada de ${entry.user}: ${entry.task}, ${formatHours(entry.hours)} horas`
+                  ? `View invoice ${invoice.supplierInvoiceNumber} for ${entry.user}`
+                  : `Entry for ${entry.user}: ${entry.task}, ${formatHours(entry.hours)} hours`
               }
               onClick={() => {
                 if (isInvoiced) {
@@ -95,7 +95,7 @@ export function EntriesCards({
                 <div className="card__meta">
                   {entry.client && (
                     <span className="card__meta-item">
-                      <span className="card__meta-label">Cliente</span>
+                      <span className="card__meta-label">Client</span>
                       {entry.client}
                     </span>
                   )}
@@ -106,7 +106,7 @@ export function EntriesCards({
                     </span>
                   )}
                   <span className="card__meta-item">
-                    <span className="card__meta-label">Semana</span>
+                    <span className="card__meta-label">Week</span>
                     {formatWeek(entry.date)}
                   </span>
                 </div>
@@ -121,7 +121,7 @@ export function EntriesCards({
                     </span>
                   </div>
                   <div className="card__payment-row">
-                    <span className="card__payment-label">Fecha</span>
+                    <span className="card__payment-label">Date</span>
                     <span className="card__payment-value">
                       {formatDate(invoice.invoiceDate)}
                     </span>

@@ -55,12 +55,12 @@ export function RenewContractModal({ contract, onClose, onSubmit }) {
       return
     }
     if (file.type !== 'application/pdf') {
-      setPdfError('El archivo debe ser un PDF.')
+      setPdfError('The file must be a PDF.')
       setPdfFile(null)
       return
     }
     if (file.size > 20 * 1024 * 1024) {
-      setPdfError('El PDF no puede superar 20 MB.')
+      setPdfError('The PDF cannot exceed 20 MB.')
       setPdfFile(null)
       return
     }
@@ -78,7 +78,7 @@ export function RenewContractModal({ contract, onClose, onSubmit }) {
   async function handleSubmit(event) {
     event.preventDefault()
     setTouched(true)
-    if (!pdfFile) setPdfError('El PDF de la renovación es obligatorio.')
+    if (!pdfFile) setPdfError('A PDF is required for the renewal.')
     if (!valid || submitting) return
     setSubmitError('')
     setSubmitting(true)
@@ -96,9 +96,9 @@ export function RenewContractModal({ contract, onClose, onSubmit }) {
       setSubmitting(false)
       if (error?.code === 'duplicate') {
         setDupError(true)
-        setSubmitError('Ese Contract # ya existe. Usá uno distinto.')
+        setSubmitError('That Contract # already exists. Please use a different one.')
       } else {
-        setSubmitError(error?.message ?? 'No se pudo renovar.')
+        setSubmitError(error?.message ?? 'Could not renew the contract.')
       }
     }
   }
@@ -125,20 +125,20 @@ export function RenewContractModal({ contract, onClose, onSubmit }) {
       >
         <div className="modal__head">
           <div>
-            <span className="modal__kicker">Renovación de contrato</span>
+            <span className="modal__kicker">Contract Renewal</span>
             <h2 className="modal__title" id="renew-title">
               {contract.supplierName}
             </h2>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Cerrar">
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </div>
 
         <form className="modal__form project-form" onSubmit={handleSubmit} noValidate>
           <p className="modal__note">
-            Se archiva el contrato <strong>{contract.contractNumber}</strong> y se crea
-            una versión nueva enlazada. El historial se conserva.
+            Contract <strong>{contract.contractNumber}</strong> will be archived and a new
+            linked version will be created. History is preserved.
           </p>
 
           <div className="project-form__grid">
@@ -150,7 +150,7 @@ export function RenewContractModal({ contract, onClose, onSubmit }) {
                 <div className="field" key={field.key}>
                   <label className="field__label" htmlFor={`renew-${field.key}`}>
                     {field.label}
-                    <span className="field__req">requerido</span>
+                    <span className="field__req">required</span>
                   </label>
                   <input
                     id={`renew-${field.key}`}
@@ -162,7 +162,7 @@ export function RenewContractModal({ contract, onClose, onSubmit }) {
                     onBlur={() => setTouched(true)}
                     autoComplete="off"
                   />
-                  {isMissing && <span className="field__error">Campo requerido.</span>}
+                  {isMissing && <span className="field__error">This field is required.</span>}
                 </div>
               )
             })}
@@ -171,7 +171,7 @@ export function RenewContractModal({ contract, onClose, onSubmit }) {
           <div className="field">
             <label className="field__label" htmlFor="renew-pdf">
               New Contract PDF
-              <span className="field__req">requerido</span>
+              <span className="field__req">required</span>
             </label>
             <input
               id="renew-pdf"
@@ -190,14 +190,14 @@ export function RenewContractModal({ contract, onClose, onSubmit }) {
 
           <div className="modal__actions">
             <button type="button" className="btn btn--ghost" onClick={onClose} disabled={submitting}>
-              Cancelar
+              Cancel
             </button>
             <motion.button type="submit" className="btn btn--pay"
               disabled={!valid || submitting}
               whileTap={valid && !submitting ? { scale: 0.97 } : undefined}>
               {submitting ? <span className="spinner" aria-hidden="true" />
                 : <RefreshCw size={16} strokeWidth={2.2} />}
-              {submitting ? 'Renovando…' : 'Renovar contrato'}
+              {submitting ? 'Renewing…' : 'Renew contract'}
             </motion.button>
           </div>
         </form>

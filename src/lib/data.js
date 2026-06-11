@@ -258,7 +258,7 @@ const MOCK_INVOICE_HISTORY = {
       toStatus: 'Collected',
       changedAt: '2026-05-20T11:00:00.000Z',
       changedBy: 'demo@southpoint.local',
-      note: 'Cobro acreditado del cliente',
+      note: 'Collection credited from client',
     },
   ],
   'inv-mock-2': [
@@ -268,7 +268,7 @@ const MOCK_INVOICE_HISTORY = {
       toStatus: 'Paid',
       changedAt: '2026-05-22T16:30:00.000Z',
       changedBy: 'demo@southpoint.local',
-      note: 'Pago al contractor realizado',
+      note: 'Contractor payment completed',
     },
     {
       id: 'h-2b',
@@ -478,8 +478,8 @@ export async function updateInvoiceStatus({
 }) {
   if (!isValidTransition(fromStatus, toStatus)) {
     throw new Error(
-      `Transición inválida: ${fromStatus} → ${toStatus}. ` +
-        'Sólo se permite Invoiced → Collected → Paid.',
+      `Invalid transition: ${fromStatus} → ${toStatus}. ` +
+        'Only Invoiced → Collected → Paid is allowed.',
     )
   }
 
@@ -509,7 +509,7 @@ export async function updateInvoiceStatus({
 
   if (error) throw new Error(error.message)
   if (!data) {
-    throw new Error('La factura ya cambió de estado; recargá e intentá de nuevo.')
+    throw new Error('The invoice status has already changed; please reload and try again.')
   }
 
   // Registrar la transición en el historial (best-effort: no tumba el cambio).
@@ -577,7 +577,7 @@ export async function triggerSync() {
   // tras los reintentos, en lugar de crashear. Lo propagamos como excepción para
   // que la UI muestre el toast de error.
   if (data && data.ok === false) {
-    throw new Error(data.error || 'No se pudo sincronizar con Zoho.')
+    throw new Error(data.error || 'Could not sync with Zoho.')
   }
   return { ok: true, mode: 'supabase', synced: data?.synced ?? null }
 }

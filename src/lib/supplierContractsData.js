@@ -254,7 +254,7 @@ export async function createSupplierContract(payload, createdBy) {
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 300))
     if (demoContracts.some((c) => c.contractNumber === payload.contractNumber)) {
-      const err = new Error('El Contract # ya existe.')
+      const err = new Error('Contract # already exists.')
       err.code = 'duplicate'
       throw err
     }
@@ -281,7 +281,7 @@ export async function createSupplierContract(payload, createdBy) {
     .single()
   if (error) {
     if (error.code === '23505') {
-      const err = new Error('El Contract # ya existe.')
+      const err = new Error('Contract # already exists.')
       err.code = 'duplicate'
       throw err
     }
@@ -306,7 +306,7 @@ export async function updateSupplierContract(current, updates, changedBy) {
       updates.contractNumber !== current.contractNumber &&
       demoContracts.some((c) => c.contractNumber === updates.contractNumber)
     ) {
-      const err = new Error('El Contract # ya existe.')
+      const err = new Error('Contract # already exists.')
       err.code = 'duplicate'
       throw err
     }
@@ -336,7 +336,7 @@ export async function updateSupplierContract(current, updates, changedBy) {
     .single()
   if (error) {
     if (error.code === '23505') {
-      const err = new Error('El Contract # ya existe.')
+      const err = new Error('Contract # already exists.')
       err.code = 'duplicate'
       throw err
     }
@@ -388,17 +388,17 @@ const BUCKET = 'supplier-contracts'
  */
 export async function uploadContractPdf(file) {
   if (!file) {
-    const e = new Error('Falta el PDF.')
+    const e = new Error('PDF is missing.')
     e.code = 'no_file'
     throw e
   }
   if (file.type !== 'application/pdf') {
-    const e = new Error('El archivo debe ser un PDF.')
+    const e = new Error('The file must be a PDF.')
     e.code = 'bad_type'
     throw e
   }
   if (file.size > PDF_MAX_BYTES) {
-    const e = new Error('El PDF no puede superar 20 MB.')
+    const e = new Error('The PDF cannot exceed 20 MB.')
     e.code = 'too_big'
     throw e
   }
@@ -488,7 +488,7 @@ export async function renewSupplierContract(oldContract, payload, by) {
     .single()
   if (error) {
     if (error.code === '23505') {
-      const err = new Error('El Contract # ya existe.')
+      const err = new Error('Contract # already exists.')
       err.code = 'duplicate'
       throw err
     }

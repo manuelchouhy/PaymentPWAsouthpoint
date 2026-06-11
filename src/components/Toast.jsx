@@ -35,7 +35,7 @@ export function Toast({ message, tone = 'success', onDismiss }) {
           type="button"
           className="toast__close"
           onClick={onDismiss}
-          aria-label="Cerrar aviso"
+          aria-label="Dismiss notification"
         >
           <X size={15} />
         </button>

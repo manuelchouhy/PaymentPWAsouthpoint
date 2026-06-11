@@ -14,11 +14,11 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         id: '/',
-        name: 'Gestión de Pagos a Proveedores',
-        short_name: 'Pagos',
+        name: 'Contractor Payment Management',
+        short_name: 'Payment',
         description:
-          'Ventana de gestión de pagos a proveedores: revisá las horas registradas y procesá los pagos.',
-        lang: 'es',
+          'Contractor payment management: review logged hours and process payments.',
+        lang: 'en',
         dir: 'ltr',
         start_url: '/',
         scope: '/',

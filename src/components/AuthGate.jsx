@@ -55,7 +55,7 @@ function AuthBootSplash() {
   return (
     <div className="auth-boot" role="status" aria-live="polite">
       <div className="auth-boot__dot" aria-hidden="true" />
-      <span className="auth-boot__label">Cargando sesión…</span>
+      <span className="auth-boot__label">Loading session…</span>
     </div>
   )
 }

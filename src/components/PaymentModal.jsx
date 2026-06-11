@@ -78,7 +78,7 @@ export function PaymentModal({ user, entries, hours, onClose, onConfirm }) {
     } catch (error) {
       setSubmitting(false)
       setSubmitError(
-        error?.message ?? 'No se pudo registrar el pago. Intentá nuevamente.',
+        error?.message ?? 'Could not register the payment. Please try again.',
       )
     }
   }
@@ -111,16 +111,16 @@ export function PaymentModal({ user, entries, hours, onClose, onConfirm }) {
       >
         <div className="modal__head">
           <div>
-            <span className="modal__kicker">Pago a proveedor</span>
+            <span className="modal__kicker">Contractor payment</span>
             <h2 className="modal__title" id="modal-title">
-              Procesar Pago
+              Process payment
             </h2>
           </div>
           <button
             type="button"
             className="icon-btn"
             onClick={onClose}
-            aria-label="Cerrar"
+            aria-label="Close"
           >
             <X size={18} />
           </button>
@@ -132,12 +132,12 @@ export function PaymentModal({ user, entries, hours, onClose, onConfirm }) {
             <span className="modal__summary-user">{user}</span>
             <span className="modal__summary-meta">
               {entries.length}{' '}
-              {entries.length === 1 ? 'entrada seleccionada' : 'entradas seleccionadas'}
+              {entries.length === 1 ? 'entry selected' : 'entries selected'}
             </span>
           </div>
           <div className="modal__summary-hours">
             <span className="modal__summary-hours-value">{formatHours(hours)}</span>
-            <span className="modal__summary-hours-label">Horas</span>
+            <span className="modal__summary-hours-label">Hours</span>
           </div>
         </div>
 
@@ -157,7 +157,7 @@ export function PaymentModal({ user, entries, hours, onClose, onConfirm }) {
           <div className="field">
             <label className="field__label" htmlFor="invoice-number">
               Invoice Number
-              <span className="field__req">requerido</span>
+              <span className="field__req">required</span>
             </label>
             <input
               id="invoice-number"
@@ -174,7 +174,7 @@ export function PaymentModal({ user, entries, hours, onClose, onConfirm }) {
             />
             {touched && !invoiceValid && (
               <span className="field__error">
-                Ingresá el número de factura para continuar.
+                Please enter the invoice number to continue.
               </span>
             )}
           </div>
@@ -182,7 +182,7 @@ export function PaymentModal({ user, entries, hours, onClose, onConfirm }) {
           <div className="field">
             <label className="field__label" htmlFor="transaction-number">
               Transaction Number
-              <span className="field__opt">opcional</span>
+              <span className="field__opt">optional</span>
             </label>
             <input
               id="transaction-number"
@@ -196,7 +196,7 @@ export function PaymentModal({ user, entries, hours, onClose, onConfirm }) {
 
           <p className="modal__note">
             <Paperclip size={14} aria-hidden="true" />
-            Los archivos se podrán adjuntar después de procesar el pago.
+            Files can be attached after the payment has been processed.
           </p>
 
           {submitError && (
@@ -212,7 +212,7 @@ export function PaymentModal({ user, entries, hours, onClose, onConfirm }) {
               onClick={onClose}
               disabled={submitting}
             >
-              Cancelar
+              Cancel
             </button>
             <motion.button
               type="submit"
@@ -225,7 +225,7 @@ export function PaymentModal({ user, entries, hours, onClose, onConfirm }) {
               ) : (
                 <Wallet size={16} strokeWidth={2.2} aria-hidden="true" />
               )}
-              {submitting ? 'Procesando…' : 'Procesar Pago'}
+              {submitting ? 'Processing…' : 'Process payment'}
             </motion.button>
           </div>
         </form>

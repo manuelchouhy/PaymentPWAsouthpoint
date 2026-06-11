@@ -9,9 +9,9 @@ import {
 import { Toast } from '../components/Toast'
 
 const FREQUENCIES = [
-  { value: 'on_threshold_cross', label: 'Al cruzar un umbral' },
-  { value: 'daily', label: 'Diaria' },
-  { value: 'weekly', label: 'Semanal' },
+  { value: 'on_threshold_cross', label: 'On threshold cross' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
 ]
 
 export function ContractAlertSettingsPage() {
@@ -64,9 +64,9 @@ export function ContractAlertSettingsPage() {
         },
         user?.email ?? null,
       )
-      setToast({ id: Date.now(), message: 'Configuración guardada' })
+      setToast({ id: Date.now(), message: 'Settings saved' })
     } catch (error) {
-      setToast({ id: Date.now(), tone: 'error', message: error?.message ?? 'No se pudo guardar' })
+      setToast({ id: Date.now(), tone: 'error', message: error?.message ?? 'Could not save' })
     } finally {
       setSaving(false)
     }
@@ -86,16 +86,16 @@ export function ContractAlertSettingsPage() {
           </Link>
           <span className="masthead__rule" aria-hidden="true" />
         </div>
-        <h1 className="masthead__title">Alertas de contrato</h1>
+        <h1 className="masthead__title">Contract alert settings</h1>
         <p className="masthead__sub">
-          Umbrales de aviso y destinatarios de las alertas de vencimiento de
-          contratos de cliente.
+          Warning thresholds and recipients for client contract expiration
+          alerts.
         </p>
       </motion.header>
 
-      {status === 'loading' && <p className="state__hint">Cargando configuración…</p>}
+      {status === 'loading' && <p className="state__hint">Loading settings…</p>}
       {status === 'error' && (
-        <div className="empty">No se pudo cargar la configuración.</div>
+        <div className="empty">Could not load settings.</div>
       )}
 
       {status === 'ready' && form && (
@@ -107,22 +107,22 @@ export function ContractAlertSettingsPage() {
           transition={{ duration: 0.4, delay: 0.05 }}
         >
           <div className="settings-section">
-            <span className="settings-section__label">Umbrales (días antes del vencimiento)</span>
+            <span className="settings-section__label">Thresholds (days before expiration)</span>
             <div className="settings-grid">
               <div className="field">
-                <label className="field__label" htmlFor="t1">Umbral 1</label>
+                <label className="field__label" htmlFor="t1">Threshold 1</label>
                 <input id="t1" type="number" min="0" className="field__input"
                   value={form.threshold1Days}
                   onChange={(e) => set('threshold1Days', e.target.value)} />
               </div>
               <div className="field">
-                <label className="field__label" htmlFor="t2">Umbral 2</label>
+                <label className="field__label" htmlFor="t2">Threshold 2</label>
                 <input id="t2" type="number" min="0" className="field__input"
                   value={form.threshold2Days}
                   onChange={(e) => set('threshold2Days', e.target.value)} />
               </div>
               <div className="field">
-                <label className="field__label" htmlFor="t3">Umbral 3</label>
+                <label className="field__label" htmlFor="t3">Threshold 3</label>
                 <input id="t3" type="number" min="0" className="field__input"
                   value={form.threshold3Days}
                   onChange={(e) => set('threshold3Days', e.target.value)} />
@@ -133,18 +133,18 @@ export function ContractAlertSettingsPage() {
           <div className="settings-section">
             <div className="field">
               <label className="field__label" htmlFor="recipients">
-                Destinatarios (emails separados por coma)
+                Recipients (comma-separated emails)
               </label>
               <input id="recipients" type="text" className="field__input"
                 value={form.recipientsText}
-                placeholder="ops@empresa.com, dir@empresa.com"
+                placeholder="ops@company.com, dir@company.com"
                 onChange={(e) => set('recipientsText', e.target.value)} />
             </div>
           </div>
 
           <div className="settings-section">
             <div className="field">
-              <label className="field__label" htmlFor="freq">Frecuencia de email</label>
+              <label className="field__label" htmlFor="freq">Email frequency</label>
               <select id="freq" className="field__input"
                 value={form.emailFrequency}
                 onChange={(e) => set('emailFrequency', e.target.value)}>
@@ -159,7 +159,7 @@ export function ContractAlertSettingsPage() {
             <motion.button type="submit" className="btn btn--pay" disabled={saving}
               whileTap={saving ? undefined : { scale: 0.97 }}>
               {saving ? <span className="spinner" aria-hidden="true" /> : <Save size={16} strokeWidth={2.2} />}
-              {saving ? 'Guardando…' : 'Guardar'}
+              {saving ? 'Saving…' : 'Save'}
             </motion.button>
           </div>
         </motion.form>

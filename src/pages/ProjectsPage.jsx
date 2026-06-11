@@ -110,14 +110,14 @@ export function ProjectsPage() {
     const created = await createProject(payload, user?.email ?? null)
     setProjects((prev) => sortByExp([created, ...prev]))
     setForm(null)
-    setToast({ id: Date.now(), message: `Proyecto creado — ${created.projectNumber}` })
+    setToast({ id: Date.now(), message: `Project created — ${created.projectNumber}` })
   }
 
   async function handleUpdate(payload) {
     const updated = await updateProject(form.project, payload, user?.email ?? null)
     setProjects((prev) => sortByExp(prev.map((p) => (p.id === updated.id ? updated : p))))
     setForm(null)
-    setToast({ id: Date.now(), message: `Proyecto actualizado — ${updated.projectNumber}` })
+    setToast({ id: Date.now(), message: `Project updated — ${updated.projectNumber}` })
   }
 
   return (
@@ -129,22 +129,22 @@ export function ProjectsPage() {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="masthead__top">
-          <span className="masthead__kicker">Gestión de contratos · Cliente</span>
+          <span className="masthead__kicker">Contract management · Client</span>
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Projects &amp; Contracts</h1>
         <p className="masthead__sub">
-          Maestro de proyectos y contratos del lado del cliente, ordenados por
-          proximidad de vencimiento.
+          Master list of client-side projects and contracts, sorted by upcoming
+          expiration date.
         </p>
       </motion.header>
 
-      {status === 'loading' && <p className="state__hint">Cargando proyectos…</p>}
+      {status === 'loading' && <p className="state__hint">Loading projects…</p>}
 
       {status === 'error' && (
         <div className="state state--error">
           <AlertTriangle size={28} strokeWidth={1.8} />
-          <h2 className="state__title">No pudimos cargar los proyectos</h2>
+          <h2 className="state__title">Could not load projects</h2>
         </div>
       )}
 
@@ -155,7 +155,7 @@ export function ProjectsPage() {
           transition={{ duration: 0.4, delay: 0.05 }}
         >
           <div className="proj-kpis">
-            <div className="proj-kpis__chips" role="group" aria-label="Contratos por estado">
+            <div className="proj-kpis__chips" role="group" aria-label="Contracts by status">
               {CONTRACT_STATUSES.map((s) => (
                 <button
                   key={s}
@@ -177,9 +177,9 @@ export function ProjectsPage() {
             </Link>
           </div>
 
-          <section className="filterbar" aria-label="Filtros">
+          <section className="filterbar" aria-label="Filters">
             <div className="filterbar__head">
-              <span className="filterbar__title">Filtros</span>
+              <span className="filterbar__title">Filters</span>
               <button
                 type="button"
                 className="btn btn--pay proj-new-btn"
@@ -203,7 +203,7 @@ export function ProjectsPage() {
                 onToggle={(v) => toggle('leadDevelopers', v)}
               />
               <div className="filterfield">
-                <span className="filterfield__label">Vence desde</span>
+                <span className="filterfield__label">Due from</span>
                 <input
                   type="date"
                   className="filterfield__input"
@@ -213,7 +213,7 @@ export function ProjectsPage() {
                 />
               </div>
               <div className="filterfield">
-                <span className="filterfield__label">Vence hasta</span>
+                <span className="filterfield__label">Due to</span>
                 <input
                   type="date"
                   className="filterfield__input"
@@ -230,7 +230,7 @@ export function ProjectsPage() {
                     setFilters({ clients: [], leadDevelopers: [], expFrom: '', expTo: '' })
                   }
                 >
-                  Limpiar
+                  Clear
                 </button>
               ) : null}
             </div>
@@ -238,12 +238,12 @@ export function ProjectsPage() {
 
           <div className="toolbar">
             <span className="toolbar__count">
-              {visible.length} {visible.length === 1 ? 'proyecto' : 'proyectos'}
+              {visible.length} {visible.length === 1 ? 'project' : 'projects'}
             </span>
           </div>
 
           {visible.length === 0 ? (
-            <div className="empty">No hay proyectos para mostrar.</div>
+            <div className="empty">No projects to display.</div>
           ) : (
             <div className="table-wrap table-wrap--scroll">
               <table className="table proj-table">
@@ -277,7 +277,7 @@ export function ProjectsPage() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: Math.min(index * 0.02, 0.3) }}
                         onClick={() => setDetail(p)}
-                        title={`Ver ${p.projectName}`}
+                        title={`View ${p.projectName}`}
                       >
                         <td>{p.client}</td>
                         <td className="cell-strong">{p.projectName}</td>

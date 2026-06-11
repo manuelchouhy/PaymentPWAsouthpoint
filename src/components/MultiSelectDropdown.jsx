@@ -17,7 +17,7 @@ export function MultiSelectDropdown({
   options,
   selected,
   onToggle,
-  placeholder = 'Todos',
+  placeholder = 'All',
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -44,7 +44,7 @@ export function MultiSelectDropdown({
       ? placeholder
       : count === 1
         ? selected[0]
-        : `${count} seleccionados`
+        : `${count} selected`
 
   return (
     <div className="filterfield msel" ref={ref}>
@@ -66,7 +66,7 @@ export function MultiSelectDropdown({
       {open && (
         <div className="msel__panel" role="listbox" aria-multiselectable="true">
           {options.length === 0 && (
-            <div className="msel__empty">Sin opciones</div>
+            <div className="msel__empty">No options</div>
           )}
           {options.map((option) => {
             const checked = selected.includes(option)

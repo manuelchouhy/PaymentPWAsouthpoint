@@ -47,14 +47,14 @@ export function ContractsExpiringWidget({ limit = 5 }) {
           Contracts expiring
         </span>
         <Link to="/projects" className="dash-widget__link">
-          Ver todos <ChevronRight size={14} aria-hidden="true" />
+          View all <ChevronRight size={14} aria-hidden="true" />
         </Link>
       </div>
 
       {loading ? (
-        <p className="dash-widget__empty">Cargando…</p>
+        <p className="dash-widget__empty">Loading…</p>
       ) : top.length === 0 ? (
-        <p className="dash-widget__empty">Sin contratos próximos a vencer.</p>
+        <p className="dash-widget__empty">No contracts expiring soon.</p>
       ) : (
         <ul className="dash-widget__list">
           {top.map((p) => {
@@ -64,12 +64,12 @@ export function ContractsExpiringWidget({ limit = 5 }) {
                 <div className="dash-widget__row-main">
                   <span className="dash-widget__row-name">{p.projectName}</span>
                   <span className="dash-widget__row-meta">
-                    {p.client} · vence {formatDate(p.contractExpirationDate)}
+                    {p.client} · expires {formatDate(p.contractExpirationDate)}
                   </span>
                 </div>
                 <div className="dash-widget__row-right">
                   <span className="dash-widget__row-days">
-                    {days < 0 ? `${Math.abs(days)} d vencido` : `${days} d`}
+                    {days < 0 ? `${Math.abs(days)} d overdue` : `${days} d`}
                   </span>
                   <ContractBadge status={contractStatus(days)} />
                 </div>

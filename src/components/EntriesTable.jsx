@@ -49,7 +49,7 @@ export function EntriesTable({
                 checked={headerChecked}
                 indeterminate={headerIndeterminate}
                 onChange={onToggleAll}
-                ariaLabel="Seleccionar todas las filas pendientes visibles"
+                ariaLabel="Select all visible pending rows"
               />
             </th>
             <th scope="col" className="col-user">User</th>
@@ -97,7 +97,7 @@ export function EntriesTable({
                 }}
                 title={
                   isInvoiced
-                    ? `Ver factura ${invoice.supplierInvoiceNumber}`
+                    ? `View invoice ${invoice.supplierInvoiceNumber}`
                     : undefined
                 }
               >
@@ -108,7 +108,7 @@ export function EntriesTable({
                     <Checkbox
                       checked={selected}
                       onChange={() => onToggle(entry.id)}
-                      ariaLabel={`Seleccionar entrada de ${entry.user} — ${entry.task}`}
+                      ariaLabel={`Select entry for ${entry.user} — ${entry.task}`}
                     />
                   )}
                 </td>
@@ -137,7 +137,7 @@ export function EntriesTable({
                 </td>
                 <td className="col-pop">
                   <CellPopButton
-                    label="Descripción"
+                    label="Description"
                     text={entry.description}
                     icon={FileText}
                   />

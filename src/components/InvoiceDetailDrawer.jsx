@@ -99,7 +99,7 @@ export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus 
         ])
       }
     } catch (err) {
-      setError(err?.message ?? 'No se pudo cambiar el estado.')
+      setError(err?.message ?? 'Could not update the status.')
     } finally {
       setChanging(false)
     }
@@ -130,7 +130,7 @@ export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus 
       >
         <div className="drawer__head">
           <div>
-            <span className="drawer__kicker">Factura</span>
+            <span className="drawer__kicker">Invoice</span>
             <h2 className="drawer__title" id="invoice-drawer-title">
               {invoice.supplierInvoiceNumber}
             </h2>
@@ -139,7 +139,7 @@ export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus 
             type="button"
             className="icon-btn"
             onClick={onClose}
-            aria-label="Cerrar"
+            aria-label="Close"
           >
             <X size={18} />
           </button>
@@ -156,19 +156,19 @@ export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus 
 
         <dl className="drawer__facts">
           <div className="drawer__fact">
-            <dt>Fecha de factura</dt>
+            <dt>Invoice date</dt>
             <dd>{formatDate(invoice.invoiceDate)}</dd>
           </div>
           <div className="drawer__fact">
-            <dt>Monto total</dt>
+            <dt>Total amount</dt>
             <dd className="drawer__amount">${formatAmount(invoice.totalAmount)}</dd>
           </div>
           <div className="drawer__fact">
-            <dt>Horas</dt>
+            <dt>Hours</dt>
             <dd>{formatHours(totalHours)} h</dd>
           </div>
           <div className="drawer__fact">
-            <dt>Emitida por</dt>
+            <dt>Issued by</dt>
             <dd>{invoice.createdBy ?? '—'}</dd>
           </div>
         </dl>
@@ -199,32 +199,32 @@ export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus 
               </div>
             ))}
             {entries.length === 0 && (
-              <p className="drawer__empty">Sin time entries asociadas.</p>
+              <p className="drawer__empty">No time entries linked.</p>
             )}
           </div>
         </div>
 
         {payment && (
           <div className="drawer__section">
-            <span className="drawer__section-label">Pago al contractor</span>
+            <span className="drawer__section-label">Contractor payment</span>
             <dl className="drawer__facts">
               <div className="drawer__fact">
-                <dt>Monto pagado</dt>
+                <dt>Amount paid</dt>
                 <dd className="drawer__amount">${formatAmount(payment.amountPaid)}</dd>
               </div>
               <div className="drawer__fact">
-                <dt>Fecha de pago</dt>
+                <dt>Payment date</dt>
                 <dd>
                   {formatDate(payment.paymentDate)}
                   {payment.backDated ? ' (back-dated)' : ''}
                 </dd>
               </div>
               <div className="drawer__fact">
-                <dt>Banco / método</dt>
+                <dt>Bank / method</dt>
                 <dd>{payment.bankMethod || '—'}</dd>
               </div>
               <div className="drawer__fact">
-                <dt>Referencia</dt>
+                <dt>Reference</dt>
                 <dd>{payment.transferReference || '—'}</dd>
               </div>
             </dl>
@@ -232,11 +232,11 @@ export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus 
         )}
 
         <div className="drawer__section">
-          <span className="drawer__section-label">Historial de estado</span>
+          <span className="drawer__section-label">Status history</span>
           {loadingHistory ? (
-            <p className="drawer__empty">Cargando historial…</p>
+            <p className="drawer__empty">Loading history…</p>
           ) : history.length === 0 ? (
-            <p className="drawer__empty">Sin cambios de estado registrados.</p>
+            <p className="drawer__empty">No status changes recorded.</p>
           ) : (
             <ul className="drawer__history">
               {history.map((row) => (
@@ -281,11 +281,11 @@ export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus 
               ) : (
                 <ArrowRight size={16} strokeWidth={2.2} aria-hidden="true" />
               )}
-              {changing ? 'Actualizando…' : `Marcar como ${next}`}
+              {changing ? 'Updating…' : `Mark as ${next}`}
             </motion.button>
           ) : (
             <p className="drawer__done">
-              Factura <strong>Paid</strong> — sin acciones pendientes.
+              Invoice <strong>Paid</strong> — no pending actions.
             </p>
           )}
         </div>

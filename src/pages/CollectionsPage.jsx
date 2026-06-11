@@ -189,8 +189,8 @@ export function CollectionsPage() {
     setToast({
       id: Date.now(),
       message: becameCollected
-        ? `${inv.supplierInvoiceNumber} cobrada por completo → Collected`
-        : `Cobro de $${formatAmount(payload.amountReceived)} registrado en ${inv.supplierInvoiceNumber}`,
+        ? `${inv.supplierInvoiceNumber} fully collected → Collected`
+        : `Collection of $${formatAmount(payload.amountReceived)} registered for ${inv.supplierInvoiceNumber}`,
     })
   }
 
@@ -203,21 +203,21 @@ export function CollectionsPage() {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="masthead__top">
-          <span className="masthead__kicker">Cobranzas · Cliente</span>
+          <span className="masthead__kicker">Collections · Client</span>
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Collections</h1>
         <p className="masthead__sub">
-          Facturas emitidas y su estado de cobro. Registrá cobros totales o
-          parciales; al completarse, la factura pasa a Collected.
+          Issued invoices and their collection status. Register full or partial
+          collections; once completed, the invoice moves to Collected.
         </p>
       </motion.header>
 
-      {status === 'loading' && <p className="state__hint">Cargando facturas…</p>}
+      {status === 'loading' && <p className="state__hint">Loading invoices…</p>}
       {status === 'error' && (
         <div className="state state--error">
           <AlertTriangle size={28} strokeWidth={1.8} />
-          <h2 className="state__title">No pudimos cargar Collections</h2>
+          <h2 className="state__title">Could not load Collections</h2>
         </div>
       )}
 
@@ -228,7 +228,7 @@ export function CollectionsPage() {
           transition={{ duration: 0.4, delay: 0.05 }}
         >
           <div className="proj-kpis">
-            <div className="proj-kpis__chips" role="group" aria-label="Alertas de cobro">
+            <div className="proj-kpis__chips" role="group" aria-label="Collection alerts">
               <button
                 type="button"
                 className={`proj-kpi proj-kpi--overdue${alertFilter === 'overdue' ? ' is-active' : ''}`}
@@ -258,9 +258,9 @@ export function CollectionsPage() {
             </Link>
           </div>
 
-          <section className="filterbar" aria-label="Filtros">
+          <section className="filterbar" aria-label="Filters">
             <div className="filterbar__head">
-              <span className="filterbar__title">Filtros</span>
+              <span className="filterbar__title">Filters</span>
             </div>
             <div className="filterbar__controls">
               <MultiSelectDropdown
@@ -282,13 +282,13 @@ export function CollectionsPage() {
                 onToggle={(v) => toggle('statuses', v)}
               />
               <div className="filterfield">
-                <span className="filterfield__label">Invoice desde</span>
+                <span className="filterfield__label">Invoice from</span>
                 <input type="date" className="filterfield__input" value={filters.dateFrom}
                   max={filters.dateTo || undefined}
                   onChange={(e) => setFilters((p) => ({ ...p, dateFrom: e.target.value }))} />
               </div>
               <div className="filterfield">
-                <span className="filterfield__label">Invoice hasta</span>
+                <span className="filterfield__label">Invoice to</span>
                 <input type="date" className="filterfield__input" value={filters.dateTo}
                   min={filters.dateFrom || undefined}
                   onChange={(e) => setFilters((p) => ({ ...p, dateTo: e.target.value }))} />
@@ -298,12 +298,12 @@ export function CollectionsPage() {
 
           <div className="toolbar">
             <span className="toolbar__count">
-              {visible.length} {visible.length === 1 ? 'factura' : 'facturas'}
+              {visible.length} {visible.length === 1 ? 'invoice' : 'invoices'}
             </span>
           </div>
 
           {visible.length === 0 ? (
-            <div className="empty">No hay facturas pendientes de cobro.</div>
+            <div className="empty">No invoices pending collection.</div>
           ) : (
             <div className="table-wrap table-wrap--scroll">
               <table className="table proj-table coll-table">

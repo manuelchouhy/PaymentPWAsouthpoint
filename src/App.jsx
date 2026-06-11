@@ -309,17 +309,17 @@ export default function App() {
       })
       const syncedMsg =
         typeof result.synced === 'number'
-          ? `Sincronizado · ${result.synced} ${
-              result.synced === 1 ? 'registro' : 'registros'
+          ? `Synced · ${result.synced} ${
+              result.synced === 1 ? 'record' : 'records'
             }`
-          : 'Sincronizado'
+          : 'Synced'
       setToast({ id: Date.now(), tone: 'success', message: syncedMsg })
     } catch (error) {
       console.error('No se pudo sincronizar:', error)
       setToast({
         id: Date.now(),
         tone: 'error',
-        message: 'No se pudo actualizar, intentá de nuevo',
+        message: 'Could not refresh, please try again',
       })
       // La Edge Function registró el estado 'Error': reflejarlo en la barra.
       getSyncStatus()
@@ -356,9 +356,9 @@ export default function App() {
     setSelectedIds(new Set())
     setToast({
       id: Date.now(),
-      message: `Factura emitida — ${billedCount} ${
-        billedCount === 1 ? 'entrada' : 'entradas'
-      } de ${billedUser} · ${billedHoursFmt} h · ${supplierInvoiceNumber}`,
+      message: `Invoice issued — ${billedCount} ${
+        billedCount === 1 ? 'entry' : 'entries'
+      } from ${billedUser} · ${billedHoursFmt} h · ${supplierInvoiceNumber}`,
     })
     fireConfetti()
   }
@@ -381,7 +381,7 @@ export default function App() {
     )
     setToast({
       id: Date.now(),
-      message: `Factura ${openInvoice.supplierInvoiceNumber} → ${toStatus}`,
+      message: `Invoice ${openInvoice.supplierInvoiceNumber} → ${toStatus}`,
     })
     return historyEntry
   }
@@ -395,13 +395,13 @@ export default function App() {
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         >
           <div className="masthead__top">
-            <span className="masthead__kicker">Gestión de pagos · Proveedores</span>
+            <span className="masthead__kicker">Payment management · Contractors</span>
             <span className="masthead__rule" aria-hidden="true" />
           </div>
-          <h1 className="masthead__title">Time Entries</h1>
+          <h1 className="masthead__title">Payment</h1>
           <p className="masthead__sub">
-            Revisá las horas registradas por proveedor, seleccioná las entradas
-            correspondientes y procesá el pago.
+            Review the hours logged per contractor, select the corresponding
+            entries and process the payment.
           </p>
         </motion.header>
 
@@ -452,15 +452,15 @@ export default function App() {
                   onClick={handleRefresh}
                   disabled={syncing}
                   aria-busy={syncing}
-                  aria-label={syncing ? 'Sincronizando…' : 'Actualizar ahora'}
-                  title="Forzar sync de Zoho y recargar la grilla"
+                  aria-label={syncing ? 'Syncing…' : 'Refresh now'}
+                  title="Force a Zoho sync and reload the grid"
                 >
                   <RefreshCw
                     size={15}
                     className={syncing ? 'icon-spin' : ''}
                     aria-hidden="true"
                   />
-                  <span>{syncing ? 'Sincronizando…' : 'Actualizar ahora'}</span>
+                  <span>{syncing ? 'Syncing…' : 'Refresh now'}</span>
                 </button>
                 <SyncStatus
                   status={syncStatus}
@@ -469,7 +469,7 @@ export default function App() {
               </div>
               <span className="toolbar__count">
                 {visibleEntries.length}{' '}
-                {visibleEntries.length === 1 ? 'entrada' : 'entradas'}
+                {visibleEntries.length === 1 ? 'entry' : 'entries'}
               </span>
             </div>
 
@@ -508,9 +508,9 @@ export default function App() {
 
             <footer className="app__footer">
               <p>
-                Los pagos se procesan en el sistema contable. Esta app es una
-                vista de consulta y registro — todo el acceso a datos está
-                aislado en <code>src/lib/data.js</code>.
+                Payments are processed in the accounting system. This app is a
+                review and recording view — all data access is isolated in{' '}
+                <code>src/lib/data.js</code>.
               </p>
               <div className="app__footer-brand">
                 <img
@@ -586,7 +586,7 @@ function LoadingState() {
           </div>
         ))}
       </div>
-      <p className="state__hint">Cargando entradas…</p>
+      <p className="state__hint">Loading entries…</p>
     </div>
   )
 }
@@ -595,11 +595,11 @@ function ErrorState({ onRetry }) {
   return (
     <div className="state state--error">
       <AlertTriangle size={28} strokeWidth={1.8} />
-      <h2 className="state__title">No pudimos cargar las entradas</h2>
-      <p className="state__text">Revisá la conexión e intentá nuevamente.</p>
+      <h2 className="state__title">We couldn't load the entries</h2>
+      <p className="state__text">Check your connection and try again.</p>
       <button type="button" className="btn btn--ghost" onClick={onRetry}>
         <RefreshCw size={15} />
-        Reintentar
+        Retry
       </button>
     </div>
   )
@@ -609,8 +609,8 @@ function EmptyState({ tab }) {
   return (
     <div className="empty">
       {tab === 'pending'
-        ? 'No hay entradas pendientes de facturar.'
-        : 'No hay entradas de tiempo para este proveedor.'}
+        ? 'No entries pending to bill.'
+        : 'No time entries for this contractor.'}
     </div>
   )
 }
