@@ -23,6 +23,7 @@ export function EntriesCards({
   onToggle,
   getInvoice,
   onOpenInvoice,
+  justInvoicedIds,
 }) {
   return (
     <ul className="cards">
@@ -31,10 +32,12 @@ export function EntriesCards({
         const isInvoiced = invoice !== null
         const billingStatus = invoice ? invoice.status : 'Pending'
         const selected = selectedIds.has(entry.id)
+        const justInvoiced = Boolean(justInvoicedIds?.has(entry.id))
         const cardClass = [
           'card',
           selected ? 'is-selected' : '',
           isInvoiced ? 'is-paid' : '',
+          justInvoiced ? 'card--just-invoiced' : '',
         ]
           .filter(Boolean)
           .join(' ')

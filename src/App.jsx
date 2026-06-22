@@ -25,6 +25,7 @@ import { InvoiceDetailDrawer } from './components/InvoiceDetailDrawer'
 import { SyncStatus } from './components/SyncStatus'
 import { SyncLogModal } from './components/SyncLogModal'
 import { Toast } from './components/Toast'
+import { logAudit } from './lib/auditData'
 
 const VIOLET_CONFETTI = ['#A78BFA', '#C4B5FD', '#8B5CF6', '#DDD6FE', '#7C3AED']
 
@@ -65,7 +66,7 @@ function fireConfetti() {
 }
 
 export default function App() {
-  const { user } = useOutletContext()
+  const { user, profile, can } = useOutletContext()
   const [entries, setEntries] = useState([])
   const [invoices, setInvoices] = useState([])
   const [status, setStatus] = useState('loading') // 'loading' | 'ready' | 'error'
@@ -77,6 +78,9 @@ export default function App() {
   // página vuelve a la default (es estado de sesión, no se persiste en URL).
   const [activeTab, setActiveTab] = useState('pending') // 'pending' | 'all'
   const [selectedIds, setSelectedIds] = useState(() => new Set())
+  // Entradas recién facturadas: se resaltan en verde unos segundos tras emitir
+  // la factura, para que el cambio (Pending → Invoiced) sea visible.
+  const [justInvoicedIds, setJustInvoicedIds] = useState(() => new Set())
   const [modalOpen, setModalOpen] = useState(false)
   const [openInvoiceId, setOpenInvoiceId] = useState(null) // FR-06 · detalle
   const [toast, setToast] = useState(null)
@@ -116,11 +120,14 @@ export default function App() {
   }, [reloadKey])
 
   // --- Mapa entryId -> factura asociada (recalculado al cambiar invoices) ---
+  // Las claves se normalizan a String: `time_entries.id` y `invoices.entry_ids`
+  // pueden llegar de Supabase con tipos distintos (number vs string, p. ej. los
+  // bigint grandes), y Map compara estricto. Normalizar evita falsos "Pending".
   const invoiceByEntryId = useMemo(() => {
     const map = new Map()
     for (const invoice of invoices) {
       for (const entryId of invoice.entryIds) {
-        map.set(entryId, {
+        map.set(String(entryId), {
           invoiceId: invoice.id,
           supplierInvoiceNumber: invoice.supplierInvoiceNumber,
           status: invoice.status,
@@ -131,7 +138,7 @@ export default function App() {
   }, [invoices])
 
   const getInvoice = useCallback(
-    (entryId) => invoiceByEntryId.get(entryId) ?? null,
+    (entryId) => invoiceByEntryId.get(String(entryId)) ?? null,
     [invoiceByEntryId],
   )
 
@@ -165,14 +172,14 @@ export default function App() {
   )
 
   const isInvoiced = useCallback(
-    (entry) => invoiceByEntryId.has(entry.id),
+    (entry) => invoiceByEntryId.has(String(entry.id)),
     [invoiceByEntryId],
   )
 
   // Billing Status de 4 estados: "Pending" si no está en ninguna factura; si no,
   // el status de la factura asociada (Invoiced | Collected | Paid).
   const getBillingStatus = useCallback(
-    (entry) => invoiceByEntryId.get(entry.id)?.status ?? 'Pending',
+    (entry) => invoiceByEntryId.get(String(entry.id))?.status ?? 'Pending',
     [invoiceByEntryId],
   )
 
@@ -232,7 +239,7 @@ export default function App() {
     for (const entry of entries) {
       if (entry.status !== 'Approved') continue
       approvedHours += entry.hours
-      const billing = invoiceByEntryId.get(entry.id)?.status
+      const billing = invoiceByEntryId.get(String(entry.id))?.status
       if (billing === 'Invoiced') invoicedHours += entry.hours
       else if (billing === 'Collected') collectedHours += entry.hours
       else if (billing === 'Paid') paidHours += entry.hours
@@ -240,12 +247,12 @@ export default function App() {
     return { approvedHours, invoicedHours, collectedHours, paidHours }
   }, [entries, invoiceByEntryId])
 
-  // Regla clave: sólo se puede facturar si hay selección y de un único proveedor.
-  const canBill = selectedEntries.length > 0 && selectedUsers.length === 1
+  // Regla clave: sólo se puede facturar si hay selección, de un único proveedor, y con permiso.
+  const canBill = can('billing.create') && selectedEntries.length > 0 && selectedUsers.length === 1
 
   // "Seleccionable" = no está facturada ya
   const isSelectable = useCallback(
-    (entry) => !invoiceByEntryId.has(entry.id),
+    (entry) => !invoiceByEntryId.has(String(entry.id)),
     [invoiceByEntryId],
   )
 
@@ -339,6 +346,7 @@ export default function App() {
     const billedCount = selectedEntries.length
     const billedUser = selectedUsers[0]
     const billedHoursFmt = formatHours(selectedHours)
+    const billedIds = selectedEntries.map((entry) => entry.id)
 
     const { invoice } = await createInvoice({
       supplierInvoiceNumber,
@@ -346,14 +354,27 @@ export default function App() {
       totalAmount,
       notes,
       userName: billedUser,
-      entryIds: selectedEntries.map((entry) => entry.id),
+      entryIds: billedIds,
       createdBy: user?.email ?? null,
     })
 
+    logAudit({
+      actorEmail: user?.email,
+      actorRole: profile?.roles?.[0] ?? null,
+      action: 'invoice.create',
+      resourceType: 'invoice',
+      resourceId: invoice.id,
+      after: { supplierInvoiceNumber, invoiceDate, totalAmount, userName: billedUser, entryCount: billedIds.length },
+    })
     // Sumar la factura al estado local → las filas facturadas se marcan en vivo.
     setInvoices((prev) => [invoice, ...prev])
     setModalOpen(false)
     setSelectedIds(new Set())
+    // Mostrar el resultado: en "Pending" las filas facturadas desaparecen, así que
+    // saltamos a "All" y las resaltamos en verde con su nº de factura unos segundos.
+    setActiveTab('all')
+    setJustInvoicedIds(new Set(billedIds))
+    window.setTimeout(() => setJustInvoicedIds(new Set()), 4500)
     setToast({
       id: Date.now(),
       message: `Invoice issued — ${billedCount} ${
@@ -372,6 +393,15 @@ export default function App() {
       toStatus,
       changedBy: user?.email ?? null,
       note: null,
+    })
+    logAudit({
+      actorEmail: user?.email,
+      actorRole: profile?.roles?.[0] ?? null,
+      action: 'invoice.status_change',
+      resourceType: 'invoice',
+      resourceId: openInvoice.id,
+      before: { status: openInvoice.status },
+      after: { status: toStatus },
     })
     // Reflejar el nuevo estado en el estado local → badges/stepper/drawer en vivo.
     setInvoices((prev) =>
@@ -492,6 +522,7 @@ export default function App() {
                 onToggle={toggleEntry}
                 getInvoice={getInvoice}
                 onOpenInvoice={setOpenInvoiceId}
+                justInvoicedIds={justInvoicedIds}
               />
             ) : (
               <EntriesTable
@@ -503,6 +534,7 @@ export default function App() {
                 headerIndeterminate={someVisibleSelected && !allVisibleSelected}
                 getInvoice={getInvoice}
                 onOpenInvoice={setOpenInvoiceId}
+                justInvoicedIds={justInvoicedIds}
               />
             )}
 

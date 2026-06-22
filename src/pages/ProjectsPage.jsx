@@ -17,6 +17,7 @@ import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ProjectFormModal } from '../components/ProjectFormModal'
 import { ProjectDetailDrawer } from '../components/ProjectDetailDrawer'
 import { Toast } from '../components/Toast'
+import { logAudit } from '../lib/auditData'
 
 // Ordena por vencimiento ascendente; los proyectos sin fecha de contrato
 // (recién traídos de Zoho) van al final.
@@ -28,7 +29,7 @@ const sortByExp = (list) =>
   )
 
 export function ProjectsPage() {
-  const { user } = useOutletContext()
+  const { user, profile, can } = useOutletContext()
   const [projects, setProjects] = useState([])
   const [status, setStatus] = useState('loading')
   const [filters, setFilters] = useState({
@@ -108,6 +109,7 @@ export function ProjectsPage() {
 
   async function handleCreate(payload) {
     const created = await createProject(payload, user?.email ?? null)
+    logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'project.create', resourceType: 'project', resourceId: created.id, after: { projectNumber: created.projectNumber, projectName: created.projectName, client: created.client } })
     setProjects((prev) => sortByExp([created, ...prev]))
     setForm(null)
     setToast({ id: Date.now(), message: `Project created — ${created.projectNumber}` })
@@ -115,6 +117,7 @@ export function ProjectsPage() {
 
   async function handleUpdate(payload) {
     const updated = await updateProject(form.project, payload, user?.email ?? null)
+    logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'project.update', resourceType: 'project', resourceId: updated.id, before: { projectNumber: form.project.projectNumber }, after: { projectNumber: updated.projectNumber, projectName: updated.projectName, client: updated.client } })
     setProjects((prev) => sortByExp(prev.map((p) => (p.id === updated.id ? updated : p))))
     setForm(null)
     setToast({ id: Date.now(), message: `Project updated — ${updated.projectNumber}` })
@@ -171,23 +174,27 @@ export function ProjectsPage() {
                 </button>
               ))}
             </div>
-            <Link to="/contract-alerts" className="btn btn--ghost proj-alerts-link">
-              <BellRing size={15} aria-hidden="true" />
-              Alert settings
-            </Link>
+            {can('settings.view') && (
+              <Link to="/contract-alerts" className="btn btn--ghost proj-alerts-link">
+                <BellRing size={15} aria-hidden="true" />
+                Alert settings
+              </Link>
+            )}
           </div>
 
           <section className="filterbar" aria-label="Filters">
             <div className="filterbar__head">
               <span className="filterbar__title">Filters</span>
-              <button
-                type="button"
-                className="btn btn--pay proj-new-btn"
-                onClick={() => setForm({ mode: 'new' })}
-              >
-                <Plus size={16} strokeWidth={2.4} aria-hidden="true" />
-                New Project
-              </button>
+              {can('projects.create') && (
+                <button
+                  type="button"
+                  className="btn btn--pay proj-new-btn"
+                  onClick={() => setForm({ mode: 'new' })}
+                >
+                  <Plus size={16} strokeWidth={2.4} aria-hidden="true" />
+                  New Project
+                </button>
+              )}
             </div>
             <div className="filterbar__controls">
               <MultiSelectDropdown

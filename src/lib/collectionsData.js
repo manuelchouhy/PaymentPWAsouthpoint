@@ -81,7 +81,8 @@ export async function getCollectionAlertSettings() {
     .select('*')
     .eq('id', 1)
     .maybeSingle()
-  if (error || !data) return { ...demoCollectionAlertSettings }
+  if (error) throw new Error(error.message)
+  if (!data) return { ...demoCollectionAlertSettings }
   return rowToCollectionAlertSettings(data)
 }
 
@@ -175,10 +176,7 @@ export async function getCollections() {
     .from('collections')
     .select('id, invoice_id, amount_received, collection_date, bank_reference, notes, created_at, created_by')
     .order('collection_date', { ascending: false })
-  if (error) {
-    console.warn('[collections] getCollections falló —', error.message)
-    return demoCollections.map((c) => ({ ...c }))
-  }
+  if (error) throw new Error(error.message)
   return data.map(rowToCollection)
 }
 

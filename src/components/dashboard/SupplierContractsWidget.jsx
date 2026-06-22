@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight, Star, Truck } from 'lucide-react'
+import { daysRemaining } from '../../lib/projectsData'
 import {
-  daysRemaining,
   displaySupplierStatus,
   getSupplierContracts,
   priorityAlertContracts,

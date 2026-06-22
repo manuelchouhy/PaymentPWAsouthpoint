@@ -15,6 +15,7 @@ import { formatDate } from '../lib/format'
 import { BillingBadge } from '../components/BillingBadge'
 import { RegisterPaymentModal } from '../components/RegisterPaymentModal'
 import { Toast } from '../components/Toast'
+import { logAudit } from '../lib/auditData'
 
 function fmtAmount(value) {
   return Number(value || 0).toLocaleString('es-AR', {
@@ -35,7 +36,7 @@ function daysUntil(iso) {
 }
 
 export function PaymentsPage() {
-  const { user } = useOutletContext()
+  const { user, profile, can } = useOutletContext()
   const [invoices, setInvoices] = useState([])
   const [collections, setCollections] = useState([])
   const [payments, setPayments] = useState([])
@@ -143,6 +144,7 @@ export function PaymentsPage() {
     const { payment } = await createPayment(inv, payload, user?.email ?? null)
     setPayments((prev) => [payment, ...prev])
     setInvoices((prev) => prev.map((i) => (i.id === inv.id ? { ...i, status: 'Paid' } : i)))
+    logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'payment.create', resourceType: 'payment', resourceId: payment.id, after: { invoiceId: inv.id, invoiceNumber: inv.supplierInvoiceNumber, amountPaid: payload.amountPaid, paymentDate: payload.paymentDate } })
     setModalInvoice(null)
     setToast({
       id: Date.now(),
@@ -217,10 +219,12 @@ export function PaymentsPage() {
                 <span className="proj-kpi__label">Total amount due</span>
               </div>
             </div>
-            <Link to="/payment-alerts" className="btn btn--ghost proj-alerts-link">
-              <BellRing size={15} aria-hidden="true" />
-              Alert settings
-            </Link>
+            {can('settings.view') && (
+              <Link to="/payment-alerts" className="btn btn--ghost proj-alerts-link">
+                <BellRing size={15} aria-hidden="true" />
+                Alert settings
+              </Link>
+            )}
           </div>
 
           <div className="toolbar">
@@ -291,7 +295,7 @@ export function PaymentsPage() {
                         </td>
                         <td><BillingBadge status={r.inv.status} /></td>
                         <td>
-                          {r.inv.status === 'Collected' ? (
+                          {r.inv.status === 'Collected' && can('payments.create') ? (
                             <button
                               type="button"
                               className="btn btn--pay btn--row"
@@ -299,7 +303,7 @@ export function PaymentsPage() {
                             >
                               Register Payment
                             </button>
-                          ) : (
+                          ) : r.inv.status !== 'Collected' ? (
                             <button
                               type="button"
                               className="btn btn--ghost btn--row"
@@ -308,7 +312,7 @@ export function PaymentsPage() {
                               <Download size={14} aria-hidden="true" />
                               Receipt
                             </button>
-                          )}
+                          ) : null}
                         </td>
                       </motion.tr>
                     )

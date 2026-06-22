@@ -16,6 +16,7 @@ import { CollectionBadge } from '../components/CollectionBadge'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { RegisterCollectionModal } from '../components/RegisterCollectionModal'
 import { Toast } from '../components/Toast'
+import { logAudit } from '../lib/auditData'
 
 function daysSince(iso) {
   if (!iso) return 0
@@ -34,7 +35,7 @@ function formatAmount(value) {
 }
 
 export function CollectionsPage() {
-  const { user } = useOutletContext()
+  const { user, profile, can } = useOutletContext()
   const [invoices, setInvoices] = useState([])
   const [collections, setCollections] = useState([])
   const [entries, setEntries] = useState([])
@@ -185,6 +186,7 @@ export function CollectionsPage() {
         prev.map((i) => (i.id === inv.id ? { ...i, status: 'Collected' } : i)),
       )
     }
+    logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'collection.register', resourceType: 'collection', resourceId: collection.id, after: { invoiceId: inv.id, invoiceNumber: inv.supplierInvoiceNumber, amountReceived: payload.amountReceived, collectionDate: payload.collectionDate } })
     setModalRow(null)
     setToast({
       id: Date.now(),
@@ -252,10 +254,12 @@ export function CollectionsPage() {
                 <span className="proj-kpi__label">Outstanding</span>
               </div>
             </div>
-            <Link to="/collection-alerts" className="btn btn--ghost proj-alerts-link">
-              <BellRing size={15} aria-hidden="true" />
-              Alert settings
-            </Link>
+            {can('settings.view') && (
+              <Link to="/collection-alerts" className="btn btn--ghost proj-alerts-link">
+                <BellRing size={15} aria-hidden="true" />
+                Alert settings
+              </Link>
+            )}
           </div>
 
           <section className="filterbar" aria-label="Filters">
@@ -347,7 +351,7 @@ export function CollectionsPage() {
                         <td className="col-num cell-mono">${formatAmount(r.collected)}</td>
                         <td className="col-num cell-mono cell-strong">${formatAmount(r.outstanding)}</td>
                         <td>
-                          {r.status !== 'Collected' && (
+                          {r.status !== 'Collected' && can('collections.create') && (
                             <button
                               type="button"
                               className="btn btn--pay btn--row"

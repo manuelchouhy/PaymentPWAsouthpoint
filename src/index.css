@@ -1298,6 +1298,20 @@ th.col-pop { text-align: center; }
 .table tbody tr.is-paid .cell-hours { color: var(--text-soft); }
 .table tbody tr.is-paid .avatar { opacity: .55; }
 
+/* Fila recién facturada: resalte NEUTRO temporal (solo para ubicarla tras el
+   scroll; el verde queda únicamente en el badge "Invoiced"). */
+.table tbody tr.row--just-invoiced td {
+  animation: just-invoiced-pulse 1.1s ease-out 3;
+}
+.table tbody tr.row--just-invoiced td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+@keyframes just-invoiced-pulse {
+  0%   { background: var(--accent-bg-strong); }
+  100% { background: transparent; }
+}
+
 .cell-strong { font-weight: 500; color: var(--text); }
 .cell-soft { color: var(--text-soft); }
 
@@ -1399,12 +1413,12 @@ th.col-pop { text-align: center; }
   color: var(--text-faint);
   border-color: var(--line-strong);
 }
-/* Billing Status · 4 estados. Pending (gris) · Invoiced (amarillo) ·
+/* Billing Status · 4 estados. Pending (gris) · Invoiced (verde) ·
    Collected (azul) · Paid (verde). */
 .badge--invoiced {
-  background: var(--warn-bg);
-  color: var(--warn);
-  border-color: var(--warn-line);
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-color: var(--ok-line);
 }
 .badge--collected {
   background: rgba(96, 165, 250, .12);
@@ -1668,6 +1682,12 @@ th.col-pop { text-align: center; }
 .card.is-paid .card__task { color: var(--text-soft); }
 .card.is-paid .card__hours { color: var(--text-faint); text-shadow: none; }
 .card.is-paid .avatar { opacity: .65; }
+
+/* Tarjeta recién facturada: resalte NEUTRO temporal (mobile) para ubicarla. */
+.card.card--just-invoiced {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 1px var(--accent-line), 0 0 28px -10px var(--accent-glow);
+}
 
 /* --- Modal ---------------------------------------------------------------- */
 .modal-backdrop {
@@ -3330,3 +3350,102 @@ select.field__input { color-scheme: dark; cursor: pointer; }
 .dash-counter--critical .dash-counter__num { color: #FB923C; }
 .dash-counter--expiring-soon .dash-counter__num { color: var(--warn); }
 .dash-counter--active .dash-counter__num { color: var(--ok); }
+
+/* --- Dashboard page (Prompt 20) ------------------------------------------- */
+.dash-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.dash-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  text-decoration: none;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+
+.dash-kpi:hover {
+  border-color: var(--line-stronger);
+  box-shadow: 0 4px 16px -6px rgba(0,0,0,.4);
+}
+
+.dash-kpi__label {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.dash-kpi__value {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.dash-kpi__unit {
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text-soft);
+}
+
+.dash-kpi__hint {
+  font-size: 11px;
+  color: var(--text-ghost);
+}
+
+.dash-kpi--warn { border-color: rgba(251, 191, 36, .35); }
+.dash-kpi--warn .dash-kpi__value { color: var(--warn); }
+
+.dash-kpi--urgent { border-color: rgba(248, 113, 113, .35); }
+.dash-kpi--urgent .dash-kpi__value { color: var(--no); }
+
+.dash-main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 0;
+}
+
+@media (max-width: 760px) {
+  .dash-main { grid-template-columns: 1fr; }
+}
+
+.dash-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.dash-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .18s ease, border-color .18s ease, color .18s ease;
+}
+
+.dash-action-btn:hover {
+  background: var(--surface-2);
+  border-color: var(--accent-line);
+  color: var(--accent);
+}

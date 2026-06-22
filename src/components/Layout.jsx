@@ -1,21 +1,25 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
+import { rolesLabel } from '../lib/permissions'
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Payment', end: true },
+  { to: '/', label: 'Dashboard', end: true },
+  { to: '/time-entries', label: 'Time Entries' },
   { to: '/projects', label: 'Projects & Contracts' },
   { to: '/collections', label: 'Collections' },
   { to: '/payments', label: 'Payments' },
   { to: '/supplier-contracts', label: 'Supplier Contracts' },
+  { to: '/traceability', label: 'Traceability' },
 ]
 
-/**
- * Shell de la app: barra superior con logo, navegación entre secciones y el
- * pill de usuario. El contenido de cada ruta se renderiza en el <Outlet>.
- * El `user` / `onSignOut` se exponen vía outlet context a las páginas.
- */
-export function Layout({ user, onSignOut }) {
+const ADMIN_NAV_ITEMS = [
+  { to: '/audit-log', label: 'Audit Log' },
+]
+
+export function Layout({ user, profile, can, onSignOut }) {
+  const rolesBadge = rolesLabel(profile?.roles ?? [])
+
   return (
     <div className="app">
       <div className="app__inner">
@@ -38,22 +42,36 @@ export function Layout({ user, onSignOut }) {
                 {item.label}
               </NavLink>
             ))}
+            {ADMIN_NAV_ITEMS.filter(() => can('settings.view')).map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  `topnav__link${isActive ? ' is-active' : ''}`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
           </nav>
           <div className="topbar__right">
-            <span className="masthead__badge">Read only</span>
-            {user && <UserPill user={user} onSignOut={onSignOut} />}
+            {rolesBadge !== 'No role' && (
+              <span className="masthead__badge">{rolesBadge}</span>
+            )}
+            {user && <UserPill user={user} profile={profile} onSignOut={onSignOut} />}
           </div>
         </header>
 
-        <Outlet context={{ user, onSignOut }} />
+        <Outlet context={{ user, profile, can, onSignOut }} />
       </div>
     </div>
   )
 }
 
-function UserPill({ user, onSignOut }) {
+function UserPill({ user, profile, onSignOut }) {
   const [busy, setBusy] = useState(false)
   const label =
+    profile?.fullName ||
     user?.user_metadata?.name ||
     user?.user_metadata?.full_name ||
     user?.email ||

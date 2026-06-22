@@ -252,10 +252,8 @@ export async function getContractAlertSettings() {
     .select('*')
     .eq('id', 1)
     .maybeSingle()
-  if (error || !data) {
-    console.warn('[projects] getContractAlertSettings —', error?.message)
-    return { ...demoAlertSettings }
-  }
+  if (error) throw new Error(error.message)
+  if (!data) return { ...demoAlertSettings }
   return rowToAlertSettings(data)
 }
 
@@ -309,10 +307,7 @@ export async function getProjects() {
     .from('projects')
     .select('*')
     .order('contract_expiration_date', { ascending: true })
-  if (error) {
-    console.warn('[projects] getProjects falló, usando mock —', error.message)
-    return [...demoProjects]
-  }
+  if (error) throw new Error(error.message)
   return data.map(rowToProject)
 }
 
@@ -405,7 +400,7 @@ export async function updateProject(current, updates, changedBy) {
 
   const { data, error } = await supabase
     .from('projects')
-    .update(projectToRow(updates))
+    .update({ ...projectToRow(updates), updated_at: new Date().toISOString() })
     .eq('id', current.id)
     .select()
     .single()

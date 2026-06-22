@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { FileText, StickyNote } from 'lucide-react'
 import { Avatar } from './Avatar'
@@ -38,7 +39,19 @@ export function EntriesTable({
   headerIndeterminate,
   getInvoice,
   onOpenInvoice,
+  justInvoicedIds,
 }) {
+  // Scroll hacia la primera fila recién facturada cuando aparece el resaltado.
+  const firstHighlightRef = useRef(null)
+  const hasHighlight = justInvoicedIds && justInvoicedIds.size > 0
+  useEffect(() => {
+    if (hasHighlight && firstHighlightRef.current) {
+      firstHighlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [hasHighlight])
+
+  let firstHighlightSeen = false
+
   return (
     <div className="table-wrap">
       <table className="table">
@@ -73,15 +86,20 @@ export function EntriesTable({
             const isInvoiced = invoice !== null
             const billingStatus = invoice ? invoice.status : 'Pending'
             const selected = selectedIds.has(entry.id)
+            const justInvoiced = Boolean(justInvoicedIds?.has(entry.id))
+            const isFirstHighlight = justInvoiced && !firstHighlightSeen
+            if (isFirstHighlight) firstHighlightSeen = true
             const rowClass = [
               selected ? 'is-selected' : '',
               isInvoiced ? 'is-paid' : '',
+              justInvoiced ? 'row--just-invoiced' : '',
             ]
               .filter(Boolean)
               .join(' ')
             return (
               <motion.tr
                 key={entry.id}
+                ref={isFirstHighlight ? firstHighlightRef : undefined}
                 custom={index}
                 initial="hidden"
                 animate="show"

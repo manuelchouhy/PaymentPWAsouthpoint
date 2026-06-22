@@ -333,10 +333,7 @@ export async function getTimeEntries() {
     )
     .order('log_date', { ascending: false })
 
-  if (error) {
-    console.warn('[data] getTimeEntries: Supabase falló, usando mock —', error.message)
-    return MOCK_TIME_ENTRIES
-  }
+  if (error) throw new Error(error.message)
   return data.map(rowToEntry)
 }
 
@@ -361,10 +358,7 @@ export async function getInvoices() {
     )
     .order('created_at', { ascending: false })
 
-  if (error) {
-    console.warn('[data] getInvoices: Supabase falló, usando mock —', error.message)
-    return MOCK_INVOICES
-  }
+  if (error) throw new Error(error.message)
   return data.map(rowToInvoice)
 }
 

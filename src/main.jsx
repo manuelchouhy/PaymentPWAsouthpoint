@@ -11,28 +11,49 @@ import { PaymentsPage } from './pages/PaymentsPage.jsx'
 import { PaymentAlertSettingsPage } from './pages/PaymentAlertSettingsPage.jsx'
 import { SupplierContractsPage } from './pages/SupplierContractsPage.jsx'
 import { SupplierAlertSettingsPage } from './pages/SupplierAlertSettingsPage.jsx'
+import { AuditLogPage } from './pages/AuditLogPage.jsx'
+import { TraceabilityPage } from './pages/TraceabilityPage.jsx'
+import { DashboardPage } from './pages/DashboardPage.jsx'
 import { AuthGate } from './components/AuthGate.jsx'
+import { can as checkCan } from './lib/permissions.js'
 import './index.css'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
       <AuthGate>
-        {({ user, signOut }) => (
-          <Routes>
-            <Route element={<Layout user={user} onSignOut={signOut} />}>
-              <Route index element={<App />} />
-              <Route path="projects" element={<ProjectsPage />} />
-              <Route path="contract-alerts" element={<ContractAlertSettingsPage />} />
-              <Route path="collections" element={<CollectionsPage />} />
-              <Route path="collection-alerts" element={<CollectionAlertSettingsPage />} />
-              <Route path="payments" element={<PaymentsPage />} />
-              <Route path="payment-alerts" element={<PaymentAlertSettingsPage />} />
-              <Route path="supplier-contracts" element={<SupplierContractsPage />} />
-              <Route path="supplier-alerts" element={<SupplierAlertSettingsPage />} />
-            </Route>
-          </Routes>
-        )}
+        {({ user, profile, appConfig, signOut }) => {
+          const enforcement = appConfig?.permissionsEnforced ?? false
+          const roles = profile?.roles ?? []
+          const can = (action) => checkCan(action, roles, enforcement)
+          return (
+            <Routes>
+              <Route
+                element={
+                  <Layout
+                    user={user}
+                    profile={profile}
+                    can={can}
+                    onSignOut={signOut}
+                  />
+                }
+              >
+                <Route index element={<DashboardPage />} />
+                <Route path="time-entries" element={<App />} />
+                <Route path="projects" element={<ProjectsPage />} />
+                <Route path="contract-alerts" element={<ContractAlertSettingsPage />} />
+                <Route path="collections" element={<CollectionsPage />} />
+                <Route path="collection-alerts" element={<CollectionAlertSettingsPage />} />
+                <Route path="payments" element={<PaymentsPage />} />
+                <Route path="payment-alerts" element={<PaymentAlertSettingsPage />} />
+                <Route path="supplier-contracts" element={<SupplierContractsPage />} />
+                <Route path="supplier-alerts" element={<SupplierAlertSettingsPage />} />
+                <Route path="audit-log" element={<AuditLogPage />} />
+                <Route path="traceability" element={<TraceabilityPage />} />
+              </Route>
+            </Routes>
+          )
+        }}
       </AuthGate>
     </BrowserRouter>
   </StrictMode>,

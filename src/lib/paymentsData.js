@@ -61,7 +61,8 @@ export async function getPaymentAlertSettings() {
     .select('*')
     .eq('id', 1)
     .maybeSingle()
-  if (error || !data) return { ...demoPaymentAlertSettings }
+  if (error) throw new Error(error.message)
+  if (!data) return { ...demoPaymentAlertSettings }
   return rowToPaymentAlertSettings(data)
 }
 
@@ -142,10 +143,7 @@ export async function getPayments() {
     .from('payments')
     .select('id, invoice_id, amount_paid, payment_date, transfer_reference, bank_method, notes, back_dated, created_at, created_by')
     .order('payment_date', { ascending: false })
-  if (error) {
-    console.warn('[payments] getPayments falló —', error.message)
-    return demoPayments.map((p) => ({ ...p }))
-  }
+  if (error) throw new Error(error.message)
   return data.map(rowToPayment)
 }
 
@@ -207,29 +205,34 @@ export async function createPayment(invoice, payload, createdBy) {
     return { payment }
   }
 
-  const { data, error } = await supabase
-    .from('payments')
-    .insert({
-      invoice_id: invoice.id,
-      amount_paid: Number(payload.amountPaid),
-      payment_date: payload.paymentDate,
-      transfer_reference: payload.transferReference || null,
-      bank_method: payload.bankMethod || null,
-      notes: payload.notes || null,
-      back_dated: backDated,
-      created_by: createdBy || null,
-    })
-    .select()
-    .single()
-  if (error) throw new Error(error.message)
-
-  await updateInvoiceStatus({
-    invoiceId: invoice.id,
-    fromStatus: 'Collected',
-    toStatus: 'Paid',
-    changedBy: createdBy ?? null,
-    note: 'Contractor payment registered',
+  // Registro ATÓMICO en el servidor (función register_contractor_payment):
+  // valida que la factura esté en 'Collected', inserta el pago, avanza la factura
+  // a 'Paid' y registra el historial, todo en una sola transacción. El índice
+  // único payments_invoice_id_unique impide un segundo pago para la misma factura.
+  const { data, error } = await supabase.rpc('register_contractor_payment', {
+    p_invoice_id: invoice.id,
+    p_amount_paid: Number(payload.amountPaid),
+    p_payment_date: payload.paymentDate,
+    p_transfer_reference: payload.transferReference || null,
+    p_bank_method: payload.bankMethod || null,
+    p_notes: payload.notes || null,
+    p_back_dated: backDated,
+    p_created_by: createdBy || null,
   })
+  if (error) {
+    if (error.code === '23505') {
+      const err = new Error('A payment is already registered for this invoice.')
+      err.code = 'duplicate'
+      throw err
+    }
+    if (error.message?.includes('not_collected')) {
+      const err = new Error('Invoice must be Collected before payment')
+      err.code = 'not_collected'
+      throw err
+    }
+    throw new Error(error.message)
+  }
 
-  return { payment: rowToPayment(data) }
+  const row = Array.isArray(data) ? data[0] : data
+  return { payment: rowToPayment(row) }
 }

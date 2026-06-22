@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { LoginScreen } from './LoginScreen'
+import { AccessDenied } from './AccessDenied'
+import { provisionCurrentUser, getAppConfig } from '../lib/authData'
+import { hasAnyRole } from '../lib/permissions'
 
 const DEMO_USER = {
   id: 'demo-user',
@@ -8,14 +11,34 @@ const DEMO_USER = {
   user_metadata: { name: 'Demo' },
 }
 
+const DEMO_PROFILE = {
+  id: 'demo',
+  email: 'demo@southpoint.local',
+  fullName: 'Demo',
+  roles: ['Administrator'],
+  isActive: true,
+}
+
+const DEMO_CONFIG = {
+  permissionsEnforced: false,
+  sessionMaxHours: 8,
+  adminBootstrapEmail: null,
+}
+
 export function AuthGate({ children }) {
-  const [status, setStatus] = useState('loading') // 'loading' | 'authed' | 'anon'
+  const [authStatus, setAuthStatus] = useState('loading') // 'loading' | 'authed' | 'anon'
   const [session, setSession] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [appConfig, setAppConfig] = useState(null)
+  const [provisionDone, setProvisionDone] = useState(false)
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
       setSession({ user: DEMO_USER })
-      setStatus('authed')
+      setAuthStatus('authed')
+      setProfile(DEMO_PROFILE)
+      setAppConfig(DEMO_CONFIG)
+      setProvisionDone(true)
       return
     }
 
@@ -24,13 +47,18 @@ export function AuthGate({ children }) {
     supabase.auth.getSession().then(({ data }) => {
       if (cancelled) return
       setSession(data.session)
-      setStatus(data.session ? 'authed' : 'anon')
+      setAuthStatus(data.session ? 'authed' : 'anon')
     })
 
     const { data: subscription } = supabase.auth.onAuthStateChange(
       (_event, nextSession) => {
         setSession(nextSession)
-        setStatus(nextSession ? 'authed' : 'anon')
+        setAuthStatus(nextSession ? 'authed' : 'anon')
+        if (!nextSession) {
+          setProfile(null)
+          setAppConfig(null)
+          setProvisionDone(false)
+        }
       },
     )
 
@@ -40,15 +68,48 @@ export function AuthGate({ children }) {
     }
   }, [])
 
+  // JIT provisioning: fetch roles + app config after auth
+  useEffect(() => {
+    if (authStatus !== 'authed' || !session || provisionDone || !isSupabaseConfigured) return
+    let cancelled = false
+    Promise.all([provisionCurrentUser(), getAppConfig()])
+      .then(([prof, cfg]) => {
+        if (cancelled) return
+        setProfile(prof)
+        setAppConfig(cfg)
+        setProvisionDone(true)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        console.error('Provision failed:', err)
+        setProfile({ roles: [] })
+        setAppConfig(DEMO_CONFIG)
+        setProvisionDone(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [authStatus, session, provisionDone])
+
   async function signOut() {
     if (!isSupabaseConfigured) return
     await supabase.auth.signOut()
   }
 
-  if (status === 'loading') return <AuthBootSplash />
-  if (status === 'anon') return <LoginScreen />
+  if (authStatus === 'loading' || (authStatus === 'authed' && !provisionDone)) {
+    return <AuthBootSplash />
+  }
+  if (authStatus === 'anon') return <LoginScreen />
+  if (appConfig?.permissionsEnforced && !hasAnyRole(profile?.roles)) {
+    return (
+      <AccessDenied
+        adminEmail={appConfig.adminBootstrapEmail}
+        onSignOut={signOut}
+      />
+    )
+  }
 
-  return children({ user: session?.user, signOut })
+  return children({ user: session?.user, profile, appConfig, signOut })
 }
 
 function AuthBootSplash() {

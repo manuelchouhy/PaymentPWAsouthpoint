@@ -243,10 +243,7 @@ export async function getSupplierContracts({ includeArchived = false } = {}) {
   let query = supabase.from('supplier_contracts').select('*').order('expiration_date', { ascending: true })
   if (!includeArchived) query = query.eq('archived', false)
   const { data, error } = await query
-  if (error) {
-    console.warn('[supplier] getSupplierContracts falló —', error.message)
-    return sortByExp(demoContracts.filter((c) => !c.archived))
-  }
+  if (error) throw new Error(error.message)
   return data.map(rowToContract)
 }
 
@@ -602,10 +599,8 @@ export async function getSupplierAlertSettings() {
     .select('*')
     .eq('id', 1)
     .maybeSingle()
-  if (error || !data) {
-    console.warn('[supplier] getSupplierAlertSettings —', error?.message)
-    return { ...demoAlertSettings }
-  }
+  if (error) throw new Error(error.message)
+  if (!data) return { ...demoAlertSettings }
   return rowToAlertSettings(data)
 }
 

@@ -25,6 +25,7 @@ import { RenewContractModal } from '../components/RenewContractModal'
 import { SupplierContractDrawer } from '../components/SupplierContractDrawer'
 import { PriorityContractBanner } from '../components/PriorityContractBanner'
 import { Toast } from '../components/Toast'
+import { logAudit } from '../lib/auditData'
 
 const SNOOZE_DAYS = 7
 
@@ -32,7 +33,7 @@ const sortByExp = (list) =>
   [...list].sort((a, b) => a.expirationDate.localeCompare(b.expirationDate))
 
 export function SupplierContractsPage() {
-  const { user } = useOutletContext()
+  const { user, profile, can } = useOutletContext()
   const [contracts, setContracts] = useState([])
   const [status, setStatus] = useState('loading')
   const [filters, setFilters] = useState({
@@ -103,6 +104,7 @@ export function SupplierContractsPage() {
   async function handleCreate(payload, pdfFile) {
     if (pdfFile) payload = { ...payload, pdfUrl: await uploadContractPdf(pdfFile) }
     const created = await createSupplierContract(payload, user?.email ?? null)
+    logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.create', resourceType: 'supplier_contract', resourceId: created.id, after: { contractNumber: created.contractNumber, supplierName: created.supplierName, expirationDate: created.expirationDate } })
     setContracts((prev) => sortByExp([created, ...prev]))
     setForm(null)
     setToast({ id: Date.now(), message: `Contract created — ${created.contractNumber}` })
@@ -111,6 +113,7 @@ export function SupplierContractsPage() {
   async function handleUpdate(payload, pdfFile) {
     if (pdfFile) payload = { ...payload, pdfUrl: await uploadContractPdf(pdfFile) }
     const updated = await updateSupplierContract(form.contract, payload, user?.email ?? null)
+    logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.update', resourceType: 'supplier_contract', resourceId: updated.id, before: { contractNumber: form.contract.contractNumber }, after: { contractNumber: updated.contractNumber, expirationDate: updated.expirationDate } })
     setContracts((prev) => sortByExp(prev.map((c) => (c.id === updated.id ? updated : c))))
     setForm(null)
     setToast({ id: Date.now(), message: `Contract updated — ${updated.contractNumber}` })
@@ -123,6 +126,7 @@ export function SupplierContractsPage() {
       { ...payload, pdfUrl },
       user?.email ?? null,
     )
+    logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.renew', resourceType: 'supplier_contract', resourceId: created.id, before: { contractNumber: renewing.contractNumber, contractId: renewing.id }, after: { contractNumber: created.contractNumber, expirationDate: created.expirationDate } })
     setContracts((prev) =>
       sortByExp([created, ...prev.map((c) => (c.id === archived.id ? archived : c))].filter((c) => !c.archived)),
     )
@@ -132,6 +136,7 @@ export function SupplierContractsPage() {
 
   async function handleMarkRenewal(contract) {
     const updated = await markRenewalInProgress(contract, SNOOZE_DAYS, user?.email ?? null)
+    logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.mark_renewal', resourceType: 'supplier_contract', resourceId: updated.id, after: { contractNumber: updated.contractNumber, status: updated.status } })
     setContracts((prev) => sortByExp(prev.map((c) => (c.id === updated.id ? updated : c))))
     setDetail(null)
     setToast({
@@ -187,14 +192,18 @@ export function SupplierContractsPage() {
             <div className="filterbar__head">
               <span className="filterbar__title">Filters</span>
               <div className="filterbar__head-actions">
-                <Link to="/supplier-alerts" className="btn btn--ghost proj-alerts-link">
-                  <BellRing size={15} aria-hidden="true" />
-                  Alert settings
-                </Link>
-                <button type="button" className="btn btn--pay proj-new-btn" onClick={() => setForm({ mode: 'new' })}>
-                  <Plus size={16} strokeWidth={2.4} aria-hidden="true" />
-                  New Contract
-                </button>
+                {can('settings.view') && (
+                  <Link to="/supplier-alerts" className="btn btn--ghost proj-alerts-link">
+                    <BellRing size={15} aria-hidden="true" />
+                    Alert settings
+                  </Link>
+                )}
+                {can('suppliers.edit') && (
+                  <button type="button" className="btn btn--pay proj-new-btn" onClick={() => setForm({ mode: 'new' })}>
+                    <Plus size={16} strokeWidth={2.4} aria-hidden="true" />
+                    New Contract
+                  </button>
+                )}
               </div>
             </div>
             <div className="filterbar__controls">
