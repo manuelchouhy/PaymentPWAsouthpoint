@@ -140,13 +140,13 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .app__inner {
   position: relative;
   z-index: 1;
-  max-width: 1200px;
+  max-width: 1920px;
   margin: 0 auto;
   padding:
     max(28px, env(safe-area-inset-top))
-    max(24px, env(safe-area-inset-right))
+    max(40px, env(safe-area-inset-right))
     96px
-    max(24px, env(safe-area-inset-left));
+    max(40px, env(safe-area-inset-left));
 }
 
 /* --- Masthead ------------------------------------------------------------- */
@@ -3571,11 +3571,11 @@ select.field__input { color-scheme: dark; cursor: pointer; }
 .topnav::-webkit-scrollbar { display: none; }
 .topnav__link { white-space: nowrap; }
 
-/* --- Compact desktop / large laptop (≤1200px) ------------------------------- */
-@media (max-width: 1200px) {
+/* --- Compact desktop / large laptop (≤1400px) ------------------------------- */
+@media (max-width: 1400px) {
   .app__inner {
-    padding-left:  max(18px, env(safe-area-inset-left));
-    padding-right: max(18px, env(safe-area-inset-right));
+    padding-left:  max(28px, env(safe-area-inset-left));
+    padding-right: max(28px, env(safe-area-inset-right));
   }
   .topnav__link { padding: 8px 10px; font-size: 13px; }
 }
@@ -3583,8 +3583,8 @@ select.field__input { color-scheme: dark; cursor: pointer; }
 /* --- Mid desktop / large tablet landscape (≤1024px) ------------------------- */
 @media (max-width: 1024px) {
   .app__inner {
-    padding-left:  max(16px, env(safe-area-inset-left));
-    padding-right: max(16px, env(safe-area-inset-right));
+    padding-left:  max(20px, env(safe-area-inset-left));
+    padding-right: max(20px, env(safe-area-inset-right));
     padding-top:   max(20px, env(safe-area-inset-top));
   }
 
