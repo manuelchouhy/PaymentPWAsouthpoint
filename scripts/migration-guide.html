@@ -1,0 +1,1868 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Generando PDF de migración…</title>
+<style>
+  body { margin: 0; background: #09090b; color: #fff; font-family: system-ui, sans-serif;
+         display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; gap: 16px; }
+  #status { font-size: 18px; color: #a1a1aa; }
+  #bar-wrap { width: 320px; background: #27272a; border-radius: 8px; height: 6px; }
+  #bar { width: 0%; height: 6px; background: #7c3aed; border-radius: 8px; transition: width .3s; }
+</style>
+</head>
+<body>
+<div style="font-size:28px;font-weight:700;letter-spacing:-0.5px">SOUTHPOINT TECH LABS</div>
+<div id="status">Cargando jsPDF…</div>
+<div id="bar-wrap"><div id="bar"></div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script>
+/* ─────────────────────────────────────────────────────────────
+   SOUTHPOINT TECH LABS — Generador de PDF de Migración
+   Abrí este archivo en Chrome y el PDF se descarga automáticamente.
+   ───────────────────────────────────────────────────────────── */
+
+const progress = (pct, msg) => {
+  document.getElementById('bar').style.width = pct + '%'
+  document.getElementById('status').textContent = msg
+}
+
+// ── Contenido del SQL completo ─────────────────────────────────
+const SQL_SCHEMA = `-- =============================================================================
+-- SOUTHPOINT TECH LABS — Contractors Management System
+-- SCHEMA COMPLETO PARA MIGRACIÓN A NUEVO PROYECTO SUPABASE
+-- Generado: 2026-06-23  |  Versión: Prompts 1-25
+-- =============================================================================
+
+-- 0. EXTENSIONES
+create extension if not exists "pg_cron";
+create extension if not exists "pg_net";
+
+-- ─── 1. time_entries ──────────────────────────────────────────
+create table if not exists public.time_entries (
+  id            bigint generated always as identity primary key,
+  zoho_log_id   text unique,
+  user_name     text not null,
+  project       text,
+  client        text,
+  task          text,
+  task_number   text,
+  description   text,
+  notes         text,
+  log_date      date,
+  hours         numeric not null,
+  status        text,
+  synced_at     timestamptz not null default now()
+);
+create index if not exists time_entries_user_name_idx on public.time_entries (user_name);
+create index if not exists time_entries_log_date_idx  on public.time_entries (log_date desc);
+
+-- ─── 2. invoices ──────────────────────────────────────────────
+create table if not exists public.invoices (
+  id                       bigint generated always as identity primary key,
+  supplier_invoice_number  text not null,
+  invoice_date             date not null,
+  total_amount             numeric(12,2) not null,
+  currency                 text not null default 'USD',
+  notes                    text,
+  user_name                text not null,
+  entry_ids                bigint[] not null,
+  payment_terms_days       integer not null default 30,
+  status                   text not null default 'Invoiced'
+                             check (status in ('Invoiced','Collected','Paid')),
+  created_at               timestamptz not null default now(),
+  created_by               text
+);
+create index if not exists invoices_user_name_idx  on public.invoices (user_name);
+create index if not exists invoices_status_idx     on public.invoices (status);
+create index if not exists invoices_created_at_idx on public.invoices (created_at desc);
+
+-- ─── 3. invoice_status_history ────────────────────────────────
+create table if not exists public.invoice_status_history (
+  id           bigint generated always as identity primary key,
+  invoice_id   bigint not null references public.invoices(id) on delete cascade,
+  from_status  text,
+  to_status    text not null,
+  changed_at   timestamptz not null default now(),
+  changed_by   text,
+  note         text
+);
+create index if not exists invoice_status_history_invoice_idx
+  on public.invoice_status_history (invoice_id, changed_at desc);
+
+-- ─── 4. payments ──────────────────────────────────────────────
+create table if not exists public.payments (
+  id                  bigint generated always as identity primary key,
+  invoice_id          bigint references public.invoices(id),
+  amount_paid         numeric(12,2) not null,
+  currency            text not null default 'USD',
+  exchange_rate       numeric(12,6),
+  payment_date        date not null,
+  transfer_reference  text,
+  bank_method         text,
+  notes               text,
+  back_dated          boolean not null default false,
+  created_at          timestamptz not null default now(),
+  created_by          text
+);
+create unique index if not exists payments_invoice_id_unique on public.payments (invoice_id);
+create index if not exists payments_invoice_idx    on public.payments (invoice_id);
+create index if not exists payments_created_at_idx on public.payments (created_at desc);
+
+-- ─── 5. sync_status + sync_log ───────────────────────────────
+create table if not exists public.sync_status (
+  id                  integer primary key default 1,
+  last_synced_at      timestamptz,
+  last_status         text,
+  last_records_count  integer,
+  last_error_message  text,
+  constraint sync_status_singleton check (id = 1)
+);
+insert into public.sync_status (id) values (1) on conflict (id) do nothing;
+
+create table if not exists public.sync_log (
+  id              bigint generated always as identity primary key,
+  ran_at          timestamptz not null default now(),
+  status          text not null,
+  records_count   integer,
+  error_message   text
+);
+create index if not exists sync_log_ran_at_idx on public.sync_log (ran_at desc);
+
+-- ─── 6. projects + project_history ───────────────────────────
+create table if not exists public.projects (
+  id                        bigint generated always as identity primary key,
+  client                    text not null,
+  project_name              text not null,
+  project_number            text not null unique,
+  zoho_project_id           text unique,
+  zoho_status               text,
+  customer_name             text,
+  customer_code             text,
+  proposal_name             text,
+  proposal_number           text,
+  approver                  text,
+  customer_manager          text,
+  lead_developer            text,
+  contract_number           text,
+  contract_expiration_date  date,
+  created_at                timestamptz not null default now(),
+  updated_at                timestamptz not null default now(),
+  created_by                text
+);
+create index if not exists projects_contract_expiration_idx
+  on public.projects (contract_expiration_date asc);
+create index if not exists projects_client_idx       on public.projects (client);
+create index if not exists projects_zoho_project_idx on public.projects (zoho_project_id);
+
+create table if not exists public.project_history (
+  id           bigint generated always as identity primary key,
+  project_id   bigint not null references public.projects(id) on delete cascade,
+  field_name   text not null,
+  old_value    text,
+  new_value    text,
+  changed_at   timestamptz not null default now(),
+  changed_by   text
+);
+create index if not exists project_history_project_idx
+  on public.project_history (project_id, changed_at desc);
+
+-- ─── 7. contract_alert_settings + contract_alert_log ─────────
+create table if not exists public.contract_alert_settings (
+  id                integer primary key default 1,
+  threshold_1_days  integer not null default 90,
+  threshold_2_days  integer not null default 60,
+  threshold_3_days  integer not null default 30,
+  email_recipients  text[]  not null default '{}',
+  email_frequency   text    not null default 'on_threshold_cross'
+                      check (email_frequency in ('daily','weekly','on_threshold_cross')),
+  updated_at        timestamptz not null default now(),
+  updated_by        text,
+  constraint contract_alert_settings_singleton check (id = 1)
+);
+insert into public.contract_alert_settings (id) values (1) on conflict (id) do nothing;
+
+create table if not exists public.contract_alert_log (
+  id              bigint generated always as identity primary key,
+  project_id      bigint not null references public.projects(id) on delete cascade,
+  threshold_days  integer not null,
+  days_remaining  integer,
+  email_sent_at   timestamptz not null default now()
+);
+create index if not exists contract_alert_log_project_idx
+  on public.contract_alert_log (project_id, threshold_days);
+
+-- ─── 8. email_outbox ──────────────────────────────────────────
+create table if not exists public.email_outbox (
+  id           bigint generated always as identity primary key,
+  recipients   text[] not null,
+  subject      text not null,
+  body         text not null,
+  category     text,
+  retry_count  integer not null default 0,
+  created_at   timestamptz not null default now(),
+  sent_at      timestamptz,
+  failed_at    timestamptz
+);
+create index if not exists email_outbox_unsent_idx
+  on public.email_outbox (created_at) where sent_at is null;
+
+-- ─── 9. collections ───────────────────────────────────────────
+create table if not exists public.collections (
+  id               bigint generated always as identity primary key,
+  invoice_id       bigint not null references public.invoices(id) on delete cascade,
+  amount_received  numeric(12,2) not null,
+  collection_date  date not null,
+  bank_reference   text,
+  voucher_url      text,
+  notes            text,
+  created_at       timestamptz not null default now(),
+  created_by       text
+);
+create index if not exists collections_invoice_idx on public.collections (invoice_id);
+create index if not exists collections_date_idx    on public.collections (collection_date desc);
+
+-- ─── 10. collection_alert_settings ───────────────────────────
+create table if not exists public.collection_alert_settings (
+  id                       integer primary key default 1,
+  warning_days_before_due  integer not null default 7,
+  overdue_immediately      boolean not null default true,
+  email_recipients         text[]  not null default '{}',
+  email_frequency          text    not null default 'daily'
+                             check (email_frequency in ('daily','realtime')),
+  updated_at               timestamptz not null default now(),
+  updated_by               text,
+  constraint collection_alert_settings_singleton check (id = 1)
+);
+insert into public.collection_alert_settings (id) values (1) on conflict (id) do nothing;
+
+-- ─── 11. payment_alert_settings ───────────────────────────────
+create table if not exists public.payment_alert_settings (
+  id                       integer primary key default 1,
+  warning_days_before_due  integer not null default 3,
+  email_recipients         text[]  not null default '{}',
+  email_frequency          text    not null default 'daily'
+                             check (email_frequency in ('daily')),
+  updated_at               timestamptz not null default now(),
+  updated_by               text,
+  constraint payment_alert_settings_singleton check (id = 1)
+);
+insert into public.payment_alert_settings (id) values (1) on conflict (id) do nothing;
+
+-- ─── 12. supplier_contracts + supplier_contract_history ───────
+create table if not exists public.supplier_contracts (
+  id                   bigint generated always as identity primary key,
+  supplier_name        text not null,
+  is_priority_supplier boolean not null default false,
+  contract_number      text not null unique,
+  start_date           date not null,
+  expiration_date      date not null,
+  renewal_date         date not null,
+  payment_terms        text not null
+                         check (payment_terms in ('Net 15','Net 30','Net 45')),
+  renewal_type         text not null default 'Auto-notify'
+                         check (renewal_type in ('Manual','Auto-notify')),
+  status               text not null default 'Active'
+                         check (status in ('Active','Renewal in Progress',
+                                           'Expiring Soon','Critical','Expired')),
+  pdf_url              text,
+  archived             boolean not null default false,
+  parent_contract_id   bigint references public.supplier_contracts(id),
+  snooze_until         timestamptz,
+  previous_status      text,
+  created_at           timestamptz not null default now(),
+  updated_at           timestamptz not null default now(),
+  created_by           text
+);
+create index if not exists supplier_contracts_expiration_idx
+  on public.supplier_contracts (expiration_date asc);
+create index if not exists supplier_contracts_supplier_idx
+  on public.supplier_contracts (supplier_name);
+
+create table if not exists public.supplier_contract_history (
+  id           bigint generated always as identity primary key,
+  contract_id  bigint not null references public.supplier_contracts(id) on delete cascade,
+  field_name   text not null,
+  old_value    text,
+  new_value    text,
+  changed_at   timestamptz not null default now(),
+  changed_by   text
+);
+create index if not exists supplier_contract_history_idx
+  on public.supplier_contract_history (contract_id, changed_at desc);
+
+-- ─── 13. supplier_alert_settings + supplier_alert_log ─────────
+create table if not exists public.supplier_alert_settings (
+  id                                  integer primary key default 1,
+  threshold_1_days                    integer not null default 90,
+  threshold_2_days                    integer not null default 60,
+  threshold_3_days                    integer not null default 30,
+  email_recipients                    text[]  not null default '{}',
+  priority_supplier_email_recipients  text[]  not null default '{}',
+  updated_at                          timestamptz not null default now(),
+  updated_by                          text,
+  constraint supplier_alert_settings_singleton check (id = 1)
+);
+insert into public.supplier_alert_settings (id) values (1) on conflict (id) do nothing;
+
+create table if not exists public.supplier_alert_log (
+  id                bigint generated always as identity primary key,
+  contract_id       bigint not null references public.supplier_contracts(id) on delete cascade,
+  threshold_crossed integer,
+  email_sent_at     timestamptz,
+  dismissed_at      timestamptz,
+  dismissed_by      text,
+  action_taken      text check (action_taken in ('renew','renew_in_progress','manual_dismiss')),
+  created_at        timestamptz not null default now()
+);
+create index if not exists supplier_alert_log_contract_idx
+  on public.supplier_alert_log (contract_id, threshold_crossed);
+
+-- ─── 14. audit_log ────────────────────────────────────────────
+create table if not exists public.audit_log (
+  id             bigint generated always as identity primary key,
+  actor_email    text not null,
+  actor_role     text,
+  action         text not null,
+  resource_type  text,
+  resource_id    text,
+  before_data    jsonb,
+  after_data     jsonb,
+  timestamp      timestamptz not null default now()
+);
+create index if not exists audit_log_timestamp_idx on public.audit_log (timestamp desc);
+create index if not exists audit_log_actor_idx     on public.audit_log (actor_email);
+create index if not exists audit_log_action_idx    on public.audit_log (action);
+
+-- ─── 15. users + role_mappings + app_config ───────────────────
+create table if not exists public.users (
+  id              uuid primary key default gen_random_uuid(),
+  email           text not null unique,
+  full_name       text,
+  upn             text,
+  azure_oid       text unique,
+  roles           text[] not null default '{}',
+  is_active       boolean not null default true,
+  first_login_at  timestamptz not null default now(),
+  last_login_at   timestamptz not null default now()
+);
+
+create table if not exists public.role_mappings (
+  id                bigint generated always as identity primary key,
+  azure_group_name  text not null unique,
+  role_name         text not null,
+  updated_at        timestamptz not null default now(),
+  updated_by        text
+);
+insert into public.role_mappings (azure_group_name, role_name) values
+  ('Contractors-Operations', 'Operations'),
+  ('Contractors-Finance',    'Finance'),
+  ('Contractors-Admin',      'Administrator')
+on conflict (azure_group_name) do nothing;
+
+create table if not exists public.app_config (
+  id                     integer primary key default 1,
+  permissions_enforced   boolean not null default false,
+  session_max_hours      integer not null default 8,
+  admin_bootstrap_email  text,
+  updated_at             timestamptz not null default now(),
+  updated_by             text,
+  constraint app_config_singleton check (id = 1)
+);
+insert into public.app_config (id) values (1) on conflict (id) do nothing;`;
+
+const SQL_FUNCTIONS = `-- ─── 16. Trigger: set_updated_at ─────────────────────────────
+create or replace function public.set_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists projects_set_updated_at on public.projects;
+create trigger projects_set_updated_at
+  before update on public.projects
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists supplier_contracts_set_updated_at on public.supplier_contracts;
+create trigger supplier_contracts_set_updated_at
+  before update on public.supplier_contracts
+  for each row execute function public.set_updated_at();
+
+-- ─── 17. RPC: register_contractor_payment ─────────────────────
+-- Valida que la invoice esté en 'Collected', inserta el pago,
+-- avanza la invoice a 'Paid' y registra en historial. Atómico.
+create or replace function public.register_contractor_payment(
+  p_invoice_id         bigint,
+  p_amount_paid        numeric,
+  p_payment_date       date,
+  p_transfer_reference text    default null,
+  p_bank_method        text    default null,
+  p_notes              text    default null,
+  p_back_dated         boolean default false,
+  p_created_by         text    default null,
+  p_exchange_rate      numeric default null
+)
+returns setof public.payments
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  v_payment_id  bigint;
+  v_status      text;
+  v_currency    text;
+begin
+  select status, currency into v_status, v_currency
+    from public.invoices where id = p_invoice_id for update;
+
+  if not found then
+    raise exception 'Invoice % not found', p_invoice_id;
+  end if;
+  if v_status <> 'Collected' then
+    raise exception 'not_collected: invoice % status is %, must be Collected',
+      p_invoice_id, v_status;
+  end if;
+
+  insert into public.payments (
+    invoice_id, amount_paid, currency, exchange_rate,
+    payment_date, transfer_reference, bank_method,
+    notes, back_dated, created_by
+  ) values (
+    p_invoice_id, p_amount_paid, coalesce(v_currency,'USD'), p_exchange_rate,
+    p_payment_date, p_transfer_reference, p_bank_method,
+    p_notes, p_back_dated, p_created_by
+  )
+  returning id into v_payment_id;
+
+  update public.invoices set status = 'Paid' where id = p_invoice_id;
+
+  insert into public.invoice_status_history
+    (invoice_id, from_status, to_status, changed_by, note)
+  values
+    (p_invoice_id,'Collected','Paid', p_created_by,'Contractor payment registered');
+
+  return query select * from public.payments where id = v_payment_id;
+end;
+$$;
+
+revoke all on function public.register_contractor_payment from public;
+grant execute on function public.register_contractor_payment to authenticated;
+
+-- ─── 18. RPC: provision_current_user ──────────────────────────
+-- JIT provisioning de usuario Azure AD en cada login.
+-- Lee JWT, mapea grupos → roles, hace upsert en public.users.
+create or replace function public.provision_current_user()
+returns jsonb
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  v_user_id    uuid;
+  v_email      text;
+  v_full_name  text;
+  v_oid        text;
+  v_upn        text;
+  v_groups     text[];
+  v_roles      text[];
+  v_row        public.users;
+  v_jwt        jsonb;
+  v_user_count integer;
+  v_cfg        public.app_config;
+begin
+  v_jwt       := auth.jwt();
+  v_user_id   := auth.uid();
+  v_email     := coalesce(v_jwt->>'email', v_jwt->>'preferred_username');
+  v_full_name := coalesce(v_jwt->>'name', v_jwt->>'full_name', v_email);
+  v_oid       := coalesce(v_jwt->>'oid', v_jwt->>'sub', v_user_id::text);
+  v_upn       := coalesce(v_jwt->>'upn', v_jwt->>'preferred_username', v_email);
+
+  begin
+    v_groups := array(select jsonb_array_elements_text(v_jwt->'groups'));
+  exception when others then
+    v_groups := '{}';
+  end;
+
+  select array_agg(distinct rm.role_name)
+    into v_roles
+    from public.role_mappings rm
+   where rm.azure_group_name = any(v_groups);
+
+  v_roles := coalesce(v_roles, '{}');
+
+  select * into v_cfg from public.app_config where id = 1;
+  select count(*) into v_user_count from public.users;
+
+  if array_length(v_roles,1) is null then
+    if v_user_count = 0
+       or (v_cfg.admin_bootstrap_email is not null
+           and lower(v_email) = lower(v_cfg.admin_bootstrap_email))
+    then
+      v_roles := array['Administrator'];
+    end if;
+  end if;
+
+  insert into public.users (
+    id, email, full_name, upn, azure_oid, roles, is_active,
+    first_login_at, last_login_at
+  ) values (
+    v_user_id, v_email, v_full_name, v_upn, v_oid, v_roles, true, now(), now()
+  )
+  on conflict (id) do update set
+    email         = excluded.email,
+    full_name     = excluded.full_name,
+    upn           = excluded.upn,
+    azure_oid     = excluded.azure_oid,
+    roles         = excluded.roles,
+    last_login_at = now();
+
+  select * into v_row from public.users where id = v_user_id;
+  return row_to_json(v_row)::jsonb;
+end;
+$$;
+
+revoke all on function public.provision_current_user from public;
+grant execute on function public.provision_current_user to authenticated;`;
+
+const SQL_VIEWS = `-- ─── 19. Views ────────────────────────────────────────────────
+create or replace view public.invoice_collection_totals
+  with (security_invoker = true)
+as
+  select
+    i.id                                as invoice_id,
+    i.total_amount,
+    coalesce(sum(c.amount_received),0)  as amount_collected,
+    i.total_amount - coalesce(sum(c.amount_received),0) as outstanding
+  from public.invoices i
+  left join public.collections c on c.invoice_id = i.id
+  group by i.id, i.total_amount;
+
+create or replace view public.trace_view
+  with (security_invoker = true)
+as
+  select
+    te.id                               as time_entry_id,
+    te.zoho_log_id,
+    te.user_name,
+    te.log_date,
+    te.hours,
+    te.client,
+    te.project,
+    te.task,
+    te.description,
+    te.status                           as zoho_status,
+    te.synced_at,
+    i.id                                as invoice_id,
+    i.supplier_invoice_number,
+    i.invoice_date,
+    i.total_amount                      as invoice_amount,
+    i.status                            as invoice_status,
+    i.currency                          as invoice_currency,
+    i.payment_terms_days,
+    i.created_at                        as invoiced_at,
+    i.created_by                        as invoiced_by,
+    coalesce(ca.amount_collected,0)     as collected_amount,
+    ca.last_collection_date,
+    coalesce(ca.collection_count,0)     as collection_count,
+    p.id                                as payment_id,
+    p.amount_paid,
+    p.payment_date,
+    p.transfer_reference,
+    p.bank_method,
+    p.notes                             as payment_notes,
+    p.created_at                        as paid_at,
+    p.created_by                        as paid_by
+  from public.time_entries te
+  left join public.invoices i
+    on i.entry_ids @> array[te.id]
+  left join (
+    select
+      invoice_id,
+      sum(amount_received)  as amount_collected,
+      max(collection_date)  as last_collection_date,
+      count(*)              as collection_count
+    from public.collections
+    group by invoice_id
+  ) ca on ca.invoice_id = i.id
+  left join public.payments p on p.invoice_id = i.id;`;
+
+const SQL_RLS = `-- ─── 20. Row Level Security ───────────────────────────────────
+-- Habilitar RLS en todas las tablas
+alter table public.time_entries            enable row level security;
+alter table public.invoices                enable row level security;
+alter table public.invoice_status_history  enable row level security;
+alter table public.payments                enable row level security;
+alter table public.sync_status             enable row level security;
+alter table public.sync_log                enable row level security;
+alter table public.projects                enable row level security;
+alter table public.project_history         enable row level security;
+alter table public.contract_alert_settings enable row level security;
+alter table public.contract_alert_log      enable row level security;
+alter table public.email_outbox            enable row level security;
+alter table public.collections             enable row level security;
+alter table public.collection_alert_settings enable row level security;
+alter table public.payment_alert_settings  enable row level security;
+alter table public.supplier_contracts      enable row level security;
+alter table public.supplier_contract_history enable row level security;
+alter table public.supplier_alert_settings enable row level security;
+alter table public.supplier_alert_log      enable row level security;
+alter table public.audit_log               enable row level security;
+alter table public.users                   enable row level security;
+alter table public.role_mappings           enable row level security;
+alter table public.app_config              enable row level security;
+
+-- Políticas (usuarios autenticados tienen acceso completo de lectura;
+-- escritura donde corresponde; las Edge Functions usan service_role y bypassean RLS)
+
+-- time_entries
+create policy "auth read time_entries" on public.time_entries
+  for select to authenticated using (true);
+
+-- invoices
+create policy "auth read invoices"   on public.invoices for select to authenticated using (true);
+create policy "auth insert invoices" on public.invoices for insert to authenticated with check (true);
+create policy "auth update invoices" on public.invoices for update to authenticated using (true) with check (true);
+
+-- invoice_status_history
+create policy "auth read inv_hist"   on public.invoice_status_history for select to authenticated using (true);
+create policy "auth insert inv_hist" on public.invoice_status_history for insert to authenticated with check (true);
+
+-- payments
+create policy "auth read payments"   on public.payments for select to authenticated using (true);
+create policy "auth insert payments" on public.payments for insert to authenticated with check (true);
+
+-- sync_status / sync_log
+create policy "auth read sync_status" on public.sync_status for select to authenticated using (true);
+create policy "auth read sync_log"    on public.sync_log    for select to authenticated using (true);
+
+-- projects
+create policy "auth read projects"   on public.projects for select to authenticated using (true);
+create policy "auth insert projects" on public.projects for insert to authenticated with check (true);
+create policy "auth update projects" on public.projects for update to authenticated using (true) with check (true);
+
+-- project_history
+create policy "auth read proj_hist"   on public.project_history for select to authenticated using (true);
+create policy "auth insert proj_hist" on public.project_history for insert to authenticated with check (true);
+
+-- contract_alert_settings
+create policy "auth read cas"   on public.contract_alert_settings for select to authenticated using (true);
+create policy "auth update cas" on public.contract_alert_settings for update to authenticated using (true) with check (true);
+
+-- contract_alert_log
+create policy "auth read cal" on public.contract_alert_log for select to authenticated using (true);
+
+-- email_outbox
+create policy "auth read outbox"   on public.email_outbox for select to authenticated using (true);
+create policy "auth update outbox" on public.email_outbox for update to authenticated using (true) with check (true);
+
+-- collections
+create policy "auth read collections"   on public.collections for select to authenticated using (true);
+create policy "auth insert collections" on public.collections for insert to authenticated with check (true);
+
+-- collection_alert_settings / payment_alert_settings
+create policy "auth read colas"   on public.collection_alert_settings for select to authenticated using (true);
+create policy "auth update colas" on public.collection_alert_settings for update to authenticated using (true) with check (true);
+create policy "auth read palas"   on public.payment_alert_settings for select to authenticated using (true);
+create policy "auth update palas" on public.payment_alert_settings for update to authenticated using (true) with check (true);
+
+-- supplier_contracts
+create policy "auth read sc"   on public.supplier_contracts for select to authenticated using (true);
+create policy "auth insert sc" on public.supplier_contracts for insert to authenticated with check (true);
+create policy "auth update sc" on public.supplier_contracts for update to authenticated using (true) with check (true);
+
+-- supplier_contract_history
+create policy "auth read sch"   on public.supplier_contract_history for select to authenticated using (true);
+create policy "auth insert sch" on public.supplier_contract_history for insert to authenticated with check (true);
+
+-- supplier_alert_settings
+create policy "auth read sas"   on public.supplier_alert_settings for select to authenticated using (true);
+create policy "auth update sas" on public.supplier_alert_settings for update to authenticated using (true) with check (true);
+
+-- supplier_alert_log
+create policy "auth read sal"   on public.supplier_alert_log for select to authenticated using (true);
+create policy "auth insert sal" on public.supplier_alert_log for insert to authenticated with check (true);
+
+-- audit_log
+create policy "auth read audit"   on public.audit_log for select to authenticated using (true);
+create policy "auth insert audit" on public.audit_log for insert to authenticated with check (true);
+
+-- users
+create policy "auth read users" on public.users for select to authenticated using (true);
+
+-- role_mappings
+create policy "auth read rm"   on public.role_mappings for select to authenticated using (true);
+create policy "auth update rm" on public.role_mappings for update to authenticated using (true) with check (true);
+create policy "auth insert rm" on public.role_mappings for insert to authenticated with check (true);
+
+-- app_config
+create policy "auth read ac"   on public.app_config for select to authenticated using (true);
+create policy "auth update ac" on public.app_config for update to authenticated using (true) with check (true);`;
+
+const SQL_STORAGE = `-- ─── 21. Storage: supplier-contracts ─────────────────────────
+insert into storage.buckets (id, name, public)
+values ('supplier-contracts', 'supplier-contracts', false)
+on conflict (id) do nothing;
+
+create policy "auth upload supplier-contracts" on storage.objects
+  for insert to authenticated with check (bucket_id = 'supplier-contracts');
+create policy "auth read supplier-contracts" on storage.objects
+  for select to authenticated using (bucket_id = 'supplier-contracts');
+create policy "auth update supplier-contracts" on storage.objects
+  for update to authenticated
+  using (bucket_id = 'supplier-contracts')
+  with check (bucket_id = 'supplier-contracts');`;
+
+const SQL_CRON = `-- ─── 22. pg_cron Jobs ─────────────────────────────────────────
+-- ANTES de ejecutar:
+--   1. Activar extensiones pg_cron y pg_net en Database → Extensions
+--   2. Reemplazar <PROJECT_REF> con el Reference ID del proyecto
+--      (Settings → General → Reference ID)
+--   3. Reemplazar <SERVICE_ROLE_KEY> con la service_role key
+--      (Settings → API → service_role key)
+
+-- Alertas de contratos de cliente (08:00 UTC todos los días)
+select cron.schedule(
+  'project-contract-alerts-daily', '0 8 * * *',
+  $$ select net.http_post(
+    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/project-contract-alerts',
+    headers := jsonb_build_object(
+      'Authorization', 'Bearer <SERVICE_ROLE_KEY>',
+      'Content-Type',  'application/json'
+    )
+  ); $$
+);
+
+-- Alertas de cobros pendientes (09:00 UTC todos los días)
+select cron.schedule(
+  'collection-alerts-daily', '0 9 * * *',
+  $$ select net.http_post(
+    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/collection-alerts',
+    headers := jsonb_build_object(
+      'Authorization', 'Bearer <SERVICE_ROLE_KEY>',
+      'Content-Type',  'application/json'
+    )
+  ); $$
+);
+
+-- Alertas de pagos al contractor (10:00 UTC todos los días)
+select cron.schedule(
+  'payment-alerts-daily', '0 10 * * *',
+  $$ select net.http_post(
+    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/payment-alerts',
+    headers := jsonb_build_object(
+      'Authorization', 'Bearer <SERVICE_ROLE_KEY>',
+      'Content-Type',  'application/json'
+    )
+  ); $$
+);
+
+-- Alertas de supplier contracts (08:30 UTC todos los días)
+select cron.schedule(
+  'supplier-contract-alerts-daily', '30 8 * * *',
+  $$ select net.http_post(
+    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/supplier-contract-alerts',
+    headers := jsonb_build_object(
+      'Authorization', 'Bearer <SERVICE_ROLE_KEY>',
+      'Content-Type',  'application/json'
+    )
+  ); $$
+);
+
+-- Procesamiento de email_outbox vía Resend (cada 5 minutos)
+select cron.schedule(
+  'process-email-outbox', '*/5 * * * *',
+  $$ select net.http_post(
+    url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/process-email-outbox',
+    headers := jsonb_build_object(
+      'Authorization', 'Bearer <SERVICE_ROLE_KEY>',
+      'Content-Type',  'application/json'
+    )
+  ); $$
+);`;
+
+const EF_PROCESS_EMAIL = `// Edge Function: process-email-outbox
+// Procesa pending rows de email_outbox y envía via Resend API.
+// Requiere secret: RESEND_API_KEY
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const FROM_ADDRESS = "Southpoint Contractors <notifications@southpointlabs.com>";
+const MAX_RETRIES = 3;
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function json(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status, headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+  });
+}
+
+function buildHtml(subject, category, body) {
+  const isPriority = category === "supplier_priority_alert";
+  const accent = isPriority ? "#dc2626" : "#7c3aed";
+  const badge = isPriority ? "PRIORITY — Action Required" : "Automated Alert";
+  const bodyHtml = body.split("\\n")
+    .map(line => line.trim()
+      ? \`<p style="margin:0 0 8px;font-size:14px">\${line}</p>\`
+      : "<br>")
+    .join("");
+  return \`<!DOCTYPE html><html><body style="background:#f4f4f5;font-family:system-ui">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px"><tr><td>
+  <table width="600" style="margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e4e4e7">
+    <tr><td style="background:#0a0a0a;padding:24px 32px">
+      <p style="margin:0;color:#fff;font-size:18px;font-weight:700">SOUTHPOINT TECH LABS</p>
+      <p style="margin:6px 0 0;color:#a0a0ab;font-size:12px">Contractors Management System</p>
+    </td></tr>
+    <tr><td style="height:4px;background:\${accent}"></td></tr>
+    <tr><td style="padding:28px 32px 12px">
+      <p style="margin:0;font-size:11px;font-weight:700;color:\${accent};text-transform:uppercase">\${badge}</p>
+      <h1 style="margin:10px 0 0;font-size:20px;color:#09090b">\${subject}</h1>
+    </td></tr>
+    <tr><td style="padding:8px 32px 32px">\${bodyHtml}</td></tr>
+    <tr><td style="padding:20px 32px;background:#f9f9fa;border-top:1px solid #e4e4e7">
+      <p style="margin:0;font-size:12px;color:#a0a0ab">
+        Mensaje automático. No responder.
+      </p>
+    </td></tr>
+  </table></td></tr></table></body></html>\`;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
+
+  const resendKey = Deno.env.get("RESEND_API_KEY");
+  if (!resendKey) return json({ ok: false, error: "RESEND_API_KEY not configured" });
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL"),
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+  );
+
+  const { data: pending, error } = await supabase
+    .from("email_outbox")
+    .select("*")
+    .is("sent_at", null)
+    .is("failed_at", null)
+    .lt("retry_count", MAX_RETRIES)
+    .order("created_at", { ascending: true })
+    .limit(50);
+
+  if (error) return json({ ok: false, error: error.message });
+  if (!pending?.length) return json({ ok: true, processed: 0, sent: 0, failed: 0 });
+
+  let sent = 0, failed = 0;
+  for (const email of pending) {
+    if (!email.recipients?.length) {
+      await supabase.from("email_outbox").update({ failed_at: new Date().toISOString() }).eq("id", email.id);
+      failed++; continue;
+    }
+    let resErr = null;
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: \`Bearer \${resendKey}\`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: FROM_ADDRESS,
+          to: email.recipients,
+          subject: email.subject,
+          html: buildHtml(email.subject, email.category, email.body),
+        }),
+      });
+      if (!res.ok) resErr = \`Resend \${res.status}: \${await res.text().catch(() => res.statusText)}\`;
+    } catch (e) { resErr = e?.message ?? String(e); }
+
+    if (!resErr) {
+      await supabase.from("email_outbox").update({ sent_at: new Date().toISOString() }).eq("id", email.id);
+      sent++;
+    } else {
+      const newRetry = (email.retry_count ?? 0) + 1;
+      const upd = { retry_count: newRetry };
+      if (newRetry >= MAX_RETRIES) upd.failed_at = new Date().toISOString();
+      await supabase.from("email_outbox").update(upd).eq("id", email.id);
+      failed++;
+    }
+  }
+  return json({ ok: true, processed: pending.length, sent, failed });
+});`;
+
+const EF_SYNC = `// Edge Function: sync-time-logs
+// Extrae time logs de Zoho Projects y hace upsert en time_entries.
+// Requiere secrets: ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const ZOHO_ACCOUNTS = "https://accounts.zoho.com";
+const ZOHO_V3 = "https://projectsapi.zoho.com/api/v3";
+const ZOHO_V1 = "https://projectsapi.zoho.com/restapi";
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", {
+    headers: { "Access-Control-Allow-Origin": "*",
+               "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" }
+  });
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL"),
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+  );
+
+  // 1. Obtener Access Token de Zoho con Refresh Token
+  const tokenRes = await fetch(\`\${ZOHO_ACCOUNTS}/oauth/v2/token\`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type:    "refresh_token",
+      client_id:     Deno.env.get("ZOHO_CLIENT_ID"),
+      client_secret: Deno.env.get("ZOHO_CLIENT_SECRET"),
+      refresh_token: Deno.env.get("ZOHO_REFRESH_TOKEN"),
+    }),
+  });
+  const { access_token } = await tokenRes.json();
+  if (!access_token) throw new Error("No se pudo obtener access_token de Zoho");
+
+  // 2. Obtener portal ID
+  const portalData = await zohoGet(\`\${ZOHO_V1}/portals/\`, access_token);
+  const portalId = portalData?.portals?.[0]?.id_string;
+
+  // 3. Listar todos los proyectos
+  const projectsData = await zohoGet(\`\${ZOHO_V1}/portal/\${portalId}/projects/\`, access_token);
+  const projects = projectsData?.projects ?? [];
+
+  const entries = [];
+  const now = new Date();
+
+  // 4. Para cada proyecto, obtener time logs de los últimos 12 meses
+  for (const project of projects) {
+    // Upsert proyecto en la tabla projects
+    await supabase.from("projects").upsert({
+      zoho_project_id: project.id_string,
+      project_name:    project.name,
+      project_number:  project.id_string,
+      client:          project.owner_name ?? "—",
+      zoho_status:     project.status,
+    }, { onConflict: "zoho_project_id", ignoreDuplicates: false });
+
+    for (let monthsBack = 0; monthsBack < 12; monthsBack++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1);
+      const fromDate = \`\${d.getFullYear()}-\${String(d.getMonth()+1).padStart(2,'0')}-01\`;
+      const toDate   = new Date(d.getFullYear(), d.getMonth()+1, 0)
+                         .toISOString().slice(0,10);
+
+      const url = \`\${ZOHO_V1}/portal/\${portalId}/projects/\${project.id_string}/logs/\`
+                + \`?users_todo=all&bill_status=all&from_date=\${fromDate}&to_date=\${toDate}\`;
+      const data = await zohoGet(url, access_token);
+      const logs = data?.timelogs?.tasklogs ?? [];
+
+      for (const log of logs) {
+        entries.push({
+          zoho_log_id:  log.id_string,
+          user_name:    log.owner_name,
+          project:      project.name,
+          client:       project.owner_name ?? null,
+          task:         log.task_name,
+          task_number:  log.task_id_string ?? null,
+          description:  log.notes ?? null,
+          log_date:     log.log_date,
+          hours:        parseFloat(log.hours) || 0,
+          status:       log.approval_status ?? null,
+          synced_at:    new Date().toISOString(),
+        });
+      }
+    }
+  }
+
+  // 5. Upsert en time_entries
+  if (entries.length) {
+    const { error } = await supabase.from("time_entries")
+      .upsert(entries, { onConflict: "zoho_log_id", ignoreDuplicates: false });
+    if (error) throw error;
+  }
+
+  // 6. Actualizar sync_status y sync_log
+  await supabase.from("sync_status").upsert({
+    id: 1, last_synced_at: new Date().toISOString(),
+    last_status: "OK", last_records_count: entries.length,
+  });
+  await supabase.from("sync_log").insert({
+    status: "OK", records_count: entries.length,
+  });
+
+  return new Response(JSON.stringify({ ok: true, records: entries.length }),
+    { headers: { "Content-Type": "application/json" } });
+});
+
+async function zohoGet(url, token) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch(url, { headers: { Authorization: "Zoho-oauthtoken " + token } });
+    if (res.status >= 500) { await new Promise(r => setTimeout(r, [2000,4000,8000][attempt] ?? 8000)); continue; }
+    if (!res.ok) return null;
+    const text = await res.text();
+    if (!text?.trim()) return null;
+    try { return JSON.parse(text); } catch { return null; }
+  }
+  return null;
+}`;
+
+const EF_CONTRACT_ALERTS = `// Edge Function: project-contract-alerts
+// Cron diario. Detecta proyectos con contrato próximo a vencer
+// y encola emails en email_outbox según los umbrales configurados.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok");
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL"),
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+  );
+
+  const { data: cfg } = await supabase
+    .from("contract_alert_settings").select("*").eq("id", 1).single();
+
+  if (!cfg?.email_recipients?.length) {
+    return new Response(JSON.stringify({ ok: true, skipped: "no recipients" }));
+  }
+
+  const { data: projects } = await supabase
+    .from("projects")
+    .select("id, project_name, contract_number, contract_expiration_date")
+    .not("contract_expiration_date", "is", null);
+
+  const today = new Date();
+  const thresholds = [cfg.threshold_1_days, cfg.threshold_2_days, cfg.threshold_3_days];
+  const emails = [];
+
+  for (const project of projects ?? []) {
+    const exp = new Date(project.contract_expiration_date);
+    const daysLeft = Math.round((exp - today) / 86400000);
+
+    for (const threshold of thresholds) {
+      if (daysLeft > threshold || daysLeft < 0) continue;
+
+      // Anti-spam: verificar si ya se mandó alerta para este threshold
+      if (cfg.email_frequency === "on_threshold_cross") {
+        const { data: existing } = await supabase
+          .from("contract_alert_log")
+          .select("id")
+          .eq("project_id", project.id)
+          .eq("threshold_days", threshold)
+          .gte("email_sent_at", new Date(Date.now() - 30*86400000).toISOString())
+          .limit(1);
+        if (existing?.length) continue;
+      }
+
+      const subject = daysLeft <= 0
+        ? \`⛔ Contract Expired: \${project.project_name}\`
+        : \`⚠️ Contract Expiring in \${daysLeft} days: \${project.project_name}\`;
+
+      const body = [
+        \`Project: \${project.project_name}\`,
+        project.contract_number ? \`Contract: \${project.contract_number}\` : "",
+        daysLeft <= 0
+          ? \`The contract expired \${Math.abs(daysLeft)} day(s) ago.\`
+          : \`The contract expires in \${daysLeft} day(s) (\${project.contract_expiration_date}).\`,
+        "",
+        "Please take action to renew or extend the contract.",
+      ].filter(Boolean).join("\\n");
+
+      emails.push({
+        recipients: cfg.email_recipients,
+        subject, body,
+        category: "contract_alert",
+      });
+
+      await supabase.from("contract_alert_log").insert({
+        project_id: project.id,
+        threshold_days: threshold,
+        days_remaining: daysLeft,
+      });
+    }
+  }
+
+  if (emails.length) await supabase.from("email_outbox").insert(emails);
+
+  return new Response(JSON.stringify({ ok: true, queued: emails.length }),
+    { headers: { "Content-Type": "application/json" } });
+});`;
+
+const EF_COLLECTION_ALERTS = `// Edge Function: collection-alerts
+// Cron diario. Detecta facturas Invoiced con cobro vencido o
+// próximo a vencer y encola emails en email_outbox.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok");
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL"),
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+  );
+
+  const { data: cfg } = await supabase
+    .from("collection_alert_settings").select("*").eq("id", 1).single();
+
+  if (!cfg?.email_recipients?.length) {
+    return new Response(JSON.stringify({ ok: true, skipped: "no recipients" }));
+  }
+
+  const { data: invoices } = await supabase
+    .from("invoices")
+    .select("id, supplier_invoice_number, invoice_date, total_amount, user_name, payment_terms_days")
+    .eq("status", "Invoiced");
+
+  const today = new Date();
+  const overdueLines = [];
+  const warningLines = [];
+
+  for (const inv of invoices ?? []) {
+    const invoiceDate = new Date(inv.invoice_date);
+    const dueDate = new Date(invoiceDate.getTime() + (inv.payment_terms_days ?? 30) * 86400000);
+    const daysPending = Math.round((today - invoiceDate) / 86400000);
+    const daysUntilDue = Math.round((dueDate - today) / 86400000);
+
+    if (daysUntilDue < 0) {
+      overdueLines.push(
+        \`  · \${inv.supplier_invoice_number} (\${inv.user_name}) — overdue \${Math.abs(daysUntilDue)} day(s), USD \${inv.total_amount}\`
+      );
+    } else if (daysUntilDue <= cfg.warning_days_before_due) {
+      warningLines.push(
+        \`  · \${inv.supplier_invoice_number} (\${inv.user_name}) — due in \${daysUntilDue} day(s), USD \${inv.total_amount}\`
+      );
+    }
+  }
+
+  if (!overdueLines.length && !warningLines.length) {
+    return new Response(JSON.stringify({ ok: true, queued: 0 }));
+  }
+
+  const bodyParts = [];
+  if (overdueLines.length) {
+    bodyParts.push(\`OVERDUE (\${overdueLines.length}):\\n\${overdueLines.join("\\n")}\`);
+  }
+  if (warningLines.length) {
+    bodyParts.push(\`DUE SOON (\${warningLines.length}):\\n\${warningLines.join("\\n")}\`);
+  }
+
+  await supabase.from("email_outbox").insert({
+    recipients: cfg.email_recipients,
+    subject: \`Collection Alert — \${overdueLines.length} overdue, \${warningLines.length} due soon\`,
+    body: bodyParts.join("\\n\\n"),
+    category: "collection_alert",
+  });
+
+  return new Response(JSON.stringify({ ok: true, queued: 1 }),
+    { headers: { "Content-Type": "application/json" } });
+});`;
+
+const EF_PAYMENT_ALERTS = `// Edge Function: payment-alerts
+// Cron diario. Detecta facturas Collected con pago al contractor
+// vencido o próximo a vencer y encola emails en email_outbox.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok");
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL"),
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+  );
+
+  const { data: cfg } = await supabase
+    .from("payment_alert_settings").select("*").eq("id", 1).single();
+
+  if (!cfg?.email_recipients?.length) {
+    return new Response(JSON.stringify({ ok: true, skipped: "no recipients" }));
+  }
+
+  const { data: invoices } = await supabase
+    .from("invoices")
+    .select("id, supplier_invoice_number, total_amount, user_name, payment_terms_days")
+    .eq("status", "Collected");
+
+  const { data: collections } = await supabase
+    .from("collections")
+    .select("invoice_id, collection_date")
+    .order("collection_date", { ascending: false });
+
+  const lastCollByInvoice = new Map();
+  for (const c of collections ?? []) {
+    if (!lastCollByInvoice.has(c.invoice_id)) lastCollByInvoice.set(c.invoice_id, c.collection_date);
+  }
+
+  const today = new Date();
+  const overdueLines = [];
+  const warningLines = [];
+
+  for (const inv of invoices ?? []) {
+    const collDate = new Date(lastCollByInvoice.get(inv.id) ?? inv.invoice_date ?? today);
+    const dueDate = new Date(collDate.getTime() + (inv.payment_terms_days ?? 30) * 86400000);
+    const daysUntilDue = Math.round((dueDate - today) / 86400000);
+
+    if (daysUntilDue < 0) {
+      overdueLines.push(\`  · \${inv.supplier_invoice_number} (\${inv.user_name}) — overdue \${Math.abs(daysUntilDue)}d, USD \${inv.total_amount}\`);
+    } else if (daysUntilDue <= cfg.warning_days_before_due) {
+      warningLines.push(\`  · \${inv.supplier_invoice_number} (\${inv.user_name}) — due in \${daysUntilDue}d, USD \${inv.total_amount}\`);
+    }
+  }
+
+  if (!overdueLines.length && !warningLines.length) {
+    return new Response(JSON.stringify({ ok: true, queued: 0 }));
+  }
+
+  const bodyParts = [];
+  if (overdueLines.length) bodyParts.push(\`OVERDUE:\\n\${overdueLines.join("\\n")}\`);
+  if (warningLines.length) bodyParts.push(\`DUE SOON:\\n\${warningLines.join("\\n")}\`);
+
+  await supabase.from("email_outbox").insert({
+    recipients: cfg.email_recipients,
+    subject: \`Payment Alert — \${overdueLines.length} overdue, \${warningLines.length} due soon\`,
+    body: bodyParts.join("\\n\\n"),
+    category: "payment_alert",
+  });
+
+  return new Response(JSON.stringify({ ok: true, queued: 1 }),
+    { headers: { "Content-Type": "application/json" } });
+});`;
+
+const EF_SUPPLIER_ALERTS = `// Edge Function: supplier-contract-alerts
+// Cron diario. Detecta supplier contracts próximos a vencer.
+// Suppliers prioritarios reciben email diario; no-prioritarios
+// reciben uno por umbral cruzado. Saltea Archived y "Renewal in Progress".
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok");
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL"),
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+  );
+
+  const { data: cfg } = await supabase
+    .from("supplier_alert_settings").select("*").eq("id", 1).single();
+
+  if (!cfg?.email_recipients?.length && !cfg?.priority_supplier_email_recipients?.length) {
+    return new Response(JSON.stringify({ ok: true, skipped: "no recipients" }));
+  }
+
+  const { data: contracts } = await supabase
+    .from("supplier_contracts")
+    .select("*")
+    .eq("archived", false)
+    .neq("status", "Renewal in Progress");
+
+  const today = new Date();
+  const thresholds = [cfg.threshold_1_days, cfg.threshold_2_days, cfg.threshold_3_days];
+  let queued = 0;
+
+  for (const contract of contracts ?? []) {
+    const exp = new Date(contract.expiration_date);
+    const daysLeft = Math.round((exp - today) / 86400000);
+
+    const matchedThreshold = thresholds.find(t => daysLeft <= t && daysLeft >= 0);
+    if (!matchedThreshold && daysLeft >= 0) continue;
+
+    const isPriority = contract.is_priority_supplier;
+    const recipients = isPriority
+      ? (cfg.priority_supplier_email_recipients?.length
+          ? cfg.priority_supplier_email_recipients
+          : cfg.email_recipients)
+      : cfg.email_recipients;
+
+    if (!recipients?.length) continue;
+
+    // Anti-spam: non-priority → una sola vez por threshold
+    if (!isPriority && matchedThreshold) {
+      const { data: existing } = await supabase
+        .from("supplier_alert_log")
+        .select("id")
+        .eq("contract_id", contract.id)
+        .eq("threshold_crossed", matchedThreshold)
+        .not("email_sent_at", "is", null)
+        .limit(1);
+      if (existing?.length) continue;
+    }
+
+    const subject = daysLeft <= 0
+      ? \`⛔ Supplier Contract Expired: \${contract.supplier_name} (\${contract.contract_number})\`
+      : \`\${isPriority ? "🔴 " : "⚠️ "}\${contract.supplier_name} contract expires in \${daysLeft} days\`;
+
+    const body = [
+      \`Supplier: \${contract.supplier_name}\`,
+      \`Contract: \${contract.contract_number}\`,
+      \`Expiration: \${contract.expiration_date}\`,
+      daysLeft <= 0 ? \`Status: EXPIRED (\${Math.abs(daysLeft)} days ago)\` : \`Days remaining: \${daysLeft}\`,
+      \`Payment terms: \${contract.payment_terms}\`,
+      "",
+      isPriority ? "This is a PRIORITY supplier. Immediate action required." : "Please review renewal options.",
+    ].join("\\n");
+
+    await supabase.from("email_outbox").insert({
+      recipients,
+      subject, body,
+      category: isPriority ? "supplier_priority_alert" : "supplier_alert",
+    });
+
+    await supabase.from("supplier_alert_log").insert({
+      contract_id: contract.id,
+      threshold_crossed: matchedThreshold ?? 0,
+      email_sent_at: new Date().toISOString(),
+    });
+
+    queued++;
+  }
+
+  return new Response(JSON.stringify({ ok: true, queued }),
+    { headers: { "Content-Type": "application/json" } });
+});`;
+
+// ── Variables de entorno ────────────────────────────────────────
+const ENV_VARS = [
+  ["VERCEL — Environment Variables", ""],
+  ["VITE_SUPABASE_URL", "https://<PROJECT_REF>.supabase.co"],
+  ["VITE_SUPABASE_ANON_KEY", "<anon key — Settings → API>"],
+  ["VITE_AZURE_CLIENT_ID", "<Application (client) ID de Azure AD>"],
+  ["VITE_AZURE_TENANT_ID", "<Directory (tenant) ID de Azure AD>"],
+  ["VITE_AZURE_REDIRECT_URI", "https://<tu-dominio>.vercel.app"],
+  ["", ""],
+  ["SUPABASE — Edge Functions Secrets", ""],
+  ["ZOHO_CLIENT_ID", "<Client ID de Zoho API Console>"],
+  ["ZOHO_CLIENT_SECRET", "<Client Secret de Zoho API Console>"],
+  ["ZOHO_REFRESH_TOKEN", "<Refresh token OAuth de Zoho>"],
+  ["RESEND_API_KEY", "re_... (resend.com → API Keys)"],
+  ["", ""],
+  ["SUPABASE — Auto-inyectadas (no tocar)", ""],
+  ["SUPABASE_URL", "Inyectada automáticamente por Supabase"],
+  ["SUPABASE_SERVICE_ROLE_KEY", "Inyectada automáticamente por Supabase"],
+];
+
+// ── Checklist de deployment ─────────────────────────────────────
+const CHECKLIST = [
+  ["SUPABASE — Preparación del proyecto", [
+    "Crear nuevo proyecto en supabase.com",
+    "Dashboard → Database → Extensions → Activar pg_cron",
+    "Dashboard → Database → Extensions → Activar pg_net",
+    "Dashboard → Authentication → Providers → Habilitar Azure (Microsoft)",
+    "Configurar Azure AD App Registration (ver sección Azure AD)",
+  ]],
+  ["SUPABASE — Base de datos", [
+    "Abrir SQL Editor → pegar schema_completo.sql completo → Run",
+    "Verificar que todas las tablas se crearon en Table Editor",
+    "Verificar que los singletons existen (sync_status, app_config, etc.)",
+    "Ejecutar los 5 comandos cron.schedule() con REF y KEY reales",
+    "Settings → General → copiar Reference ID para las variables",
+  ]],
+  ["SUPABASE — Edge Functions", [
+    "CLI: supabase login (si no está logueado)",
+    "supabase functions deploy sync-time-logs",
+    "supabase functions deploy project-contract-alerts",
+    "supabase functions deploy collection-alerts",
+    "supabase functions deploy payment-alerts",
+    "supabase functions deploy supplier-contract-alerts",
+    "supabase functions deploy process-email-outbox",
+  ]],
+  ["SUPABASE — Secrets", [
+    "Dashboard → Edge Functions → Secrets → Agregar ZOHO_CLIENT_ID",
+    "Dashboard → Edge Functions → Secrets → Agregar ZOHO_CLIENT_SECRET",
+    "Dashboard → Edge Functions → Secrets → Agregar ZOHO_REFRESH_TOKEN",
+    "Dashboard → Edge Functions → Secrets → Agregar RESEND_API_KEY",
+  ]],
+  ["SUPABASE — Storage", [
+    "Verificar bucket 'supplier-contracts' en Storage → Buckets",
+    "Verificar que las policies de storage se aplicaron correctamente",
+  ]],
+  ["AZURE AD — App Registration", [
+    "Azure Portal → App registrations → New registration",
+    "Redirect URI: https://<tu-dominio>.vercel.app (Single-page app)",
+    "API permissions → Add Microsoft Graph → openid, email, profile",
+    "Token configuration → Add groups claim (para mapeo de roles)",
+    "Copiar Application (client) ID y Directory (tenant) ID",
+  ]],
+  ["RESEND — Email", [
+    "resend.com → Domains → Agregar southpointlabs.com",
+    "Configurar DNS (los registros que muestra Resend)",
+    "Esperar verificación del dominio (puede tardar hasta 24h)",
+    "resend.com → API Keys → Create API Key → copiar a Supabase Secrets",
+  ]],
+  ["VERCEL — Deployment", [
+    "Agregar todas las variables de entorno en Vercel → Settings → Env Vars",
+    "Trigger de re-deploy para aplicar las nuevas variables",
+    "Verificar login con Microsoft (Azure AD) en la app desplegada",
+    "Probar sync manual desde Dashboard → Sync → 'Sync Now'",
+    "Verificar que los emails de alerta llegan correctamente",
+  ]],
+];
+
+// ═══════════════════════════════════════════════════════════════════
+// GENERACIÓN DEL PDF
+// ═══════════════════════════════════════════════════════════════════
+window.addEventListener('load', () => {
+  setTimeout(generate, 300);
+});
+
+function generate() {
+  progress(5, 'Inicializando jsPDF…');
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  const W = 210, H = 297;
+  const MARGIN = 15;
+  const TEXT_W = W - MARGIN * 2;
+  const CODE_BG = '#0d0d14';
+  const CODE_COLOR = '#c4b5fd';
+  const HEADER_BG = '#0a0a0a';
+
+  let y = MARGIN;
+  let pageNum = 1;
+
+  // ── Helpers ─────────────────────────────────────────────────────
+  function newPage() {
+    doc.addPage();
+    pageNum++;
+    y = MARGIN;
+    doc.setFillColor(HEADER_BG);
+    doc.rect(0, 0, W, 10, 'F');
+    doc.setFontSize(7); doc.setTextColor('#6b7280');
+    doc.text('SOUTHPOINT TECH LABS — Guía de Migración de Base de Datos', MARGIN, 6.5);
+    doc.text(`Pág. ${pageNum}`, W - MARGIN, 6.5, { align: 'right' });
+    y = 16;
+  }
+
+  function checkPage(needed = 12) {
+    if (y + needed > H - 12) newPage();
+  }
+
+  function sectionTitle(title, color = '#7c3aed') {
+    checkPage(18);
+    doc.setFillColor(color);
+    doc.rect(MARGIN, y, TEXT_W, 8, 'F');
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+    doc.setTextColor('#ffffff');
+    doc.text(title, MARGIN + 3, y + 5.5);
+    y += 10;
+  }
+
+  function h2(text) {
+    checkPage(10);
+    doc.setFontSize(9.5); doc.setFont('helvetica', 'bold');
+    doc.setTextColor('#1f2937');
+    doc.setDrawColor('#e5e7eb');
+    doc.line(MARGIN, y + 5, W - MARGIN, y + 5);
+    doc.text(text, MARGIN, y + 3.5);
+    y += 9;
+  }
+
+  function para(text, size = 9, color = '#374151') {
+    doc.setFontSize(size); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(color);
+    const lines = doc.splitTextToSize(text, TEXT_W);
+    for (const line of lines) {
+      checkPage(5);
+      doc.text(line, MARGIN, y);
+      y += 4.5;
+    }
+    y += 1;
+  }
+
+  function codeBlock(code, title = '') {
+    const lines = code.split('\n');
+    const lineH = 3.8;
+    const pad = 3;
+    const headerH = title ? 7 : 0;
+    const totalH = lines.length * lineH + pad * 2 + headerH;
+    const MAX_BLOCK = H - MARGIN * 2 - 20;
+
+    // Split code into chunks that fit on a page
+    const chunks = [];
+    let chunk = [];
+    let chunkH = pad * 2 + headerH;
+    for (const line of lines) {
+      if (chunkH + lineH > MAX_BLOCK && chunk.length > 0) {
+        chunks.push([...chunk]);
+        chunk = [];
+        chunkH = pad * 2;
+      }
+      chunk.push(line);
+      chunkH += lineH;
+    }
+    if (chunk.length) chunks.push(chunk);
+
+    chunks.forEach((ch, ci) => {
+      const blockH = ch.length * lineH + pad * 2 + (ci === 0 ? headerH : 0);
+      checkPage(blockH + 4);
+
+      doc.setFillColor(CODE_BG);
+      doc.roundedRect(MARGIN, y, TEXT_W, blockH, 2, 2, 'F');
+
+      let iy = y + pad;
+
+      if (ci === 0 && title) {
+        doc.setFontSize(7.5); doc.setFont('courier', 'bold');
+        doc.setTextColor('#a78bfa');
+        doc.text(title, MARGIN + pad, iy + 3.2);
+        iy += headerH;
+      }
+
+      doc.setFontSize(6.3); doc.setFont('courier', 'normal');
+      for (const line of ch) {
+        if (iy > y + blockH - pad) break;
+        doc.setTextColor(
+          line.trimStart().startsWith('--') ? '#6b7280' :
+          /^(create|insert|drop|alter|select|grant|revoke|update|delete)\b/i.test(line.trim()) ? '#93c5fd' :
+          line.includes(':=') || line.includes('begin') || line.includes('end') || line.includes('return') ? '#86efac' :
+          CODE_COLOR
+        );
+        const trimmed = doc.splitTextToSize(line, TEXT_W - pad * 2)[0] ?? '';
+        doc.text(trimmed, MARGIN + pad, iy + 2.8);
+        iy += lineH;
+      }
+      y += blockH + 3;
+    });
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // PORTADA
+  // ════════════════════════════════════════════════════════════════
+  progress(15, 'Generando portada…');
+  doc.setFillColor('#09090b');
+  doc.rect(0, 0, W, H, 'F');
+
+  doc.setFillColor('#7c3aed');
+  doc.rect(0, H / 2 - 1, W, 2, 'F');
+
+  doc.setFontSize(28); doc.setFont('helvetica', 'bold');
+  doc.setTextColor('#ffffff');
+  doc.text('SOUTHPOINT', W / 2, 80, { align: 'center' });
+  doc.text('TECH LABS', W / 2, 95, { align: 'center' });
+
+  doc.setFillColor('#7c3aed');
+  doc.rect(MARGIN, 105, TEXT_W, 1, 'F');
+
+  doc.setFontSize(14); doc.setFont('helvetica', 'normal');
+  doc.setTextColor('#c4b5fd');
+  doc.text('Contractors Management System', W / 2, 116, { align: 'center' });
+
+  doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+  doc.setTextColor('#f9fafb');
+  doc.text('Guía de Migración', W / 2, 130, { align: 'center' });
+  doc.setFontSize(11); doc.setFont('helvetica', 'normal');
+  doc.text('Base de Datos — Schema Completo', W / 2, 138, { align: 'center' });
+
+  doc.setFontSize(9); doc.setTextColor('#6b7280');
+  doc.text('Incluye: SQL completo · Edge Functions · pg_cron · Variables de entorno', W / 2, 152, { align: 'center' });
+
+  doc.setFontSize(9); doc.setTextColor('#a1a1aa');
+  doc.text('Generado: 2026-06-23', W / 2, H - 30, { align: 'center' });
+  doc.text('Versión: Prompts 1–25', W / 2, H - 24, { align: 'center' });
+
+  // Índice
+  newPage();
+  progress(20, 'Generando índice…');
+  doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor('#09090b');
+  doc.text('Contenido', MARGIN, y); y += 12;
+
+  const toc = [
+    ['1', 'Instrucciones de Migración', '3'],
+    ['2', 'Schema SQL — Tablas (time_entries → app_config)', '4'],
+    ['3', 'Schema SQL — Funciones y Triggers', '9'],
+    ['4', 'Schema SQL — Vistas', '12'],
+    ['5', 'Schema SQL — Row Level Security', '13'],
+    ['6', 'Storage — Bucket supplier-contracts', '15'],
+    ['7', 'pg_cron Jobs', '16'],
+    ['8', 'Edge Function: process-email-outbox', '17'],
+    ['9', 'Edge Function: sync-time-logs', '19'],
+    ['10', 'Edge Function: project-contract-alerts', '21'],
+    ['11', 'Edge Function: collection-alerts', '22'],
+    ['12', 'Edge Function: payment-alerts', '23'],
+    ['13', 'Edge Function: supplier-contract-alerts', '24'],
+    ['14', 'Variables de Entorno', '25'],
+    ['15', 'Checklist de Deployment', '26'],
+  ];
+
+  doc.autoTable({
+    startY: y,
+    head: [],
+    body: toc,
+    theme: 'plain',
+    styles: { fontSize: 9, cellPadding: { top: 2, bottom: 2, left: 3, right: 3 } },
+    columnStyles: {
+      0: { cellWidth: 12, fontStyle: 'bold', textColor: '#7c3aed' },
+      1: { cellWidth: 145 },
+      2: { cellWidth: 20, halign: 'right', textColor: '#6b7280' },
+    },
+    alternateRowStyles: { fillColor: '#f9fafb' },
+    margin: { left: MARGIN, right: MARGIN },
+  });
+  y = doc.lastAutoTable.finalY + 8;
+
+  // ════════════════════════════════════════════════════════════════
+  // SECCIÓN 1 — INSTRUCCIONES
+  // ════════════════════════════════════════════════════════════════
+  newPage();
+  progress(25, 'Sección 1: Instrucciones…');
+  sectionTitle('1 — Instrucciones de Migración');
+
+  h2('Prerequisitos');
+  para('Esta guía cubre la migración COMPLETA a un nuevo proyecto Supabase desde cero. Incluye todo el SQL necesario para recrear la base de datos, todas las Edge Functions, los jobs de pg_cron y la configuración de entorno.');
+
+  h2('Orden de ejecución');
+  const steps = [
+    ['Paso 1', 'Crear proyecto nuevo en supabase.com y activar extensiones pg_cron y pg_net en Database → Extensions.'],
+    ['Paso 2', 'Abrir SQL Editor → pegar y ejecutar el schema completo (secciones 2-6 de esta guía). El archivo también está en: supabase/schema_completo.sql'],
+    ['Paso 3', 'Configurar Authentication → Providers → Azure AD con los datos de tu App Registration.'],
+    ['Paso 4', 'Desplegar las 6 Edge Functions con el CLI: supabase functions deploy <nombre>'],
+    ['Paso 5', 'Agregar los Secrets de las Edge Functions en Dashboard → Edge Functions → Secrets.'],
+    ['Paso 6', 'Ejecutar los comandos pg_cron (sección 7) reemplazando <PROJECT_REF> y <SERVICE_ROLE_KEY>.'],
+    ['Paso 7', 'Agregar las variables de entorno en Vercel → Settings → Environment Variables.'],
+    ['Paso 8', 'Hacer redeploy en Vercel y verificar el login con Microsoft Azure AD.'],
+  ];
+
+  doc.autoTable({
+    startY: y,
+    head: [],
+    body: steps,
+    theme: 'striped',
+    styles: { fontSize: 8.5, cellPadding: 3 },
+    columnStyles: {
+      0: { cellWidth: 22, fontStyle: 'bold', textColor: '#7c3aed' },
+      1: { cellWidth: TEXT_W - 22 },
+    },
+    headStyles: { fillColor: '#7c3aed' },
+    margin: { left: MARGIN, right: MARGIN },
+  });
+  y = doc.lastAutoTable.finalY + 6;
+
+  h2('Tablas a crear (en orden de dependencia)');
+  const tableOrder = [
+    'time_entries · invoices · invoice_status_history · payments · sync_status · sync_log',
+    'projects · project_history · contract_alert_settings · contract_alert_log · email_outbox',
+    'collections · collection_alert_settings · payment_alert_settings',
+    'supplier_contracts · supplier_contract_history · supplier_alert_settings · supplier_alert_log',
+    'audit_log · users · role_mappings · app_config',
+  ];
+  tableOrder.forEach(t => para('  · ' + t, 8.5, '#374151'));
+
+  // ════════════════════════════════════════════════════════════════
+  // SECCIÓN 2 — TABLAS
+  // ════════════════════════════════════════════════════════════════
+  newPage();
+  progress(35, 'Sección 2: Tablas SQL…');
+  sectionTitle('2 — Schema SQL — Tablas');
+  para('Ejecutar en SQL Editor de Supabase. El schema completo también está en: supabase/schema_completo.sql', 8.5, '#6b7280');
+  y += 2;
+  codeBlock(SQL_SCHEMA, '2 / schema_completo.sql — Tablas');
+
+  // ════════════════════════════════════════════════════════════════
+  // SECCIÓN 3 — FUNCIONES
+  // ════════════════════════════════════════════════════════════════
+  newPage();
+  progress(45, 'Sección 3: Funciones…');
+  sectionTitle('3 — Schema SQL — Funciones y Triggers', '#1d4ed8');
+  para('Incluye: set_updated_at (trigger), register_contractor_payment (RPC atómica), provision_current_user (JIT provisioning Azure AD).', 8.5, '#6b7280');
+  y += 2;
+  codeBlock(SQL_FUNCTIONS, '3 / Funciones y Triggers');
+
+  // ════════════════════════════════════════════════════════════════
+  // SECCIÓN 4 — VISTAS
+  // ════════════════════════════════════════════════════════════════
+  newPage();
+  progress(50, 'Sección 4: Vistas…');
+  sectionTitle('4 — Schema SQL — Vistas', '#065f46');
+  para('invoice_collection_totals: totales cobrados vs pendientes por factura. trace_view: trazabilidad completa time_entry → invoice → collections → payment.', 8.5, '#6b7280');
+  y += 2;
+  codeBlock(SQL_VIEWS, '4 / Vistas');
+
+  // ════════════════════════════════════════════════════════════════
+  // SECCIÓN 5 — RLS
+  // ════════════════════════════════════════════════════════════════
+  newPage();
+  progress(55, 'Sección 5: RLS…');
+  sectionTitle('5 — Schema SQL — Row Level Security', '#92400e');
+  para('RLS habilitado en todas las tablas. Usuarios autenticados (Azure AD OAuth) tienen acceso de lectura a todo y escritura donde corresponde. Las Edge Functions usan service_role y bypasean RLS por diseño.', 8.5, '#6b7280');
+  y += 2;
+  codeBlock(SQL_RLS, '5 / Row Level Security');
+
+  // ════════════════════════════════════════════════════════════════
+  // SECCIÓN 6 — STORAGE
+  // ════════════════════════════════════════════════════════════════
+  newPage();
+  progress(58, 'Sección 6: Storage…');
+  sectionTitle('6 — Storage — Bucket supplier-contracts', '#831843');
+  para('Bucket privado para almacenar PDFs de supplier contracts. Las políticas permiten upload, lectura y update a usuarios autenticados.', 8.5, '#6b7280');
+  y += 2;
+  codeBlock(SQL_STORAGE, '6 / Storage');
+
+  // ════════════════════════════════════════════════════════════════
+  // SECCIÓN 7 — CRON
+  // ════════════════════════════════════════════════════════════════
+  newPage();
+  progress(61, 'Sección 7: pg_cron…');
+  sectionTitle('7 — pg_cron Jobs', '#1e3a5f');
+  para('⚠️  Reemplazar <PROJECT_REF> con el Reference ID del proyecto (Settings → General) y <SERVICE_ROLE_KEY> con la service_role key (Settings → API). Ejecutar cada select cron.schedule() por separado en SQL Editor.', 8.5, '#92400e');
+  y += 2;
+
+  const cronTable = [
+    ['Job', 'Schedule', 'Función'],
+    ['project-contract-alerts-daily', '0 8 * * *', 'project-contract-alerts'],
+    ['collection-alerts-daily', '0 9 * * *', 'collection-alerts'],
+    ['payment-alerts-daily', '0 10 * * *', 'payment-alerts'],
+    ['supplier-contract-alerts-daily', '30 8 * * *', 'supplier-contract-alerts'],
+    ['process-email-outbox', '*/5 * * * *', 'process-email-outbox'],
+  ];
+  doc.autoTable({
+    startY: y,
+    head: [cronTable[0]],
+    body: cronTable.slice(1),
+    theme: 'grid',
+    styles: { fontSize: 8.5, cellPadding: 3 },
+    headStyles: { fillColor: '#1e3a5f', textColor: '#fff' },
+    margin: { left: MARGIN, right: MARGIN },
+  });
+  y = doc.lastAutoTable.finalY + 6;
+  codeBlock(SQL_CRON, '7 / pg_cron Jobs');
+
+  // ════════════════════════════════════════════════════════════════
+  // SECCIÓN 8 — EDGE FUNCTION: process-email-outbox
+  // ════════════════════════════════════════════════════════════════
+  newPage();
+  progress(65, 'Sección 8: Edge Function process-email-outbox…');
+  sectionTitle('8 — Edge Function: process-email-outbox', '#7c3aed');
+  para('Procesa la cola email_outbox y envía emails via Resend API. Se ejecuta cada 5 minutos via pg_cron. Requiere secret: RESEND_API_KEY. Máximo 3 reintentos por email.', 8.5, '#6b7280');
+  para('Deploy: supabase functions deploy process-email-outbox', 8, '#4b5563');
+  y += 2;
+  codeBlock(EF_PROCESS_EMAIL, 'supabase/functions/process-email-outbox/index.ts');
+
+  // ════════════════════════════════════════════════════════════════
+  // SECCIÓN 9 — EDGE FUNCTION: sync-time-logs
+  // ════════════════════════════════════════════════════════════════
+  newPage();
+  progress(70, 'Sección 9: Edge Function sync-time-logs…');
+  sectionTitle('9 — Edge Function: sync-time-logs', '#7c3aed');
+  para('Autentica con Zoho Projects usando OAuth Refresh Token, extrae time logs de los últimos 12 meses para todos los proyectos activos y hace upsert en time_entries. Requiere secrets: ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN.', 8.5, '#6b7280');
+  para('Deploy: supabase functions deploy sync-time-logs', 8, '#4b5563');
+  y += 2;
+  codeBlock(EF_SYNC, 'supabase/functions/sync-time-logs/index.ts');
+
+  // ════════════════════════════════════════════════════════════════
+  // SECCIÓN 10 — EDGE FUNCTION: project-contract-alerts
+  // ════════════════════════════════════════════════════════════════
+  newPage();
+  progress(74, 'Sección 10: Edge Function project-contract-alerts…');
+  sectionTitle('10 — Edge Function: project-contract-alerts', '#7c3aed');
+  para('Cron diario. Lee contract_alert_settings, detecta proyectos con contrato próximo a vencer según los 3 umbrales configurados y encola emails en email_outbox. Anti-spam por threshold.', 8.5, '#6b7280');
+  para('Deploy: supabase functions deploy project-contract-alerts', 8, '#4b5563');
+  y += 2;
+  codeBlock(EF_CONTRACT_ALERTS, 'supabase/functions/project-contract-alerts/index.ts');
+
+  // ════════════════════════════════════════════════════════════════
+  // SECCIÓN 11 — EDGE FUNCTION: collection-alerts
+  // ════════════════════════════════════════════════════════════════
+  newPage();
+  progress(78, 'Sección 11: Edge Function collection-alerts…');
+  sectionTitle('11 — Edge Function: collection-alerts', '#7c3aed');
+  para('Cron diario. Detecta facturas Invoiced con cobro vencido o próximo a vencer (según collection_alert_settings) y encola un digest de email en email_outbox.', 8.5, '#6b7280');
+  para('Deploy: supabase functions deploy collection-alerts', 8, '#4b5563');
+  y += 2;
+  codeBlock(EF_COLLECTION_ALERTS, 'supabase/functions/collection-alerts/index.ts');
+
+  // ════════════════════════════════════════════════════════════════
+  // SECCIÓN 12 — EDGE FUNCTION: payment-alerts
+  // ════════════════════════════════════════════════════════════════
+  newPage();
+  progress(82, 'Sección 12: Edge Function payment-alerts…');
+  sectionTitle('12 — Edge Function: payment-alerts', '#7c3aed');
+  para('Cron diario. Detecta facturas Collected donde el pago al contractor está vencido o próximo a vencer (collection_date + payment_terms_days) y encola digest en email_outbox.', 8.5, '#6b7280');
+  para('Deploy: supabase functions deploy payment-alerts', 8, '#4b5563');
+  y += 2;
+  codeBlock(EF_PAYMENT_ALERTS, 'supabase/functions/payment-alerts/index.ts');
+
+  // ════════════════════════════════════════════════════════════════
+  // SECCIÓN 13 — EDGE FUNCTION: supplier-contract-alerts
+  // ════════════════════════════════════════════════════════════════
+  newPage();
+  progress(86, 'Sección 13: Edge Function supplier-contract-alerts…');
+  sectionTitle('13 — Edge Function: supplier-contract-alerts', '#7c3aed');
+  para('Cron diario. Detecta supplier contracts próximos a vencer. Proveedores priority reciben email diario; no-priority reciben uno por umbral cruzado. Saltea Archived y "Renewal in Progress".', 8.5, '#6b7280');
+  para('Deploy: supabase functions deploy supplier-contract-alerts', 8, '#4b5563');
+  y += 2;
+  codeBlock(EF_SUPPLIER_ALERTS, 'supabase/functions/supplier-contract-alerts/index.ts');
+
+  // ════════════════════════════════════════════════════════════════
+  // SECCIÓN 14 — VARIABLES DE ENTORNO
+  // ════════════════════════════════════════════════════════════════
+  newPage();
+  progress(90, 'Sección 14: Variables de entorno…');
+  sectionTitle('14 — Variables de Entorno', '#065f46');
+  para('Las claves (keys) las completás vos directamente. Nunca expongas service_role ni las keys de Zoho/Resend en el frontend.', 8.5, '#92400e');
+  y += 2;
+
+  const envRows = ENV_VARS.map(([key, val]) => {
+    if (!key && !val) return null;
+    if (!val) return [{ content: key, colSpan: 2, styles: { fontStyle: 'bold', textColor: '#374151', fillColor: '#f3f4f6' } }];
+    return [key, val];
+  }).filter(Boolean);
+
+  doc.autoTable({
+    startY: y,
+    head: [['Variable', 'Valor / Descripción']],
+    body: envRows,
+    theme: 'striped',
+    styles: { fontSize: 8.5, cellPadding: 3, font: 'courier' },
+    headStyles: { fillColor: '#065f46', textColor: '#fff', font: 'helvetica' },
+    columnStyles: {
+      0: { cellWidth: 75, fontStyle: 'bold', textColor: '#1f2937' },
+      1: { cellWidth: TEXT_W - 75, textColor: '#4b5563' },
+    },
+    margin: { left: MARGIN, right: MARGIN },
+  });
+  y = doc.lastAutoTable.finalY + 6;
+
+  // ════════════════════════════════════════════════════════════════
+  // SECCIÓN 15 — CHECKLIST
+  // ════════════════════════════════════════════════════════════════
+  newPage();
+  progress(95, 'Sección 15: Checklist…');
+  sectionTitle('15 — Checklist de Deployment', '#7c2d12');
+  para('Completar en este orden exacto. Marcar cada ítem antes de pasar al siguiente.', 8.5, '#6b7280');
+  y += 2;
+
+  for (const [section, items] of CHECKLIST) {
+    checkPage(items.length * 6 + 12);
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor('#7c2d12');
+    doc.text(section, MARGIN, y); y += 5;
+
+    for (const item of items) {
+      checkPage(6);
+      doc.setFillColor('#fff');
+      doc.setDrawColor('#d1d5db');
+      doc.rect(MARGIN + 2, y - 3, 4, 4, 'S');
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor('#374151');
+      const lines = doc.splitTextToSize(item, TEXT_W - 14);
+      doc.text(lines, MARGIN + 8, y);
+      y += lines.length * 4 + 1;
+    }
+    y += 3;
+  }
+
+  // ── Última página — notas finales ────────────────────────────
+  checkPage(40);
+  sectionTitle('Notas Finales', '#09090b');
+  para('Proyecto Supabase ID actual (para referencia): wefgryuyfaxvtdhvdosg');
+  para('El archivo fuente de este PDF está en: scripts/migration-guide.html');
+  para('El SQL completo también está en: supabase/schema_completo.sql');
+  y += 4;
+  para('⚠️  IMPORTANTE: El schema_completo.sql incluye la sección de pg_cron con los comandos comentados (/* ... */). Descomentarlos para ejecutarlos, o copiar los comandos desde la Sección 7 de este PDF.', 8.5, '#92400e');
+  y += 4;
+  para('Para cualquier duda sobre la configuración de Azure AD, consultar: Settings → Authentication → Providers → Azure (en Supabase Dashboard) y Azure Portal → App registrations.', 8.5, '#374151');
+
+  // ── Guardar ─────────────────────────────────────────────────
+  progress(99, 'Guardando PDF…');
+  doc.save('Southpoint-Migracion-DB-2026.pdf');
+  progress(100, '¡Listo! El PDF se descargó automáticamente.');
+  document.getElementById('status').style.color = '#4ade80';
+}
+</script>
+</body>
+</html>
