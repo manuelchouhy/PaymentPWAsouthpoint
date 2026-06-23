@@ -15,6 +15,7 @@ const NAV_ITEMS = [
 
 const ADMIN_NAV_ITEMS = [
   { to: '/audit-log', label: 'Audit Log' },
+  { to: '/email-outbox', label: 'Email Outbox' },
 ]
 
 export function Layout({ user, profile, can, onSignOut }) {

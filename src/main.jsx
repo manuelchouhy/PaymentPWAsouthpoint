@@ -13,6 +13,7 @@ import { SupplierContractsPage } from './pages/SupplierContractsPage.jsx'
 import { SupplierAlertSettingsPage } from './pages/SupplierAlertSettingsPage.jsx'
 import { AuditLogPage } from './pages/AuditLogPage.jsx'
 import { TraceabilityPage } from './pages/TraceabilityPage.jsx'
+import { EmailOutboxPage } from './pages/EmailOutboxPage.jsx'
 import { DashboardPage } from './pages/DashboardPage.jsx'
 import { AuthGate } from './components/AuthGate.jsx'
 import { can as checkCan } from './lib/permissions.js'
@@ -50,6 +51,7 @@ createRoot(document.getElementById('root')).render(
                 <Route path="supplier-alerts" element={<SupplierAlertSettingsPage />} />
                 <Route path="audit-log" element={<AuditLogPage />} />
                 <Route path="traceability" element={<TraceabilityPage />} />
+                <Route path="email-outbox" element={<EmailOutboxPage />} />
               </Route>
             </Routes>
           )
