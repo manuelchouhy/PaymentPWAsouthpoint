@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Edge Functions PDF</title>
+<style>
+  body { margin:0; background:#09090b; color:#fff; font-family:system-ui,sans-serif;
+         display:flex; align-items:center; justify-content:center; height:100vh; flex-direction:column; gap:16px; }
+  #status { font-size:16px; color:#a1a1aa; }
+  #bar-wrap { width:320px; background:#27272a; border-radius:8px; height:6px; }
+  #bar { width:0%; height:6px; background:#7c3aed; border-radius:8px; transition:width .3s; }
+</style>
+</head>
+<body>
+<div style="font-size:24px;font-weight:700">SOUTHPOINT — Edge Functions</div>
+<div id="status">Cargando…</div>
+<div id="bar-wrap"><div id="bar"></div></div>
+
+<!-- Código fuente real de cada Edge Function embebido como text/plain -->
+<!-- De esta forma los backticks, comillas y caracteres especiales no necesitan escape -->
+
+<script type="text/plain" id="fn-process-email-outbox">
+// Supabase Edge Function: process-email-outbox
+// Reads pending rows from email_outbox and sends via Resend API.
+// Scheduled every 5 minutes via pg_cron.
+//
+// Required secret: RESEND_API_KEY
+// Sender: must match a domain verified in Resend.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const FROM_ADDRESS = "Southpoint Contractors <notifications@southpointlabs.com>";
+const MAX_RETRIES = 3;
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+  });
+}
+
+function esc(s: string): string {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function buildHtml(subject: string, category: string, body: string): string {
+  const isPriority = category === "supplier_priority_alert";
+  const accent = isPriority ? "#dc2626" : "#7c3aed";
+  const badge = isPriority ? "&#9888;&#65039; PRIORITY — Action Required" : "Automated Alert";
+  const bodyHtml = body.split("\n")
+    .map((line) =>
+      line.trim()
+        ? `<p style="margin:0 0 8px;color:#3f3f46;font-size:14px">${esc(line)}</p>`
+        : "<br>"
+    ).join("");
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>${esc(subject)}</title></head>
+<body style="margin:0;background:#f4f4f5;font-family:system-ui,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px"><tr><td>
+    <table width="600" cellpadding="0" cellspacing="0"
+           style="margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e4e4e7">
+      <tr><td style="background:#0a0a0a;padding:24px 32px">
+        <p style="margin:0;font-size:18px;font-weight:700;color:#fff">SOUTHPOINT TECH LABS</p>
+        <p style="margin:6px 0 0;font-size:12px;color:#a0a0ab">Contractors Management System</p>
+      </td></tr>
+      <tr><td style="height:4px;background:${accent}"></td></tr>
+      <tr><td style="padding:28px 32px 12px">
+        <p style="margin:0;font-size:11px;font-weight:700;color:${accent};text-transform:uppercase">${badge}</p>
+        <h1 style="margin:10px 0 0;font-size:20px;font-weight:700;color:#09090b">${esc(subject)}</h1>
+      </td></tr>
+      <tr><td style="padding:8px 32px 32px;line-height:1.7">${bodyHtml}</td></tr>
+      <tr><td style="padding:20px 32px;background:#f9f9fa;border-top:1px solid #e4e4e7">
+        <p style="margin:0;font-size:12px;color:#a0a0ab">Mensaje automático. No responder.</p>
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
+
+  const resendKey = Deno.env.get("RESEND_API_KEY");
+  if (!resendKey) {
+    console.error("RESEND_API_KEY secret is not configured.");
+    return json({ ok: false, error: "RESEND_API_KEY secret not configured" });
+  }
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  try {
+    const { data: pending, error: fetchErr } = await supabase
+      .from("email_outbox")
+      .select("*")
+      .is("sent_at", null)
+      .is("failed_at", null)
+      .lt("retry_count", MAX_RETRIES)
+      .order("created_at", { ascending: true })
+      .limit(50);
+
+    if (fetchErr) return json({ ok: false, error: fetchErr.message });
+    if (!pending?.length) return json({ ok: true, processed: 0, sent: 0, failed: 0 });
+
+    let sent = 0;
+    let failed = 0;
+
+    for (const email of pending) {
+      if (!email.recipients?.length) {
+        await supabase.from("email_outbox")
+          .update({ failed_at: new Date().toISOString() }).eq("id", email.id);
+        failed++; continue;
+      }
+      let resErr: string | null = null;
+      try {
+        const res = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${resendKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: FROM_ADDRESS,
+            to: email.recipients,
+            subject: email.subject,
+            html: buildHtml(email.subject ?? "", email.category ?? "", email.body ?? ""),
+          }),
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => res.statusText);
+          resErr = `Resend ${res.status}: ${text}`;
+        }
+      } catch (e) {
+        resErr = String((e as Error)?.message ?? e);
+      }
+
+      if (!resErr) {
+        await supabase.from("email_outbox")
+          .update({ sent_at: new Date().toISOString() }).eq("id", email.id);
+        sent++;
+      } else {
+        console.error(`email_outbox id=${email.id} failed: ${resErr}`);
+        const newRetry = (email.retry_count ?? 0) + 1;
+        const upd: Record<string, unknown> = { retry_count: newRetry };
+        if (newRetry >= MAX_RETRIES) upd.failed_at = new Date().toISOString();
+        await supabase.from("email_outbox").update(upd).eq("id", email.id);
+        failed++;
+      }
+    }
+    return json({ ok: true, processed: pending.length, sent, failed });
+  } catch (e) {
+    console.error("process-email-outbox error:", e);
+    return json({ ok: false, error: String((e as Error)?.message ?? e) });
+  }
+});
+</script>
+
+<script type="text/plain" id="fn-sync-time-logs">
+// Supabase Edge Function: sync-time-logs
+// Extrae time logs de Zoho Projects y hace upsert en time_entries.
+// Secrets necesarios: ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const ZOHO_ACCOUNTS = "https://accounts.zoho.com";
+const ZOHO_V3 = "https://projectsapi.zoho.com/api/v3";
+const ZOHO_V1 = "https://projectsapi.zoho.com/restapi";
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+const RETRY_DELAYS_MS = [2000, 4000, 8000];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function zohoGet(url: string, token: string): Promise<any | null> {
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: "Zoho-oauthtoken " + token },
+      });
+      if (res.status >= 500) {
+        if (attempt < RETRY_DELAYS_MS.length) { await sleep(RETRY_DELAYS_MS[attempt]); continue; }
+        throw new Error(`HTTP ${res.status} on ${url}`);
+      }
+      if (!res.ok) { console.log(`HTTP ${res.status} on ${url}`); return null; }
+      const text = await res.text();
+      if (!text || !text.trim()) return null;
+      try { return JSON.parse(text); } catch { return null; }
+    } catch (e) {
+      if (attempt < RETRY_DELAYS_MS.length) { await sleep(RETRY_DELAYS_MS[attempt]); continue; }
+      throw e;
+    }
+  }
+  return null;
+}
+
+async function fetchAllPagesV3(baseUrl: string, dataKey: string, token: string): Promise<any[]> {
+  let results: any[] = [];
+  let page = 1;
+  while (page <= 50) {
+    const sep = baseUrl.indexOf("?") === -1 ? "?" : "&";
+    const data = await zohoGet(`${baseUrl}${sep}page=${page}&per_page=100`, token);
+    if (!data) break;
+    const items = Array.isArray(data) ? data : (data[dataKey] || []);
+    results = results.concat(items);
+    if (!data.page_info || !data.page_info.has_next_page) break;
+    page++;
+  }
+  return results;
+}
+
+function safe(obj: any, path: string, fallback: any): any {
+  if (obj == null) return fallback;
+  const parts = path.split(".");
+  let cur = obj;
+  for (const p of parts) { if (cur == null) return fallback; cur = cur[p]; }
+  return cur == null ? fallback : cur;
+}
+
+function logDateToISO(s: string): string | null {
+  if (!s || s.length < 10) return null;
+  const parts = s.split("-");
+  if (parts.length !== 3) return null;
+  return `${parts[2]}-${parts[0]}-${parts[1]}`;
+}
+
+function zohoProjectEndDate(p: any): string | null {
+  const long = p.end_date_long ?? safe(p, "end_date_long", null);
+  if (long && Number(long) > 0) {
+    const d = new Date(Number(long));
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+  const s = String(p.end_date || safe(p, "end_date", "")).trim();
+  if (s.length >= 8) {
+    const parts = s.replace(/\//g, "-").split("-");
+    if (parts.length === 3) {
+      if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2,"0")}-${parts[2].padStart(2,"0")}`;
+      return `${parts[2]}-${parts[0].padStart(2,"0")}-${parts[1].padStart(2,"0")}`;
+    }
+  }
+  return null;
+}
+
+async function getAccessToken(): Promise<string> {
+  const params = new URLSearchParams({
+    refresh_token: Deno.env.get("ZOHO_REFRESH_TOKEN")!,
+    client_id: Deno.env.get("ZOHO_CLIENT_ID")!,
+    client_secret: Deno.env.get("ZOHO_CLIENT_SECRET")!,
+    grant_type: "refresh_token",
+  });
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const res = await fetch(`${ZOHO_ACCOUNTS}/oauth/v2/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString(),
+      });
+      if (res.status >= 500) throw new Error(`Zoho token HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data.access_token) throw new Error("No access_token from Zoho. Revisá las credenciales.");
+      return data.access_token;
+    } catch (e) {
+      const transient = String(e).includes("HTTP 5");
+      if (transient && attempt < RETRY_DELAYS_MS.length) {
+        await sleep(RETRY_DELAYS_MS[attempt]); continue;
+      }
+      throw e;
+    }
+  }
+  throw new Error("No se pudo obtener el access token de Zoho.");
+}
+
+async function recordStatus(supabase: any, status: "OK"|"Error", recordsCount: number, errorMessage: string|null): Promise<void> {
+  const now = new Date().toISOString();
+  try {
+    await supabase.from("sync_status").upsert(
+      { id: 1, last_synced_at: now, last_status: status, last_records_count: recordsCount, last_error_message: errorMessage },
+      { onConflict: "id" },
+    );
+    await supabase.from("sync_log").insert({ ran_at: now, status, records_count: recordsCount, error_message: errorMessage });
+  } catch (e) { console.log("No se pudo registrar el estado del sync:", e); }
+}
+
+async function upsertProjects(supabase: any, projects: any[]): Promise<number> {
+  let synced = 0;
+  for (const p of projects) {
+    const zid = String(p.id_string || p.id || "");
+    if (!zid) continue;
+    const projectName = p.name || "";
+    const clientName = safe(p,"client_name","") || safe(p,"client.name","") || safe(p,"client_company_name","") || (projectName ? String(projectName).split(" ")[0] : "");
+    const zohoStatus = safe(p,"status.name","") || (typeof p.status === "string" ? p.status : "") || safe(p,"status_name","");
+    const endDate = zohoProjectEndDate(p);
+    try {
+      const { data: existing } = await supabase.from("projects").select("id, contract_expiration_date").eq("zoho_project_id", zid).maybeSingle();
+      if (existing) {
+        const patch: any = { project_name: projectName, client: clientName, zoho_status: zohoStatus };
+        if (!existing.contract_expiration_date && endDate) patch.contract_expiration_date = endDate;
+        await supabase.from("projects").update(patch).eq("zoho_project_id", zid);
+      } else {
+        await supabase.from("projects").insert({
+          zoho_project_id: zid, project_name: projectName, client: clientName,
+          zoho_status: zohoStatus, contract_expiration_date: endDate,
+          project_number: String(p.key || zid), created_by: "zoho-sync",
+        });
+      }
+      synced++;
+    } catch (e) { console.log(`upsertProjects ${zid} error: ${e}`); }
+  }
+  return synced;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
+
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+  try {
+    const token = await getAccessToken();
+    const portals = await zohoGet(`${ZOHO_V3}/portals`, token);
+    if (!portals || !portals[0]) return json({ error: "No portal found" }, 500);
+    const portalId = portals[0].id;
+
+    const projects = await fetchAllPagesV3(`${ZOHO_V3}/portal/${portalId}/projects`, "projects", token);
+    const projectsSynced = await upsertProjects(supabase, projects);
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    const monthDates: string[] = [];
+    for (let m = 1; m <= currentMonth; m++) {
+      const mm = m < 10 ? "0" + m : "" + m;
+      monthDates.push(`${mm}-15-${currentYear}`);
+    }
+
+    const rows: any[] = [];
+    for (const p of projects) {
+      const projectId = p.id;
+      const projectName = p.name;
+      const clientName = safe(p,"client_name","") || safe(p,"client.name","") || safe(p,"client_company_name","") || (projectName ? String(projectName).split(" ")[0] : "");
+
+      for (const dateParam of monthDates) {
+        const logsUrl = `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/logs/?users_list=all&view_type=month&date=${dateParam}&bill_status=All&component_type=task`;
+        const logsData = await zohoGet(logsUrl, token);
+        if (!logsData?.timelogs?.date) continue;
+        for (const bucket of logsData.timelogs.date) {
+          const logDate = logDateToISO(bucket.date);
+          for (const tl of (bucket.tasklogs || [])) {
+            rows.push({
+              zoho_log_id: String(tl.id_string || tl.id || ""),
+              user_name: tl.owner_name || safe(tl,"added_by.name",""),
+              project: projectName,
+              client: clientName,
+              task: safe(tl,"task.name",""),
+              task_number: String(safe(tl,"task.id_string","") || safe(tl,"task.id","")),
+              description: tl.notes || "",
+              notes: tl.notes || "",
+              log_date: logDate,
+              hours: Number(tl.total_minutes || 0) / 60,
+              status: tl.approval_status || tl.bill_status || "",
+              synced_at: new Date().toISOString(),
+            });
+          }
+        }
+      }
+    }
+
+    if (rows.length === 0) {
+      await recordStatus(supabase, "OK", 0, null);
+      return json({ ok: true, synced: 0, projects: projectsSynced, note: "Sin time logs en el rango." });
+    }
+
+    let synced = 0;
+    for (let i = 0; i < rows.length; i += 500) {
+      const batch = rows.slice(i, i + 500);
+      const { error } = await supabase.from("time_entries").upsert(batch, { onConflict: "zoho_log_id" });
+      if (error) {
+        await recordStatus(supabase, "Error", synced, error.message);
+        return json({ ok: false, error: error.message, synced }, 200);
+      }
+      synced += batch.length;
+    }
+    await recordStatus(supabase, "OK", synced, null);
+    return json({ ok: true, synced, projects: projectsSynced });
+  } catch (e) {
+    const msg = String((e as Error)?.message ?? e);
+    await recordStatus(supabase, "Error", 0, msg);
+    return json({ ok: false, error: msg }, 200);
+  }
+});
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status, headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+  });
+}
+</script>
+
+<script type="text/plain" id="fn-project-contract-alerts">
+// Supabase Edge Function: project-contract-alerts  (FR-08)
+// Corre 1 vez por día (vía pg_cron). Encola emails en email_outbox
+// para proyectos con contrato próximo a vencer.
+//
+// Frecuencias (contract_alert_settings.email_frequency):
+//   'on_threshold_cross' → 1 email por proyecto por umbral cruzado.
+//   'daily'              → 1 email por proyecto en cada corrida.
+//   'weekly'             → 1 email si no se mandó en los últimos 7 días.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+}
+
+function daysUntil(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  const exp = Date.UTC(y, m - 1, d);
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.round((exp - today) / 86400000);
+}
+
+function pickThreshold(days: number, thresholds: number[]): number | null {
+  if (days < 0) return 0;
+  const asc = [...thresholds].sort((a, b) => a - b);
+  for (const t of asc) if (days <= t) return t;
+  return null;
+}
+
+function isoDaysFromNow(offset: number): string {
+  const now = new Date();
+  const base = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return new Date(base + offset * 86400000).toISOString().slice(0, 10);
+}
+
+Deno.serve(async (_req) => {
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  try {
+    const { data: settings, error: sErr } = await supabase.from("contract_alert_settings").select("*").eq("id", 1).single();
+    if (sErr || !settings) return json({ ok: false, error: "No se pudo leer contract_alert_settings" }, 200);
+
+    const thresholds = [settings.threshold_1_days, settings.threshold_2_days, settings.threshold_3_days];
+    const widest = Math.max(...thresholds);
+    const frequency: string = settings.email_frequency;
+    const recipients: string[] = settings.email_recipients ?? [];
+    const horizon = isoDaysFromNow(widest);
+    const weekAgo = isoDaysFromNow(-7);
+
+    const { data: projects, error: pErr } = await supabase.from("projects")
+      .select("id, project_name, client, contract_number, contract_expiration_date")
+      .lte("contract_expiration_date", horizon);
+    if (pErr) return json({ ok: false, error: pErr.message }, 200);
+
+    let queued = 0;
+    for (const p of projects ?? []) {
+      const days = daysUntil(p.contract_expiration_date);
+      const threshold = pickThreshold(days, thresholds);
+      if (threshold === null) continue;
+
+      if (frequency === "on_threshold_cross") {
+        const { data: existing } = await supabase.from("contract_alert_log").select("id").eq("project_id", p.id).eq("threshold_days", threshold).limit(1);
+        if (existing && existing.length) continue;
+      } else if (frequency === "weekly") {
+        const { data: recent } = await supabase.from("contract_alert_log").select("id").eq("project_id", p.id).gte("email_sent_at", `${weekAgo}T00:00:00Z`).limit(1);
+        if (recent && recent.length) continue;
+      }
+
+      const subject = `Contract alert: ${p.project_name} expires in ${days} days`;
+      const body = [`Project: ${p.project_name}`, `Client: ${p.client}`, `Contract #: ${p.contract_number}`, `Expiration date: ${p.contract_expiration_date}`, `Days remaining: ${days}`].join("\n");
+
+      await supabase.from("email_outbox").insert({ recipients, subject, body, category: "contract_alert" });
+      await supabase.from("contract_alert_log").insert({ project_id: p.id, threshold_days: threshold, days_remaining: days });
+      queued++;
+    }
+    return json({ ok: true, scanned: projects?.length ?? 0, queued });
+  } catch (e) {
+    return json({ ok: false, error: String((e as Error)?.message ?? e) }, 200);
+  }
+});
+</script>
+
+<script type="text/plain" id="fn-collection-alerts">
+// Supabase Edge Function: collection-alerts  (FR-12)
+// Corre 1 vez por día. Revisa facturas no cobradas y encola un email-digest
+// con las que están en warning u overdue.
+//
+//   days_pending = hoy - invoice_date
+//   warning  : days_pending >= payment_terms_days - warning_days_before_due
+//   overdue  : days_pending > payment_terms_days
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...CORS_HEADERS } });
+}
+
+function daysSince(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  const then = Date.UTC(y, m - 1, d);
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.round((today - then) / 86400000);
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  try {
+    const { data: settings } = await supabase.from("collection_alert_settings").select("*").eq("id", 1).single();
+    if (!settings) return json({ ok: false, error: "No settings" }, 200);
+
+    const warningBefore: number = settings.warning_days_before_due ?? 7;
+    const recipients: string[] = settings.email_recipients ?? [];
+
+    const { data: invoices, error } = await supabase.from("invoices")
+      .select("id, supplier_invoice_number, user_name, total_amount, invoice_date, payment_terms_days")
+      .eq("status", "Invoiced");
+    if (error) return json({ ok: false, error: error.message }, 200);
+
+    const affected: any[] = [];
+    for (const inv of invoices ?? []) {
+      const days = daysSince(inv.invoice_date);
+      const terms = inv.payment_terms_days ?? 30;
+      let level: "warning" | "overdue" | null = null;
+      if (days > terms) level = "overdue";
+      else if (days >= terms - warningBefore) level = "warning";
+      if (!level) continue;
+      affected.push({ level, invoice: inv.supplier_invoice_number, contractor: inv.user_name, amount: Number(inv.total_amount), days, terms });
+    }
+
+    const overdue = affected.filter((a) => a.level === "overdue").length;
+    const warning = affected.filter((a) => a.level === "warning").length;
+
+    let queued = 0;
+    if (affected.length > 0 && recipients.length > 0) {
+      const lines = affected.sort((a, b) => b.days - a.days)
+        .map((a) => `- [${a.level.toUpperCase()}] ${a.invoice} · ${a.contractor} · $${a.amount.toFixed(2)} · ${a.days} dias (plazo ${a.terms})`);
+      const body = [`Facturas que necesitan atención: ${affected.length} (${overdue} overdue, ${warning} warning).`, "", ...lines].join("\n");
+      await supabase.from("email_outbox").insert({ recipients, subject: `Collections alert: ${affected.length} invoices need attention`, body, category: "collection_alert" });
+      queued = 1;
+    }
+    return json({ ok: true, scanned: invoices?.length ?? 0, overdue, warning, queued });
+  } catch (e) {
+    return json({ ok: false, error: String((e as Error)?.message ?? e) }, 200);
+  }
+});
+</script>
+
+<script type="text/plain" id="fn-payment-alerts">
+// Supabase Edge Function: payment-alerts  (FR-13)
+// Corre 1 vez por día. Revisa invoices Collected sin pago al contractor
+// y encola un email-digest con las que están en warning u overdue.
+//
+//   payment_due_date = collection_date + payment_terms_days
+//   days_until_due   = payment_due_date - hoy
+//   warning : days_until_due <= warning_days_before_due
+//   overdue : days_until_due < 0
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...CORS_HEADERS } });
+}
+
+function addDaysISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d) + days * 86400000).toISOString().slice(0, 10);
+}
+
+function daysUntil(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  const target = Date.UTC(y, m - 1, d);
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.round((target - today) / 86400000);
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  try {
+    const { data: settings } = await supabase.from("payment_alert_settings").select("*").eq("id", 1).single();
+    if (!settings) return json({ ok: false, error: "No settings" }, 200);
+
+    const warnBefore: number = settings.warning_days_before_due ?? 3;
+    const recipients: string[] = settings.email_recipients ?? [];
+
+    const { data: invoices, error } = await supabase.from("invoices")
+      .select("id, supplier_invoice_number, user_name, total_amount, invoice_date, payment_terms_days")
+      .eq("status", "Collected");
+    if (error) return json({ ok: false, error: error.message }, 200);
+
+    const ids = (invoices ?? []).map((i) => i.id);
+    const collDateByInvoice = new Map<number, string>();
+    if (ids.length) {
+      const { data: cols } = await supabase.from("collections").select("invoice_id, collection_date").in("invoice_id", ids);
+      for (const c of cols ?? []) {
+        const prev = collDateByInvoice.get(c.invoice_id);
+        if (!prev || c.collection_date > prev) collDateByInvoice.set(c.invoice_id, c.collection_date);
+      }
+    }
+
+    const affected: any[] = [];
+    for (const inv of invoices ?? []) {
+      const collDate = collDateByInvoice.get(inv.id) ?? inv.invoice_date;
+      const dueDate = addDaysISO(collDate, inv.payment_terms_days ?? 30);
+      const days = daysUntil(dueDate);
+      let level: "warning" | "overdue" | null = null;
+      if (days < 0) level = "overdue";
+      else if (days <= warnBefore) level = "warning";
+      if (!level) continue;
+      affected.push({ level, invoice: inv.supplier_invoice_number, contractor: inv.user_name, amount: Number(inv.total_amount), days, dueDate });
+    }
+
+    const overdue = affected.filter((a) => a.level === "overdue").length;
+    const warning = affected.filter((a) => a.level === "warning").length;
+
+    let queued = 0;
+    if (affected.length > 0 && recipients.length > 0) {
+      const lines = affected.sort((a, b) => a.days - b.days)
+        .map((a) => `- [${a.level.toUpperCase()}] ${a.invoice} · ${a.contractor} · $${a.amount.toFixed(2)} · ` + (a.days < 0 ? `${Math.abs(a.days)} días vencido` : `vence en ${a.days} días`));
+      const body = [`Pagos a contractor que necesitan atención: ${affected.length} (${overdue} overdue, ${warning} warning).`, "", ...lines].join("\n");
+      await supabase.from("email_outbox").insert({ recipients, subject: `Payments alert: ${affected.length} contractor payments overdue`, body, category: "payment_alert" });
+      queued = 1;
+    }
+    return json({ ok: true, scanned: invoices?.length ?? 0, overdue, warning, queued });
+  } catch (e) {
+    return json({ ok: false, error: String((e as Error)?.message ?? e) }, 200);
+  }
+});
+</script>
+
+<script type="text/plain" id="fn-supplier-contract-alerts">
+// Supabase Edge Function: supplier-contract-alerts  (FR-16)
+// Corre 1 vez por día (vía pg_cron). Revisa supplier_contracts activos
+// y encola emails según prioridad y umbral.
+//
+//   No priority → 1 email por umbral cruzado (anti-spam vía supplier_alert_log).
+//   Priority    → email DIARIO hasta renovar o marcar "Renewal in Progress".
+//
+// Skipea contratos con status = 'Renewal in Progress' y los archivados.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...CORS_HEADERS } });
+}
+
+function daysUntil(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  const exp = Date.UTC(y, m - 1, d);
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.round((exp - today) / 86400000);
+}
+
+function pickThreshold(days: number, thresholds: number[]): number | null {
+  if (days < 0) return 0;
+  const asc = [...thresholds].sort((a, b) => a - b);
+  for (const t of asc) if (days <= t) return t;
+  return null;
+}
+
+function isoDaysFromNow(offset: number): string {
+  const now = new Date();
+  const base = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return new Date(base + offset * 86400000).toISOString().slice(0, 10);
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  try {
+    const { data: settings, error: sErr } = await supabase.from("supplier_alert_settings").select("*").eq("id", 1).single();
+    if (sErr || !settings) return json({ ok: false, error: "No se pudo leer supplier_alert_settings" }, 200);
+
+    const thresholds = [settings.threshold_1_days, settings.threshold_2_days, settings.threshold_3_days];
+    const widest = Math.max(...thresholds);
+    const teamRecipients: string[] = settings.email_recipients ?? [];
+    const priorityRecipients: string[] = settings.priority_supplier_email_recipients ?? [];
+
+    const horizon = isoDaysFromNow(widest);
+    const todayStart = `${isoDaysFromNow(0)}T00:00:00Z`;
+
+    const { data: contracts, error: cErr } = await supabase.from("supplier_contracts")
+      .select("id, supplier_name, contract_number, expiration_date, is_priority_supplier, status, archived")
+      .eq("archived", false)
+      .neq("status", "Renewal in Progress")
+      .lte("expiration_date", horizon);
+    if (cErr) return json({ ok: false, error: cErr.message }, 200);
+
+    let queued = 0;
+    let priorityQueued = 0;
+
+    for (const c of contracts ?? []) {
+      if (!c.expiration_date) continue;
+      const days = daysUntil(c.expiration_date);
+      const threshold = pickThreshold(days, thresholds);
+      if (threshold === null) continue;
+
+      if (c.is_priority_supplier) {
+        const { data: sentToday } = await supabase.from("supplier_alert_log").select("id").eq("contract_id", c.id).gte("email_sent_at", todayStart).limit(1);
+        if (sentToday && sentToday.length) continue;
+
+        const subject = `Action Required: ${c.supplier_name} contract renewal — ${days} days remaining`;
+        const body = [
+          `PRIORITY SUPPLIER — action required.`, ``,
+          `Supplier: ${c.supplier_name}`, `Contract #: ${c.contract_number}`,
+          `Expiration date: ${c.expiration_date}`,
+          days < 0 ? `Status: EXPIRED ${Math.abs(days)} days ago` : `Days remaining: ${days}`, ``,
+          `Renew the contract or mark it as "Renewal in Progress" to stop these alerts.`,
+        ].join("\n");
+
+        await supabase.from("email_outbox").insert({ recipients: priorityRecipients, subject, body, category: "supplier_priority_alert" });
+        await supabase.from("supplier_alert_log").insert({ contract_id: c.id, threshold_crossed: threshold, email_sent_at: new Date().toISOString() });
+        priorityQueued++; continue;
+      }
+
+      const { data: already } = await supabase.from("supplier_alert_log").select("id").eq("contract_id", c.id).eq("threshold_crossed", threshold).not("email_sent_at", "is", null).limit(1);
+      if (already && already.length) continue;
+
+      const subject = `Supplier contract alert: ${c.supplier_name} expires in ${days} days`;
+      const body = [`Supplier: ${c.supplier_name}`, `Contract #: ${c.contract_number}`, `Expiration date: ${c.expiration_date}`, `Days remaining: ${days}`].join("\n");
+
+      await supabase.from("email_outbox").insert({ recipients: teamRecipients, subject, body, category: "supplier_contract_alert" });
+      await supabase.from("supplier_alert_log").insert({ contract_id: c.id, threshold_crossed: threshold, email_sent_at: new Date().toISOString() });
+      queued++;
+    }
+    return json({ ok: true, scanned: contracts?.length ?? 0, queued, priorityQueued });
+  } catch (e) {
+    return json({ ok: false, error: String((e as Error)?.message ?? e) }, 200);
+  }
+});
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script>
+const progress = (pct, msg) => {
+  document.getElementById('bar').style.width = pct + '%';
+  document.getElementById('status').textContent = msg;
+};
+
+const FUNCTIONS = [
+  { id: 'fn-process-email-outbox',     name: 'process-email-outbox',     secret: 'RESEND_API_KEY',                         desc: 'Procesa la cola email_outbox y envía emails via Resend API. Se ejecuta cada 5 min via pg_cron.' },
+  { id: 'fn-sync-time-logs',           name: 'sync-time-logs',            secret: 'ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN', desc: 'Extrae time logs de Zoho Projects y hace upsert en time_entries. Se invoca manualmente o via cron.' },
+  { id: 'fn-project-contract-alerts',  name: 'project-contract-alerts',   secret: '(ninguno extra — usa service_role)',     desc: 'Corre 1x/día. Detecta proyectos con contrato próximo a vencer y encola alertas en email_outbox.' },
+  { id: 'fn-collection-alerts',        name: 'collection-alerts',         secret: '(ninguno extra)',                        desc: 'Corre 1x/día. Detecta facturas Invoiced con cobro vencido o próximo y encola digest.' },
+  { id: 'fn-payment-alerts',           name: 'payment-alerts',            secret: '(ninguno extra)',                        desc: 'Corre 1x/día. Detecta facturas Collected con pago vencido o próximo y encola digest.' },
+  { id: 'fn-supplier-contract-alerts', name: 'supplier-contract-alerts',  secret: '(ninguno extra)',                        desc: 'Corre 1x/día. Alerta de supplier contracts. Priority: diario; non-priority: 1x por umbral.' },
+];
+
+window.addEventListener('load', () => setTimeout(generate, 400));
+
+function generate() {
+  progress(5, 'Inicializando…');
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210, H = 297, M = 14, TW = W - M * 2;
+  let y = M, pageNum = 1;
+
+  function addHeader() {
+    doc.setFillColor('#09090b');
+    doc.rect(0, 0, W, 9, 'F');
+    doc.setFontSize(6.5); doc.setTextColor('#6b7280'); doc.setFont('helvetica','normal');
+    doc.text('SOUTHPOINT TECH LABS — Edge Functions', M, 6);
+    doc.text('Pág. ' + pageNum, W - M, 6, { align: 'right' });
+  }
+
+  function newPage() {
+    doc.addPage(); pageNum++; y = M;
+    addHeader(); y = 14;
+  }
+
+  function checkPage(need = 10) {
+    if (y + need > H - 10) newPage();
+  }
+
+  // PORTADA
+  doc.setFillColor('#09090b');
+  doc.rect(0, 0, W, H, 'F');
+  doc.setFillColor('#7c3aed');
+  doc.rect(0, H/2 - 1, W, 2, 'F');
+  doc.setFontSize(26); doc.setFont('helvetica','bold'); doc.setTextColor('#ffffff');
+  doc.text('SOUTHPOINT TECH LABS', W/2, 82, { align:'center' });
+  doc.setFontSize(13); doc.setFont('helvetica','normal'); doc.setTextColor('#c4b5fd');
+  doc.text('Contractors Management System', W/2, 94, { align:'center' });
+  doc.setFillColor('#7c3aed');
+  doc.rect(M, 102, TW, 0.8, 'F');
+  doc.setFontSize(20); doc.setFont('helvetica','bold'); doc.setTextColor('#f9fafb');
+  doc.text('Edge Functions', W/2, 116, { align:'center' });
+  doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor('#a1a1aa');
+  doc.text('Código fuente completo — listo para copiar en Supabase Dashboard', W/2, 125, { align:'center' });
+  doc.setFontSize(9); doc.setTextColor('#6b7280');
+  doc.text('Generado: 2026-06-23', W/2, H-32, { align:'center' });
+  doc.text('supabase/functions/ — 6 funciones', W/2, H-26, { align:'center' });
+
+  // ÍNDICE
+  newPage();
+  progress(15, 'Índice…');
+  doc.setFontSize(15); doc.setFont('helvetica','bold'); doc.setTextColor('#09090b');
+  doc.text('Edge Functions — Índice', M, y); y += 10;
+
+  doc.autoTable({
+    startY: y,
+    head: [['#', 'Función', 'Secrets requeridos', 'Descripción']],
+    body: FUNCTIONS.map((f, i) => [i+1, f.name, f.secret, f.desc]),
+    theme: 'grid',
+    styles: { fontSize: 7.5, cellPadding: 3 },
+    headStyles: { fillColor: '#7c3aed', textColor: '#fff', fontStyle: 'bold' },
+    columnStyles: {
+      0: { cellWidth: 8,  halign: 'center' },
+      1: { cellWidth: 50, font: 'courier', fontStyle: 'bold', textColor: '#7c3aed' },
+      2: { cellWidth: 50, font: 'courier', textColor: '#374151', fontSize: 7 },
+      3: { cellWidth: TW - 8 - 50 - 50 },
+    },
+    alternateRowStyles: { fillColor: '#faf5ff' },
+    margin: { left: M, right: M },
+  });
+  y = doc.lastAutoTable.finalY + 6;
+
+  // INSTRUCCIONES
+  checkPage(40);
+  doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor('#7c3aed');
+  doc.text('Cómo deployar', M, y); y += 6;
+
+  doc.setFontSize(8.5); doc.setFont('helvetica','normal'); doc.setTextColor('#374151');
+  const instrs = [
+    'OPCIÓN A — Dashboard (sin CLI, recomendada para migración):',
+    '  1. Ir a Supabase Dashboard → Edge Functions → New function',
+    '  2. Poner el nombre exacto de la función (ej: process-email-outbox)',
+    '  3. Copiar el código de este PDF y pegarlo en el editor → Deploy',
+    '  4. Repetir para cada función',
+    '',
+    'OPCIÓN B — CLI (si tenés el repo clonado):',
+    '  supabase login',
+    '  supabase link --project-ref <PROJECT_REF>',
+    '  supabase functions deploy process-email-outbox',
+    '  supabase functions deploy sync-time-logs',
+    '  supabase functions deploy project-contract-alerts',
+    '  supabase functions deploy collection-alerts',
+    '  supabase functions deploy payment-alerts',
+    '  supabase functions deploy supplier-contract-alerts',
+    '',
+    'SECRETS (Dashboard → Edge Functions → Secrets):',
+    '  RESEND_API_KEY          → para process-email-outbox',
+    '  ZOHO_CLIENT_ID          → para sync-time-logs',
+    '  ZOHO_CLIENT_SECRET      → para sync-time-logs',
+    '  ZOHO_REFRESH_TOKEN      → para sync-time-logs',
+    '  SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY se inyectan automáticamente.',
+  ];
+  for (const line of instrs) {
+    checkPage(5);
+    const isCode = line.startsWith('  supabase') || line.startsWith('  RESEND') || line.startsWith('  ZOHO') || line.startsWith('  SUPA');
+    doc.setFont(isCode ? 'courier' : 'helvetica', line.endsWith(':') ? 'bold' : 'normal');
+    doc.setTextColor(isCode ? '#7c3aed' : line.endsWith(':') ? '#1f2937' : '#374151');
+    doc.text(line, M, y);
+    y += line === '' ? 3 : 4.5;
+  }
+
+  // CÓDIGO DE CADA FUNCIÓN
+  FUNCTIONS.forEach((fn, idx) => {
+    progress(20 + idx * 13, `Función ${idx+1}/6: ${fn.name}…`);
+    const code = document.getElementById(fn.id)?.textContent?.trim() ?? '';
+    const lines = code.split('\n');
+
+    newPage();
+    // Header de función
+    doc.setFillColor('#7c3aed');
+    doc.rect(0, 0, W, 16, 'F');
+    doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor('#ffffff');
+    doc.text(`${idx+1} / 6 — ${fn.name}`, M, 10);
+    doc.setFontSize(7.5); doc.setFont('courier','normal'); doc.setTextColor('#c4b5fd');
+    doc.text(`supabase/functions/${fn.name}/index.ts`, M, 15);
+    y = 22;
+
+    // Info box
+    doc.setFillColor('#faf5ff');
+    doc.setDrawColor('#e9d5ff');
+    doc.roundedRect(M, y, TW, 14, 2, 2, 'FD');
+    doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor('#6d28d9');
+    doc.text('Descripción', M+3, y+5);
+    doc.setFont('helvetica','normal'); doc.setTextColor('#374151');
+    const descLines = doc.splitTextToSize(fn.desc, TW - 6);
+    doc.text(descLines, M+3, y+10);
+    y += 17;
+
+    doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor('#6d28d9');
+    doc.text('Secrets: ', M, y+4);
+    doc.setFont('courier','normal'); doc.setTextColor('#374151');
+    doc.text(fn.secret, M+18, y+4);
+    y += 9;
+
+    // Código
+    const LINE_H = 3.6;
+    const PAD = 3;
+    const CODE_BG = '#0d0d14';
+
+    let lineIdx = 0;
+    while (lineIdx < lines.length) {
+      const spaceLeft = H - 12 - y;
+      const linesPerBlock = Math.max(1, Math.floor((spaceLeft - PAD*2) / LINE_H));
+      const chunk = lines.slice(lineIdx, lineIdx + linesPerBlock);
+      const blockH = chunk.length * LINE_H + PAD * 2;
+
+      doc.setFillColor(CODE_BG);
+      doc.roundedRect(M, y, TW, blockH, 1.5, 1.5, 'F');
+
+      let cy = y + PAD;
+      doc.setFontSize(5.9); doc.setFont('courier','normal');
+      for (const line of chunk) {
+        const trimmed = line.replace(/\t/g, '  ');
+        const isComment = trimmed.trimStart().startsWith('//');
+        const isKeyword = /^(import|export|const|let|function|async|await|return|if|for|try|catch|throw|new)\b/.test(trimmed.trimStart());
+        doc.setTextColor(isComment ? '#4b5563' : isKeyword ? '#93c5fd' : '#c4b5fd');
+        const shown = doc.splitTextToSize(trimmed, TW - PAD*2)[0] ?? '';
+        doc.text(shown, M + PAD, cy + 2.5);
+        cy += LINE_H;
+      }
+
+      lineIdx += chunk.length;
+      y += blockH + 2;
+
+      if (lineIdx < lines.length) newPage();
+    }
+  });
+
+  progress(99, 'Guardando…');
+  doc.save('Southpoint-EdgeFunctions-2026.pdf');
+  progress(100, '¡Listo! El PDF se descargó.');
+  document.getElementById('status').style.color = '#4ade80';
+}
+</script>
+</body>
+</html>
