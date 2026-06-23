@@ -2898,7 +2898,7 @@ th.col-pop { text-align: center; }
   flex-shrink: 0;
 }
 
-.topnav { display: flex; gap: 4px; }
+.topnav { display: flex; gap: 4px; flex-shrink: 1; }
 
 .topnav__link {
   padding: 8px 14px;
@@ -2924,6 +2924,7 @@ th.col-pop { text-align: center; }
   align-items: center;
   gap: 12px;
   margin-left: auto;
+  flex-shrink: 0;
 }
 
 @media (max-width: 720px) {
@@ -3513,4 +3514,134 @@ select.field__input { color-scheme: dark; cursor: pointer; }
   color: var(--text-soft);
   text-transform: uppercase;
   letter-spacing: .5px;
+}
+
+/* =============================================================================
+   Prompt 24 · Responsive: compact desktop (1024–1920px) + tablet (768–1023px)
+   ============================================================================= */
+
+/*
+ * TOPNAV ALWAYS SCROLLABLE
+ * The nav has 7–9 items. At 13.5px with 14px padding they total ~870–1075px,
+ * wider than the 1152px content slot once the logo + user-pill are counted.
+ * Fix: give topnav flex:1 + overflow-x:auto so it fills available space and
+ * scrolls its own children instead of pushing siblings out of view.
+ */
+.topnav {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.topnav::-webkit-scrollbar { display: none; }
+.topnav__link { white-space: nowrap; }
+
+/* --- Compact desktop / large laptop (≤1200px) ------------------------------- */
+@media (max-width: 1200px) {
+  .app__inner {
+    padding-left:  max(18px, env(safe-area-inset-left));
+    padding-right: max(18px, env(safe-area-inset-right));
+  }
+  .topnav__link { padding: 8px 10px; font-size: 13px; }
+}
+
+/* --- Mid desktop / large tablet landscape (≤1024px) ------------------------- */
+@media (max-width: 1024px) {
+  .app__inner {
+    padding-left:  max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-top:   max(20px, env(safe-area-inset-top));
+  }
+
+  /* Compact topnav links */
+  .topnav__link { padding: 7px 10px; font-size: 12.5px; }
+
+  /* 4-step billing stepper collapses to 2×2 */
+  .stepper__nodes--four { grid-template-columns: repeat(2, 1fr); }
+
+  /* Modal fills more of the viewport width */
+  .modal { max-width: calc(100vw - 48px); }
+
+  /* Selbar wraps earlier */
+  .selbar { flex-wrap: wrap; gap: 12px 16px; }
+  .selbar__detail { order: 3; flex-basis: 100%; }
+  .selbar .btn--pay { margin-left: auto; }
+}
+
+/* --- Tablet landscape (≤900px) ---------------------------------------------- */
+@media (max-width: 900px) {
+  .topbar__logo { height: 22px; }
+  .topnav__link { padding: 6px 9px; font-size: 12px; }
+
+  /* Tighter KPI chips */
+  .proj-kpis { gap: 8px; }
+  .proj-kpi { padding: 6px 10px; }
+  .proj-kpi__count { font-size: 14px; }
+
+  /* Supplier / collection tables: let the badge truncate gracefully */
+  .badge { font-size: 10.5px; padding: 3px 7px 3px 5px; }
+
+  /* Dashboard counters: 2 columns on 900px */
+  .dash-counters { grid-template-columns: repeat(2, 1fr); }
+
+  /* Outbox KPI row wraps */
+  .outbox-kpis { flex-wrap: wrap; }
+}
+
+/* --- Tablet portrait / phablet (≤768px) ------------------------------------- */
+@media (max-width: 768px) {
+  .app__inner {
+    padding-left:  max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
+
+  /* Navigation: topnav becomes a full-width scrollable strip under the brand bar.
+     (Mirrors the existing ≤720px rule but activates earlier for tablet portrait.) */
+  .topbar { flex-wrap: wrap; }
+  .topnav { order: 3; width: 100%; }
+
+  /* Masthead title smaller on tablets */
+  .masthead__title { font-size: clamp(2rem, 7vw, 3rem); }
+
+  /* Modal: expand to use more of the viewport */
+  .modal { max-width: calc(100vw - 32px); padding: 20px; }
+
+  /* 3-col BillModal form row → 2-col+1 wrap */
+  .modal__form-row { flex-wrap: wrap; }
+  .modal__form-row .field { flex: 1 1 120px; min-width: calc(50% - 6px); }
+
+  /* Settings grid: 2-col on tablet (was 3) */
+  .settings-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* Dashboard action grid adjusts naturally via minmax, but give it a hint */
+  .dash-actions { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+
+  /* Toolbar: let count go below the export button on tight widths */
+  .toolbar { flex-wrap: wrap; gap: 10px; }
+
+  /* FilterBar controls: 2-column (already at 720px, redundant but explicit) */
+  .filterbar__controls > * { flex: 1 1 calc(50% - 12px); }
+}
+
+/* --- Small tablet / landscape phone (≤640px) -------------------------------- */
+@media (max-width: 640px) {
+  .masthead { padding-bottom: 20px; }
+  .masthead__sub { font-size: 14px; }
+
+  /* Stepper goes 1-column (already at 720px, but be explicit for 640-720px) */
+  .stepper__nodes { grid-template-columns: 1fr; gap: 10px; }
+
+  /* KPI chips wrap with smaller text */
+  .proj-kpi { padding: 6px 8px; }
+  .proj-kpi__label { font-size: 10px; }
+  .proj-kpi__count { font-size: 13px; }
+
+  /* Drawer: full height, full width */
+  .drawer { width: 100vw; padding: 18px; }
+  .drawer__facts { grid-template-columns: 1fr; }
+
+  /* Settings grid: 1-col */
+  .settings-grid { grid-template-columns: 1fr; }
 }
