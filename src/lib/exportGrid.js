@@ -1,6 +1,5 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import { formatDateTime } from './format'
 
 function tsFilename(gridName) {
@@ -12,15 +11,16 @@ function tsFilename(gridName) {
 
 // columns: [{ header: string, key: string }]
 // rows: plain object array — each row must have all keys used by columns
-export function exportGrid({ rows, columns, title, gridName, format, generatedBy = '' }) {
+export async function exportGrid({ rows, columns, title, gridName, format, generatedBy = '' }) {
   if (format === 'xlsx') {
-    _xlsx({ rows, columns, title, gridName })
+    await _xlsx({ rows, columns, title, gridName })
   } else if (format === 'pdf') {
     _pdf({ rows, columns, title, gridName, generatedBy })
   }
 }
 
-function _xlsx({ rows, columns, title, gridName }) {
+async function _xlsx({ rows, columns, title, gridName }) {
+  const XLSX = await import('xlsx')
   const data = rows.map((r) => {
     const obj = {}
     for (const c of columns) obj[c.header] = r[c.key] ?? ''
