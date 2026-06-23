@@ -1981,6 +1981,39 @@ th.col-pop { text-align: center; }
   padding: 10px 12px;
 }
 
+/* --- Contract expiration warnings in BillModal (FR-05 / Prompt 25) ---------- */
+.modal__contract-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.modal__contract-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  line-height: 1.45;
+  border: 1px solid;
+}
+
+.modal__contract-warning--expiring {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: var(--warn-line);
+}
+
+.modal__contract-warning--expired {
+  background: var(--no-bg);
+  color: var(--no);
+  border-color: var(--no-line);
+}
+
+.modal__contract-warning-icon { flex-shrink: 0; margin-top: 1px; }
+
 .modal__actions {
   display: flex;
   gap: 10px;

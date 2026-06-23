@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { FileText, X } from 'lucide-react'
+import { AlertTriangle, FileText, X } from 'lucide-react'
 import { Avatar } from './Avatar'
 import { formatHours } from '../lib/format'
 import { CURRENCIES, getCurrencySymbol } from '../lib/currenciesData'
+import { contractStatus, daysRemaining, getProjects } from '../lib/projectsData'
 
 // Fecha de hoy en formato ISO YYYY-MM-DD (para el default del date picker).
 function todayISO() {
@@ -34,6 +35,7 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
   const [touched, setTouched] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [contractWarnings, setContractWarnings] = useState([])
 
   const dialogRef = useRef(null)
   const firstFieldRef = useRef(null)
@@ -57,6 +59,31 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
       document.body.style.overflow = previousOverflow
     }
   }, [])
+
+  useEffect(() => {
+    const names = new Set(entries.map((e) => e.project).filter(Boolean))
+    if (names.size === 0) return
+    getProjects()
+      .then((all) => {
+        const warnings = []
+        for (const p of all) {
+          if (!names.has(p.projectName)) continue
+          const days = daysRemaining(p.contractExpirationDate)
+          const status = contractStatus(days)
+          if (status === 'Expired' || status === 'Critical' || status === 'Expiring Soon') {
+            warnings.push({
+              id: p.id,
+              projectName: p.projectName,
+              contractNumber: p.contractNumber,
+              days,
+              status,
+            })
+          }
+        }
+        setContractWarnings(warnings)
+      })
+      .catch(() => {})
+  }, [entries])
 
   useEffect(() => {
     function onKeyDown(event) {
@@ -163,6 +190,28 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
             <span className="modal__summary-hours-label">Hours</span>
           </div>
         </div>
+
+        {contractWarnings.length > 0 && (
+          <div className="modal__contract-warnings">
+            {contractWarnings.map((w) => (
+              <div
+                key={w.id}
+                className={`modal__contract-warning modal__contract-warning--${w.status === 'Expired' ? 'expired' : 'expiring'}`}
+                role="alert"
+              >
+                <AlertTriangle size={14} aria-hidden="true" className="modal__contract-warning-icon" />
+                <span>
+                  <strong>{w.projectName}</strong>
+                  {w.contractNumber ? ` · ${w.contractNumber}` : ''}
+                  {' — '}
+                  {w.status === 'Expired'
+                    ? `Contract expired ${Math.abs(w.days)} day${Math.abs(w.days) === 1 ? '' : 's'} ago`
+                    : `Contract ${w.status.toLowerCase()} · expires in ${w.days} day${w.days === 1 ? '' : 's'}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <form className="modal__form" onSubmit={handleSubmit} noValidate>
           <div className="field">
