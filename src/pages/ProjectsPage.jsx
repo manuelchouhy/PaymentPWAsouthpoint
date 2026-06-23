@@ -18,6 +18,8 @@ import { ProjectFormModal } from '../components/ProjectFormModal'
 import { ProjectDetailDrawer } from '../components/ProjectDetailDrawer'
 import { Toast } from '../components/Toast'
 import { logAudit } from '../lib/auditData'
+import { ExportDropdown } from '../components/ExportDropdown'
+import { exportGrid } from '../lib/exportGrid'
 
 // Ordena por vencimiento ascendente; los proyectos sin fecha de contrato
 // (recién traídos de Zoho) van al final.
@@ -106,6 +108,26 @@ export function ProjectsPage() {
     filters.leadDevelopers.length ||
     filters.expFrom ||
     filters.expTo
+
+  function handleExport(format) {
+    const cols = [
+      { header: 'Client', key: 'client' },
+      { header: 'Project', key: 'projectName' },
+      { header: 'Project #', key: 'projectNumber' },
+      { header: 'Contract #', key: 'contractNumber' },
+      { header: 'Lead Dev', key: 'leadDeveloper' },
+      { header: 'Approver', key: 'approver' },
+      { header: 'Contract Expiration', key: 'contractExpirationDate' },
+      { header: 'Status', key: 'contractStatus' },
+      { header: 'Days Left', key: 'daysLeft' },
+    ]
+    const exportRows = visible.map((p) => ({
+      ...p,
+      contractStatus: contractStatus(daysRemaining(p.contractExpirationDate)),
+      daysLeft: daysRemaining(p.contractExpirationDate),
+    }))
+    exportGrid({ rows: exportRows, columns: cols, title: 'Projects & Contracts', gridName: 'projects', format, generatedBy: user?.email ?? '' })
+  }
 
   async function handleCreate(payload) {
     const created = await createProject(payload, user?.email ?? null)
@@ -244,6 +266,7 @@ export function ProjectsPage() {
           </section>
 
           <div className="toolbar">
+            <ExportDropdown onExport={handleExport} />
             <span className="toolbar__count">
               {visible.length} {visible.length === 1 ? 'project' : 'projects'}
             </span>

@@ -3,6 +3,8 @@ import { useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import confetti from 'canvas-confetti'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { ExportDropdown } from './components/ExportDropdown'
+import { exportGrid } from './lib/exportGrid'
 import {
   createInvoice,
   getInvoices,
@@ -416,6 +418,23 @@ export default function App() {
     return historyEntry
   }
 
+  function handleExport(format) {
+    const cols = [
+      { header: 'Date', key: 'date' },
+      { header: 'Contractor', key: 'user' },
+      { header: 'Hours', key: 'hours' },
+      { header: 'Project', key: 'project' },
+      { header: 'Client', key: 'client' },
+      { header: 'Task', key: 'task' },
+      { header: 'Task #', key: 'taskNumber' },
+      { header: 'Description', key: 'description' },
+      { header: 'Billing Status', key: 'billingStatus' },
+      { header: 'Zoho Status', key: 'status' },
+    ]
+    const exportRows = visibleEntries.map((e) => ({ ...e, billingStatus: getBillingStatus(e) }))
+    exportGrid({ rows: exportRows, columns: cols, title: 'Time Entries', gridName: 'time_entries', format, generatedBy: user?.email ?? '' })
+  }
+
   return (
     <>
         <motion.header
@@ -497,10 +516,13 @@ export default function App() {
                   onOpenLog={() => setSyncLogOpen(true)}
                 />
               </div>
-              <span className="toolbar__count">
-                {visibleEntries.length}{' '}
-                {visibleEntries.length === 1 ? 'entry' : 'entries'}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <ExportDropdown onExport={handleExport} />
+                <span className="toolbar__count">
+                  {visibleEntries.length}{' '}
+                  {visibleEntries.length === 1 ? 'entry' : 'entries'}
+                </span>
+              </div>
             </div>
 
             <div className="selbar-wrap">

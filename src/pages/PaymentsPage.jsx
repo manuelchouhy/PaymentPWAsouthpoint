@@ -16,6 +16,8 @@ import { BillingBadge } from '../components/BillingBadge'
 import { RegisterPaymentModal } from '../components/RegisterPaymentModal'
 import { Toast } from '../components/Toast'
 import { logAudit } from '../lib/auditData'
+import { ExportDropdown } from '../components/ExportDropdown'
+import { exportGrid } from '../lib/exportGrid'
 
 function fmtAmount(value) {
   return Number(value || 0).toLocaleString('es-AR', {
@@ -161,6 +163,34 @@ export function PaymentsPage() {
     downloadPaymentReceipt({ invoice: row.inv, payment, generatedBy: user?.email ?? null })
   }
 
+  function handleExport(format) {
+    const cols = [
+      { header: 'Contractor', key: 'contractor' },
+      { header: 'Invoice #', key: 'invoiceNumber' },
+      { header: 'Amount Due', key: 'totalAmount' },
+      { header: 'Collection Date', key: 'collectionDate' },
+      { header: 'Payment Due', key: 'dueDate' },
+      { header: 'Days Until Due', key: 'daysUntilDue' },
+      { header: 'Alert', key: 'alertLevel' },
+      { header: 'Status', key: 'status' },
+      { header: 'Payment Date', key: 'paymentDate' },
+      { header: 'Transfer Ref', key: 'transferReference' },
+    ]
+    const exportRows = rows.map((r) => ({
+      contractor: r.inv.userName,
+      invoiceNumber: r.inv.supplierInvoiceNumber,
+      totalAmount: r.inv.totalAmount,
+      collectionDate: r.collectionDate,
+      dueDate: r.dueDate,
+      daysUntilDue: r.daysUntilDue,
+      alertLevel: r.alertLevel,
+      status: r.inv.status,
+      paymentDate: r.payment?.paymentDate ?? '',
+      transferReference: r.payment?.transferReference ?? '',
+    }))
+    exportGrid({ rows: exportRows, columns: cols, title: 'Payments', gridName: 'payments', format, generatedBy: user?.email ?? '' })
+  }
+
   return (
     <>
       <motion.header
@@ -236,9 +266,12 @@ export function PaymentsPage() {
               />
               Show paid
             </label>
-            <span className="toolbar__count">
-              {rows.length} {rows.length === 1 ? 'invoice' : 'invoices'}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <ExportDropdown onExport={handleExport} />
+              <span className="toolbar__count">
+                {rows.length} {rows.length === 1 ? 'invoice' : 'invoices'}
+              </span>
+            </div>
           </div>
 
           {rows.length === 0 ? (

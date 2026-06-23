@@ -3449,3 +3449,37 @@ select.field__input { color-scheme: dark; cursor: pointer; }
   border-color: var(--accent-line);
   color: var(--accent);
 }
+
+/* --- Export dropdown (Prompt 21) ------------------------------------------ */
+.export-wrap { position: relative; }
+
+.export-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 148px;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.export-menu__item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--fg);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.export-menu__item:hover {
+  background: var(--surface-3);
+}

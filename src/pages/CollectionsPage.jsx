@@ -17,6 +17,8 @@ import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { RegisterCollectionModal } from '../components/RegisterCollectionModal'
 import { Toast } from '../components/Toast'
 import { logAudit } from '../lib/auditData'
+import { ExportDropdown } from '../components/ExportDropdown'
+import { exportGrid } from '../lib/exportGrid'
 
 function daysSince(iso) {
   if (!iso) return 0
@@ -196,6 +198,32 @@ export function CollectionsPage() {
     })
   }
 
+  function handleExport(format) {
+    const cols = [
+      { header: 'Invoice #', key: 'invoiceNumber' },
+      { header: 'Contractor', key: 'contractor' },
+      { header: 'Client', key: 'client' },
+      { header: 'Invoice Date', key: 'invoiceDate' },
+      { header: 'Invoice Amount', key: 'invoiceAmount' },
+      { header: 'Collected', key: 'collected' },
+      { header: 'Outstanding', key: 'outstanding' },
+      { header: 'Status', key: 'status' },
+      { header: 'Days Pending', key: 'daysPending' },
+    ]
+    const exportRows = visible.map((r) => ({
+      invoiceNumber: r.inv.supplierInvoiceNumber,
+      contractor: r.inv.userName,
+      client: r.client,
+      invoiceDate: r.inv.invoiceDate,
+      invoiceAmount: r.inv.totalAmount,
+      collected: r.collected,
+      outstanding: r.outstanding,
+      status: r.status,
+      daysPending: r.daysPending,
+    }))
+    exportGrid({ rows: exportRows, columns: cols, title: 'Collections', gridName: 'collections', format, generatedBy: user?.email ?? '' })
+  }
+
   return (
     <>
       <motion.header
@@ -301,6 +329,7 @@ export function CollectionsPage() {
           </section>
 
           <div className="toolbar">
+            <ExportDropdown onExport={handleExport} />
             <span className="toolbar__count">
               {visible.length} {visible.length === 1 ? 'invoice' : 'invoices'}
             </span>

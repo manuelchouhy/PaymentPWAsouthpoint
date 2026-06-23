@@ -26,6 +26,8 @@ import { SupplierContractDrawer } from '../components/SupplierContractDrawer'
 import { PriorityContractBanner } from '../components/PriorityContractBanner'
 import { Toast } from '../components/Toast'
 import { logAudit } from '../lib/auditData'
+import { ExportDropdown } from '../components/ExportDropdown'
+import { exportGrid } from '../lib/exportGrid'
 
 const SNOOZE_DAYS = 7
 
@@ -100,6 +102,26 @@ export function SupplierContractsPage() {
         ? prev[key].filter((v) => v !== value)
         : [...prev[key], value],
     }))
+
+  function handleExport(format) {
+    const cols = [
+      { header: 'Supplier', key: 'supplierName' },
+      { header: 'Contract #', key: 'contractNumber' },
+      { header: 'Start Date', key: 'startDate' },
+      { header: 'Expiration', key: 'expirationDate' },
+      { header: 'Renewal Date', key: 'renewalDate' },
+      { header: 'Renewal Type', key: 'renewalType' },
+      { header: 'Payment Terms', key: 'paymentTerms' },
+      { header: 'Status', key: 'status' },
+      { header: 'Days Left', key: 'daysLeft' },
+    ]
+    const exportRows = rows.map((c) => ({
+      ...c,
+      status: displaySupplierStatus(c),
+      daysLeft: daysRemaining(c.expirationDate),
+    }))
+    exportGrid({ rows: exportRows, columns: cols, title: 'Supplier Contracts', gridName: 'supplier_contracts', format, generatedBy: user?.email ?? '' })
+  }
 
   async function handleCreate(payload, pdfFile) {
     if (pdfFile) payload = { ...payload, pdfUrl: await uploadContractPdf(pdfFile) }
@@ -233,6 +255,7 @@ export function SupplierContractsPage() {
           </section>
 
           <div className="toolbar">
+            <ExportDropdown onExport={handleExport} />
             <span className="toolbar__count">
               {rows.length} {rows.length === 1 ? 'contract' : 'contracts'}
             </span>
