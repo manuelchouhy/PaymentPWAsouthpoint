@@ -11,25 +11,31 @@ function tsFilename(gridName) {
 
 // columns: [{ header: string, key: string }]
 // rows: plain object array — each row must have all keys used by columns
-export async function exportGrid({ rows, columns, title, gridName, format, generatedBy = '' }) {
+export function exportGrid({ rows, columns, title, gridName, format, generatedBy = '' }) {
   if (format === 'xlsx') {
-    await _xlsx({ rows, columns, title, gridName })
+    _csv({ rows, columns, gridName })
   } else if (format === 'pdf') {
     _pdf({ rows, columns, title, gridName, generatedBy })
   }
 }
 
-async function _xlsx({ rows, columns, title, gridName }) {
-  const XLSX = await import('xlsx')
-  const data = rows.map((r) => {
-    const obj = {}
-    for (const c of columns) obj[c.header] = r[c.key] ?? ''
-    return obj
-  })
-  const ws = XLSX.utils.json_to_sheet(data)
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, title.slice(0, 31))
-  XLSX.writeFile(wb, `${tsFilename(gridName)}.xlsx`)
+function _csv({ rows, columns, gridName }) {
+  const escape = (v) => {
+    const s = v == null ? '' : String(v)
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? `"${s.replace(/"/g, '""')}"`
+      : s
+  }
+  const header = columns.map((c) => escape(c.header)).join(',')
+  const body = rows.map((r) => columns.map((c) => escape(r[c.key])).join(','))
+  const csv = [header, ...body].join('\r\n')
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${tsFilename(gridName)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 function _pdf({ rows, columns, title, gridName, generatedBy }) {
