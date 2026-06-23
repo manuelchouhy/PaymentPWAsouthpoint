@@ -140,13 +140,11 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .app__inner {
   position: relative;
   z-index: 1;
-  max-width: 1920px;
-  margin: 0 auto;
   padding:
-    max(28px, env(safe-area-inset-top))
-    max(40px, env(safe-area-inset-right))
+    32px
+    max(32px, env(safe-area-inset-right))
     96px
-    max(40px, env(safe-area-inset-left));
+    max(32px, env(safe-area-inset-left));
 }
 
 /* --- Masthead ------------------------------------------------------------- */
@@ -2914,12 +2912,22 @@ th.col-pop { text-align: center; }
 
 /* --- Topbar / navegación entre secciones --------------------------------- */
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  width: 100%;
+  background: rgba(10, 10, 10, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar__inner {
   display: flex;
   align-items: center;
   gap: 20px;
-  padding: 16px 0 14px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid var(--line);
+  padding: 0 max(32px, env(safe-area-inset-right)) 0 max(32px, env(safe-area-inset-left));
+  height: 56px;
 }
 
 .topbar__logo {
@@ -2931,7 +2939,7 @@ th.col-pop { text-align: center; }
   flex-shrink: 0;
 }
 
-.topnav { display: flex; gap: 4px; flex-shrink: 1; }
+.topnav { display: flex; gap: 4px; flex: 1; overflow-x: auto; }
 
 .topnav__link {
   padding: 8px 14px;
@@ -2961,8 +2969,8 @@ th.col-pop { text-align: center; }
 }
 
 @media (max-width: 720px) {
-  .topbar { flex-wrap: wrap; }
-  .topnav { order: 3; width: 100%; overflow-x: auto; }
+  .topbar__inner { flex-wrap: wrap; height: auto; padding-top: 12px; padding-bottom: 8px; }
+  .topnav { order: 3; width: 100%; }
 }
 
 /* --- Badges de estado de contrato (FR-07) -------------------------------- */
@@ -3632,7 +3640,7 @@ select.field__input { color-scheme: dark; cursor: pointer; }
 
   /* Navigation: topnav becomes a full-width scrollable strip under the brand bar.
      (Mirrors the existing ≤720px rule but activates earlier for tablet portrait.) */
-  .topbar { flex-wrap: wrap; }
+  .topbar__inner { flex-wrap: wrap; height: auto; padding-top: 12px; padding-bottom: 8px; }
   .topnav { order: 3; width: 100%; }
 
   /* Masthead title smaller on tablets */

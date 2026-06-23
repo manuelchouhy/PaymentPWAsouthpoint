@@ -23,8 +23,8 @@ export function Layout({ user, profile, can, onSignOut }) {
 
   return (
     <div className="app">
-      <div className="app__inner">
-        <header className="topbar">
+      <header className="topbar">
+        <div className="topbar__inner">
           <img
             src="/logo-southpoint.png"
             alt="Southpoint Tech Labs"
@@ -61,8 +61,10 @@ export function Layout({ user, profile, can, onSignOut }) {
             )}
             {user && <UserPill user={user} profile={profile} onSignOut={onSignOut} />}
           </div>
-        </header>
+        </div>
+      </header>
 
+      <div className="app__inner">
         <Outlet context={{ user, profile, can, onSignOut }} />
       </div>
     </div>
