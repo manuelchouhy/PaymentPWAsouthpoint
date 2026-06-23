@@ -342,6 +342,7 @@ export default function App() {
   async function handleConfirmBill({
     supplierInvoiceNumber,
     invoiceDate,
+    currency,
     totalAmount,
     notes,
   }) {
@@ -353,6 +354,7 @@ export default function App() {
     const { invoice } = await createInvoice({
       supplierInvoiceNumber,
       invoiceDate,
+      currency,
       totalAmount,
       notes,
       userName: billedUser,

@@ -305,6 +305,7 @@ function rowToInvoice(row) {
     supplierInvoiceNumber: row.supplier_invoice_number,
     invoiceDate: row.invoice_date,
     totalAmount: Number(row.total_amount),
+    currency: row.currency ?? 'USD',
     notes: row.notes ?? null,
     userName: row.user_name,
     entryIds: Array.isArray(row.entry_ids) ? row.entry_ids : [],
@@ -354,7 +355,7 @@ export async function getInvoices() {
   const { data, error } = await supabase
     .from('invoices')
     .select(
-      'id, supplier_invoice_number, invoice_date, total_amount, notes, user_name, entry_ids, status, payment_terms_days, created_at, created_by',
+      'id, supplier_invoice_number, invoice_date, total_amount, currency, notes, user_name, entry_ids, status, payment_terms_days, created_at, created_by',
     )
     .order('created_at', { ascending: false })
 
@@ -381,6 +382,7 @@ export async function createInvoice({
   supplierInvoiceNumber,
   invoiceDate,
   totalAmount,
+  currency = 'USD',
   notes,
   userName,
   entryIds,
@@ -393,6 +395,7 @@ export async function createInvoice({
       supplierInvoiceNumber,
       invoiceDate,
       totalAmount: Number(totalAmount),
+      currency,
       notes: notes || null,
       userName,
       entryIds: [...entryIds],
@@ -414,6 +417,7 @@ export async function createInvoice({
       supplier_invoice_number: supplierInvoiceNumber,
       invoice_date: invoiceDate,
       total_amount: Number(totalAmount),
+      currency,
       notes: notes || null,
       user_name: userName,
       entry_ids: numericIds,

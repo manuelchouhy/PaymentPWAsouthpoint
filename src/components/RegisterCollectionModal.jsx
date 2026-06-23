@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { CircleDollarSign, X } from 'lucide-react'
+import { getCurrencySymbol } from '../lib/currenciesData'
 
 function todayISO() {
   const now = new Date()
@@ -28,7 +29,8 @@ function formatAmount(value) {
  *   onConfirm: (data: { amountReceived:number, collectionDate:string, bankReference:string, notes:string }) => Promise<void>,
  * }} props
  */
-export function RegisterCollectionModal({ invoice, outstanding, collected, onClose, onConfirm }) {
+export function RegisterCollectionModal({ invoice, outstanding, collected, currency = 'USD', onClose, onConfirm }) {
+  const sym = getCurrencySymbol(currency)
   const [amount, setAmount] = useState(String(outstanding))
   const [collectionDate, setCollectionDate] = useState(todayISO)
   const [bankReference, setBankReference] = useState('')
@@ -121,11 +123,11 @@ export function RegisterCollectionModal({ invoice, outstanding, collected, onClo
           <div className="modal__summary-id">
             <span className="modal__summary-user">{invoice.supplierInvoiceNumber}</span>
             <span className="modal__summary-meta">
-              {invoice.userName} · collected ${formatAmount(collected)} of ${formatAmount(invoice.totalAmount)}
+              {invoice.userName} · collected {sym}{formatAmount(collected)} of {sym}{formatAmount(invoice.totalAmount)}
             </span>
           </div>
           <div className="modal__summary-hours">
-            <span className="modal__summary-hours-value">${formatAmount(outstanding)}</span>
+            <span className="modal__summary-hours-value">{sym}{formatAmount(outstanding)}</span>
             <span className="modal__summary-hours-label">Balance</span>
           </div>
         </div>
@@ -167,7 +169,7 @@ export function RegisterCollectionModal({ invoice, outstanding, collected, onClo
           </div>
           {touched && !amountValid && (
             <span className="field__error">
-              Enter an amount between 0 and the outstanding balance (${formatAmount(outstanding)}).
+              Enter an amount between 0 and the outstanding balance ({sym}{formatAmount(outstanding)}).
             </span>
           )}
 

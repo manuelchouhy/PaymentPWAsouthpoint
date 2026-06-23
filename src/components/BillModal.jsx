@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { FileText, X } from 'lucide-react'
 import { Avatar } from './Avatar'
 import { formatHours } from '../lib/format'
+import { CURRENCIES, getCurrencySymbol } from '../lib/currenciesData'
 
 // Fecha de hoy en formato ISO YYYY-MM-DD (para el default del date picker).
 function todayISO() {
@@ -27,6 +28,7 @@ function todayISO() {
 export function BillModal({ user, entries, hours, onClose, onConfirm }) {
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('')
   const [invoiceDate, setInvoiceDate] = useState(todayISO)
+  const [currency, setCurrency] = useState('USD')
   const [totalAmount, setTotalAmount] = useState('')
   const [notes, setNotes] = useState('')
   const [touched, setTouched] = useState(false)
@@ -42,11 +44,9 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
   const amountValid = totalAmount !== '' && Number.isFinite(amountNumber) && amountNumber > 0
   const formValid = invoiceValid && dateValid && amountValid
 
-  // No hay tarifa por contractor disponible todavía, así que el monto se ingresa
-  // manualmente. Cuando exista (Supplier Contracts, Fase 3) se podrá auto-calcular.
   const estimatedLabel = useMemo(
-    () => (amountValid ? `$${amountNumber.toFixed(2)}` : '—'),
-    [amountValid, amountNumber],
+    () => (amountValid ? `${getCurrencySymbol(currency)}${amountNumber.toFixed(2)}` : '—'),
+    [amountValid, amountNumber, currency],
   )
 
   useEffect(() => {
@@ -97,6 +97,7 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
       await onConfirm({
         supplierInvoiceNumber: supplierInvoiceNumber.trim(),
         invoiceDate,
+        currency,
         totalAmount: amountNumber,
         notes: notes.trim(),
       })
@@ -205,6 +206,20 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
                 onChange={(event) => setInvoiceDate(event.target.value)}
                 aria-invalid={touched && !dateValid}
               />
+            </div>
+
+            <div className="field">
+              <label className="field__label" htmlFor="bill-currency">Currency</label>
+              <select
+                id="bill-currency"
+                className="field__input"
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>{c.code} – {c.name}</option>
+                ))}
+              </select>
             </div>
 
             <div className="field">

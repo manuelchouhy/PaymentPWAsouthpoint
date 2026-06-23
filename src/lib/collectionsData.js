@@ -158,6 +158,7 @@ function rowToCollection(row) {
     id: row.id,
     invoiceId: row.invoice_id,
     amountReceived: Number(row.amount_received),
+    currency: row.currency ?? 'USD',
     collectionDate: row.collection_date,
     bankReference: row.bank_reference ?? null,
     notes: row.notes ?? null,
@@ -174,7 +175,7 @@ export async function getCollections() {
   }
   const { data, error } = await supabase
     .from('collections')
-    .select('id, invoice_id, amount_received, collection_date, bank_reference, notes, created_at, created_by')
+    .select('id, invoice_id, amount_received, currency, collection_date, bank_reference, notes, created_at, created_by')
     .order('collection_date', { ascending: false })
   if (error) throw new Error(error.message)
   return data.map(rowToCollection)
@@ -202,6 +203,7 @@ export async function createCollection(invoice, payload, alreadyCollected, creat
       id: `col-demo-${Date.now()}`,
       invoiceId: invoice.id,
       amountReceived: Number(payload.amountReceived),
+      currency: invoice.currency ?? 'USD',
       collectionDate: payload.collectionDate,
       bankReference: payload.bankReference || null,
       notes: payload.notes || null,
@@ -226,6 +228,7 @@ export async function createCollection(invoice, payload, alreadyCollected, creat
     .insert({
       invoice_id: invoice.id,
       amount_received: Number(payload.amountReceived),
+      currency: invoice.currency ?? 'USD',
       collection_date: payload.collectionDate,
       bank_reference: payload.bankReference || null,
       notes: payload.notes || null,

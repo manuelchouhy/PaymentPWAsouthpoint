@@ -19,6 +19,7 @@ import { Toast } from '../components/Toast'
 import { logAudit } from '../lib/auditData'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { exportGrid } from '../lib/exportGrid'
+import { getCurrencySymbol } from '../lib/currenciesData'
 
 function daysSince(iso) {
   if (!iso) return 0
@@ -190,11 +191,12 @@ export function CollectionsPage() {
     }
     logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'collection.register', resourceType: 'collection', resourceId: collection.id, after: { invoiceId: inv.id, invoiceNumber: inv.supplierInvoiceNumber, amountReceived: payload.amountReceived, collectionDate: payload.collectionDate } })
     setModalRow(null)
+    const sym = getCurrencySymbol(inv.currency ?? 'USD')
     setToast({
       id: Date.now(),
       message: becameCollected
         ? `${inv.supplierInvoiceNumber} fully collected → Collected`
-        : `Collection of $${formatAmount(payload.amountReceived)} registered for ${inv.supplierInvoiceNumber}`,
+        : `Collection of ${sym}${formatAmount(payload.amountReceived)} registered for ${inv.supplierInvoiceNumber}`,
     })
   }
 
@@ -203,6 +205,7 @@ export function CollectionsPage() {
       { header: 'Invoice #', key: 'invoiceNumber' },
       { header: 'Contractor', key: 'contractor' },
       { header: 'Client', key: 'client' },
+      { header: 'Currency', key: 'currency' },
       { header: 'Invoice Date', key: 'invoiceDate' },
       { header: 'Invoice Amount', key: 'invoiceAmount' },
       { header: 'Collected', key: 'collected' },
@@ -214,6 +217,7 @@ export function CollectionsPage() {
       invoiceNumber: r.inv.supplierInvoiceNumber,
       contractor: r.inv.userName,
       client: r.client,
+      currency: r.inv.currency ?? 'USD',
       invoiceDate: r.inv.invoiceDate,
       invoiceAmount: r.inv.totalAmount,
       collected: r.collected,
@@ -373,12 +377,12 @@ export function CollectionsPage() {
                         <td className="cell-mono">{r.inv.supplierInvoiceNumber}</td>
                         <td>{r.inv.userName}</td>
                         <td className="cell-soft">{r.client}</td>
-                        <td className="col-num cell-mono">${formatAmount(r.inv.totalAmount)}</td>
+                        <td className="col-num cell-mono">{getCurrencySymbol(r.inv.currency)}{formatAmount(r.inv.totalAmount)}</td>
                         <td className="cell-mono">{formatDate(r.inv.invoiceDate)}</td>
                         <td><CollectionBadge status={r.status} /></td>
                         <td className="col-num cell-mono">{r.daysPending}</td>
-                        <td className="col-num cell-mono">${formatAmount(r.collected)}</td>
-                        <td className="col-num cell-mono cell-strong">${formatAmount(r.outstanding)}</td>
+                        <td className="col-num cell-mono">{getCurrencySymbol(r.inv.currency)}{formatAmount(r.collected)}</td>
+                        <td className="col-num cell-mono cell-strong">{getCurrencySymbol(r.inv.currency)}{formatAmount(r.outstanding)}</td>
                         <td>
                           {r.status !== 'Collected' && can('collections.create') && (
                             <button
@@ -407,6 +411,7 @@ export function CollectionsPage() {
             invoice={modalRow.inv}
             outstanding={modalRow.outstanding}
             collected={modalRow.collected}
+            currency={modalRow.inv.currency ?? 'USD'}
             onClose={() => setModalRow(null)}
             onConfirm={handleRegister}
           />

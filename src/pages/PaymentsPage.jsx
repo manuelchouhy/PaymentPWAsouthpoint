@@ -18,6 +18,7 @@ import { Toast } from '../components/Toast'
 import { logAudit } from '../lib/auditData'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { exportGrid } from '../lib/exportGrid'
+import { getCurrencySymbol } from '../lib/currenciesData'
 
 function fmtAmount(value) {
   return Number(value || 0).toLocaleString('es-AR', {
@@ -167,6 +168,7 @@ export function PaymentsPage() {
     const cols = [
       { header: 'Contractor', key: 'contractor' },
       { header: 'Invoice #', key: 'invoiceNumber' },
+      { header: 'Currency', key: 'currency' },
       { header: 'Amount Due', key: 'totalAmount' },
       { header: 'Collection Date', key: 'collectionDate' },
       { header: 'Payment Due', key: 'dueDate' },
@@ -175,10 +177,12 @@ export function PaymentsPage() {
       { header: 'Status', key: 'status' },
       { header: 'Payment Date', key: 'paymentDate' },
       { header: 'Transfer Ref', key: 'transferReference' },
+      { header: 'Exchange Rate', key: 'exchangeRate' },
     ]
     const exportRows = rows.map((r) => ({
       contractor: r.inv.userName,
       invoiceNumber: r.inv.supplierInvoiceNumber,
+      currency: r.inv.currency ?? 'USD',
       totalAmount: r.inv.totalAmount,
       collectionDate: r.collectionDate,
       dueDate: r.dueDate,
@@ -187,6 +191,7 @@ export function PaymentsPage() {
       status: r.inv.status,
       paymentDate: r.payment?.paymentDate ?? '',
       transferReference: r.payment?.transferReference ?? '',
+      exchangeRate: r.payment?.exchangeRate ?? '',
     }))
     exportGrid({ rows: exportRows, columns: cols, title: 'Payments', gridName: 'payments', format, generatedBy: user?.email ?? '' })
   }
@@ -311,7 +316,7 @@ export function PaymentsPage() {
                       >
                         <td>{r.inv.userName}</td>
                         <td className="cell-mono">{r.inv.supplierInvoiceNumber}</td>
-                        <td className="col-num cell-mono">${fmtAmount(r.inv.totalAmount)}</td>
+                        <td className="col-num cell-mono">{getCurrencySymbol(r.inv.currency)}{fmtAmount(r.inv.totalAmount)}</td>
                         <td className="cell-mono">{formatDate(r.collectionDate)}</td>
                         <td className="cell-mono">{formatDate(r.dueDate)}</td>
                         <td className={`col-num cell-mono${overdue ? ' proj-days--overdue' : ''}`}>
@@ -362,6 +367,7 @@ export function PaymentsPage() {
           <RegisterPaymentModal
             key={`pay-${modalInvoice.inv.id}`}
             invoice={modalInvoice.inv}
+            currency={modalInvoice.inv.currency ?? 'USD'}
             onClose={() => setModalInvoice(null)}
             onConfirm={handleRegister}
           />

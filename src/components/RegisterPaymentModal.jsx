@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Banknote, X } from 'lucide-react'
 import { BANK_METHODS } from '../lib/paymentsData'
+import { getCurrencySymbol } from '../lib/currenciesData'
 
 function todayISO() {
   const now = new Date()
@@ -26,11 +27,15 @@ function fmtAmount(value) {
  *   onConfirm: (data) => Promise<void>,
  * }} props
  */
-export function RegisterPaymentModal({ invoice, onClose, onConfirm }) {
+export function RegisterPaymentModal({ invoice, currency = 'USD', onClose, onConfirm }) {
+  const sym = getCurrencySymbol(currency)
+  const needsExchangeRate = currency !== 'USD'
+
   const [amount, setAmount] = useState(String(invoice.totalAmount))
   const [paymentDate, setPaymentDate] = useState(todayISO)
   const [transferReference, setTransferReference] = useState('')
   const [bankMethod, setBankMethod] = useState(BANK_METHODS[0])
+  const [exchangeRate, setExchangeRate] = useState('')
   const [notes, setNotes] = useState('')
   const [touched, setTouched] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -44,9 +49,10 @@ export function RegisterPaymentModal({ invoice, onClose, onConfirm }) {
   const amountNum = Number(amount)
   const amountValid = amount !== '' && Number.isFinite(amountNum) && amountNum > 0
   const dateValid = Boolean(paymentDate)
-  // Si es back-dated, la nota es obligatoria (auditoría).
   const noteOk = !isBackDated || notes.trim().length > 0
-  const valid = amountValid && dateValid && noteOk
+  const rateNum = Number(exchangeRate)
+  const rateValid = !needsExchangeRate || (exchangeRate !== '' && Number.isFinite(rateNum) && rateNum > 0)
+  const valid = amountValid && dateValid && noteOk && rateValid
 
   useEffect(() => {
     firstRef.current?.focus()
@@ -79,6 +85,7 @@ export function RegisterPaymentModal({ invoice, onClose, onConfirm }) {
         transferReference: transferReference.trim(),
         bankMethod,
         notes: notes.trim(),
+        exchangeRate: needsExchangeRate ? rateNum : null,
       })
     } catch (error) {
       setSubmitting(false)
@@ -131,8 +138,8 @@ export function RegisterPaymentModal({ invoice, onClose, onConfirm }) {
             </span>
           </div>
           <div className="modal__summary-hours">
-            <span className="modal__summary-hours-value">${fmtAmount(invoice.totalAmount)}</span>
-            <span className="modal__summary-hours-label">Amount</span>
+            <span className="modal__summary-hours-value">{sym}{fmtAmount(invoice.totalAmount)}</span>
+            <span className="modal__summary-hours-label">Amount {currency !== 'USD' ? `(${currency})` : ''}</span>
           </div>
         </div>
 
@@ -198,6 +205,30 @@ export function RegisterPaymentModal({ invoice, onClose, onConfirm }) {
               />
             </div>
           </div>
+
+          {needsExchangeRate && (
+            <div className="field">
+              <label className="field__label" htmlFor="pay-rate">
+                Exchange rate ({currency} → USD)
+                <span className="field__req">required</span>
+              </label>
+              <input
+                id="pay-rate"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.000001"
+                className={`field__input${touched && !rateValid ? ' field__input--error' : ''}`}
+                value={exchangeRate}
+                onChange={(e) => setExchangeRate(e.target.value)}
+                placeholder="e.g. 0.000025"
+                aria-invalid={touched && !rateValid}
+              />
+              {touched && !rateValid && (
+                <span className="field__error">Enter the exchange rate to USD.</span>
+              )}
+            </div>
+          )}
 
           <div className="field">
             <label className="field__label" htmlFor="pay-notes">

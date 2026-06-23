@@ -123,6 +123,8 @@ function rowToPayment(row) {
     id: row.id,
     invoiceId: row.invoice_id,
     amountPaid: Number(row.amount_paid),
+    currency: row.currency ?? 'USD',
+    exchangeRate: row.exchange_rate != null ? Number(row.exchange_rate) : null,
     paymentDate: row.payment_date,
     transferReference: row.transfer_reference ?? null,
     bankMethod: row.bank_method ?? null,
@@ -141,7 +143,7 @@ export async function getPayments() {
   }
   const { data, error } = await supabase
     .from('payments')
-    .select('id, invoice_id, amount_paid, payment_date, transfer_reference, bank_method, notes, back_dated, created_at, created_by')
+    .select('id, invoice_id, amount_paid, currency, exchange_rate, payment_date, transfer_reference, bank_method, notes, back_dated, created_at, created_by')
     .order('payment_date', { ascending: false })
   if (error) throw new Error(error.message)
   return data.map(rowToPayment)
@@ -154,7 +156,7 @@ export async function getPaymentByInvoice(invoiceId) {
   }
   const { data, error } = await supabase
     .from('payments')
-    .select('id, invoice_id, amount_paid, payment_date, transfer_reference, bank_method, notes, back_dated, created_at, created_by')
+    .select('id, invoice_id, amount_paid, currency, exchange_rate, payment_date, transfer_reference, bank_method, notes, back_dated, created_at, created_by')
     .eq('invoice_id', invoiceId)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -186,6 +188,8 @@ export async function createPayment(invoice, payload, createdBy) {
       id: `pay-demo-${Date.now()}`,
       invoiceId: invoice.id,
       amountPaid: Number(payload.amountPaid),
+      currency: invoice.currency ?? 'USD',
+      exchangeRate: payload.exchangeRate ?? null,
       paymentDate: payload.paymentDate,
       transferReference: payload.transferReference || null,
       bankMethod: payload.bankMethod || null,
@@ -218,6 +222,7 @@ export async function createPayment(invoice, payload, createdBy) {
     p_notes: payload.notes || null,
     p_back_dated: backDated,
     p_created_by: createdBy || null,
+    p_exchange_rate: payload.exchangeRate ?? null,
   })
   if (error) {
     if (error.code === '23505') {
