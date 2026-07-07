@@ -13,7 +13,8 @@ const EMPTY_FILTERS = {
   contractors: [],
   clients: [],
   projects: [],
-  billingStatuses: [], // 'Pending' | 'Invoiced'  (FR-05)
+  tasks: [],
+  billingStatuses: [], // 'Pending' | 'Invoiced' | 'Collected' | 'Paid'
   dateFrom: '',
   dateTo: '',
   week: '',
@@ -47,6 +48,7 @@ export function useEntryFilters() {
       filters.contractors.length > 0 ||
       filters.clients.length > 0 ||
       filters.projects.length > 0 ||
+      filters.tasks.length > 0 ||
       filters.billingStatuses.length > 0 ||
       Boolean(filters.dateFrom) ||
       Boolean(filters.dateTo) ||
@@ -58,15 +60,14 @@ export function useEntryFilters() {
 }
 
 /**
- * Aplica los filtros a una lista de entradas. `isPaid(entry)` resuelve el
- * Payment Status (que vive en otra tabla), inyectado desde App.
+ * Aplica los filtros a una lista de entradas.
  *
  * @param {import('./data').TimeEntry[]} entries
  * @param {typeof EMPTY_FILTERS} filters
- * @param {(entry: import('./data').TimeEntry) => string} getBillingStatus  'Pending'|'Invoiced'|'Collected'|'Paid'
+ * @param {Map<string, {status: string}>} invoiceByEntryId  mapa id→factura para resolver Billing Status
  * @returns {import('./data').TimeEntry[]}
  */
-export function applyEntryFilters(entries, filters, getBillingStatus) {
+export function applyEntryFilters(entries, filters, invoiceByEntryId) {
   const week = filters.week ? Number(filters.week) : null
 
   return entries.filter((entry) => {
@@ -79,8 +80,12 @@ export function applyEntryFilters(entries, filters, getBillingStatus) {
     if (filters.projects.length && !filters.projects.includes(entry.project)) {
       return false
     }
+    if (filters.tasks.length && !filters.tasks.includes(entry.task)) {
+      return false
+    }
     if (filters.billingStatuses.length) {
-      if (!filters.billingStatuses.includes(getBillingStatus(entry))) return false
+      const billingStatus = invoiceByEntryId.get(String(entry.id))?.status ?? 'Pending'
+      if (!filters.billingStatuses.includes(billingStatus)) return false
     }
     // log_date es ISO YYYY-MM-DD → la comparación de strings respeta el orden.
     if (filters.dateFrom && (!entry.date || entry.date < filters.dateFrom)) {

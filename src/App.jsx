@@ -30,6 +30,7 @@ import { Toast } from './components/Toast'
 import { logAudit } from './lib/auditData'
 
 const VIOLET_CONFETTI = ['#A78BFA', '#C4B5FD', '#8B5CF6', '#DDD6FE', '#7C3AED']
+const BILLING_SORT_ORDER = { Pending: 0, Invoiced: 1, Collected: 2, Paid: 3 }
 
 function fireConfetti() {
   if (typeof window === 'undefined') return
@@ -172,10 +173,9 @@ export default function App() {
     () => sortedUnique(entries.map((entry) => entry.project)),
     [entries],
   )
-
-  const isInvoiced = useCallback(
-    (entry) => invoiceByEntryId.has(String(entry.id)),
-    [invoiceByEntryId],
+  const tasks = useMemo(
+    () => sortedUnique(entries.map((entry) => entry.task)),
+    [entries],
   )
 
   // Billing Status de 4 estados: "Pending" si no está en ninguna factura; si no,
@@ -186,16 +186,18 @@ export default function App() {
   )
 
   // FR-03 · entradas tras aplicar todos los filtros (sin la tab todavía).
+  // Se pasa invoiceByEntryId directamente para que el useMemo dependa del mapa
+  // real, evitando cualquier indirección por referencia de función.
   const filteredEntries = useMemo(
-    () => applyEntryFilters(entries, filters, getBillingStatus),
-    [entries, filters, getBillingStatus],
+    () => applyEntryFilters(entries, filters, invoiceByEntryId),
+    [entries, filters, invoiceByEntryId],
   )
 
   // FR-04 · "Pendiente de facturar" = todavía no está en ninguna factura. Los
   // contadores se recalculan solos cuando cambian filtros o facturas.
   const pendingCount = useMemo(
-    () => filteredEntries.filter((entry) => !isInvoiced(entry)).length,
-    [filteredEntries, isInvoiced],
+    () => filteredEntries.filter((entry) => !invoiceByEntryId.has(String(entry.id))).length,
+    [filteredEntries, invoiceByEntryId],
   )
   const allCount = filteredEntries.length
 
@@ -203,9 +205,9 @@ export default function App() {
   const visibleEntries = useMemo(
     () =>
       activeTab === 'pending'
-        ? filteredEntries.filter((entry) => !isInvoiced(entry))
+        ? filteredEntries.filter((entry) => !invoiceByEntryId.has(String(entry.id)))
         : filteredEntries,
-    [filteredEntries, activeTab, isInvoiced],
+    [filteredEntries, activeTab, invoiceByEntryId],
   )
 
   // FR-03 · contadores de los 4 estados sobre el resultado actualmente visible.
@@ -216,6 +218,12 @@ export default function App() {
     }
     return counts
   }, [visibleEntries, getBillingStatus])
+
+  // Total de horas de la vista filtrada (Feature 3).
+  const filteredHours = useMemo(
+    () => visibleEntries.reduce((sum, entry) => sum + entry.hours, 0),
+    [visibleEntries],
+  )
 
   const selectedEntries = useMemo(
     () => entries.filter((entry) => selectedIds.has(entry.id)),
@@ -249,6 +257,39 @@ export default function App() {
     return { approvedHours, invoicedHours, collectedHours, paidHours }
   }, [entries, invoiceByEntryId])
 
+  // Sort de columnas (Feature 1): key = nombre de columna, dir = 'asc'|'desc'|null.
+  const [sort, setSort] = useState({ key: null, dir: null })
+
+  const sortedEntries = useMemo(() => {
+    if (!sort.key || !sort.dir) return visibleEntries
+    const copy = [...visibleEntries]
+    copy.sort((a, b) => {
+      const mul = sort.dir === 'asc' ? 1 : -1
+      switch (sort.key) {
+        case 'hours': return mul * (a.hours - b.hours)
+        case 'billing': {
+          const aO = BILLING_SORT_ORDER[getBillingStatus(a)] ?? 0
+          const bO = BILLING_SORT_ORDER[getBillingStatus(b)] ?? 0
+          return mul * (aO - bO)
+        }
+        default: {
+          const aV = String(a[sort.key] ?? '')
+          const bV = String(b[sort.key] ?? '')
+          return mul * aV.localeCompare(bV, 'es', { sensitivity: 'base' })
+        }
+      }
+    })
+    return copy
+  }, [visibleEntries, sort, getBillingStatus])
+
+  function handleSort(key) {
+    setSort((prev) => {
+      if (prev.key !== key) return { key, dir: 'asc' }
+      if (prev.dir === 'asc') return { key, dir: 'desc' }
+      return { key: null, dir: null }
+    })
+  }
+
   // Regla clave: sólo se puede facturar si hay selección, de un único proveedor, y con permiso.
   const canBill = can('billing.create') && selectedEntries.length > 0 && selectedUsers.length === 1
 
@@ -272,8 +313,9 @@ export default function App() {
 
   // --- Acciones -------------------------------------------------------------
   function toggleEntry(id) {
-    // Defensa extra: nunca togglear una entrada ya facturada.
-    if (invoiceByEntryId.has(id)) return
+    // Nunca togglear una entrada ya facturada (normalizar a String para que coincida
+    // con las claves del Map, que también usan String(id)).
+    if (invoiceByEntryId.has(String(id))) return
     setSelectedIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -433,7 +475,7 @@ export default function App() {
       { header: 'Billing Status', key: 'billingStatus' },
       { header: 'Zoho Status', key: 'status' },
     ]
-    const exportRows = visibleEntries.map((e) => ({ ...e, billingStatus: getBillingStatus(e) }))
+    const exportRows = sortedEntries.map((e) => ({ ...e, billingStatus: getBillingStatus(e) }))
     exportGrid({ rows: exportRows, columns: cols, title: 'Time Entries', gridName: 'time_entries', format, generatedBy: user?.email ?? '' })
   }
 
@@ -486,6 +528,7 @@ export default function App() {
               contractors={users}
               clients={clients}
               projects={projects}
+              tasks={tasks}
               filters={filters}
               toggleValue={toggleValue}
               setField={setField}
@@ -520,6 +563,9 @@ export default function App() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <ExportDropdown onExport={handleExport} />
+                <span className="toolbar__total">
+                  Total: {formatHours(filteredHours)} h
+                </span>
                 <span className="toolbar__count">
                   {visibleEntries.length}{' '}
                   {visibleEntries.length === 1 ? 'entry' : 'entries'}
@@ -541,7 +587,7 @@ export default function App() {
               <EmptyState tab={activeTab} />
             ) : isMobile ? (
               <EntriesCards
-                entries={visibleEntries}
+                entries={sortedEntries}
                 selectedIds={selectedIds}
                 onToggle={toggleEntry}
                 getInvoice={getInvoice}
@@ -550,7 +596,7 @@ export default function App() {
               />
             ) : (
               <EntriesTable
-                entries={visibleEntries}
+                entries={sortedEntries}
                 selectedIds={selectedIds}
                 onToggle={toggleEntry}
                 onToggleAll={toggleAllVisible}
@@ -559,6 +605,8 @@ export default function App() {
                 getInvoice={getInvoice}
                 onOpenInvoice={setOpenInvoiceId}
                 justInvoicedIds={justInvoicedIds}
+                sort={sort}
+                onSort={handleSort}
               />
             )}
 
