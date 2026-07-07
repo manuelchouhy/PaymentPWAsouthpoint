@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { FileText, StickyNote } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronsUpDown, FileText, StickyNote } from 'lucide-react'
 import { Avatar } from './Avatar'
 import { Checkbox } from './Checkbox'
 import { StatusBadge } from './StatusBadge'
@@ -17,18 +17,25 @@ const rowVariants = {
   }),
 }
 
+function SortIcon({ sortKey, sort }) {
+  if (sort?.key !== sortKey) return <ChevronsUpDown size={13} aria-hidden="true" className="th-sort__icon th-sort__icon--idle" />
+  if (sort.dir === 'asc') return <ArrowUp size={13} aria-hidden="true" className="th-sort__icon th-sort__icon--active" />
+  return <ArrowDown size={13} aria-hidden="true" className="th-sort__icon th-sort__icon--active" />
+}
+
+function SortTh({ sortKey, sort, onSort, className, scope, children }) {
+  return (
+    <th scope={scope ?? 'col'} className={className}>
+      <button type="button" className="th-sort" onClick={() => onSort(sortKey)}>
+        {children}
+        <SortIcon sortKey={sortKey} sort={sort} />
+      </button>
+    </th>
+  )
+}
+
 /**
  * Tabla de entradas de tiempo (vista de escritorio).
- *
- * @param {{
- *   entries: import('../lib/data').TimeEntry[],
- *   selectedIds: Set<string|number>,
- *   onToggle: (id: string|number) => void,
- *   onToggleAll: () => void,
- *   headerChecked: boolean,
- *   headerIndeterminate: boolean,
- *   getInvoice: (id: string|number) => ({ supplierInvoiceNumber: string, status: string } | null)
- * }} props
  */
 export function EntriesTable({
   entries,
@@ -40,6 +47,8 @@ export function EntriesTable({
   getInvoice,
   onOpenInvoice,
   justInvoicedIds,
+  sort,
+  onSort,
 }) {
   // Scroll hacia la primera fila recién facturada cuando aparece el resaltado.
   const firstHighlightRef = useRef(null)
@@ -65,18 +74,18 @@ export function EntriesTable({
                 ariaLabel="Select all visible pending rows"
               />
             </th>
-            <th scope="col" className="col-user">User</th>
-            <th scope="col" className="col-project">Project</th>
-            <th scope="col" className="col-client col-optional">Client</th>
-            <th scope="col" className="col-task">Task</th>
+            <SortTh sortKey="user" sort={sort} onSort={onSort} className="col-user">User</SortTh>
+            <SortTh sortKey="project" sort={sort} onSort={onSort} className="col-project">Project</SortTh>
+            <SortTh sortKey="client" sort={sort} onSort={onSort} className="col-client col-optional">Client</SortTh>
+            <SortTh sortKey="task" sort={sort} onSort={onSort} className="col-task">Task</SortTh>
             <th scope="col" className="col-tasknum col-optional">Task #</th>
             <th scope="col" className="col-pop">Desc.</th>
             <th scope="col" className="col-pop">Notes</th>
-            <th scope="col" className="col-date">Date</th>
+            <SortTh sortKey="date" sort={sort} onSort={onSort} className="col-date">Date</SortTh>
             <th scope="col" className="col-week col-optional">Week</th>
-            <th className="col-num col-hours" scope="col">Hours</th>
+            <SortTh sortKey="hours" sort={sort} onSort={onSort} className="col-num col-hours">Hours</SortTh>
             <th scope="col" className="col-status">Status</th>
-            <th scope="col" className="col-billing">Billing</th>
+            <SortTh sortKey="billing" sort={sort} onSort={onSort} className="col-billing">Billing</SortTh>
             <th scope="col" className="col-invoice">Invoice</th>
           </tr>
         </thead>

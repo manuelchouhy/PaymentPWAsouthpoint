@@ -25,6 +25,7 @@ export function FilterBar({
   contractors,
   clients,
   projects,
+  tasks,
   filters,
   toggleValue,
   setField,
@@ -53,6 +54,7 @@ export function FilterBar({
     filters.contractors.length +
     filters.clients.length +
     filters.projects.length +
+    (filters.tasks?.length ?? 0) +
     filters.billingStatuses.length +
     (filters.dateFrom ? 1 : 0) +
     (filters.dateTo ? 1 : 0) +
@@ -113,6 +115,12 @@ export function FilterBar({
             options={projects}
             selected={filters.projects}
             onToggle={(value) => toggleValue('projects', value)}
+          />
+          <MultiSelectDropdown
+            label="Task"
+            options={tasks ?? []}
+            selected={filters.tasks ?? []}
+            onToggle={(value) => toggleValue('tasks', value)}
           />
           <MultiSelectDropdown
             label="Billing Status"

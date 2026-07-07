@@ -535,6 +535,15 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   padding-bottom: 9px;
 }
 
+.toolbar__total {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-soft);
+  letter-spacing: .02em;
+  padding-bottom: 9px;
+  font-weight: 600;
+}
+
 /* Botón "Actualizar ahora" — secundario respecto al Pay; alineado con el
    control del filtro, nunca con su etiqueta. */
 .btn--refresh {
@@ -1168,6 +1177,25 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   top: 0;
   z-index: 1;
 }
+
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  outline-offset: 2px;
+}
+.th-sort:hover { color: var(--text); }
+.th-sort__icon { flex-shrink: 0; opacity: .5; }
+.th-sort__icon--active { opacity: 1; color: var(--accent); }
 
 .table tbody td {
   padding: 13px 10px;
