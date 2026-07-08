@@ -1175,7 +1175,11 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   text-overflow: ellipsis;
   position: sticky;
   top: 0;
-  z-index: 1;
+  /* Por encima de .selbar-wrap (z-index: 30): ambos son sticky con top:0,
+     así que al scrollear quedan a la misma altura. Sin esto la barra de
+     selección tapa el checkbox "seleccionar todo" del header y el click
+     no le llega. */
+  z-index: 35;
 }
 
 .th-sort {
