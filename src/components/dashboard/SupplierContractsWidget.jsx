@@ -2,11 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight, Star, Truck } from 'lucide-react'
 import { daysRemaining } from '../../lib/projectsData'
-import {
-  displaySupplierStatus,
-  getSupplierContracts,
-  priorityAlertContracts,
-} from '../../lib/supplierContractsData'
+import { displaySupplierStatus, priorityAlertContracts } from '../../lib/supplierContractsData'
+import { api } from '../../lib/api'
 import { formatDate } from '../../lib/format'
 
 const COUNTED = ['Expired', 'Critical', 'Expiring Soon', 'Active']
@@ -22,7 +19,7 @@ export function SupplierContractsWidget() {
 
   useEffect(() => {
     let cancelled = false
-    getSupplierContracts()
+    api.supplierContracts.list()
       .then((data) => !cancelled && setContracts(data))
       .catch(() => !cancelled && setContracts([]))
       .finally(() => !cancelled && setLoading(false))

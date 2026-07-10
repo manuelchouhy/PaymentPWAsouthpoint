@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { AlertCircle, CheckCircle2, X } from 'lucide-react'
-import { getSyncLog } from '../lib/data'
+import { api } from '../lib/api'
 import { formatDateTime } from '../lib/format'
 
 /**
@@ -19,7 +19,7 @@ export function SyncLogModal({ onClose }) {
   useEffect(() => {
     let cancelled = false
     setState('loading')
-    getSyncLog(50)
+    api.sync.getLog(50)
       .then((data) => {
         if (cancelled) return
         setEntries(data)

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, Download, X } from 'lucide-react'
-import { getAuditLog } from '../lib/auditData'
+import { api } from '../lib/api'
 
 const ACTIONS = [
   'invoice.create',
@@ -31,7 +31,7 @@ export function AuditLogPage() {
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
-    getAuditLog({
+    api.audit.list({
       action: filters.action || undefined,
       resourceType: filters.resourceType || undefined,
       dateFrom: filters.dateFrom || undefined,

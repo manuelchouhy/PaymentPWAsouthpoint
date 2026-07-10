@@ -2,14 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowRight, BellOff, Download, Pencil, RefreshCw, Star, X } from 'lucide-react'
 import { SupplierStatusBadge } from './SupplierStatusBadge'
-import {
-  displaySupplierStatus,
-  getContractPdfUrl,
-  getRenewalHistory,
-  getSupplierAlertHistory,
-  getSupplierContractHistory,
-} from '../lib/supplierContractsData'
+import { displaySupplierStatus } from '../lib/supplierContractsData'
 import { daysRemaining } from '../lib/projectsData'
+import { api } from '../lib/api'
 import { formatDate, formatDateTime } from '../lib/format'
 
 const FIELD_LABELS = {
@@ -68,7 +63,7 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
     }
     setPdfBusy(true)
     try {
-      const url = await getContractPdfUrl(contract.pdfUrl)
+      const url = await api.supplierContracts.getPdfUrl(contract.pdfUrl)
       if (url) window.open(url, '_blank', 'noopener')
       else setPdfMsg('Could not generate the download link.')
     } finally {
@@ -80,9 +75,9 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
     let cancelled = false
     setLoading(true)
     Promise.all([
-      getSupplierContractHistory(contract.id),
-      getRenewalHistory(contract),
-      getSupplierAlertHistory(contract.id),
+      api.supplierContracts.getHistory(contract.id),
+      api.supplierContracts.getRenewalHistory(contract),
+      api.supplierContracts.getAlertHistory(contract.id),
     ])
       .then(([h, r, a]) => {
         if (cancelled) return

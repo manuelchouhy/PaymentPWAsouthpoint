@@ -3,11 +3,8 @@ import { motion } from 'framer-motion'
 import { ArrowRight, X } from 'lucide-react'
 import { BillingBadge } from './BillingBadge'
 import { Avatar } from './Avatar'
-import {
-  getInvoiceStatusHistory,
-  nextBillingStatus,
-} from '../lib/data'
-import { getPaymentByInvoice } from '../lib/paymentsData'
+import { nextBillingStatus } from '../lib/data'
+import { api } from '../lib/api'
 import { formatDate, formatDateTime, formatHours } from '../lib/format'
 
 const ENTRY_SCROLL_THRESHOLD = 20
@@ -45,7 +42,7 @@ export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus 
   useEffect(() => {
     let cancelled = false
     setLoadingHistory(true)
-    getInvoiceStatusHistory(invoice.id)
+    api.invoices.getStatusHistory(invoice.id)
       .then((rows) => {
         if (!cancelled) setHistory(rows)
       })
@@ -56,7 +53,7 @@ export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus 
         if (!cancelled) setLoadingHistory(false)
       })
     // Pago al contractor (si la factura ya está Paid).
-    getPaymentByInvoice(invoice.id)
+    api.payments.getByInvoice(invoice.id)
       .then((p) => !cancelled && setPayment(p))
       .catch(() => !cancelled && setPayment(null))
     return () => {

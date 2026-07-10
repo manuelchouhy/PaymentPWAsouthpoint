@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowLeft, Save } from 'lucide-react'
-import {
-  getCollectionAlertSettings,
-  updateCollectionAlertSettings,
-} from '../lib/collectionsData'
+import { api } from '../lib/api'
 import { Toast } from '../components/Toast'
 
 const FREQUENCIES = [
@@ -22,7 +19,7 @@ export function CollectionAlertSettingsPage() {
 
   useEffect(() => {
     let cancelled = false
-    getCollectionAlertSettings()
+    api.collections.getAlertSettings()
       .then((s) => {
         if (cancelled) return
         setForm({
@@ -46,7 +43,7 @@ export function CollectionAlertSettingsPage() {
     if (saving) return
     setSaving(true)
     try {
-      await updateCollectionAlertSettings(
+      await api.collections.updateAlertSettings(
         {
           warningDaysBeforeDue: Number(form.warningDaysBeforeDue),
           overdueImmediately: form.overdueImmediately,

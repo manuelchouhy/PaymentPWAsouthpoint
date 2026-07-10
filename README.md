@@ -195,8 +195,9 @@ payment-pwa/
    ├─ App.jsx               # estado, derivados y orquestación
    ├─ index.css             # sistema de diseño completo
    ├─ lib/
+   │  ├─ api/                # ApiClient — ver "Capa de datos" más abajo
    │  ├─ supabase.js         # cliente de Supabase (lazy: null si falta env)
-   │  ├─ data.js             # getTimeEntries() + createPayment() (con fallback mock)
+   │  ├─ data.js             # time entries / invoices / sync (con fallback mock)
    │  ├─ avatarColor.js      # color e iniciales de avatar
    │  ├─ format.js           # formato de fechas y horas
    │  └─ useMediaQuery.js    # hook tabla/tarjetas
@@ -214,18 +215,56 @@ payment-pwa/
 
 ---
 
-## Capa de datos
+## Capa de datos (API layer)
 
-Todo el acceso a datos pasa por **dos funciones** en `src/lib/data.js`:
+Ningún componente llama a Supabase directamente. Todo pasa por un cliente
+abstracto (`ApiClient`) importado desde `src/lib/api`:
 
 ```js
-async function getTimeEntries()
-async function createPayment({ userName, totalHours, invoiceNumber, transactionNumber, entryIds })
+import { api } from '../lib/api'
+
+const invoices = await api.invoices.list()
+await api.payments.create(invoice, payload, user.email)
 ```
 
-Cada función decide sola si va contra Supabase o devuelve mock, mirando
-`isSupabaseConfigured`. Eso permite tener la misma UI funcionando en demo y
-en producción sin condicionales repartidos por la app.
+```
+src/lib/api/
+├─ types.ts            # contrato ApiClient — la interfaz pública (solo tipos)
+├─ supabase-client.js   # implementación actual: delega en src/lib/*Data.js
+├─ http-client.js       # stub para el backend Node/MySQL — cada método
+│                       # documenta URL, body y response esperados
+└─ index.js             # elige la implementación activa según VITE_API_MODE
+```
+
+La lógica de negocio (queries, fallback a datos mock, validaciones de
+transición de estado, etc.) sigue viviendo tal cual en `src/lib/data.js` y en
+los demás `src/lib/*Data.js` — `supabase-client.js` es un facade delgado que
+solo agrupa esas funciones bajo la forma de `ApiClient`.
+
+### Cambiar de modo
+
+```bash
+# .env.local
+VITE_API_MODE=supabase   # default — no hace falta declararla
+VITE_API_MODE=http       # usa http-client.js contra VITE_API_BASE_URL
+```
+
+### Qué espera `http-client.js` (spec para el backend de Claudio)
+
+Cada método de `http-client.js` tiene, en un comentario justo arriba, la URL,
+el body y la response esperados, por ejemplo:
+
+```js
+// GET  /api/time-entries?user_name=X&from=Y&to=Z → TimeEntry[]
+// POST /api/invoices { supplierInvoiceNumber, invoiceDate, totalAmount, ... } → { invoice }
+// POST /api/collections/register { invoiceId, amountReceived, ... } → { collection, becameCollected }
+// POST /api/payments/register { invoiceId, amountPaid, ... } → { payment }
+```
+
+Convención: JSON en camelCase, auth vía cookie de sesión (`credentials:
+'include'`), base URL en `VITE_API_BASE_URL`. Los tipos completos de cada
+entidad (Invoice, Payment, Project, SupplierContract, etc.) están en
+`src/lib/api/types.ts`.
 
 ---
 

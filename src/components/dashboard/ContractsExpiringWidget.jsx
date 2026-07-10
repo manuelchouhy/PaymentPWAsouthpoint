@@ -1,11 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CalendarClock, ChevronRight } from 'lucide-react'
-import {
-  contractStatus,
-  daysRemaining,
-  getProjects,
-} from '../../lib/projectsData'
+import { contractStatus, daysRemaining } from '../../lib/projectsData'
+import { api } from '../../lib/api'
 import { ContractBadge } from '../ContractBadge'
 import { formatDate } from '../../lib/format'
 
@@ -22,7 +19,7 @@ export function ContractsExpiringWidget({ limit = 5 }) {
 
   useEffect(() => {
     let cancelled = false
-    getProjects()
+    api.projects.list()
       .then((projects) => {
         if (cancelled) return
         // Solo los que tienen contrato, por proximidad de vencimiento.

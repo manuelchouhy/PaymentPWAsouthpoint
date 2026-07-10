@@ -6,18 +6,15 @@ import {
   CONTRACT_STATUSES,
   contractStatus,
   countByStatus,
-  createProject,
   daysRemaining,
-  getProjects,
-  updateProject,
 } from '../lib/projectsData'
+import { api } from '../lib/api'
 import { formatDate } from '../lib/format'
 import { ContractBadge } from '../components/ContractBadge'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ProjectFormModal } from '../components/ProjectFormModal'
 import { ProjectDetailDrawer } from '../components/ProjectDetailDrawer'
 import { Toast } from '../components/Toast'
-import { logAudit } from '../lib/auditData'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { exportGrid } from '../lib/exportGrid'
 
@@ -48,7 +45,7 @@ export function ProjectsPage() {
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
-    getProjects()
+    api.projects.list()
       .then((data) => {
         if (cancelled) return
         setProjects(data)
@@ -130,16 +127,16 @@ export function ProjectsPage() {
   }
 
   async function handleCreate(payload) {
-    const created = await createProject(payload, user?.email ?? null)
-    logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'project.create', resourceType: 'project', resourceId: created.id, after: { projectNumber: created.projectNumber, projectName: created.projectName, client: created.client } })
+    const created = await api.projects.create(payload, user?.email ?? null)
+    api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'project.create', resourceType: 'project', resourceId: created.id, after: { projectNumber: created.projectNumber, projectName: created.projectName, client: created.client } })
     setProjects((prev) => sortByExp([created, ...prev]))
     setForm(null)
     setToast({ id: Date.now(), message: `Project created — ${created.projectNumber}` })
   }
 
   async function handleUpdate(payload) {
-    const updated = await updateProject(form.project, payload, user?.email ?? null)
-    logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'project.update', resourceType: 'project', resourceId: updated.id, before: { projectNumber: form.project.projectNumber }, after: { projectNumber: updated.projectNumber, projectName: updated.projectName, client: updated.client } })
+    const updated = await api.projects.update(form.project, payload, user?.email ?? null)
+    api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'project.update', resourceType: 'project', resourceId: updated.id, before: { projectNumber: form.project.projectNumber }, after: { projectNumber: updated.projectNumber, projectName: updated.projectName, client: updated.client } })
     setProjects((prev) => sortByExp(prev.map((p) => (p.id === updated.id ? updated : p))))
     setForm(null)
     setToast({ id: Date.now(), message: `Project updated — ${updated.projectNumber}` })

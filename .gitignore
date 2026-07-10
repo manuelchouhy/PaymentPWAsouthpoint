@@ -14,3 +14,7 @@ dev-dist
 .env.*.local
 
 .vercel
+
+# Artifacts de herramientas locales (Playwright MCP, IDEs)
+.playwright-mcp
+supabase/.idea

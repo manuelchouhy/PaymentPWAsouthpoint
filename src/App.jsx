@@ -5,14 +5,7 @@ import confetti from 'canvas-confetti'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { ExportDropdown } from './components/ExportDropdown'
 import { exportGrid } from './lib/exportGrid'
-import {
-  createInvoice,
-  getInvoices,
-  getSyncStatus,
-  getTimeEntries,
-  triggerSync,
-  updateInvoiceStatus,
-} from './lib/data'
+import { api } from './lib/api'
 import { useMediaQuery } from './lib/useMediaQuery'
 import { formatHours } from './lib/format'
 import { useEntryFilters, applyEntryFilters } from './lib/useEntryFilters'
@@ -27,7 +20,6 @@ import { InvoiceDetailDrawer } from './components/InvoiceDetailDrawer'
 import { SyncStatus } from './components/SyncStatus'
 import { SyncLogModal } from './components/SyncLogModal'
 import { Toast } from './components/Toast'
-import { logAudit } from './lib/auditData'
 
 const VIOLET_CONFETTI = ['#A78BFA', '#C4B5FD', '#8B5CF6', '#DDD6FE', '#7C3AED']
 const BILLING_SORT_ORDER = { Pending: 0, Invoiced: 1, Collected: 2, Paid: 3 }
@@ -97,7 +89,7 @@ export default function App() {
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
-    Promise.all([getTimeEntries(), getInvoices()])
+    Promise.all([api.timeEntries.list(), api.invoices.list()])
       .then(([entriesData, invoicesData]) => {
         if (cancelled) return
         setEntries(entriesData)
@@ -110,7 +102,7 @@ export default function App() {
         setStatus('error')
       })
     // El estado del último sync se carga aparte: si falla, no rompe la grilla.
-    getSyncStatus()
+    api.sync.getStatus()
       .then((data) => {
         if (!cancelled) setSyncStatus(data)
       })
@@ -340,11 +332,11 @@ export default function App() {
     if (syncing) return
     setSyncing(true)
     try {
-      const result = await triggerSync()
+      const result = await api.sync.trigger()
       const [entriesData, invoicesData, syncData] = await Promise.all([
-        getTimeEntries(),
-        getInvoices(),
-        getSyncStatus(),
+        api.timeEntries.list(),
+        api.invoices.list(),
+        api.sync.getStatus(),
       ])
       setEntries(entriesData)
       setInvoices(invoicesData)
@@ -373,7 +365,7 @@ export default function App() {
         message: 'Could not refresh, please try again',
       })
       // La Edge Function registró el estado 'Error': reflejarlo en la barra.
-      getSyncStatus()
+      api.sync.getStatus()
         .then((data) => setSyncStatus(data))
         .catch(() => {})
     } finally {
@@ -393,7 +385,7 @@ export default function App() {
     const billedHoursFmt = formatHours(selectedHours)
     const billedIds = selectedEntries.map((entry) => entry.id)
 
-    const { invoice } = await createInvoice({
+    const { invoice } = await api.invoices.create({
       supplierInvoiceNumber,
       invoiceDate,
       currency,
@@ -404,7 +396,7 @@ export default function App() {
       createdBy: user?.email ?? null,
     })
 
-    logAudit({
+    api.audit.log({
       actorEmail: user?.email,
       actorRole: profile?.roles?.[0] ?? null,
       action: 'invoice.create',
@@ -433,14 +425,14 @@ export default function App() {
   // FR-06 · avanzar el estado de una factura desde el drawer (transición validada).
   async function handleChangeInvoiceStatus(toStatus) {
     if (!openInvoice) return null
-    const { historyEntry } = await updateInvoiceStatus({
+    const { historyEntry } = await api.invoices.updateStatus({
       invoiceId: openInvoice.id,
       fromStatus: openInvoice.status,
       toStatus,
       changedBy: user?.email ?? null,
       note: null,
     })
-    logAudit({
+    api.audit.log({
       actorEmail: user?.email,
       actorRole: profile?.roles?.[0] ?? null,
       action: 'invoice.status_change',
@@ -613,8 +605,8 @@ export default function App() {
             <footer className="app__footer">
               <p>
                 Payments are processed in the accounting system. This app is a
-                review and recording view — all data access is isolated in{' '}
-                <code>src/lib/data.js</code>.
+                review and recording view — all data access is isolated behind{' '}
+                <code>src/lib/api</code>.
               </p>
               <div className="app__footer-brand">
                 <img

@@ -2,11 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowRight, Pencil, X } from 'lucide-react'
 import { ContractBadge } from './ContractBadge'
-import {
-  contractStatus,
-  daysRemaining,
-  getProjectHistory,
-} from '../lib/projectsData'
+import { contractStatus, daysRemaining } from '../lib/projectsData'
+import { api } from '../lib/api'
 import { formatDate, formatDateTime } from '../lib/format'
 
 const FIELDS = [
@@ -44,7 +41,7 @@ export function ProjectDetailDrawer({ project, onClose, onEdit }) {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    getProjectHistory(project.id)
+    api.projects.getHistory(project.id)
       .then((rows) => !cancelled && setHistory(rows))
       .catch(() => !cancelled && setHistory([]))
       .finally(() => !cancelled && setLoading(false))

@@ -4,7 +4,8 @@ import { AlertTriangle, FileText, X } from 'lucide-react'
 import { Avatar } from './Avatar'
 import { formatHours } from '../lib/format'
 import { CURRENCIES, getCurrencySymbol } from '../lib/currenciesData'
-import { contractStatus, daysRemaining, getProjects } from '../lib/projectsData'
+import { contractStatus, daysRemaining } from '../lib/projectsData'
+import { api } from '../lib/api'
 
 // Fecha de hoy en formato ISO YYYY-MM-DD (para el default del date picker).
 function todayISO() {
@@ -63,7 +64,7 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
   useEffect(() => {
     const names = new Set(entries.map((e) => e.project).filter(Boolean))
     if (names.size === 0) return
-    getProjects()
+    api.projects.list()
       .then((all) => {
         const warnings = []
         for (const p of all) {

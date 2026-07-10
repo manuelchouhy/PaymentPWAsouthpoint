@@ -10,8 +10,7 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
-import { getTimeEntries, getInvoices } from '../lib/data'
-import { getCollections } from '../lib/collectionsData'
+import { api } from '../lib/api'
 import { ContractsExpiringWidget } from '../components/dashboard/ContractsExpiringWidget'
 import { SupplierContractsWidget } from '../components/dashboard/SupplierContractsWidget'
 
@@ -43,7 +42,7 @@ export function DashboardPage() {
   useEffect(() => {
     let cancelled = false
     setLoadStatus('loading')
-    Promise.all([getTimeEntries(), getInvoices(), getCollections()])
+    Promise.all([api.timeEntries.list(), api.invoices.list(), api.collections.list()])
       .then(([entries, invoices, collections]) => {
         if (cancelled) return
         setData({ entries, invoices, collections })

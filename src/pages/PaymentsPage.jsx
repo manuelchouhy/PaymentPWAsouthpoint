@@ -2,20 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, BellRing, Download } from 'lucide-react'
-import { getInvoices } from '../lib/data'
-import { getCollections } from '../lib/collectionsData'
-import {
-  createPayment,
-  getPaymentAlertSettings,
-  getPayments,
-  paymentAlertLevel,
-} from '../lib/paymentsData'
+import { paymentAlertLevel } from '../lib/paymentsData'
+import { api } from '../lib/api'
 import { downloadPaymentReceipt } from '../lib/paymentReceipt'
 import { formatDate } from '../lib/format'
 import { BillingBadge } from '../components/BillingBadge'
 import { RegisterPaymentModal } from '../components/RegisterPaymentModal'
 import { Toast } from '../components/Toast'
-import { logAudit } from '../lib/auditData'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { exportGrid } from '../lib/exportGrid'
 import { getCurrencySymbol } from '../lib/currenciesData'
@@ -52,7 +45,7 @@ export function PaymentsPage() {
 
   function load() {
     setStatus('loading')
-    Promise.all([getInvoices(), getCollections(), getPayments(), getPaymentAlertSettings()])
+    Promise.all([api.invoices.list(), api.collections.list(), api.payments.list(), api.payments.getAlertSettings()])
       .then(([inv, col, pay, settings]) => {
         setInvoices(inv)
         setCollections(col)
@@ -144,10 +137,10 @@ export function PaymentsPage() {
 
   async function handleRegister(payload) {
     const { inv } = modalInvoice
-    const { payment } = await createPayment(inv, payload, user?.email ?? null)
+    const { payment } = await api.payments.create(inv, payload, user?.email ?? null)
     setPayments((prev) => [payment, ...prev])
     setInvoices((prev) => prev.map((i) => (i.id === inv.id ? { ...i, status: 'Paid' } : i)))
-    logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'payment.create', resourceType: 'payment', resourceId: payment.id, after: { invoiceId: inv.id, invoiceNumber: inv.supplierInvoiceNumber, amountPaid: payload.amountPaid, paymentDate: payload.paymentDate } })
+    api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'payment.create', resourceType: 'payment', resourceId: payment.id, after: { invoiceId: inv.id, invoiceNumber: inv.supplierInvoiceNumber, amountPaid: payload.amountPaid, paymentDate: payload.paymentDate } })
     setModalInvoice(null)
     setToast({
       id: Date.now(),

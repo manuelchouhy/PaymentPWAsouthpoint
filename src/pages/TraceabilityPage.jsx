@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, FileText, X } from 'lucide-react'
-import { searchTrace, getCollectionsForInvoice } from '../lib/traceData'
+import { api } from '../lib/api'
 import { downloadTracePdf } from '../lib/tracePdf'
 import { BillingBadge } from '../components/BillingBadge'
 import { formatDate, formatDateTime, formatHours } from '../lib/format'
@@ -32,7 +32,7 @@ export function TraceabilityPage() {
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
-    searchTrace({
+    api.trace.search({
       contractor: filters.contractor || undefined,
       project: filters.project || undefined,
       dateFrom: filters.dateFrom || undefined,
@@ -248,7 +248,7 @@ function TraceDrawer({ trace, generatedBy, onClose }) {
 
   useEffect(() => {
     if (!trace.invoiceId) return
-    getCollectionsForInvoice(trace.invoiceId).then(setCollections).catch(() => {})
+    api.trace.getCollectionsForInvoice(trace.invoiceId).then(setCollections).catch(() => {})
   }, [trace.invoiceId])
 
   // Close on Escape

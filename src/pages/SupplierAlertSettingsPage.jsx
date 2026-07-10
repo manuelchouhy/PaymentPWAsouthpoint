@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowLeft, Save, Star } from 'lucide-react'
-import {
-  getSupplierAlertSettings,
-  updateSupplierAlertSettings,
-} from '../lib/supplierContractsData'
+import { api } from '../lib/api'
 import { Toast } from '../components/Toast'
 
 export function SupplierAlertSettingsPage() {
@@ -17,7 +14,7 @@ export function SupplierAlertSettingsPage() {
 
   useEffect(() => {
     let cancelled = false
-    getSupplierAlertSettings()
+    api.supplierContracts.getAlertSettings()
       .then((s) => {
         if (cancelled) return
         setForm({
@@ -48,7 +45,7 @@ export function SupplierAlertSettingsPage() {
     if (saving) return
     setSaving(true)
     try {
-      await updateSupplierAlertSettings(
+      await api.supplierContracts.updateAlertSettings(
         {
           threshold1Days: Number(form.threshold1Days),
           threshold2Days: Number(form.threshold2Days),

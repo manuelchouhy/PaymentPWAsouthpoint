@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowLeft, Save } from 'lucide-react'
-import {
-  getPaymentAlertSettings,
-  updatePaymentAlertSettings,
-} from '../lib/paymentsData'
+import { api } from '../lib/api'
 import { Toast } from '../components/Toast'
 
 export function PaymentAlertSettingsPage() {
@@ -17,7 +14,7 @@ export function PaymentAlertSettingsPage() {
 
   useEffect(() => {
     let cancelled = false
-    getPaymentAlertSettings()
+    api.payments.getAlertSettings()
       .then((s) => {
         if (cancelled) return
         setForm({
@@ -39,7 +36,7 @@ export function PaymentAlertSettingsPage() {
     if (saving) return
     setSaving(true)
     try {
-      await updatePaymentAlertSettings(
+      await api.payments.updateAlertSettings(
         {
           warningDaysBeforeDue: Number(form.warningDaysBeforeDue),
           emailRecipients: form.recipientsText.split(',').map((s) => s.trim()).filter(Boolean),

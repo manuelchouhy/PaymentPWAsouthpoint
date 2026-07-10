@@ -2,21 +2,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, BellRing } from 'lucide-react'
-import { getInvoices, getTimeEntries } from '../lib/data'
 import {
   COLLECTION_STATUSES,
   collectionAlertLevel,
   collectionStatus,
-  createCollection,
-  getCollectionAlertSettings,
-  getCollections,
 } from '../lib/collectionsData'
+import { api } from '../lib/api'
 import { formatDate } from '../lib/format'
 import { CollectionBadge } from '../components/CollectionBadge'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { RegisterCollectionModal } from '../components/RegisterCollectionModal'
 import { Toast } from '../components/Toast'
-import { logAudit } from '../lib/auditData'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { exportGrid } from '../lib/exportGrid'
 import { getCurrencySymbol } from '../lib/currenciesData'
@@ -59,10 +55,10 @@ export function CollectionsPage() {
     let cancelled = false
     setStatus('loading')
     Promise.all([
-      getInvoices(),
-      getCollections(),
-      getTimeEntries(),
-      getCollectionAlertSettings(),
+      api.invoices.list(),
+      api.collections.list(),
+      api.timeEntries.list(),
+      api.collections.getAlertSettings(),
     ])
       .then(([inv, col, ent, settings]) => {
         if (cancelled) return
@@ -177,7 +173,7 @@ export function CollectionsPage() {
 
   async function handleRegister(payload) {
     const { inv, collected } = modalRow
-    const { collection, becameCollected } = await createCollection(
+    const { collection, becameCollected } = await api.collections.create(
       inv,
       payload,
       collected,
@@ -189,7 +185,7 @@ export function CollectionsPage() {
         prev.map((i) => (i.id === inv.id ? { ...i, status: 'Collected' } : i)),
       )
     }
-    logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'collection.register', resourceType: 'collection', resourceId: collection.id, after: { invoiceId: inv.id, invoiceNumber: inv.supplierInvoiceNumber, amountReceived: payload.amountReceived, collectionDate: payload.collectionDate } })
+    api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'collection.register', resourceType: 'collection', resourceId: collection.id, after: { invoiceId: inv.id, invoiceNumber: inv.supplierInvoiceNumber, amountReceived: payload.amountReceived, collectionDate: payload.collectionDate } })
     setModalRow(null)
     const sym = getCurrencySymbol(inv.currency ?? 'USD')
     setToast({

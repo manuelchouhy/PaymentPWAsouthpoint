@@ -5,18 +5,12 @@ import { AlertTriangle, BellRing, FileText, Plus, Star } from 'lucide-react'
 import {
   RENEWAL_TYPES,
   SUPPLIER_STATUSES,
-  createSupplierContract,
   displaySupplierStatus,
-  getSupplierAlertSettings,
-  getSupplierContracts,
-  markRenewalInProgress,
   priorityAlertContracts,
-  renewSupplierContract,
   supplierRowTint,
-  updateSupplierContract,
-  uploadContractPdf,
 } from '../lib/supplierContractsData'
 import { daysRemaining } from '../lib/projectsData'
+import { api } from '../lib/api'
 import { formatDate } from '../lib/format'
 import { SupplierStatusBadge } from '../components/SupplierStatusBadge'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
@@ -25,7 +19,6 @@ import { RenewContractModal } from '../components/RenewContractModal'
 import { SupplierContractDrawer } from '../components/SupplierContractDrawer'
 import { PriorityContractBanner } from '../components/PriorityContractBanner'
 import { Toast } from '../components/Toast'
-import { logAudit } from '../lib/auditData'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { exportGrid } from '../lib/exportGrid'
 
@@ -54,7 +47,7 @@ export function SupplierContractsPage() {
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
-    Promise.all([getSupplierContracts(), getSupplierAlertSettings()])
+    Promise.all([api.supplierContracts.list(), api.supplierContracts.getAlertSettings()])
       .then(([data, settings]) => {
         if (cancelled) return
         setContracts(data)
@@ -124,31 +117,31 @@ export function SupplierContractsPage() {
   }
 
   async function handleCreate(payload, pdfFile) {
-    if (pdfFile) payload = { ...payload, pdfUrl: await uploadContractPdf(pdfFile) }
-    const created = await createSupplierContract(payload, user?.email ?? null)
-    logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.create', resourceType: 'supplier_contract', resourceId: created.id, after: { contractNumber: created.contractNumber, supplierName: created.supplierName, expirationDate: created.expirationDate } })
+    if (pdfFile) payload = { ...payload, pdfUrl: await api.supplierContracts.uploadPdf(pdfFile) }
+    const created = await api.supplierContracts.create(payload, user?.email ?? null)
+    api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.create', resourceType: 'supplier_contract', resourceId: created.id, after: { contractNumber: created.contractNumber, supplierName: created.supplierName, expirationDate: created.expirationDate } })
     setContracts((prev) => sortByExp([created, ...prev]))
     setForm(null)
     setToast({ id: Date.now(), message: `Contract created — ${created.contractNumber}` })
   }
 
   async function handleUpdate(payload, pdfFile) {
-    if (pdfFile) payload = { ...payload, pdfUrl: await uploadContractPdf(pdfFile) }
-    const updated = await updateSupplierContract(form.contract, payload, user?.email ?? null)
-    logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.update', resourceType: 'supplier_contract', resourceId: updated.id, before: { contractNumber: form.contract.contractNumber }, after: { contractNumber: updated.contractNumber, expirationDate: updated.expirationDate } })
+    if (pdfFile) payload = { ...payload, pdfUrl: await api.supplierContracts.uploadPdf(pdfFile) }
+    const updated = await api.supplierContracts.update(form.contract, payload, user?.email ?? null)
+    api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.update', resourceType: 'supplier_contract', resourceId: updated.id, before: { contractNumber: form.contract.contractNumber }, after: { contractNumber: updated.contractNumber, expirationDate: updated.expirationDate } })
     setContracts((prev) => sortByExp(prev.map((c) => (c.id === updated.id ? updated : c))))
     setForm(null)
     setToast({ id: Date.now(), message: `Contract updated — ${updated.contractNumber}` })
   }
 
   async function handleRenew(payload, pdfFile) {
-    const pdfUrl = await uploadContractPdf(pdfFile)
-    const { archived, created } = await renewSupplierContract(
+    const pdfUrl = await api.supplierContracts.uploadPdf(pdfFile)
+    const { archived, created } = await api.supplierContracts.renew(
       renewing,
       { ...payload, pdfUrl },
       user?.email ?? null,
     )
-    logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.renew', resourceType: 'supplier_contract', resourceId: created.id, before: { contractNumber: renewing.contractNumber, contractId: renewing.id }, after: { contractNumber: created.contractNumber, expirationDate: created.expirationDate } })
+    api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.renew', resourceType: 'supplier_contract', resourceId: created.id, before: { contractNumber: renewing.contractNumber, contractId: renewing.id }, after: { contractNumber: created.contractNumber, expirationDate: created.expirationDate } })
     setContracts((prev) =>
       sortByExp([created, ...prev.map((c) => (c.id === archived.id ? archived : c))].filter((c) => !c.archived)),
     )
@@ -157,8 +150,8 @@ export function SupplierContractsPage() {
   }
 
   async function handleMarkRenewal(contract) {
-    const updated = await markRenewalInProgress(contract, SNOOZE_DAYS, user?.email ?? null)
-    logAudit({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.mark_renewal', resourceType: 'supplier_contract', resourceId: updated.id, after: { contractNumber: updated.contractNumber, status: updated.status } })
+    const updated = await api.supplierContracts.markRenewalInProgress(contract, SNOOZE_DAYS, user?.email ?? null)
+    api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.mark_renewal', resourceType: 'supplier_contract', resourceId: updated.id, after: { contractNumber: updated.contractNumber, status: updated.status } })
     setContracts((prev) => sortByExp(prev.map((c) => (c.id === updated.id ? updated : c))))
     setDetail(null)
     setToast({

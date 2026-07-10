@@ -1,34 +1,26 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { AlertTriangle, Loader2 } from 'lucide-react'
-import { supabase, isSupabaseConfigured } from '../lib/supabase'
+import { api } from '../lib/api'
 
 export function LoginScreen() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
   async function handleMicrosoftLogin() {
-    if (!isSupabaseConfigured) {
-      setError(
-        'Supabase is not configured in this environment. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.',
-      )
-      return
-    }
     setError(null)
     setLoading(true)
     try {
-      const { error: authError } = await supabase.auth.signInWithOAuth({
-        provider: 'azure',
-        options: {
-          scopes: 'openid email profile',
-          redirectTo: window.location.origin,
-        },
-      })
+      const { error: authError } = await api.auth.signInWithMicrosoft()
       if (authError) throw authError
       // El navegador hace redirect al IdP — no llegamos a "loading=false" en éxito.
     } catch (err) {
       console.error('No se pudo iniciar sesión:', err)
-      setError('Could not sign in. Please try again in a few seconds.')
+      setError(
+        err?.code === 'not_configured'
+          ? err.message
+          : 'Could not sign in. Please try again in a few seconds.',
+      )
       setLoading(false)
     }
   }

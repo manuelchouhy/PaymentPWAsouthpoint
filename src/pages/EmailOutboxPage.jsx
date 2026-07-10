@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { AlertTriangle, CheckCircle, Clock, RefreshCw, XCircle } from 'lucide-react'
-import { getEmailOutbox, retryEmail } from '../lib/emailOutboxData'
+import { api } from '../lib/api'
 
 function statusOf(row) {
   if (row.sentAt) return { label: 'Sent', color: '#16a34a', Icon: CheckCircle }
@@ -32,7 +32,7 @@ export function EmailOutboxPage() {
   async function load() {
     setLoadStatus('loading')
     try {
-      setRows(await getEmailOutbox())
+      setRows(await api.emailOutbox.list())
       setLoadStatus('ready')
     } catch {
       setLoadStatus('error')
@@ -42,7 +42,7 @@ export function EmailOutboxPage() {
   async function handleRetry(id) {
     setRetrying(id)
     try {
-      await retryEmail(id)
+      await api.emailOutbox.retry(id)
       await load()
     } finally {
       setRetrying(null)

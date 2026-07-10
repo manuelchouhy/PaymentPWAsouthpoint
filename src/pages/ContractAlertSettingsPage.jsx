@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowLeft, Save } from 'lucide-react'
-import {
-  getContractAlertSettings,
-  updateContractAlertSettings,
-} from '../lib/projectsData'
+import { api } from '../lib/api'
 import { Toast } from '../components/Toast'
 
 const FREQUENCIES = [
@@ -23,7 +20,7 @@ export function ContractAlertSettingsPage() {
 
   useEffect(() => {
     let cancelled = false
-    getContractAlertSettings()
+    api.projects.getContractAlertSettings()
       .then((s) => {
         if (cancelled) return
         setForm({
@@ -54,7 +51,7 @@ export function ContractAlertSettingsPage() {
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean)
-      await updateContractAlertSettings(
+      await api.projects.updateContractAlertSettings(
         {
           threshold1Days: Number(form.threshold1Days),
           threshold2Days: Number(form.threshold2Days),
