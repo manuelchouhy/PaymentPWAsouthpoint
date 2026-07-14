@@ -8,6 +8,11 @@ import {
 } from './helpers'
 
 test('registrar pago mueve la factura a Paid', async ({ page }) => {
+  // 90s: encadena bill + collect + pay, cada uno un round-trip real a
+  // Supabase — el default de 45s queda muy justo para las 3 mutaciones
+  // reales seguidas (visible sobre todo en Collections/Payments, que
+  // no virtualizan sus tablas y tardan más en re-renderizar tras cada una).
+  test.setTimeout(90_000)
   await loginAsTestAdmin(page)
 
   const { invoiceId, invoiceNumber } = await billFirstPendingEntry(page)

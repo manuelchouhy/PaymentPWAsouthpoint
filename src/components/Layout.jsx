@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
 import { rolesLabel } from '../lib/permissions'
+import { ThemeToggle } from './ThemeToggle'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', end: true },
@@ -59,6 +60,7 @@ export function Layout({ user, profile, can, onSignOut }) {
             {rolesBadge !== 'No role' && (
               <span className="masthead__badge">{rolesBadge}</span>
             )}
+            <ThemeToggle />
             {user && <UserPill user={user} profile={profile} onSignOut={onSignOut} />}
           </div>
         </div>

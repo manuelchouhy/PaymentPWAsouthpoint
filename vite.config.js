@@ -1,3 +1,4 @@
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -6,6 +7,12 @@ import { VitePWA } from 'vite-plugin-pwa'
 // vite-plugin-pwa genera el manifest y el service worker, de modo que la app
 // es instalable en iPhone y Android sin pasar por las tiendas de aplicaciones.
 export default defineConfig({
+  resolve: {
+    // Alias "@/*" requerido por el CLI de shadcn/ui (ver components.json).
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
   optimizeDeps: {
     include: ['xlsx'],
   },

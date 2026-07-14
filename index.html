@@ -18,17 +18,27 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Payment" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="dark light" />
 
     <title>Contractor Payment Management</title>
 
-    <!-- Geist Sans + Geist Mono (Vercel) desde Google Fonts -->
+    <!-- Montserrat (wordmark/headings) + Inter (UI) + JetBrains Mono (código/IDs) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
+    <script>
+      // Aplica el tema ANTES del primer paint (evita flash del tema
+      // incorrecto). ThemeProvider (src/lib/theme.jsx) reactiva sobre esto
+      // mismo una vez React monta.
+      ;(function () {
+        var stored = localStorage.getItem('southpoint-theme')
+        var dark = stored ? stored === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+        document.documentElement.classList.toggle('dark', dark)
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

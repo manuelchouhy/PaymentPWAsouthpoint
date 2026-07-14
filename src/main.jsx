@@ -18,6 +18,7 @@ import { DashboardPage } from './pages/DashboardPage.jsx'
 import { AuthGate } from './components/AuthGate.jsx'
 import { TestLoginPage } from './pages/TestLoginPage.jsx'
 import { can as checkCan } from './lib/permissions.js'
+import { ThemeProvider } from './lib/theme.jsx'
 import './index.css'
 
 const isTestMode = import.meta.env.VITE_TEST_MODE === 'true'
@@ -64,15 +65,17 @@ function AuthenticatedApp() {
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <BrowserRouter>
-      {isTestMode ? (
-        <Routes>
-          <Route path="/test-login" element={<TestLoginPage />} />
-          <Route path="*" element={<AuthenticatedApp />} />
-        </Routes>
-      ) : (
-        <AuthenticatedApp />
-      )}
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        {isTestMode ? (
+          <Routes>
+            <Route path="/test-login" element={<TestLoginPage />} />
+            <Route path="*" element={<AuthenticatedApp />} />
+          </Routes>
+        ) : (
+          <AuthenticatedApp />
+        )}
+      </BrowserRouter>
+    </ThemeProvider>
   </StrictMode>,
 )
