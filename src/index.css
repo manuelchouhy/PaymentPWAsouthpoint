@@ -32,7 +32,7 @@
   --radius: 0.375rem;
 
   --success: 160 84% 39%;
-  --success-foreground: 0 0% 100%;
+  --success-foreground: 240 7% 5%;
   --warning: 38 92% 50%;
   --warning-foreground: 240 7% 5%;
   --info: 186 100% 42%;
@@ -61,7 +61,7 @@
   --ring: 186 100% 42%;
 
   --success: 160 84% 39%;
-  --success-foreground: 0 0% 100%;
+  --success-foreground: 240 7% 5%;
   --warning: 38 92% 50%;
   --warning-foreground: 240 7% 5%;
   --info: 186 100% 42%;
@@ -113,14 +113,19 @@
   --text-faint:       #71717A;
   --text-ghost:       #52525B;
 
-  /* Acento — violeta Vercel */
-  --accent:           #A78BFA;
-  --accent-deep:      #8B5CF6;
-  --accent-darker:    #7C3AED;
-  --accent-bg:        rgba(167, 139, 250, .10);
-  --accent-bg-strong: rgba(167, 139, 250, .18);
-  --accent-line:      rgba(167, 139, 250, .28);
-  --accent-glow:      rgba(167, 139, 250, .42);
+  /* Acento — brand cyan Southpoint (remapeado en Fase 2; ver también los
+     tokens shadcn --primary/--accent más arriba, que son la fuente de
+     verdad para componentes nuevos). Estos --accent-* legacy quedan vivos
+     para todo lo que las Fases 3-4 todavía no migraron pantalla por
+     pantalla (charts, banners, sync status, etc.) — así no queda nada
+     violeta dando vueltas mientras tanto. */
+  --accent:           #00BFD4;
+  --accent-deep:      #00A0B4;
+  --accent-darker:    #008494;
+  --accent-bg:        rgba(0, 191, 212, .10);
+  --accent-bg-strong: rgba(0, 191, 212, .18);
+  --accent-line:      rgba(0, 191, 212, .28);
+  --accent-glow:      rgba(0, 191, 212, .42);
   --on-accent:        #0A0A0A;
 
   /* Estados */
@@ -453,11 +458,10 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   color: var(--text);
   font-family: var(--sans);
   font-size: 13px;
-  color-scheme: dark;
 }
 .filterfield__input:focus {
   outline: none;
-  border-color: var(--accent-line);
+  border-color: hsl(var(--primary));
   background: var(--surface);
 }
 .filterfield--week .filterfield__input { width: 92px; }
@@ -648,7 +652,7 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   opacity: .85;
 }
 
-.btn--refresh .icon-spin { color: var(--accent); }
+.btn--refresh .icon-spin { color: hsl(var(--primary)); }
 .btn--refresh:disabled .icon-spin { color: var(--text-faint); }
 
 /* --- Estado de sync (FR-01) ----------------------------------------------- */
@@ -1129,7 +1133,11 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   }
 }
 
-/* --- Botones -------------------------------------------------------------- */
+/* --- Botones (Southpoint, Fase 2) ------------------------------------------
+   primary = brand cyan sólido, secondary/ghost = outline, sin gradientes ni
+   glow — solo shadow-sm. .btn--pay es el nombre histórico del primary (se
+   usa en toda la app para la acción principal de cada pantalla, no solo
+   pagos); .btn--primary es alias para el mismo estilo. */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -1140,62 +1148,65 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   font-size: 14px;
   letter-spacing: -.005em;
   padding: 10px 18px;
-  border-radius: var(--r);
+  border-radius: calc(var(--radius) - 2px);
   border: 1px solid transparent;
   white-space: nowrap;
   position: relative;
-  transition: transform .12s var(--ease-spring), box-shadow .25s ease,
-    background-color .15s ease, color .15s ease, border-color .15s ease;
+  transition: background-color .15s ease, color .15s ease, border-color .15s ease,
+    filter .15s ease;
 }
 
-.btn--pay {
-  background: var(--accent);
-  color: var(--on-accent);
-  border-color: var(--accent-deep);
+.btn--pay,
+.btn--primary {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: transparent;
   font-weight: 600;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .25),
-    0 0 0 1px rgba(167, 139, 250, .3),
-    0 8px 24px -8px var(--accent-glow);
+  box-shadow: var(--shadow-sm);
 }
 
-.btn--pay:hover:not(:disabled) {
-  background: #B5A0FF;
-  transform: translateY(-1px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .3),
-    0 0 0 1px var(--accent),
-    0 0 0 4px var(--accent-bg-strong),
-    0 12px 32px -8px var(--accent-glow);
+.btn--pay:hover:not(:disabled),
+.btn--primary:hover:not(:disabled) {
+  background: hsl(var(--accent));
 }
 
-.btn--pay:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow:
-    inset 0 1px 4px rgba(0, 0, 0, .25),
-    0 0 0 1px var(--accent-deep);
+.btn--pay:active:not(:disabled),
+.btn--primary:active:not(:disabled) {
+  filter: brightness(.94);
 }
 
-.btn--pay:disabled {
-  background: var(--surface-2);
-  color: var(--text-ghost);
-  border-color: var(--line-strong);
+.btn--pay:disabled,
+.btn--primary:disabled {
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  border-color: transparent;
   box-shadow: none;
   cursor: not-allowed;
 }
 
 .btn--ghost {
-  background: var(--surface);
-  color: var(--text);
-  border-color: var(--line-strong);
+  background: transparent;
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
 }
 
 .btn--ghost:hover:not(:disabled) {
-  background: var(--surface-2);
-  border-color: var(--line-stronger);
+  background: hsl(var(--muted));
+  border-color: hsl(var(--primary));
 }
 
-.btn--ghost:active:not(:disabled) { background: var(--surface-3); }
+.btn--ghost:active:not(:disabled) { background: hsl(var(--border)); }
+
+.btn--destructive {
+  background: hsl(var(--destructive));
+  color: hsl(var(--destructive-foreground));
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.btn--destructive:hover:not(:disabled) { filter: brightness(1.08); }
+.btn--destructive:active:not(:disabled) { filter: brightness(.94); }
+
 .btn:disabled { cursor: not-allowed; }
 
 .icon-btn {
@@ -1520,29 +1531,29 @@ th.col-pop { text-align: center; }
   border: 1px solid transparent;
 }
 
-.badge--ok { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-line); }
-.badge--no { background: var(--no-bg); color: var(--no); border-color: var(--no-line); }
-.badge--paid {
-  background: var(--ok-bg);
-  color: var(--ok);
-  border-color: var(--ok-line);
-}
+.badge--ok { background: hsl(var(--success) / .15); color: hsl(var(--success)); border-color: hsl(var(--success) / .3); }
+.badge--no { background: hsl(var(--destructive) / .15); color: hsl(var(--destructive)); border-color: hsl(var(--destructive) / .3); }
+
+/* Billing Status · 4 estados, fondo sólido (Southpoint, Fase 2). */
 .badge--pending {
-  background: var(--surface-3);
-  color: var(--text-faint);
-  border-color: var(--line-strong);
+  background: #52525B;
+  color: #fff;
+  border-color: transparent;
 }
-/* Billing Status · 4 estados. Pending (gris) · Invoiced (verde) ·
-   Collected (azul) · Paid (verde). */
 .badge--invoiced {
-  background: var(--ok-bg);
-  color: var(--ok);
-  border-color: var(--ok-line);
+  background: hsl(var(--warning));
+  color: hsl(var(--warning-foreground));
+  border-color: transparent;
 }
 .badge--collected {
-  background: rgba(96, 165, 250, .12);
-  color: #93C5FD;
-  border-color: rgba(96, 165, 250, .28);
+  background: hsl(var(--info));
+  color: hsl(var(--info-foreground));
+  border-color: transparent;
+}
+.badge--paid {
+  background: hsl(var(--success));
+  color: hsl(var(--success-foreground));
+  border-color: transparent;
 }
 .badge svg { flex-shrink: 0; }
 
@@ -1614,21 +1625,16 @@ th.col-pop { text-align: center; }
 .card {
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
+  border-radius: var(--radius);
   padding: 16px;
   cursor: pointer;
-  transition: transform .14s var(--ease-spring), border-color .15s ease,
-    background-color .15s ease, box-shadow .2s ease;
+  transition: border-color .15s ease, background-color .15s ease, box-shadow .2s ease;
 }
 
-.card:active { transform: scale(.99); }
-
 .card.is-selected {
-  background: linear-gradient(180deg, var(--accent-bg), transparent 80%);
-  border-color: var(--accent-line);
-  box-shadow:
-    0 0 0 1px var(--accent-line),
-    0 0 32px -8px var(--accent-glow);
+  background: hsl(var(--primary) / .06);
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 1px hsl(var(--primary));
 }
 
 .card__top {
@@ -1690,7 +1696,7 @@ th.col-pop { text-align: center; }
   gap: 4px;
 }
 
-.card.is-selected .card__body { border-color: var(--accent-line); }
+.card.is-selected .card__body { border-color: hsl(var(--primary) / .3); }
 
 .card__task { font-weight: 500; font-size: 14px; color: var(--text); letter-spacing: -.005em; }
 .card__desc { font-size: 13.5px; color: var(--text-soft); }
@@ -1829,20 +1835,10 @@ th.col-pop { text-align: center; }
   margin: auto;
   background: var(--surface);
   border: 1px solid var(--line-stronger);
-  border-radius: var(--r-xl);
-  box-shadow: var(--shadow-pop);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
   padding: 24px;
   position: relative;
-}
-
-/* Halo violeta detrás del modal */
-.modal::before {
-  content: '';
-  position: absolute;
-  inset: -100px;
-  z-index: -1;
-  background: radial-gradient(ellipse at top, rgba(167, 139, 250, .15), transparent 60%);
-  pointer-events: none;
 }
 
 .modal__head {
@@ -1862,9 +1858,8 @@ th.col-pop { text-align: center; }
   bottom: -1px;
   width: 32px;
   height: 1.5px;
-  background: var(--accent);
+  background: hsl(var(--primary));
   border-radius: 1px;
-  box-shadow: 0 0 8px var(--accent-glow);
 }
 
 .modal__kicker {
@@ -2013,10 +2008,6 @@ th.col-pop { text-align: center; }
   line-height: 1.5;
 }
 
-/* Pickers de fecha/número con esquema oscuro consistente. */
-.field__input[type="date"],
-.field__input[type="number"] { color-scheme: dark; }
-
 .field__label {
   font-family: var(--sans);
   font-size: 11px;
@@ -2037,7 +2028,11 @@ th.col-pop { text-align: center; }
   font-weight: 500;
 }
 
-.field__req { background: var(--accent-bg-strong); color: var(--accent); border: 1px solid var(--accent-line); }
+.field__req {
+  background: hsl(var(--primary) / .15);
+  color: hsl(var(--primary));
+  border: 1px solid hsl(var(--primary) / .3);
+}
 
 .field__opt {
   background: var(--surface-3);
@@ -2062,17 +2057,17 @@ th.col-pop { text-align: center; }
 
 .field__input:focus-visible {
   outline: none;
-  border-color: var(--accent);
+  border-color: hsl(var(--primary));
   background: var(--surface);
-  box-shadow: 0 0 0 3px var(--accent-bg);
+  box-shadow: 0 0 0 3px hsl(var(--primary) / .15);
 }
 
-.field__input--error { border-color: var(--no); }
+.field__input--error { border-color: hsl(var(--destructive)); }
 .field__input--error:focus-visible {
-  border-color: var(--no);
-  box-shadow: 0 0 0 3px var(--no-bg);
+  border-color: hsl(var(--destructive));
+  box-shadow: 0 0 0 3px hsl(var(--destructive) / .15);
 }
-.field__error { font-size: 12px; color: var(--no); }
+.field__error { font-size: 12px; color: hsl(var(--destructive)); }
 
 .modal__note {
   display: flex;
@@ -2183,9 +2178,8 @@ th.col-pop { text-align: center; }
   bottom: -1px;
   width: 32px;
   height: 1.5px;
-  background: var(--accent);
+  background: hsl(var(--primary));
   border-radius: 1px;
-  box-shadow: 0 0 8px var(--accent-glow);
 }
 .drawer__kicker {
   font-family: var(--mono);
@@ -2458,8 +2452,8 @@ th.col-pop { text-align: center; }
   bottom: calc(24px + env(safe-area-inset-bottom));
   z-index: 120;
   display: flex;
-  justify-content: center;
-  padding: 0 16px;
+  justify-content: flex-end;
+  padding: 0 24px;
   pointer-events: none;
 }
 
@@ -2472,11 +2466,9 @@ th.col-pop { text-align: center; }
   background: var(--surface-2);
   color: var(--text);
   border: 1px solid var(--line-stronger);
-  border-radius: var(--r-lg);
+  border-radius: var(--radius);
   padding: 14px 16px 14px 20px;
-  box-shadow:
-    0 24px 48px -16px rgba(0, 0, 0, .8),
-    0 0 0 1px var(--accent-line);
+  box-shadow: var(--shadow-sm);
   position: relative;
   overflow: hidden;
 }
@@ -2488,28 +2480,17 @@ th.col-pop { text-align: center; }
   top: 0;
   bottom: 0;
   width: 3px;
-  background: linear-gradient(180deg, var(--accent), var(--accent-deep));
-  box-shadow: 0 0 12px var(--accent-glow);
+  background: hsl(var(--success));
 }
 
 .toast__icon {
   display: inline-flex;
-  color: var(--ok);
+  color: hsl(var(--success));
   flex-shrink: 0;
 }
 
-.toast--error {
-  box-shadow:
-    0 24px 48px -16px rgba(0, 0, 0, .8),
-    0 0 0 1px var(--no-line);
-}
-
-.toast--error::before {
-  background: linear-gradient(180deg, var(--no), #DC2626);
-  box-shadow: 0 0 12px rgba(248, 113, 113, .35);
-}
-
-.toast--error .toast__icon { color: var(--no); }
+.toast--error::before { background: hsl(var(--destructive)); }
+.toast--error .toast__icon { color: hsl(var(--destructive)); }
 
 .toast__msg {
   font-size: 13.5px;
@@ -3078,7 +3059,7 @@ th.col-pop { text-align: center; }
 .topnav__link.is-active {
   color: var(--text);
   background: var(--surface-2);
-  border-color: var(--line-strong);
+  border-color: hsl(var(--primary) / .35);
 }
 
 .topbar__right {
@@ -3095,11 +3076,11 @@ th.col-pop { text-align: center; }
 }
 
 /* --- Badges de estado de contrato (FR-07) -------------------------------- */
-.badge--expired  { background: var(--no-bg);  color: var(--no);  border-color: var(--no-line); }
+.badge--expired  { background: hsl(var(--destructive) / .15); color: hsl(var(--destructive)); border-color: hsl(var(--destructive) / .3); }
 .badge--critical { background: rgba(251, 146, 60, .12); color: #FDBA74; border-color: rgba(251, 146, 60, .28); }
-.badge--expiring { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-line); }
+.badge--expiring { background: hsl(var(--warning) / .15); color: hsl(var(--warning)); border-color: hsl(var(--warning) / .3); }
 .badge--advance  { background: rgba(253, 224, 71, .10); color: #FDE68A; border-color: rgba(253, 224, 71, .22); }
-.badge--active   { background: var(--ok-bg);  color: var(--ok);  border-color: var(--ok-line); }
+.badge--active   { background: hsl(var(--success) / .15); color: hsl(var(--success)); border-color: hsl(var(--success) / .3); }
 
 /* --- Grilla de proyectos (tabla ancha con scroll horizontal) ------------- */
 .table-wrap--scroll { overflow: auto; }
@@ -3342,7 +3323,7 @@ th.col-pop { text-align: center; }
 }
 .settings-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .settings-actions { display: flex; justify-content: flex-end; }
-select.field__input { color-scheme: dark; cursor: pointer; }
+select.field__input { cursor: pointer; }
 .settings-check {
   display: flex;
   align-items: center;
@@ -3529,14 +3510,14 @@ select.field__input { color-scheme: dark; cursor: pointer; }
   padding: 16px 18px;
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
+  border-radius: var(--radius);
   text-decoration: none;
   transition: border-color .18s ease, box-shadow .18s ease;
 }
 
 .dash-kpi:hover {
-  border-color: var(--line-stronger);
-  box-shadow: 0 4px 16px -6px rgba(0,0,0,.4);
+  border-color: hsl(var(--primary));
+  box-shadow: var(--shadow-sm);
 }
 
 .dash-kpi__label {
@@ -3565,11 +3546,11 @@ select.field__input { color-scheme: dark; cursor: pointer; }
   color: var(--text-ghost);
 }
 
-.dash-kpi--warn { border-color: rgba(251, 191, 36, .35); }
-.dash-kpi--warn .dash-kpi__value { color: var(--warn); }
+.dash-kpi--warn { border-color: hsl(var(--warning) / .35); }
+.dash-kpi--warn .dash-kpi__value { color: hsl(var(--warning)); }
 
-.dash-kpi--urgent { border-color: rgba(248, 113, 113, .35); }
-.dash-kpi--urgent .dash-kpi__value { color: var(--no); }
+.dash-kpi--urgent { border-color: hsl(var(--destructive) / .35); }
+.dash-kpi--urgent .dash-kpi__value { color: hsl(var(--destructive)); }
 
 .dash-main {
   display: grid;
