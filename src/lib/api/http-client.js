@@ -175,4 +175,11 @@ export const httpApiClient = {
     // POST /api/email-outbox/:id/retry
     retry: () => notImplemented('emailOutbox.retry'),
   },
+
+  test: {
+    // POST /api/test/login — solo con VITE_TEST_MODE=true en el backend de test.
+    login: () => notImplemented('test.login'),
+    // POST /api/test/cleanup-invoice-chain/:invoiceId
+    cleanupInvoiceChain: () => notImplemented('test.cleanupInvoiceChain'),
+  },
 }

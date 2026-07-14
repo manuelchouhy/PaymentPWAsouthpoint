@@ -16,47 +16,63 @@ import { TraceabilityPage } from './pages/TraceabilityPage.jsx'
 import { EmailOutboxPage } from './pages/EmailOutboxPage.jsx'
 import { DashboardPage } from './pages/DashboardPage.jsx'
 import { AuthGate } from './components/AuthGate.jsx'
+import { TestLoginPage } from './pages/TestLoginPage.jsx'
 import { can as checkCan } from './lib/permissions.js'
 import './index.css'
+
+const isTestMode = import.meta.env.VITE_TEST_MODE === 'true'
+
+function AuthenticatedApp() {
+  return (
+    <AuthGate>
+      {({ user, profile, appConfig, signOut }) => {
+        const enforcement = appConfig?.permissionsEnforced ?? false
+        const roles = profile?.roles ?? []
+        const can = (action) => checkCan(action, roles, enforcement)
+        return (
+          <Routes>
+            <Route
+              element={
+                <Layout
+                  user={user}
+                  profile={profile}
+                  can={can}
+                  onSignOut={signOut}
+                />
+              }
+            >
+              <Route index element={<DashboardPage />} />
+              <Route path="time-entries" element={<App />} />
+              <Route path="projects" element={<ProjectsPage />} />
+              <Route path="contract-alerts" element={<ContractAlertSettingsPage />} />
+              <Route path="collections" element={<CollectionsPage />} />
+              <Route path="collection-alerts" element={<CollectionAlertSettingsPage />} />
+              <Route path="payments" element={<PaymentsPage />} />
+              <Route path="payment-alerts" element={<PaymentAlertSettingsPage />} />
+              <Route path="supplier-contracts" element={<SupplierContractsPage />} />
+              <Route path="supplier-alerts" element={<SupplierAlertSettingsPage />} />
+              <Route path="audit-log" element={<AuditLogPage />} />
+              <Route path="traceability" element={<TraceabilityPage />} />
+              <Route path="email-outbox" element={<EmailOutboxPage />} />
+            </Route>
+          </Routes>
+        )
+      }}
+    </AuthGate>
+  )
+}
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
-      <AuthGate>
-        {({ user, profile, appConfig, signOut }) => {
-          const enforcement = appConfig?.permissionsEnforced ?? false
-          const roles = profile?.roles ?? []
-          const can = (action) => checkCan(action, roles, enforcement)
-          return (
-            <Routes>
-              <Route
-                element={
-                  <Layout
-                    user={user}
-                    profile={profile}
-                    can={can}
-                    onSignOut={signOut}
-                  />
-                }
-              >
-                <Route index element={<DashboardPage />} />
-                <Route path="time-entries" element={<App />} />
-                <Route path="projects" element={<ProjectsPage />} />
-                <Route path="contract-alerts" element={<ContractAlertSettingsPage />} />
-                <Route path="collections" element={<CollectionsPage />} />
-                <Route path="collection-alerts" element={<CollectionAlertSettingsPage />} />
-                <Route path="payments" element={<PaymentsPage />} />
-                <Route path="payment-alerts" element={<PaymentAlertSettingsPage />} />
-                <Route path="supplier-contracts" element={<SupplierContractsPage />} />
-                <Route path="supplier-alerts" element={<SupplierAlertSettingsPage />} />
-                <Route path="audit-log" element={<AuditLogPage />} />
-                <Route path="traceability" element={<TraceabilityPage />} />
-                <Route path="email-outbox" element={<EmailOutboxPage />} />
-              </Route>
-            </Routes>
-          )
-        }}
-      </AuthGate>
+      {isTestMode ? (
+        <Routes>
+          <Route path="/test-login" element={<TestLoginPage />} />
+          <Route path="*" element={<AuthenticatedApp />} />
+        </Routes>
+      ) : (
+        <AuthenticatedApp />
+      )}
     </BrowserRouter>
   </StrictMode>,
 )

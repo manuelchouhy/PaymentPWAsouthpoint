@@ -12,3 +12,10 @@ import { httpApiClient } from './http-client'
 const API_MODE = import.meta.env.VITE_API_MODE === 'http' ? 'http' : 'supabase'
 
 export const api = API_MODE === 'http' ? httpApiClient : supabaseApiClient
+
+// Expone el cliente en window solo en modo test (Prompt R2): Playwright corre
+// en un contexto Node aparte y no puede importar este módulo ESM directamente
+// (usa import.meta.env), así que llama a api.test.* vía page.evaluate().
+if (import.meta.env.VITE_TEST_MODE === 'true' && typeof window !== 'undefined') {
+  window.__api = api
+}

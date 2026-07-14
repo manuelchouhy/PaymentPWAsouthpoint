@@ -18,3 +18,8 @@ dev-dist
 # Artifacts de herramientas locales (Playwright MCP, IDEs)
 .playwright-mcp
 supabase/.idea
+
+# Playwright — reportes y resultados de test runs
+/test-results
+/playwright-report
+/blob-report

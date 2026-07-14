@@ -327,4 +327,10 @@ export interface ApiClient {
     list(): Promise<EmailOutboxEntry[]>
     retry(id: string | number): Promise<void>
   }
+
+  /** Solo activo con VITE_TEST_MODE=true — infraestructura para Playwright (Prompt R2). */
+  test: {
+    login(): Promise<void>
+    cleanupInvoiceChain(invoiceId: string | number): Promise<void>
+  }
 }
