@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Southpoint UI redesign — baseline vs. after</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 32px; background: #0D0D0F; color: #FAFAFA; font-family: Inter, system-ui, sans-serif; }
+  h1 { font-family: Montserrat, sans-serif; font-weight: 300; letter-spacing: .04em; text-transform: uppercase; }
+  .pair { margin-bottom: 48px; border-bottom: 1px solid #1F1F24; padding-bottom: 32px; }
+  .pair h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: #B8B8BC; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; text-transform: none; letter-spacing: 0; }
+  .tag--new { background: rgba(0,191,212,.15); color: #00BFD4; }
+  .tag--missing { background: rgba(239,68,68,.15); color: #EF4444; }
+  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  figure { margin: 0; }
+  figcaption { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #6B6B72; margin-bottom: 8px; }
+  img { width: 100%; height: auto; border: 1px solid #1F1F24; border-radius: 6px; display: block; }
+  .empty { border: 1px dashed #1F1F24; border-radius: 6px; padding: 40px; text-align: center; color: #6B6B72; }
+  @media (max-width: 900px) { .shots { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+  <h1>Southpoint UI redesign</h1>
+  <p>Baseline (antes) vs. after (después) — 18 pantallas. Todo debería verse distinto; esto es para revisión manual, no valida nada automáticamente.</p>
+  
+      <section class="pair">
+        <h2>login</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/01-login.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/01-login.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>dashboard</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/02-dashboard.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/02-dashboard.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>time-entries</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/03-time-entries.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/03-time-entries.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>time-entries-filtered</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/04-time-entries-filtered.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/04-time-entries-filtered.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>bill-modal</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/05-bill-modal.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/05-bill-modal.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>collections</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/06-collections.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/06-collections.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>register-collection-modal</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/07-register-collection-modal.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/07-register-collection-modal.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>payments</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/08-payments.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/08-payments.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>payments-show-paid</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/09-payments-show-paid.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/09-payments-show-paid.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>register-payment-modal</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/10-register-payment-modal.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/10-register-payment-modal.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>invoice-drawer</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/11-invoice-drawer.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/11-invoice-drawer.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>projects</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/12-projects.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/12-projects.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>supplier-contracts</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/13-supplier-contracts.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/13-supplier-contracts.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>audit-log</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/14-audit-log.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/14-audit-log.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>settings-contract-alerts</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/15-settings-contract-alerts.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/15-settings-contract-alerts.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>settings-collection-alerts</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/16-settings-collection-alerts.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/16-settings-collection-alerts.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>settings-payment-alerts</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/17-settings-payment-alerts.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/17-settings-payment-alerts.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+
+      <section class="pair">
+        <h2>settings-supplier-alerts</h2>
+        <div class="shots">
+          <figure>
+            <figcaption>Baseline</figcaption>
+            <img src="baseline/18-settings-supplier-alerts.png" loading="lazy" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src="after/18-settings-supplier-alerts.png" loading="lazy" />
+          </figure>
+        </div>
+      </section>
+</body>
+</html>
