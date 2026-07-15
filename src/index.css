@@ -68,6 +68,9 @@
   --info-foreground: 240 7% 5%;
 }
 
+/* Vive en .app-header, que sigue el legacy --bg (dark, no reactivo) — usa
+   texto legacy en vez de --foreground/--muted-foreground por la misma
+   razón que .btn--ghost (ver más abajo). */
 .theme-toggle {
   display: inline-flex;
   align-items: center;
@@ -75,14 +78,14 @@
   width: 32px;
   height: 32px;
   border-radius: calc(var(--radius) - 2px);
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--line-strong);
   background: transparent;
-  color: hsl(var(--muted-foreground));
+  color: var(--text-soft);
   cursor: pointer;
   transition: color .15s ease, border-color .15s ease, background-color .15s ease;
 }
 .theme-toggle:hover {
-  color: hsl(var(--foreground));
+  color: var(--text);
   border-color: hsl(var(--primary));
 }
 
@@ -1172,14 +1175,20 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   cursor: not-allowed;
 }
 
+/* --foreground/--muted son theme-reactive (cambian con .dark), pero el
+   fondo de página/toolbar donde vive este botón sigue siendo el legacy
+   --bg/--surface, que NO reacciona al toggle (todavía sin migrar) — si el
+   texto usara --foreground, en modo claro quedaría texto oscuro sobre un
+   fondo que sigue oscuro (contraste ~1:1, invisible). Se usan los tokens
+   legacy --text/--surface-2, que sí están en sync con ese fondo. */
 .btn--ghost {
   background: transparent;
-  color: hsl(var(--foreground));
+  color: var(--text);
   border-color: hsl(var(--border));
 }
 
 .btn--ghost:hover:not(:disabled) {
-  background: hsl(var(--muted));
+  background: var(--surface-2);
   border-color: hsl(var(--primary));
 }
 
