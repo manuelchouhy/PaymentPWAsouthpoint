@@ -15,10 +15,10 @@ import { ContractsExpiringWidget } from '../components/dashboard/ContractsExpiri
 import { SupplierContractsWidget } from '../components/dashboard/SupplierContractsWidget'
 
 const STATUS_COLORS = {
-  Pending: '#6b7280',
-  Invoiced: '#7c3aed',
-  Collected: '#2563eb',
-  Paid: '#16a34a',
+  Pending: '#52525B',
+  Invoiced: '#F59E0B',
+  Collected: '#00BFD4',
+  Paid: '#10B981',
 }
 
 function addDaysISO(iso, days) {

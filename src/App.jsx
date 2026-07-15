@@ -21,7 +21,7 @@ import { SyncStatus } from './components/SyncStatus'
 import { SyncLogModal } from './components/SyncLogModal'
 import { Toast } from './components/Toast'
 
-const VIOLET_CONFETTI = ['#A78BFA', '#C4B5FD', '#8B5CF6', '#DDD6FE', '#7C3AED']
+const BRAND_CONFETTI = ['#00BFD4', '#1FC5D9', '#7DE3EC', '#10B981', '#FFFFFF']
 const BILLING_SORT_ORDER = { Pending: 0, Invoiced: 1, Collected: 2, Paid: 3 }
 
 function fireConfetti() {
@@ -36,7 +36,7 @@ function fireConfetti() {
       gravity: 0.9,
       ticks: 180,
       origin: { x: originX, y: 0.85 },
-      colors: VIOLET_CONFETTI,
+      colors: BRAND_CONFETTI,
       shapes: ['circle', 'square'],
       scalar: 0.9,
       disableForReducedMotion: true,
@@ -52,7 +52,7 @@ function fireConfetti() {
         startVelocity: 28,
         gravity: 1,
         origin: { x: 0.5, y: 0.75 },
-        colors: VIOLET_CONFETTI,
+        colors: BRAND_CONFETTI,
         scalar: 0.8,
         disableForReducedMotion: true,
       }),

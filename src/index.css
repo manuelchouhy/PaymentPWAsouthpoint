@@ -139,10 +139,10 @@
   --warn-bg:          rgba(251, 191, 36, .10);
   --warn-line:        rgba(251, 191, 36, .25);
 
-  /* Sombras — sutiles, lo gordo lo hace el glow del acento */
+  /* Sombras — sutiles, sin glow de acento (Southpoint: shadow-sm estándar). */
   --shadow-sm:   0 1px 0 rgba(255, 255, 255, .03);
   --shadow-card: 0 1px 0 rgba(255, 255, 255, .03), 0 0 0 1px rgba(0, 0, 0, .6);
-  --shadow-pop:  0 24px 64px -16px rgba(0, 0, 0, .8), 0 0 0 1px rgba(167, 139, 250, .12);
+  --shadow-pop:  0 24px 64px -16px rgba(0, 0, 0, .8), 0 0 0 1px var(--line-stronger);
   --shadow-glow: 0 0 0 1px var(--accent-deep), 0 0 0 4px var(--accent-bg-strong), 0 8px 24px -4px var(--accent-glow);
 
   /* Radius — sharper, Linear/Vercel sensibility */
@@ -327,7 +327,7 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   margin-bottom: 16px;
   background: var(--surface-2);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
+  border-radius: var(--radius);
 }
 
 .viewtabs__tab {
@@ -383,7 +383,7 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   padding: 14px 16px;
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
+  border-radius: var(--radius);
 }
 
 .filterbar__head {
@@ -745,20 +745,18 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   gap: 22px;
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
+  border-radius: var(--radius);
   padding: 18px 18px 18px 22px;
   position: relative;
   overflow: hidden;
   transition: border-color .25s ease, box-shadow .3s ease, background-color .2s ease;
 }
 
-/* Glow violeta cuando hay selección activa */
+/* Surface sólido cyan cuando hay selección activa (sin gradiente ni glow). */
 .selbar--active {
-  border-color: var(--accent-line);
-  background: linear-gradient(180deg, var(--surface) 0%, rgba(167, 139, 250, .04) 100%);
-  box-shadow:
-    0 0 0 1px var(--accent-line),
-    0 0 40px -8px var(--accent-glow);
+  border-color: hsl(var(--primary) / .35);
+  background: hsl(var(--primary) / .05);
+  box-shadow: 0 0 0 1px hsl(var(--primary) / .35);
 }
 
 .selbar__metric {
@@ -880,7 +878,7 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .stepper {
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
+  border-radius: var(--radius);
   padding: 18px 20px 16px;
   margin-bottom: 18px;
   position: relative;
@@ -1234,7 +1232,7 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .table-wrap {
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
+  border-radius: var(--radius);
   overflow: hidden;
   position: relative;
 }
@@ -2517,7 +2515,7 @@ th.col-pop { text-align: center; }
   padding: 56px 24px;
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
+  border-radius: var(--radius);
   color: var(--text-soft);
 }
 
@@ -2544,7 +2542,7 @@ th.col-pop { text-align: center; }
 .skeleton-table {
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
@@ -2573,7 +2571,7 @@ th.col-pop { text-align: center; }
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(167, 139, 250, .12) 50%,
+    hsl(var(--primary) / .12) 50%,
     transparent 100%
   );
   transform: translateX(-100%);
@@ -2750,7 +2748,7 @@ th.col-pop { text-align: center; }
   overflow: hidden;
 }
 
-/* Mismas signatures que el app__: grilla sutil + halo violeta superior */
+/* Grid sutil de fondo — sin halo de color (mismo signature que .app::before). */
 .login::before {
   content: '';
   position: fixed;
@@ -2766,20 +2764,6 @@ th.col-pop { text-align: center; }
   -webkit-mask-image: radial-gradient(ellipse at top, black 0%, transparent 70%);
 }
 
-.login::after {
-  content: '';
-  position: fixed;
-  top: -200px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 1000px;
-  height: 600px;
-  z-index: 0;
-  pointer-events: none;
-  background: radial-gradient(ellipse at center, rgba(167, 139, 250, .14), transparent 60%);
-  filter: blur(40px);
-}
-
 .login__card {
   position: relative;
   z-index: 1;
@@ -2787,24 +2771,26 @@ th.col-pop { text-align: center; }
   max-width: 420px;
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-xl);
+  border-radius: var(--radius);
   padding: 32px 32px 28px;
   box-shadow: var(--shadow-card);
 }
 
+/* Splash: logo grande y centrado (Fase 4). */
 .login__brand {
   display: flex;
   align-items: center;
-  margin-bottom: 24px;
+  justify-content: center;
+  margin-bottom: 28px;
 }
 
 .login__logo {
-  height: 30px;
+  height: 48px;
   width: auto;
-  filter: invert(1) hue-rotate(180deg) brightness(1.05);
   user-select: none;
   -webkit-user-drag: none;
 }
+.dark .login__logo { filter: invert(1) hue-rotate(180deg) brightness(1.05); }
 
 .login__kicker-row {
   display: flex;
@@ -3418,7 +3404,7 @@ th.col-pop { text-align: center; }
   max-width: 560px;
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
+  border-radius: var(--radius);
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -3455,7 +3441,7 @@ select.field__input { cursor: pointer; }
 .dash-widget {
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
+  border-radius: var(--radius);
   padding: 16px 18px;
   max-width: 480px;
 }
@@ -3520,10 +3506,10 @@ select.field__input { cursor: pointer; }
   gap: 14px;
   margin: 0 0 18px;
   padding: 14px 18px;
-  border-radius: var(--r-lg);
+  border-radius: var(--radius);
   background: var(--no-bg);
   border: 1px solid var(--no-line);
-  box-shadow: 0 0 0 1px var(--no-line), 0 8px 24px -10px rgba(248, 113, 113, .4);
+  box-shadow: var(--shadow-sm);
 }
 .priority-banner__icon {
   display: grid;
@@ -3690,7 +3676,7 @@ select.field__input { cursor: pointer; }
   padding: 20px 16px;
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-lg);
+  border-radius: var(--radius);
   color: var(--text-soft);
   font-size: 13px;
   font-weight: 500;
@@ -3753,7 +3739,7 @@ select.field__input { cursor: pointer; }
   padding: 16px 24px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--r-lg);
+  border-radius: var(--radius);
   min-width: 100px;
 }
 
