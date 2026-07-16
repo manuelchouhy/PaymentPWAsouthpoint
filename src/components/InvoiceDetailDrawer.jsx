@@ -282,7 +282,7 @@ export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus 
             </motion.button>
           ) : (
             <p className="drawer__done">
-              Invoice <strong>Paid</strong> — no pending actions.
+              Invoice <strong>Paid</strong>. No pending actions.
             </p>
           )}
         </div>

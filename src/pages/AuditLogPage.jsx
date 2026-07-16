@@ -105,7 +105,7 @@ export function AuditLogPage() {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="masthead__top">
-          <span className="masthead__kicker">Settings · Administrator</span>
+          <span className="masthead__kicker">Administrator settings</span>
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Audit Log</h1>

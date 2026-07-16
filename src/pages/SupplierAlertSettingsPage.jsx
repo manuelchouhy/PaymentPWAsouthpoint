@@ -125,7 +125,7 @@ export function SupplierAlertSettingsPage() {
           <div className="settings-section">
             <div className="field">
               <label className="field__label" htmlFor="recipients">
-                Recipients — operations team (comma-separated emails)
+                Recipients (operations team, comma-separated emails)
               </label>
               <input id="recipients" type="text" className="field__input"
                 value={form.recipientsText}
@@ -138,7 +138,7 @@ export function SupplierAlertSettingsPage() {
             <div className="field">
               <label className="field__label" htmlFor="prio-recipients">
                 <Star size={13} aria-hidden="true" className="sc-priority-star" />
-                Priority recipients — southpointlabs (comma-separated emails)
+                Priority recipients (southpointlabs, comma-separated emails)
               </label>
               <input id="prio-recipients" type="text" className="field__input"
                 value={form.priorityRecipientsText}

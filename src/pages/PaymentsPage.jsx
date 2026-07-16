@@ -198,7 +198,7 @@ export function PaymentsPage() {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="masthead__top">
-          <span className="masthead__kicker">Payments · Contractor</span>
+          <span className="masthead__kicker">Contractor payments</span>
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Payments</h1>

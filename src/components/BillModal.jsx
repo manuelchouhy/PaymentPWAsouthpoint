@@ -204,7 +204,7 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
                 <span>
                   <strong>{w.projectName}</strong>
                   {w.contractNumber ? ` · ${w.contractNumber}` : ''}
-                  {' — '}
+                  {': '}
                   {w.status === 'Expired'
                     ? `Contract expired ${Math.abs(w.days)} day${Math.abs(w.days) === 1 ? '' : 's'} ago`
                     : `Contract ${w.status.toLowerCase()} · expires in ${w.days} day${w.days === 1 ? '' : 's'}`}

@@ -8,7 +8,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#0A0A0A" />
+    <meta name="theme-color" id="theme-color-meta" content="#0A0A0A" />
     <meta
       name="description"
       content="Contractor payment management: review logged hours and process payments."
@@ -18,7 +18,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Payment" />
-    <meta name="color-scheme" content="dark light" />
+    <meta name="color-scheme" content="light dark" />
 
     <title>Contractor Payment Management</title>
 
@@ -37,6 +37,8 @@
         var stored = localStorage.getItem('southpoint-theme')
         var dark = stored ? stored === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
         document.documentElement.classList.toggle('dark', dark)
+        var meta = document.getElementById('theme-color-meta')
+        if (meta) meta.setAttribute('content', dark ? '#0A0A0A' : '#FAFAFA')
       })()
     </script>
   </head>

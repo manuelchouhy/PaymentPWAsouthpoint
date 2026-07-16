@@ -233,7 +233,7 @@ export function CollectionsPage() {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="masthead__top">
-          <span className="masthead__kicker">Collections · Client</span>
+          <span className="masthead__kicker">Client collections</span>
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Collections</h1>

@@ -122,7 +122,7 @@ export function SupplierContractsPage() {
     api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.create', resourceType: 'supplier_contract', resourceId: created.id, after: { contractNumber: created.contractNumber, supplierName: created.supplierName, expirationDate: created.expirationDate } })
     setContracts((prev) => sortByExp([created, ...prev]))
     setForm(null)
-    setToast({ id: Date.now(), message: `Contract created — ${created.contractNumber}` })
+    setToast({ id: Date.now(), message: `Contract created: ${created.contractNumber}` })
   }
 
   async function handleUpdate(payload, pdfFile) {
@@ -131,7 +131,7 @@ export function SupplierContractsPage() {
     api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.update', resourceType: 'supplier_contract', resourceId: updated.id, before: { contractNumber: form.contract.contractNumber }, after: { contractNumber: updated.contractNumber, expirationDate: updated.expirationDate } })
     setContracts((prev) => sortByExp(prev.map((c) => (c.id === updated.id ? updated : c))))
     setForm(null)
-    setToast({ id: Date.now(), message: `Contract updated — ${updated.contractNumber}` })
+    setToast({ id: Date.now(), message: `Contract updated: ${updated.contractNumber}` })
   }
 
   async function handleRenew(payload, pdfFile) {
@@ -146,7 +146,7 @@ export function SupplierContractsPage() {
       sortByExp([created, ...prev.map((c) => (c.id === archived.id ? archived : c))].filter((c) => !c.archived)),
     )
     setRenewing(null)
-    setToast({ id: Date.now(), message: `Contract renewed — ${created.contractNumber}` })
+    setToast({ id: Date.now(), message: `Contract renewed: ${created.contractNumber}` })
   }
 
   async function handleMarkRenewal(contract) {
@@ -156,7 +156,7 @@ export function SupplierContractsPage() {
     setDetail(null)
     setToast({
       id: Date.now(),
-      message: `Renewal in progress — snoozed for ${SNOOZE_DAYS} days`,
+      message: `Renewal in progress: snoozed for ${SNOOZE_DAYS} days`,
     })
   }
 
@@ -169,7 +169,7 @@ export function SupplierContractsPage() {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="masthead__top">
-          <span className="masthead__kicker">Contracts · Supplier</span>
+          <span className="masthead__kicker">Supplier contracts</span>
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Supplier Contracts</h1>

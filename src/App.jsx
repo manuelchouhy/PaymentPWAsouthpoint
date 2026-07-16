@@ -415,7 +415,7 @@ export default function App() {
     window.setTimeout(() => setJustInvoicedIds(new Set()), 4500)
     setToast({
       id: Date.now(),
-      message: `Invoice issued — ${billedCount} ${
+      message: `Invoice issued: ${billedCount} ${
         billedCount === 1 ? 'entry' : 'entries'
       } from ${billedUser} · ${billedHoursFmt} h · ${supplierInvoiceNumber}`,
     })
@@ -480,10 +480,10 @@ export default function App() {
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         >
           <div className="masthead__top">
-            <span className="masthead__kicker">Payment management · Contractors</span>
+            <span className="masthead__kicker">Contractor payment management</span>
             <span className="masthead__rule" aria-hidden="true" />
           </div>
-          <h1 className="masthead__title">Payment</h1>
+          <h1 className="masthead__title">Time Entries</h1>
           <p className="masthead__sub">
             Review the hours logged per contractor, select the corresponding
             entries and process the payment.
@@ -605,7 +605,7 @@ export default function App() {
             <footer className="app__footer">
               <p>
                 Payments are processed in the accounting system. This app is a
-                review and recording view — all data access is isolated behind{' '}
+                review and recording view. All data access is isolated behind{' '}
                 <code>src/lib/api</code>.
               </p>
               <div className="app__footer-brand">

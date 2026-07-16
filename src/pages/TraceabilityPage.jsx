@@ -78,12 +78,12 @@ export function TraceabilityPage() {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="masthead__top">
-          <span className="masthead__kicker">Traceability · End-to-end</span>
+          <span className="masthead__kicker">End-to-end traceability</span>
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Traceability</h1>
         <p className="masthead__sub">
-          Full lifecycle of each logged hour — from Zoho to contractor payment.
+          Full lifecycle of each logged hour, from Zoho to contractor payment.
           Click any row to see the complete timeline.
         </p>
       </motion.header>

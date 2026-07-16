@@ -135,7 +135,7 @@ export function EntriesTable({
                     <Checkbox
                       checked={selected}
                       onChange={() => onToggle(entry.id)}
-                      ariaLabel={`Select entry for ${entry.user} — ${entry.task}`}
+                      ariaLabel={`Select entry for ${entry.user}: ${entry.task}`}
                     />
                   )}
                 </td>
@@ -159,7 +159,10 @@ export function EntriesTable({
                 <td className="col-task cell-strong" title={entry.task}>
                   {entry.task}
                 </td>
-                <td className="col-tasknum col-optional cell-mono">
+                <td
+                  className="col-tasknum col-optional cell-mono"
+                  title={entry.taskNumber || undefined}
+                >
                   {entry.taskNumber || '—'}
                 </td>
                 <td className="col-pop">

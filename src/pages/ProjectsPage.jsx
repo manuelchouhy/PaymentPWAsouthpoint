@@ -131,7 +131,7 @@ export function ProjectsPage() {
     api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'project.create', resourceType: 'project', resourceId: created.id, after: { projectNumber: created.projectNumber, projectName: created.projectName, client: created.client } })
     setProjects((prev) => sortByExp([created, ...prev]))
     setForm(null)
-    setToast({ id: Date.now(), message: `Project created — ${created.projectNumber}` })
+    setToast({ id: Date.now(), message: `Project created: ${created.projectNumber}` })
   }
 
   async function handleUpdate(payload) {
@@ -139,7 +139,7 @@ export function ProjectsPage() {
     api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'project.update', resourceType: 'project', resourceId: updated.id, before: { projectNumber: form.project.projectNumber }, after: { projectNumber: updated.projectNumber, projectName: updated.projectName, client: updated.client } })
     setProjects((prev) => sortByExp(prev.map((p) => (p.id === updated.id ? updated : p))))
     setForm(null)
-    setToast({ id: Date.now(), message: `Project updated — ${updated.projectNumber}` })
+    setToast({ id: Date.now(), message: `Project updated: ${updated.projectNumber}` })
   }
 
   return (
@@ -151,7 +151,7 @@ export function ProjectsPage() {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="masthead__top">
-          <span className="masthead__kicker">Contract management · Client</span>
+          <span className="masthead__kicker">Client contract management</span>
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Projects &amp; Contracts</h1>

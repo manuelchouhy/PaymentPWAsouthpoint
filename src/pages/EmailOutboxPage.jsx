@@ -70,7 +70,7 @@ export function EmailOutboxPage() {
     <>
       <header className="masthead">
         <div className="masthead__top">
-          <span className="masthead__kicker">Settings · Notifications</span>
+          <span className="masthead__kicker">Notification settings</span>
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Email Outbox</h1>

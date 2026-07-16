@@ -132,7 +132,7 @@ export function DashboardPage() {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="masthead__top">
-          <span className="masthead__kicker">Overview · {monthLabel}</span>
+          <span className="masthead__kicker">{monthLabel} overview</span>
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Dashboard</h1>
