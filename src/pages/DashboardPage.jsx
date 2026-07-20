@@ -13,6 +13,7 @@ import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recha
 import { api } from '../lib/api'
 import { ContractsExpiringWidget } from '../components/dashboard/ContractsExpiringWidget'
 import { SupplierContractsWidget } from '../components/dashboard/SupplierContractsWidget'
+import { Sparkline } from '../components/Sparkline'
 
 const STATUS_COLORS = {
   Pending: '#52525B',
@@ -34,6 +35,28 @@ function daysUntilDate(iso) {
   return Math.round((target - today) / 86400000)
 }
 
+// Serie de 7 puntos (uno por día, últimos 7 días incluyendo hoy) para las
+// sparklines de las KPI cards. `valueKey` ausente → cuenta ocurrencias.
+function last7DaysSeries(items, dateKey, valueKey) {
+  const now = new Date()
+  const days = []
+  for (let i = 6; i >= 0; i -= 1) {
+    days.push(
+      new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i),
+      )
+        .toISOString()
+        .slice(0, 10),
+    )
+  }
+  const sums = Object.fromEntries(days.map((d) => [d, 0]))
+  for (const item of items) {
+    const iso = item[dateKey]
+    if (iso in sums) sums[iso] += valueKey ? item[valueKey] : 1
+  }
+  return days.map((d) => sums[d])
+}
+
 export function DashboardPage() {
   const { can } = useOutletContext()
   const [data, setData] = useState(null)
@@ -42,10 +65,15 @@ export function DashboardPage() {
   useEffect(() => {
     let cancelled = false
     setLoadStatus('loading')
-    Promise.all([api.timeEntries.list(), api.invoices.list(), api.collections.list()])
-      .then(([entries, invoices, collections]) => {
+    Promise.all([
+      api.timeEntries.list(),
+      api.invoices.list(),
+      api.collections.list(),
+      api.payments.list(),
+    ])
+      .then(([entries, invoices, collections, payments]) => {
         if (cancelled) return
-        setData({ entries, invoices, collections })
+        setData({ entries, invoices, collections, payments })
         setLoadStatus('ready')
       })
       .catch((err) => {
@@ -107,6 +135,19 @@ export function DashboardPage() {
     return { pendingHours, invoicesThisMonth, collectionsPending, paymentsDueThisWeek }
   }, [data, invoiceByEntryId, lastCollDateByInvoiceId])
 
+  // Micro-visual de cada KPI card: actividad real de los últimos 7 días en el
+  // dominio de esa card (no repite el número de la card, da contexto de tendencia).
+  const sparklines = useMemo(() => {
+    if (!data) return null
+    const unbilled = data.entries.filter((e) => !invoiceByEntryId.has(String(e.id)))
+    return {
+      pendingHours: last7DaysSeries(unbilled, 'date', 'hours'),
+      invoicesThisMonth: last7DaysSeries(data.invoices, 'invoiceDate'),
+      collectionsPending: last7DaysSeries(data.collections, 'collectionDate'),
+      paymentsDueThisWeek: last7DaysSeries(data.payments, 'paymentDate'),
+    }
+  }, [data, invoiceByEntryId])
+
   const billingDist = useMemo(() => {
     if (!data) return []
     const sums = { Pending: 0, Invoiced: 0, Collected: 0, Paid: 0 }
@@ -162,7 +203,10 @@ export function DashboardPage() {
             {can('billing.create') && (
               <>
                 <Link to="/time-entries" className="dash-kpi">
-                  <span className="dash-kpi__label">Pending Hours</span>
+                  <div className="dash-kpi__head">
+                    <span className="dash-kpi__label">Pending Hours</span>
+                    <Sparkline values={sparklines.pendingHours} />
+                  </div>
                   <span className="dash-kpi__value">
                     {kpis.pendingHours.toFixed(1)}
                     <span className="dash-kpi__unit"> h</span>
@@ -170,7 +214,10 @@ export function DashboardPage() {
                   <span className="dash-kpi__hint">unbilled entries</span>
                 </Link>
                 <Link to="/time-entries" className="dash-kpi">
-                  <span className="dash-kpi__label">Invoices This Month</span>
+                  <div className="dash-kpi__head">
+                    <span className="dash-kpi__label">Invoices This Month</span>
+                    <Sparkline values={sparklines.invoicesThisMonth} />
+                  </div>
                   <span className="dash-kpi__value">{kpis.invoicesThisMonth}</span>
                   <span className="dash-kpi__hint">{monthLabel}</span>
                 </Link>
@@ -180,7 +227,10 @@ export function DashboardPage() {
               to="/collections"
               className={`dash-kpi${kpis.collectionsPending > 0 ? ' dash-kpi--warn' : ''}`}
             >
-              <span className="dash-kpi__label">Collections Pending</span>
+              <div className="dash-kpi__head">
+                <span className="dash-kpi__label">Collections Pending</span>
+                <Sparkline values={sparklines.collectionsPending} />
+              </div>
               <span className="dash-kpi__value">{kpis.collectionsPending}</span>
               <span className="dash-kpi__hint">invoiced, not yet collected</span>
             </Link>
@@ -188,7 +238,10 @@ export function DashboardPage() {
               to="/payments"
               className={`dash-kpi${kpis.paymentsDueThisWeek > 0 ? ' dash-kpi--urgent' : ''}`}
             >
-              <span className="dash-kpi__label">Payments Due This Week</span>
+              <div className="dash-kpi__head">
+                <span className="dash-kpi__label">Payments Due This Week</span>
+                <Sparkline values={sparklines.paymentsDueThisWeek} />
+              </div>
               <span className="dash-kpi__value">{kpis.paymentsDueThisWeek}</span>
               <span className="dash-kpi__hint">next 7 days</span>
             </Link>

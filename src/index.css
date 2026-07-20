@@ -98,7 +98,7 @@
 :root {
   color-scheme: light dark;
 
-  /* Base — escala monocroma cálida clara (modo claro, default). Las
+  /* Base — paleta Southpoint "grafo" (rediseño identidad original). Las
      superficies se aclaran hacia blanco puro a medida que "elevan"
      (--surface es más blanco que --bg), espejo del comportamiento en
      modo oscuro (donde las superficies se aclaran hacia gris). */
@@ -109,58 +109,66 @@
   --surface-3:        #E4E4E7;
 
   /* Bordes — 1px crisp en toda la app */
-  --line:             #EFEFF1;
+  --line:             #F1F1F3;
   --line-strong:      #E4E4E7;
   --line-stronger:    #D4D4D8;
 
-  /* Tipografía */
-  --text:             #0C0C0D;
+  /* Tipografía — 4 niveles; el prompt de identidad define 3 (primary/muted/
+     soft), acá "soft" (#A1A1AA, el más tenue) se usa para texto decorativo
+     (--text-ghost) y --text-faint (labels reales: headers de tabla, campos
+     de filtro) queda en un tono intermedio propio que sostiene 4.5:1 sobre
+     --bg/--surface — con el valor del prompt ahí, esos labels bajan a
+     ~2.9:1 y fallan WCAG AA. */
+  --text:             #0A0A0C;
   --text-soft:        #52525B;
   --text-faint:       #71717A;
   --text-ghost:       #A1A1AA;
 
-  /* Acento — brand cyan Southpoint (remapeado en Fase 2; ver también los
-     tokens shadcn --primary/--accent más arriba, que son la fuente de
-     verdad para componentes nuevos). Estos --accent-* legacy quedan vivos
-     para todo lo que las Fases 3-4 todavía no migraron pantalla por
-     pantalla (charts, banners, sync status, etc.) — así no queda nada
-     violeta dando vueltas mientras tanto. Mismo valor en claro/oscuro:
-     el cian de marca no cambia con el tema. */
+  /* Acento — cyan de marca Southpoint, único acento saturado en toda la
+     app (ver --primary/--accent shadcn arriba, que ya coinciden con estos
+     valores). Mismo valor en claro/oscuro: no cambia con el tema. */
   --accent:           #00BFD4;
+  --accent-hover:     #1FC5D9;
   --accent-deep:      #00A0B4;
   --accent-darker:    #008494;
-  --accent-bg:        rgba(0, 191, 212, .10);
-  --accent-bg-strong: rgba(0, 191, 212, .18);
+  --accent-bg:        rgba(0, 191, 212, .08);
+  --accent-bg-strong: rgba(0, 191, 212, .16);
   --accent-line:      rgba(0, 191, 212, .28);
   --accent-glow:      rgba(0, 191, 212, .42);
-  --on-accent:        #0A0A0A;
+  --on-accent:        #0A0A0C;
+  /* --accent como TEXTO da 2:1 sobre fondos claros (falla AA, axe-core lo
+     marca) — --accent-text es la variante oscurecida para eso puntual
+     (labels/kickers/números en cyan). Bordes/íconos/fondos siguen usando
+     --accent tal cual: ahí el contraste no aplica igual. */
+  --accent-text:      #0E7490;
 
-  /* Estados — en modo claro se oscurecen respecto al valor "pastel" de
-     modo oscuro para sostener 4.5:1 quando se usan como texto sobre
-     --bg/--surface claros (--*-bg/--*-line son tints translúcidos y no
+  /* Estados — semánticos planos (success/warning/error), sin glow. En modo
+     claro se oscurecen respecto al valor plano de modo oscuro para sostener
+     4.5:1 cuando se usan como texto sobre --bg/--surface claros (--*-bg/
+     --*-line son tints translúcidos de la MISMA familia de color y no
      necesitan el ajuste). Ver overrides de modo oscuro en .dark abajo. */
-  --ok:               #15803D;
-  --ok-bg:            rgba(21, 128, 61, .12);
-  --ok-line:          rgba(21, 128, 61, .35);
+  --ok:               #047857;
+  --ok-bg:            rgba(16, 185, 129, .10);
+  --ok-line:          rgba(16, 185, 129, .30);
   --no:               #DC2626;
-  --no-bg:            rgba(220, 38, 38, .10);
-  --no-line:          rgba(220, 38, 38, .30);
+  --no-bg:            rgba(239, 68, 68, .10);
+  --no-line:          rgba(239, 68, 68, .30);
   --warn:             #B45309;
-  --warn-bg:          rgba(180, 83, 9, .12);
-  --warn-line:        rgba(180, 83, 9, .32);
+  --warn-bg:          rgba(245, 158, 11, .12);
+  --warn-line:        rgba(245, 158, 11, .32);
 
-  /* Sombras — suaves sobre fondo claro (el aro negro fuerte de la versión
-     oscura se leería como un borde duro sobre blanco). */
-  --shadow-sm:   0 1px 2px rgba(24, 24, 27, .04);
-  --shadow-card: 0 1px 2px rgba(24, 24, 27, .04), 0 0 0 1px rgba(24, 24, 27, .06);
-  --shadow-pop:  0 24px 64px -16px rgba(24, 24, 27, .18), 0 0 0 1px var(--line-stronger);
+  /* Sombras — suaves sobre fondo claro, sin blur de color (glow); solo
+     elevación neutra. */
+  --shadow-sm:   0 1px 2px rgba(10, 10, 12, .04);
+  --shadow-card: 0 1px 2px rgba(10, 10, 12, .04), 0 0 0 1px rgba(10, 10, 12, .06);
+  --shadow-pop:  0 16px 40px -12px rgba(10, 10, 12, .16), 0 0 0 1px var(--line-stronger);
 
-  /* Radius — sharper, Linear/Vercel sensibility */
+  /* Radius — 4-8px, sin rounded-2xl/3xl */
   --r-xs: 4px;
   --r-sm: 6px;
   --r:    8px;
-  --r-lg: 12px;
-  --r-xl: 16px;
+  --r-lg: 10px;
+  --r-xl: 12px;
 
   /* Tipografía */
   --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -171,38 +179,39 @@
   --ease-out:    cubic-bezier(.16, 1, .3, 1);
 }
 
-/* Overrides de modo oscuro para los tokens legacy de arriba — valores
-   originales Dark Linear/Vercel (Fases 2-4). Negro profundo, bordes 1px
-   crisp, Geist Sans + Mono. */
+/* Overrides de modo oscuro para los tokens de arriba — paleta Southpoint
+   "grafo": negro cálido (no negro puro), bordes 1px crisp. */
 .dark {
-  --bg:               #0A0A0A;
-  --bg-elev:          #111111;
-  --surface:          #141414;
-  --surface-2:        #1A1A1A;
-  --surface-3:        #1F1F1F;
+  --bg:               #0A0A0C;
+  --bg-elev:          #131316;
+  --surface:          #131316;
+  --surface-2:        #1B1B20;
+  --surface-3:        #232329;
 
-  --line:             #202020;
-  --line-strong:      #2E2E2E;
-  --line-stronger:    #3F3F46;
+  --line:             #1F1F24;
+  --line-strong:      #2A2A31;
+  --line-stronger:    #34343C;
 
-  --text:             #FAFAFA;
-  --text-soft:        #A1A1AA;
+  --text:             #F5F5F7;
+  --text-soft:        #A0A0A8;
   --text-faint:       #71717A;
-  --text-ghost:       #52525B;
+  --text-ghost:       #666670;
 
-  --ok:               #4ADE80;
-  --ok-bg:            rgba(74, 222, 128, .10);
-  --ok-line:          rgba(74, 222, 128, .25);
-  --no:               #F87171;
-  --no-bg:            rgba(248, 113, 113, .10);
-  --no-line:          rgba(248, 113, 113, .25);
-  --warn:             #FBBF24;
-  --warn-bg:          rgba(251, 191, 36, .10);
-  --warn-line:        rgba(251, 191, 36, .25);
+  --accent-text:      #00BFD4;
+
+  --ok:               #10B981;
+  --ok-bg:            rgba(16, 185, 129, .12);
+  --ok-line:          rgba(16, 185, 129, .28);
+  --no:               #EF4444;
+  --no-bg:            rgba(239, 68, 68, .12);
+  --no-line:          rgba(239, 68, 68, .28);
+  --warn:             #F59E0B;
+  --warn-bg:          rgba(245, 158, 11, .12);
+  --warn-line:        rgba(245, 158, 11, .28);
 
   --shadow-sm:   0 1px 0 rgba(255, 255, 255, .03);
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, .03), 0 0 0 1px rgba(0, 0, 0, .6);
-  --shadow-pop:  0 24px 64px -16px rgba(0, 0, 0, .8), 0 0 0 1px var(--line-stronger);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, .03), 0 0 0 1px rgba(0, 0, 0, .5);
+  --shadow-pop:  0 16px 40px -12px rgba(0, 0, 0, .55), 0 0 0 1px var(--line-stronger);
 }
 
 /* --- Reset ---------------------------------------------------------------- */
@@ -249,7 +258,7 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 1600px;
+  max-width: 1440px;
   margin: 0 auto;
   padding:
     32px
@@ -285,7 +294,7 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .masthead__kicker {
@@ -294,7 +303,9 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   font-weight: 500;
   letter-spacing: .05em;
   text-transform: uppercase;
-  color: var(--accent);
+  /* --accent como texto da 2.13:1 sobre fondo claro (falla AA) —
+     --accent-text es la variante oscurecida para eso puntual, ver token. */
+  color: var(--accent-text);
   white-space: nowrap;
   display: inline-flex;
   align-items: center;
@@ -333,19 +344,19 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 
 .masthead__title {
   font-family: var(--heading);
-  font-weight: 300;
-  font-size: clamp(2.5rem, 6vw, 3.6rem);
-  line-height: 1.02;
-  letter-spacing: .02em;
+  font-weight: 500;
+  font-size: 28px;
+  line-height: 1.2;
+  letter-spacing: normal;
   color: var(--text);
 }
 
 .masthead__sub {
-  margin-top: 14px;
+  margin-top: 8px;
   max-width: 54ch;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--text-soft);
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 /* --- Tabs de vista (FR-04) ------------------------------------------------ */
@@ -642,7 +653,8 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .toolbar__count {
   font-family: var(--mono);
   font-size: 12px;
-  color: var(--text-faint);
+  /* --text-faint da ~3.5:1 acá (falla AA) — --text-soft sostiene 4.5+. */
+  color: var(--text-soft);
   letter-spacing: .02em;
   padding-bottom: 9px;
 }
@@ -754,7 +766,6 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .filter__select:focus-visible {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-bg);
 }
 .filter__control:hover .filter__chevron { color: var(--accent); transform: translateY(1px); }
 
@@ -903,26 +914,29 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .dark .selbar__warn strong { color: #FCD34D; }
 .selbar__warn svg { flex-shrink: 0; margin-top: 2px; color: var(--warn); }
 
-/* --- Stepper de billing --------------------------------------------------- */
-.stepper {
+/* --- NodeStepper: grafo de billing -----------------------------------------
+   Approved → Invoiced → Collected → Paid como 4 nodos circulares conectados
+   por aristas de 1px (leitmotif del grafo Southpoint). El nodo activo es la
+   etapa más avanzada con horas > 0: fill cyan + halo sutil sin blur. Las
+   etapas ya superadas quedan "done" (fill neutro + check); lo que no llegó
+   todavía, "idle" (solo outline). El número va debajo del nodo, no adentro. */
+.node-stepper {
   background: var(--surface);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  padding: 18px 20px 16px;
+  padding: 20px 20px 18px;
   margin-bottom: 18px;
-  position: relative;
-  overflow: hidden;
 }
 
-.stepper__header {
+.node-stepper__header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 14px;
+  margin-bottom: 28px;
 }
 
-.stepper__title {
+.node-stepper__title {
   font-family: var(--sans);
   font-size: 11.5px;
   font-weight: 500;
@@ -931,22 +945,17 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   color: var(--text-faint);
 }
 
-.stepper__totals {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-}
+.node-stepper__totals { display: inline-flex; align-items: baseline; gap: 6px; }
 
-.stepper__totals-num {
+.node-stepper__totals-num {
   font-family: var(--sans);
   font-weight: 600;
   font-size: 1.05rem;
   color: var(--text);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -.015em;
 }
 
-.stepper__totals-of {
+.node-stepper__totals-of {
   font-family: var(--mono);
   font-size: .72em;
   font-weight: 400;
@@ -954,7 +963,7 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   margin: 0 2px;
 }
 
-.stepper__totals-unit {
+.node-stepper__totals-unit {
   font-family: var(--mono);
   font-size: 10.5px;
   letter-spacing: .06em;
@@ -962,176 +971,208 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   color: var(--text-faint);
 }
 
-.stepper__track {
-  position: relative;
-  height: 6px;
-  margin: 14px 0 16px;
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.stepper__track-bg {
-  position: absolute;
-  inset: 0;
-  background: var(--surface-3);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-}
-
-.stepper__track-selected {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  background: var(--accent-bg-strong);
-  border-radius: 999px;
-  z-index: 1;
-}
-
-.stepper__track-fill {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  background: var(--accent);
-  border-radius: 999px;
-  z-index: 2;
-}
-
-.stepper__nodes {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+.node-stepper__row {
+  display: flex;
   margin: 0;
   padding: 0;
 }
 
-.stepper__node {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
+.node-stepper__item {
+  flex: 1;
   position: relative;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: var(--surface-2);
-  transition: border-color .2s ease, background-color .2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  padding: 0 4px;
 }
 
-/* Nodos activos: card neutra (sin tinte de color ni glow) — el color de
-   estado vive únicamente en el ícono, no en el fondo/borde de la card. */
-.stepper__node.is-active {
-  border-color: var(--line-stronger);
-  background: var(--surface-3);
+/* Arista: línea de 1px desde el centro del nodo anterior hasta el de este
+   (truco flex: left:-50% width:100% dibuja el segmento entre ambos centros). */
+.node-stepper__edge {
+  content: '';
+  position: absolute;
+  top: 15px;
+  left: -50%;
+  width: 100%;
+  height: 1px;
+  background: var(--line-strong);
+  z-index: 0;
 }
+.node-stepper__edge--done { background: var(--accent); }
 
-.stepper__node.is-done {
-  border-color: var(--line-stronger);
-  background: var(--surface-3);
-}
-
-.stepper__node-icon {
+.node-stepper__node {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: var(--surface-3);
-  border: 1px solid var(--line-strong);
+  border: 1.5px solid var(--line-stronger);
+  background: var(--surface);
   color: var(--text-faint);
-  flex-shrink: 0;
 }
 
-.stepper__node.is-active .stepper__node-icon {
-  background: var(--accent-bg-strong);
-  border-color: var(--accent-line);
-  color: var(--accent);
+.node-stepper__item--active .node-stepper__node {
+  background: var(--accent);
+  border-color: rgba(0, 191, 212, .4);
+  color: var(--on-accent);
+}
+.node-stepper__item--done .node-stepper__node {
+  background: var(--surface-3);
+  border-color: var(--line-stronger);
+  color: var(--text-soft);
 }
 
-.stepper__node.is-done .stepper__node-icon {
-  background: rgba(74, 222, 128, .18);
-  border-color: var(--ok-line);
-  color: var(--ok);
-}
-
-.stepper__node-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
-.stepper__node-label {
+.node-stepper__label {
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 500;
-  letter-spacing: .08em;
+  letter-spacing: .07em;
   text-transform: uppercase;
   color: var(--text-faint);
 }
+.node-stepper__item--active .node-stepper__label { color: var(--accent); }
+.node-stepper__item--done .node-stepper__label { color: var(--text-soft); }
 
-.stepper__node.is-active .stepper__node-label,
-.stepper__node.is-done .stepper__node-label { color: var(--text-soft); }
-
-.stepper__node-value {
+.node-stepper__value {
   font-family: var(--sans);
   font-weight: 600;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   color: var(--text);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -.02em;
   line-height: 1.1;
 }
-
-.stepper__node-unit {
+.node-stepper__value-unit {
   font-family: var(--mono);
-  font-size: .55em;
+  font-size: .6em;
   font-weight: 400;
   color: var(--text-faint);
   margin-left: 2px;
 }
 
-.stepper__node-hint {
-  font-size: 12.5px;
+.node-stepper__hint {
+  font-size: 11.5px;
   color: var(--text-soft);
-  line-height: 1.35;
+  line-height: 1.3;
 }
 
-/* Stepper de 4 etapas (FR · Billing Status). */
-.stepper__nodes--four { grid-template-columns: repeat(4, 1fr); }
-
-/* Nodos activos: card neutra en las cuatro etapas (mismo fondo/borde que
-   arriba) — el color de estado solo tiñe el ícono, nunca la card entera. */
-.stepper__node--invoiced.is-active .stepper__node-icon {
-  background: var(--warn-bg);
-  border-color: var(--warn-line);
-  color: var(--warn);
+@media (max-width: 640px) {
+  .node-stepper__hint { display: none; }
+  .node-stepper__label { font-size: 9.5px; }
 }
 
-.stepper__node--collected.is-active .stepper__node-icon {
-  background: rgba(96, 165, 250, .16);
-  border-color: rgba(96, 165, 250, .28);
-  color: #1D4ED8;
-}
-.dark .stepper__node--collected.is-active .stepper__node-icon { color: #93C5FD; }
-
-.stepper__node--paid.is-active .stepper__node-icon {
-  background: rgba(74, 222, 128, .18);
-  border-color: var(--ok-line);
-  color: var(--ok);
+/* --- Trace timeline (grafo vertical, mismo lenguaje visual que NodeStepper) - */
+.trace-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-@media (max-width: 980px) {
-  .stepper__nodes--four { grid-template-columns: repeat(2, 1fr); }
+.trace-timeline__step {
+  display: flex;
+  gap: 14px;
+  position: relative;
 }
 
-@media (max-width: 720px) {
-  .stepper__nodes {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
+.trace-timeline__rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.trace-timeline__node {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-stronger);
+  background: var(--surface);
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.trace-timeline__step--active .trace-timeline__node {
+  background: var(--accent);
+  border-color: rgba(0, 191, 212, .4);
+  color: var(--on-accent);
+}
+
+.trace-timeline__step--done .trace-timeline__node {
+  background: var(--surface-3);
+  border-color: var(--line-stronger);
+  color: var(--text-soft);
+}
+
+.trace-timeline__edge {
+  width: 1px;
+  flex: 1;
+  min-height: 24px;
+  margin: 4px 0;
+  background: var(--line);
+}
+
+.trace-timeline__edge--done { background: var(--accent); }
+
+.trace-timeline__body {
+  padding-bottom: 20px;
+  flex: 1;
+}
+
+.trace-timeline__step:last-child .trace-timeline__body { padding-bottom: 0; }
+
+.trace-timeline__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.trace-timeline__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.trace-timeline__step--active .trace-timeline__label,
+.trace-timeline__step--done .trace-timeline__label { color: var(--text); }
+
+.trace-timeline__date {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+
+.trace-timeline__details {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trace-timeline__details li {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.trace-timeline__pending {
+  font-size: 11px;
+  color: var(--text-ghost);
+  font-style: italic;
 }
 
 /* --- Botones (Southpoint, Fase 2) ------------------------------------------
@@ -1147,15 +1188,18 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   font-family: var(--sans);
   font-weight: 500;
   font-size: 14px;
-  letter-spacing: -.005em;
-  padding: 10px 18px;
-  border-radius: calc(var(--radius) - 2px);
+  letter-spacing: normal;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--r-sm);
   border: 1px solid transparent;
   white-space: nowrap;
   position: relative;
   transition: background-color .15s ease, color .15s ease, border-color .15s ease,
     filter .15s ease;
 }
+
+.btn--lg { height: 44px; padding: 0 24px; }
 
 .btn--pay,
 .btn--primary {
@@ -1205,13 +1249,16 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .btn--ghost:active:not(:disabled) { background: hsl(var(--border)); }
 
 .btn--destructive {
-  background: hsl(var(--destructive));
-  color: hsl(var(--destructive-foreground));
-  border-color: transparent;
+  background: transparent;
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive));
   font-weight: 600;
 }
 
-.btn--destructive:hover:not(:disabled) { filter: brightness(1.08); }
+.btn--destructive:hover:not(:disabled) {
+  background: hsl(var(--destructive));
+  color: hsl(var(--destructive-foreground));
+}
 .btn--destructive:active:not(:disabled) { filter: brightness(.94); }
 
 .btn:disabled { cursor: not-allowed; }
@@ -1269,12 +1316,12 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .table thead th {
   font-family: var(--sans);
   font-weight: 600;
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--text-faint);
   text-align: left;
-  padding: 16px 10px;
+  padding: 16px 11px;
   background: var(--surface-2);
   border-bottom: 1px solid var(--line-strong);
   white-space: nowrap;
@@ -1309,13 +1356,13 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .th-sort__icon--active { opacity: 1; color: var(--accent); }
 
 .table tbody td {
-  padding: 16px 10px;
+  padding: 14px 11px;
   font-size: 13px;
   line-height: 1.6;
   color: var(--text);
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
-  transition: background-color .12s ease;
+  transition: background-color .12s ease, box-shadow .12s ease;
 }
 
 .table tbody tr {
@@ -1325,8 +1372,19 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 }
 
 .table tbody tr:last-child td { border-bottom: none; }
-.table tbody tr:hover td { background: var(--surface-2); }
-.table tbody tr.is-selected td { background: var(--accent-bg); }
+
+/* Ritmo visual: tinte apenas perceptible cada 2 filas — puro contraste
+   tonal, sin cambiar de color de acento. --bg-elev no sirve acá: en modo
+   oscuro coincide exactamente con --surface (fondo de la tabla) y el
+   tinte queda invisible. */
+.table tbody tr:nth-child(4n+3):not(.is-selected):not(.is-paid) td,
+.table tbody tr:nth-child(4n+4):not(.is-selected):not(.is-paid) td {
+  background: var(--surface-2);
+}
+
+.table tbody tr:hover td { background: var(--accent-bg); }
+.table tbody tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+.table tbody tr.is-selected td { background: var(--accent-bg-strong); }
 .table tbody tr.is-selected:hover td { background: var(--accent-bg-strong); }
 .table tbody tr.is-selected td:first-child {
   box-shadow: inset 3px 0 0 var(--accent);
@@ -1537,7 +1595,7 @@ th.col-pop { text-align: center; }
   font-weight: 500;
   letter-spacing: .02em;
   padding: 4px 10px 4px 8px;
-  border-radius: 999px;
+  border-radius: var(--r-xs);
   white-space: nowrap;
   border: 1px solid transparent;
 }
@@ -1834,9 +1892,7 @@ th.col-pop { text-align: center; }
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(0, 0, 0, .75);
-  -webkit-backdrop-filter: blur(8px) saturate(1.2);
-  backdrop-filter: blur(8px) saturate(1.2);
+  background: rgba(0, 0, 0, .6);
   overflow-y: auto;
 }
 
@@ -1845,7 +1901,7 @@ th.col-pop { text-align: center; }
   max-width: 480px;
   margin: auto;
   background: var(--surface);
-  border: 1px solid var(--line-stronger);
+  border: 1px solid var(--accent-line);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
   padding: 24px;
@@ -1879,14 +1935,14 @@ th.col-pop { text-align: center; }
   font-weight: 500;
   letter-spacing: .08em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .modal__title {
-  font-family: var(--heading);
+  font-family: var(--sans);
   font-weight: 600;
-  font-size: 1.6rem;
-  letter-spacing: -.025em;
+  font-size: 20px;
+  letter-spacing: normal;
   margin-top: 4px;
   color: var(--text);
 }
@@ -2069,15 +2125,32 @@ th.col-pop { text-align: center; }
   outline: none;
   border-color: hsl(var(--primary));
   background: var(--surface);
-  box-shadow: 0 0 0 3px hsl(var(--primary) / .15);
 }
 
 .field__input--error { border-color: hsl(var(--destructive)); }
 .field__input--error:focus-visible {
   border-color: hsl(var(--destructive));
-  box-shadow: 0 0 0 3px hsl(var(--destructive) / .15);
 }
-.field__error { font-size: 12px; color: hsl(var(--destructive)); }
+/* Ícono AlertCircle vía mask (no requiere tocar los ~11 call-sites en JSX
+   ni importar el ícono en cada modal — hereda el color por background). */
+.field__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  color: hsl(var(--destructive));
+  line-height: 1.4;
+}
+.field__error::before {
+  content: '';
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  margin-top: 1px;
+  background: hsl(var(--destructive));
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' x2='12' y1='8' y2='12'/%3E%3Cline x1='12' x2='12.01' y1='16' y2='16'/%3E%3C/svg%3E") center / contain no-repeat;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' x2='12' y1='8' y2='12'/%3E%3Cline x1='12' x2='12.01' y1='16' y2='16'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 
 .modal__note {
   display: flex;
@@ -2154,8 +2227,6 @@ th.col-pop { text-align: center; }
   display: flex;
   justify-content: flex-end;
   background: rgba(0, 0, 0, .6);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
 }
 
 .drawer {
@@ -2165,7 +2236,7 @@ th.col-pop { text-align: center; }
   overflow-y: auto;
   background: var(--surface);
   border-left: 1px solid var(--line-stronger);
-  box-shadow: -24px 0 60px rgba(0, 0, 0, .5);
+  box-shadow: -6px 0 10px rgba(0, 0, 0, .3);
   padding: 24px 24px calc(24px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
@@ -2196,7 +2267,7 @@ th.col-pop { text-align: center; }
   font-size: 10.5px;
   letter-spacing: .08em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .drawer__title {
   font-family: var(--mono);
@@ -2317,17 +2388,32 @@ th.col-pop { text-align: center; }
   padding: 8px 2px;
 }
 
+/* Timeline vertical: cada evento es un nodo (dot) sobre la línea que conecta
+   con el siguiente — misma lógica que NodeStepper, en vertical. */
 .drawer__history {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 .drawer__history-row {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding-left: 12px;
-  border-left: 2px solid var(--line-stronger);
+  padding-left: 16px;
+  border-left: 1px solid var(--line-strong);
+}
+.drawer__history-row:last-child { border-left-color: transparent; }
+.drawer__history-row::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
 }
 .drawer__history-status {
   display: inline-flex;
@@ -2489,7 +2575,7 @@ th.col-pop { text-align: center; }
   left: 0;
   top: 0;
   bottom: 0;
-  width: 3px;
+  width: 2px;
   background: hsl(var(--success));
 }
 
@@ -2629,6 +2715,50 @@ th.col-pop { text-align: center; }
   background-position: center;
 }
 
+/* Nodos SIN conectar — el leitmotif "apagado" para estados vacíos: sin
+   datos, sin aristas entre los nodos (opuesto al NodeStepper, siempre con
+   líneas). Reemplaza a .empty en las pantallas ya migradas. */
+.empty-graph {
+  text-align: center;
+  padding: 48px 24px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+.empty-graph__art {
+  display: block;
+  margin: 0 auto 16px;
+}
+.empty-graph__art circle {
+  fill: none;
+  stroke: var(--line-stronger);
+  stroke-width: 1.5;
+}
+.empty-graph__title {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text);
+}
+.empty-graph__hint {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-soft);
+  max-width: 36ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+.empty-graph__action { margin-top: 16px; }
+
+/* Anidado dentro de .login__card (access-denied): esa card ya pone su
+   propio fondo/borde/padding — sin esto quedan dos cards una adentro de
+   la otra. */
+.login__card .empty-graph {
+  padding: 8px 0 4px;
+  background: none;
+  border: none;
+}
+
 /* --- Footer --------------------------------------------------------------- */
 .app__footer {
   margin-top: 32px;
@@ -2687,6 +2817,50 @@ th.col-pop { text-align: center; }
   50%      { opacity: .5; transform: scale(.85); }
 }
 
+/* --- NodeLoader: puntos que se conectan (reemplaza spinners genéricos) ---- */
+@keyframes node-loader-dot {
+  0%, 100% { background: var(--line-stronger); transform: scale(1); }
+  10%      { background: var(--accent); transform: scale(1.3); }
+  25%, 60% { background: var(--accent); transform: scale(1); }
+  75%      { background: var(--line-stronger); transform: scale(1); }
+}
+
+@keyframes node-loader-edge {
+  0%, 100% { background: var(--line-stronger); transform: scaleX(0); }
+  10%      { background: var(--accent); }
+  30%, 70% { background: var(--accent); transform: scaleX(1); }
+  85%      { background: var(--line-stronger); transform: scaleX(0); }
+}
+
+.node-loader {
+  display: inline-flex;
+  align-items: center;
+}
+
+.node-loader__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-stronger);
+  flex-shrink: 0;
+  animation: node-loader-dot 1.5s ease-in-out infinite;
+}
+.node-loader__dot:nth-child(3) { animation-delay: .4s; }
+.node-loader__dot:nth-child(5) { animation-delay: .8s; }
+
+.node-loader__edge {
+  width: 14px;
+  height: 1px;
+  background: var(--line-stronger);
+  transform-origin: left;
+  animation: node-loader-edge 1.5s ease-in-out infinite;
+}
+.node-loader__edge:nth-child(2) { animation-delay: .2s; }
+.node-loader__edge:nth-child(4) { animation-delay: .6s; }
+
+.node-loader--sm .node-loader__dot { width: 5px; height: 5px; }
+.node-loader--sm .node-loader__edge { width: 10px; }
+
 /* --- Responsive ----------------------------------------------------------- */
 @media (max-width: 720px) {
   .masthead { padding-bottom: 24px; }
@@ -2740,14 +2914,6 @@ th.col-pop { text-align: center; }
   font-size: 12px;
   letter-spacing: .04em;
   z-index: 100;
-}
-
-.auth-boot__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: pulse-dot 1.6s ease-in-out infinite;
 }
 
 .auth-boot__label {
@@ -2812,7 +2978,7 @@ th.col-pop { text-align: center; }
   font-weight: 500;
   letter-spacing: .05em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-text);
   white-space: nowrap;
   display: inline-flex;
   align-items: center;
@@ -2837,8 +3003,8 @@ th.col-pop { text-align: center; }
 .login__title {
   font-family: var(--heading);
   font-weight: 300;
-  font-size: clamp(1.8rem, 5vw, 2.2rem);
-  line-height: 1.05;
+  font-size: clamp(2rem, 7vw, 3rem);
+  line-height: 1.1;
   letter-spacing: .02em;
   color: var(--text);
 }
@@ -2874,7 +3040,6 @@ th.col-pop { text-align: center; }
 .login__ms-btn:hover:not(:disabled) {
   background: var(--surface-3);
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-bg);
 }
 
 .login__ms-btn:active:not(:disabled) {
@@ -3003,6 +3168,78 @@ th.col-pop { text-align: center; }
   .user-pill__logout { padding: 5px 8px; }
 }
 
+/* --- Header user menu ------------------------------------------------------ */
+.app-header .sync-status { padding-bottom: 0; }
+
+.header-user { position: relative; }
+
+.header-user__trigger {
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: border-color .15s ease;
+}
+
+.header-user__trigger:hover {
+  border-color: var(--accent);
+}
+
+.header-user__menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 200px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 10px;
+  box-shadow: var(--shadow-pop);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.header-user__email {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-soft);
+  padding: 0 4px 8px;
+  border-bottom: 1px solid var(--line);
+  word-break: break-all;
+}
+
+.header-user__signout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+
+.header-user__signout:hover:not(:disabled) {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.header-user__signout:disabled {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+@media (max-width: 760px) {
+  .app-header .sync-status__text { display: none; }
+  .header-user__trigger .user-pill__label { display: none; }
+}
+
 /* =============================================================================
    FASE 3 · Shell de navegación + Projects & Contracts (FR-07)
    ============================================================================= */
@@ -3047,6 +3284,7 @@ th.col-pop { text-align: center; }
 }
 
 .sidebar__link {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 11px;
@@ -3063,13 +3301,45 @@ th.col-pop { text-align: center; }
   white-space: nowrap;
   transition: background-color .14s ease, color .14s ease, border-color .14s ease;
 }
-.sidebar__link:hover { color: var(--text); background: var(--surface-2); }
-.sidebar__link.is-active {
-  color: hsl(var(--primary));
-  background: hsl(var(--primary) / .1);
-  border-color: hsl(var(--primary) / .3);
+
+/* Arista de 1px que conecta cada ítem con el anterior — la navegación es,
+   literalmente, un grafo de nodos secuenciales (leitmotif de la app). Se tiñe
+   de cyan en el tramo que lleva hasta el ítem activo. */
+.sidebar__link:not(:first-child)::before {
+  content: '';
+  position: absolute;
+  left: 21px;
+  top: -2px;
+  width: 1px;
+  height: 2px;
+  background: var(--line-strong);
 }
-.sidebar__link svg { flex-shrink: 0; }
+.sidebar__link.is-active + .sidebar__link::before { background: var(--accent); }
+.sidebar__link:hover { color: var(--text); background: var(--surface-2); }
+.sidebar__link:hover svg { color: var(--accent); }
+.sidebar__link.is-active {
+  /* hsl(var(--primary)) como texto da 1.99:1 sobre --surface-2 en modo
+     claro (falla AA) — --accent-text es la variante oscurecida. */
+  color: var(--accent-text);
+  background: var(--surface-2);
+  border-color: transparent;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.sidebar__link svg { flex-shrink: 0; transition: color .2s var(--ease-out); }
+
+.sidebar__nav-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px 12px;
+}
+.sidebar__nav-divider::before {
+  content: '';
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--line-stronger);
+}
 
 .sidebar__user {
   display: flex;
@@ -3097,9 +3367,7 @@ th.col-pop { text-align: center; }
   gap: 14px;
   height: 56px;
   padding: 0 max(32px, env(safe-area-inset-right)) 0 max(32px, env(safe-area-inset-left));
-  background: color-mix(in srgb, var(--bg) 85%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
 
@@ -3144,10 +3412,11 @@ th.col-pop { text-align: center; }
 
 /* Tablet: sidebar colapsa a solo íconos */
 @media (max-width: 1023px) {
-  .sidebar { width: 64px; }
+  .sidebar { width: 60px; }
   .sidebar__brand { padding: 20px 12px 16px; display: flex; justify-content: center; }
   .sidebar__logo { height: 22px; }
   .sidebar__link { justify-content: center; padding: 10px; }
+  .sidebar__link::before { display: none; }
   .sidebar__label { display: none; }
   .sidebar__user { justify-content: center; padding: 12px 8px; }
   .sidebar__user .user-pill__label { display: none; }
@@ -3280,15 +3549,15 @@ th.col-pop { text-align: center; }
 .proj-kpi--warning .proj-kpi__count::before        { background: #FB923C; }
 .proj-kpi--total { cursor: default; }
 .proj-kpi--total .proj-kpi__count::before { display: none; }
-.proj-kpi--total .proj-kpi__count { color: var(--accent); }
+.proj-kpi--total .proj-kpi__count { color: var(--accent-text); }
 
 .proj-kpi__label {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: .05em;
-  color: var(--text-faint);
+  /* --text-faint da ~3.4:1 acá (falla AA) — --text-soft sostiene 4.5+. */
+  color: var(--text-soft);
 }
-.proj-kpi.is-active .proj-kpi__label { color: var(--text-soft); }
 
 .proj-alerts-link { height: 36px; }
 
@@ -3468,7 +3737,7 @@ select.field__input { cursor: pointer; }
   gap: 7px;
   font-family: var(--sans);
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 16px;
   color: var(--text);
 }
 .dash-widget__title svg { color: var(--accent); }
@@ -3511,6 +3780,9 @@ select.field__input { cursor: pointer; }
 .filterbar__head-actions { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* Banner persistente priority (southpointlabs en alerta) */
+/* Distintivo (borde+ícono cyan de marca — es un proveedor priority, no una
+   emergencia) pero sin alarmismo: sin fondo/borde rojo. El rojo queda
+   contenido solo en el conteo de días si está vencido. */
 .priority-banner {
   display: flex;
   align-items: center;
@@ -3518,23 +3790,25 @@ select.field__input { cursor: pointer; }
   margin: 0 0 18px;
   padding: 14px 18px;
   border-radius: var(--radius);
-  background: var(--no-bg);
-  border: 1px solid var(--no-line);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-left: 2px solid var(--accent);
   box-shadow: var(--shadow-sm);
 }
 .priority-banner__icon {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
   border-radius: 10px;
-  background: rgba(248, 113, 113, .14);
-  color: var(--no);
+  background: var(--accent-bg);
+  color: var(--accent);
 }
 .priority-banner__body { flex: 1 1 auto; min-width: 0; }
 .priority-banner__text { margin: 0; font-size: 14px; color: var(--text); line-height: 1.45; }
-.priority-banner__text strong { color: var(--no); }
+.priority-banner__text strong { color: var(--text); }
+.priority-banner__days--overdue { color: var(--no); font-weight: 600; }
 .priority-banner__more { margin: 3px 0 0; font-size: 12px; color: var(--text-faint); }
 .priority-banner__actions { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
 
@@ -3632,11 +3906,24 @@ select.field__input { cursor: pointer; }
   box-shadow: var(--shadow-sm);
 }
 
+.dash-kpi__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .dash-kpi__label {
   font-size: 11.5px;
   color: var(--text-faint);
   text-transform: uppercase;
   letter-spacing: .05em;
+}
+
+.dash-kpi .sparkline {
+  flex-shrink: 0;
+  opacity: .8;
+  margin-top: -2px;
 }
 
 .dash-kpi__value {

@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
-import { ShieldAlert, LogOut } from 'lucide-react'
+import { LogOut } from 'lucide-react'
+import { EmptyGraph } from './EmptyGraph'
 
 /**
  * Pantalla de acceso denegado (FR-11): el usuario autenticó correctamente
@@ -30,34 +31,22 @@ export function AccessDenied({ adminEmail, onSignOut }) {
           <span className="login__rule" aria-hidden="true" />
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            margin: '4px 0 2px',
-          }}
-        >
-          <ShieldAlert size={22} aria-hidden="true" style={{ color: 'var(--warn, #f59e0b)' }} />
-          <h1 className="login__title" style={{ margin: 0 }}>
-            No access
-          </h1>
-        </div>
-
-        <p className="login__sub">
-          Your account authenticated correctly but you don&apos;t have permission
-          to use this application. Contact{' '}
-          <strong>{contact}</strong> to request access.
-        </p>
-
-        <button
-          type="button"
-          className="login__ms-btn"
-          onClick={onSignOut}
-        >
-          <LogOut size={16} aria-hidden="true" />
-          <span>Sign out</span>
-        </button>
+        <EmptyGraph
+          title="No access yet"
+          hint={
+            <>
+              Your account authenticated correctly, but it doesn&apos;t have
+              permission to use this app. Contact <strong>{contact}</strong>{' '}
+              to request access.
+            </>
+          }
+          action={
+            <button type="button" className="login__ms-btn" onClick={onSignOut}>
+              <LogOut size={16} aria-hidden="true" />
+              <span>Sign out</span>
+            </button>
+          }
+        />
 
         <div className="login__footnote">
           Secure session via Supabase Auth · Azure / Entra ID

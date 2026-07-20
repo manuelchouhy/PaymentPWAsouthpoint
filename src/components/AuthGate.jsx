@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { LoginScreen } from './LoginScreen'
 import { AccessDenied } from './AccessDenied'
+import { NodeLoader } from './NodeLoader'
 import { hasAnyRole } from '../lib/permissions'
 
 export function AuthGate({ children }) {
@@ -81,9 +82,9 @@ export function AuthGate({ children }) {
 
 function AuthBootSplash() {
   return (
-    <div className="auth-boot" role="status" aria-live="polite">
-      <div className="auth-boot__dot" aria-hidden="true" />
-      <span className="auth-boot__label">Loading session…</span>
+    <div className="auth-boot">
+      <NodeLoader label="Loading session…" />
+      <span className="auth-boot__label" aria-hidden="true">Loading session…</span>
     </div>
   )
 }

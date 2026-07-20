@@ -53,19 +53,24 @@ export function Sidebar({ can, open, onNavigate, user, profile, onSignOut }) {
             <span className="sidebar__label">{label}</span>
           </NavLink>
         ))}
-        {ADMIN_NAV_ITEMS.filter(() => can('settings.view')).map(({ to, label, Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              `sidebar__link${isActive ? ' is-active' : ''}`
-            }
-          >
-            <Icon size={18} aria-hidden="true" />
-            <span className="sidebar__label">{label}</span>
-          </NavLink>
-        ))}
+        {can('settings.view') && (
+          <>
+            <span className="sidebar__nav-divider" aria-hidden="true" />
+            {ADMIN_NAV_ITEMS.map(({ to, label, Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  `sidebar__link${isActive ? ' is-active' : ''}`
+                }
+              >
+                <Icon size={18} aria-hidden="true" />
+                <span className="sidebar__label">{label}</span>
+              </NavLink>
+            ))}
+          </>
+        )}
       </nav>
       {user && <SidebarUser user={user} profile={profile} onSignOut={onSignOut} />}
     </aside>

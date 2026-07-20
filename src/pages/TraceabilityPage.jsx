@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, FileText, X } from 'lucide-react'
+import { AlertTriangle, Check, FileText, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { downloadTracePdf } from '../lib/tracePdf'
 import { BillingBadge } from '../components/BillingBadge'
@@ -408,59 +408,46 @@ function Timeline({ trace, collections }) {
     },
   ]
 
+  // Nodo "activo" = la etapa más avanzada ya alcanzada — mismo criterio visual
+  // que <NodeStepper /> (fill cyan + halo), para que el grafo de la app hable
+  // el mismo idioma en el flujo horizontal de billing y en este timeline vertical.
+  let lastDoneIdx = -1
+  steps.forEach((step, i) => {
+    if (step.done) lastDoneIdx = i
+  })
+
   return (
-    <ol style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
+    <ol className="trace-timeline">
       {steps.map((step, i) => {
         const isLast = i === steps.length - 1
-        const dotColor = step.done ? 'var(--accent)' : 'var(--line-stronger)'
-        const labelColor = step.done ? 'var(--text)' : 'var(--text-faint)'
+        const state = i < lastDoneIdx ? 'done' : i === lastDoneIdx ? 'active' : 'idle'
+        const edgeState = i > 0 && i <= lastDoneIdx ? 'done' : 'idle'
         return (
-          <li key={step.label} style={{ display: 'flex', gap: 14, position: 'relative' }}>
-            {/* Connector line */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
-              <div
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: '50%',
-                  background: dotColor,
-                  boxShadow: step.done ? `0 0 6px ${dotColor}` : 'none',
-                  marginTop: 4,
-                  flexShrink: 0,
-                }}
-              />
+          <li key={step.label} className={`trace-timeline__step trace-timeline__step--${state}`}>
+            <div className="trace-timeline__rail">
+              <span className="trace-timeline__node" aria-hidden="true">
+                {state === 'done' && <Check size={11} strokeWidth={2.5} />}
+              </span>
               {!isLast && (
-                <div
-                  style={{
-                    width: 1,
-                    flex: 1,
-                    minHeight: 24,
-                    background: 'var(--line)',
-                    margin: '4px 0',
-                  }}
+                <span
+                  className={`trace-timeline__edge trace-timeline__edge--${edgeState}`}
+                  aria-hidden="true"
                 />
               )}
             </div>
-            {/* Content */}
-            <div style={{ paddingBottom: isLast ? 0 : 20, flex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: labelColor }}>{step.label}</span>
-                {step.date && (
-                  <span style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>
-                    {step.date}
-                  </span>
-                )}
+            <div className="trace-timeline__body">
+              <div className="trace-timeline__row">
+                <span className="trace-timeline__label">{step.label}</span>
+                {step.date && <span className="trace-timeline__date">{step.date}</span>}
               </div>
               {step.details.length > 0 && (
-                <ul style={{ listStyle: 'none', padding: 0, margin: '4px 0 0', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <ul className="trace-timeline__details">
                   {step.details.map((d) => (
-                    <li key={d} style={{ fontSize: 12, color: 'var(--text-soft)' }}>{d}</li>
+                    <li key={d}>{d}</li>
                   ))}
                 </ul>
               )}
-              {!step.done && (
-                <span style={{ fontSize: 11, color: 'var(--text-ghost)', fontStyle: 'italic' }}>Pending</span>
-              )}
+              {!step.done && <span className="trace-timeline__pending">Pending</span>}
             </div>
           </li>
         )

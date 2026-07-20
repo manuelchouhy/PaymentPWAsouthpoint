@@ -15,7 +15,9 @@ declare global {
 export async function loginAsTestAdmin(page: Page) {
   await page.goto('/test-login')
   await expect(page).toHaveURL('/')
-  await expect(page.getByText('PW Test Admin')).toBeVisible()
+  // Ambigüedad: "PW Test Admin" ahora también aparece en el user menu del
+  // header (Fase 5) — se ancla al sidebar, que siempre lo muestra sin recorte.
+  await expect(page.locator('.sidebar__user').getByText('PW Test Admin')).toBeVisible()
 }
 
 /** Prefijo de datos de prueba (convención acordada en el README). */

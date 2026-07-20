@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { AlertOctagon, BellOff, RefreshCw } from 'lucide-react'
+import { Star, BellOff, RefreshCw } from 'lucide-react'
 import { daysRemaining } from '../lib/projectsData'
 import { formatDate } from '../lib/format'
 
@@ -27,15 +27,17 @@ export function PriorityContractBanner({ contracts, onRenew, onMarkRenewal }) {
       transition={{ duration: 0.3 }}
     >
       <div className="priority-banner__icon" aria-hidden="true">
-        <AlertOctagon size={20} strokeWidth={2.2} />
+        <Star size={18} strokeWidth={2.2} />
       </div>
       <div className="priority-banner__body">
         <p className="priority-banner__text">
           <strong>{top.supplierName}</strong> contract expires on{' '}
           {formatDate(top.expirationDate)} (
-          {days < 0
-            ? `${Math.abs(days)} days overdue`
-            : `${days} days remaining`}
+          <span className={days < 0 ? 'priority-banner__days--overdue' : undefined}>
+            {days < 0
+              ? `${Math.abs(days)} days overdue`
+              : `${days} days remaining`}
+          </span>
           ).
         </p>
         {extra > 0 && (

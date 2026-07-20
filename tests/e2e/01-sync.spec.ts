@@ -21,6 +21,8 @@ test('sync manual de Zoho refresca la grilla y el estado', async ({ page }) => {
   // queda en "No syncs yet" aunque el sync haya sido exitoso (confirmado por
   // el toast de arriba) — no es una regresión de este refactor, así que la
   // aserción se relaja a "no muestra error" en ese caso.
-  const syncText = page.locator('.sync-status__text')
+  // El header (Fase 5) también muestra su propio sync status global — se
+  // ancla al de la toolbar de Time Entries, que es el que refleja este refresh.
+  const syncText = page.locator('.toolbar__left .sync-status__text')
   await expect(syncText).not.toHaveClass(/sync-status__text--error/)
 })

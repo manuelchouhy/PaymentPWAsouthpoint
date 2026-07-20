@@ -30,6 +30,9 @@ export function Layout({ user, profile, can, onSignOut }) {
         <Header
           rolesBadge={rolesBadge}
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
+          user={user}
+          profile={profile}
+          onSignOut={onSignOut}
         />
 
         <div className="app__inner">
@@ -37,7 +40,7 @@ export function Layout({ user, profile, can, onSignOut }) {
         </div>
 
         <footer className="app-footer">
-          <span>Southpoint Tech Labs © 2026</span>
+          <span>Southpoint Tech Labs © 2026 · v1.0.0</span>
         </footer>
       </div>
     </div>

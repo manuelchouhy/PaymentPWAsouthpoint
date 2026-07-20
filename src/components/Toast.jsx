@@ -10,9 +10,9 @@ import { AlertCircle, CheckCircle2, X } from 'lucide-react'
  */
 export function Toast({ message, tone = 'success', onDismiss }) {
   useEffect(() => {
-    const timer = setTimeout(onDismiss, 4600)
+    const timer = setTimeout(onDismiss, tone === 'error' ? 7000 : 4000)
     return () => clearTimeout(timer)
-  }, [message, onDismiss])
+  }, [message, tone, onDismiss])
 
   const Icon = tone === 'error' ? AlertCircle : CheckCircle2
 
@@ -22,10 +22,10 @@ export function Toast({ message, tone = 'success', onDismiss }) {
         className={`toast toast--${tone}`}
         role={tone === 'error' ? 'alert' : 'status'}
         aria-live={tone === 'error' ? 'assertive' : 'polite'}
-        initial={{ opacity: 0, y: 24, scale: 0.92 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 12, scale: 0.96 }}
-        transition={{ type: 'spring', damping: 22, stiffness: 280, mass: 0.7 }}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 8 }}
+        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
       >
         <span className="toast__icon">
           <Icon size={18} strokeWidth={2.2} />

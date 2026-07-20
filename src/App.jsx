@@ -12,7 +12,9 @@ import { useEntryFilters, applyEntryFilters } from './lib/useEntryFilters'
 import { FilterBar } from './components/FilterBar'
 import { ViewTabs } from './components/ViewTabs'
 import { SelectionBar } from './components/SelectionBar'
-import { Stepper } from './components/Stepper'
+import { NodeStepper } from './components/NodeStepper'
+import { NodeLoader } from './components/NodeLoader'
+import { EmptyGraph } from './components/EmptyGraph'
 import { EntriesTable } from './components/EntriesTable'
 import { EntriesCards } from './components/EntriesCards'
 import { BillModal } from './components/BillModal'
@@ -502,7 +504,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4, delay: 0.05 }}
           >
-            <Stepper
+            <NodeStepper
               approvedHours={stepperMetrics.approvedHours}
               invoicedHours={stepperMetrics.invoicedHours}
               collectedHours={stepperMetrics.collectedHours}
@@ -682,7 +684,10 @@ function LoadingState() {
           </div>
         ))}
       </div>
-      <p className="state__hint">Loading entries…</p>
+      <p className="state__hint">
+        <NodeLoader size="sm" label="Loading entries…" />{' '}
+        <span aria-hidden="true">Loading entries…</span>
+      </p>
     </div>
   )
 }
@@ -703,10 +708,13 @@ function ErrorState({ onRetry }) {
 
 function EmptyState({ tab }) {
   return (
-    <div className="empty">
-      {tab === 'pending'
-        ? 'No entries pending to bill.'
-        : 'No time entries for this contractor.'}
-    </div>
+    <EmptyGraph
+      title={tab === 'pending' ? 'Nothing pending to bill' : 'No entries here yet'}
+      hint={
+        tab === 'pending'
+          ? 'Every logged hour is already billed. New entries show up here once approved.'
+          : 'This contractor has no logged hours yet.'
+      }
+    />
   )
 }
