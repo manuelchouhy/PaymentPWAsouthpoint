@@ -159,6 +159,7 @@ export function RegisterPaymentModal({ invoice, currency = 'USD', onClose, onCon
                 className={`field__input${touched && !amountValid ? ' field__input--error' : ''}`}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
+                onInvalid={(e) => e.preventDefault()}
               />
             </div>
             <div className="field">
@@ -221,6 +222,7 @@ export function RegisterPaymentModal({ invoice, currency = 'USD', onClose, onCon
                 className={`field__input${touched && !rateValid ? ' field__input--error' : ''}`}
                 value={exchangeRate}
                 onChange={(e) => setExchangeRate(e.target.value)}
+                onInvalid={(e) => e.preventDefault()}
                 placeholder="e.g. 0.000025"
                 aria-invalid={touched && !rateValid}
               />

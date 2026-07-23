@@ -297,7 +297,7 @@ async function upsertProjects(supabase: any, projects: any[]): Promise<number> {
     const zid = String(p.id_string || p.id || "");
     if (!zid) continue;
     const projectName = p.name || "";
-    const clientName = safe(p,"client_name","") || safe(p,"client.name","") || safe(p,"client_company_name","") || (projectName ? String(projectName).split(" ")[0] : "");
+    const clientName = safe(p,"client_name","") || safe(p,"client.name","") || safe(p,"client_company_name","") || "";
     const zohoStatus = safe(p,"status.name","") || (typeof p.status === "string" ? p.status : "") || safe(p,"status_name","");
     const endDate = zohoProjectEndDate(p);
     try {
@@ -346,7 +346,7 @@ Deno.serve(async (req) => {
     for (const p of projects) {
       const projectId = p.id;
       const projectName = p.name;
-      const clientName = safe(p,"client_name","") || safe(p,"client.name","") || safe(p,"client_company_name","") || (projectName ? String(projectName).split(" ")[0] : "");
+      const clientName = safe(p,"client_name","") || safe(p,"client.name","") || safe(p,"client_company_name","") || "";
 
       for (const dateParam of monthDates) {
         const logsUrl = `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/logs/?users_list=all&view_type=month&date=${dateParam}&bill_status=All&component_type=task`;
@@ -451,6 +451,9 @@ Deno.serve(async (_req) => {
     const widest = Math.max(...thresholds);
     const frequency: string = settings.email_frequency;
     const recipients: string[] = settings.email_recipients ?? [];
+    // Sin destinatarios: no encolar (fallaría con "Recipients: None") ni
+    // marcar los proyectos como ya alertados.
+    if (recipients.length === 0) return json({ ok: true, queued: 0, note: "No recipients configured." });
     const horizon = isoDaysFromNow(widest);
     const weekAgo = isoDaysFromNow(-7);
 
@@ -722,6 +725,7 @@ Deno.serve(async (req) => {
       if (threshold === null) continue;
 
       if (c.is_priority_supplier) {
+        if (priorityRecipients.length === 0) continue;
         const { data: sentToday } = await supabase.from("supplier_alert_log").select("id").eq("contract_id", c.id).gte("email_sent_at", todayStart).limit(1);
         if (sentToday && sentToday.length) continue;
 
@@ -739,6 +743,7 @@ Deno.serve(async (req) => {
         priorityQueued++; continue;
       }
 
+      if (teamRecipients.length === 0) continue;
       const { data: already } = await supabase.from("supplier_alert_log").select("id").eq("contract_id", c.id).eq("threshold_crossed", threshold).not("email_sent_at", "is", null).limit(1);
       if (already && already.length) continue;
 

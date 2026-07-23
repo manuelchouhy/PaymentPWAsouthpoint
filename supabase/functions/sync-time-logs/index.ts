@@ -225,11 +225,17 @@ async function upsertProjects(supabase: any, projects: any[]): Promise<number> {
     const zid = String(p.id_string || p.id || "");
     if (!zid) continue;
     const projectName = p.name || "";
+    // FR-02 · si Zoho no expone cliente para este proyecto (no está configurado
+    // ahí tampoco), se deja vacío en vez de adivinar con el nombre del proyecto:
+    // un cliente puede tener varios proyectos con nombres distintos, así que
+    // "inventar" el cliente a partir del nombre de UN proyecto rompe el
+    // agrupamiento real (dos proyectos del mismo cliente terminan con
+    // "clientes" distintos).
     const clientName =
       safe(p, "client_name", "") ||
       safe(p, "client.name", "") ||
       safe(p, "client_company_name", "") ||
-      (projectName ? String(projectName).split(" ")[0] : "");
+      "";
     // Status de Zoho: puede venir como objeto {name} o como string plano.
     const zohoStatus =
       safe(p, "status.name", "") ||
@@ -331,13 +337,14 @@ Deno.serve(async (req) => {
       const projectOwner = safe(p, "owner.full_name", "");
 
       // FR-02 · Cliente del proyecto. Zoho no siempre expone el cliente con la
-      // misma clave, así que probamos varias y, si no hay ninguna, caemos a la
-      // primera palabra del nombre del proyecto como fallback razonable.
+      // misma clave, así que probamos varias — si no hay ninguna (no está
+      // configurado en Zoho tampoco), se deja vacío en vez de adivinar con el
+      // nombre del proyecto (ver misma nota en upsertProjects).
       const clientName =
         safe(p, "client_name", "") ||
         safe(p, "client.name", "") ||
         safe(p, "client_company_name", "") ||
-        (projectName ? String(projectName).split(" ")[0] : "");
+        "";
 
       for (const dateParam of monthDates) {
         const logsUrl =

@@ -68,6 +68,13 @@ Deno.serve(async (_req) => {
     const widest = Math.max(...thresholds);
     const frequency: string = settings.email_frequency;
     const recipients: string[] = settings.email_recipients ?? [];
+    // Sin destinatarios configurados: no tiene sentido encolar (fallaría al
+    // enviar con "Recipients: None") ni marcar los proyectos como ya alertados
+    // en contract_alert_log — se corta acá para no perder el aviso una vez
+    // que sí se configuren destinatarios.
+    if (recipients.length === 0) {
+      return json({ ok: true, queued: 0, note: "No recipients configured." });
+    }
 
     // Proyectos cuyo contrato vence dentro de la ventana más amplia.
     const horizon = isoDaysFromNow(widest);

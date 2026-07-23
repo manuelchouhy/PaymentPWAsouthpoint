@@ -11,11 +11,22 @@ import { api } from '../lib/api'
 const ALL_ITEMS = [...NAV_ITEMS, ...ADMIN_NAV_ITEMS]
 const SYNC_POLL_MS = 60000
 
+// Rutas de configuración de alertas: no están en el sidebar (se accede desde
+// un link dentro de cada pantalla), pero el breadcrumb del header las
+// necesita igual — si no, quedaban mostrando "Dashboard" (bug reportado).
+const EXTRA_BREADCRUMBS = [
+  { to: '/contract-alerts', label: 'Contract Alert Settings' },
+  { to: '/collection-alerts', label: 'Collection Alert Settings' },
+  { to: '/payment-alerts', label: 'Payment Alert Settings' },
+  { to: '/supplier-alerts', label: 'Supplier Alert Settings' },
+]
+
 function useBreadcrumb() {
   const { pathname } = useLocation()
-  const match = ALL_ITEMS.find((item) =>
-    item.end ? pathname === item.to : pathname.startsWith(item.to),
-  )
+  const match =
+    ALL_ITEMS.find((item) =>
+      item.end ? pathname === item.to : pathname.startsWith(item.to),
+    ) ?? EXTRA_BREADCRUMBS.find((item) => pathname.startsWith(item.to))
   return match?.label ?? 'Dashboard'
 }
 

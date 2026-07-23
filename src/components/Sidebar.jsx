@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -11,6 +11,7 @@ import {
   ScrollText,
   Mail,
   LogOut,
+  Check,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -77,8 +78,15 @@ export function Sidebar({ can, open, onNavigate, user, profile, onSignOut }) {
   )
 }
 
+// Ventana para confirmar el sign out con un segundo click (evita el logout
+// accidental de un solo click reportado en QA — el botón está pegado justo
+// debajo del nombre de usuario).
+const SIGNOUT_CONFIRM_MS = 3000
+
 function SidebarUser({ user, profile, onSignOut }) {
   const [busy, setBusy] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const confirmTimer = useRef(null)
   const label =
     profile?.fullName ||
     user?.user_metadata?.name ||
@@ -87,14 +95,23 @@ function SidebarUser({ user, profile, onSignOut }) {
     'User'
   const initial = label.trim().charAt(0).toUpperCase() || '?'
 
+  useEffect(() => () => clearTimeout(confirmTimer.current), [])
+
   async function handleSignOut() {
     if (busy) return
+    if (!confirming) {
+      setConfirming(true)
+      confirmTimer.current = setTimeout(() => setConfirming(false), SIGNOUT_CONFIRM_MS)
+      return
+    }
+    clearTimeout(confirmTimer.current)
     setBusy(true)
     try {
       await onSignOut?.()
     } catch (error) {
       console.error('No se pudo cerrar sesión:', error)
       setBusy(false)
+      setConfirming(false)
     }
   }
 
@@ -108,13 +125,14 @@ function SidebarUser({ user, profile, onSignOut }) {
       </span>
       <button
         type="button"
-        className="user-pill__logout"
+        className={`user-pill__logout${confirming ? ' user-pill__logout--confirm' : ''}`}
         onClick={handleSignOut}
+        onBlur={() => setConfirming(false)}
         disabled={busy}
-        aria-label="Sign out"
-        title="Sign out"
+        aria-label={confirming ? 'Click again to confirm sign out' : 'Sign out'}
+        title={confirming ? 'Click again to confirm' : 'Sign out'}
       >
-        <LogOut size={14} aria-hidden="true" />
+        {confirming ? <Check size={14} aria-hidden="true" /> : <LogOut size={14} aria-hidden="true" />}
       </button>
     </div>
   )

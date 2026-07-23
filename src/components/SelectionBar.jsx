@@ -1,24 +1,7 @@
-import { useEffect } from 'react'
 import { AlertTriangle, FileText } from 'lucide-react'
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { formatHours } from '../lib/format'
 import { Avatar } from './Avatar'
-
-/**
- * Número que se anima suavemente al cambiar (spring physics). Mantiene
- * el contrato de display (siempre con 1 decimal vía formatHours).
- */
-function AnimatedHours({ value }) {
-  const motionValue = useMotionValue(value)
-  const spring = useSpring(motionValue, { damping: 28, stiffness: 220, mass: 0.6 })
-  const display = useTransform(spring, (latest) => formatHours(latest))
-
-  useEffect(() => {
-    motionValue.set(value)
-  }, [value, motionValue])
-
-  return <motion.span>{display}</motion.span>
-}
 
 /**
  * Barra de selección (sticky). Muestra las horas seleccionadas en vivo como
@@ -35,7 +18,7 @@ export function SelectionBar({ count, hours, users, canBill, onBill }) {
       <div className="selbar__metric">
         <span className="selbar__label">Selected Hours</span>
         <span className="selbar__value">
-          <AnimatedHours value={hours} />
+          {formatHours(hours)}
           <span className="selbar__unit">h</span>
         </span>
       </div>

@@ -288,6 +288,11 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
                 }`}
                 value={totalAmount}
                 onChange={(event) => setTotalAmount(event.target.value)}
+                // Sin esto, el navegador muestra su propio globo de validación
+                // nativo (en el idioma del SO/navegador, ej. español, aunque
+                // la UI esté en inglés) — la validación real es la nuestra,
+                // mostrada más abajo vía field__error.
+                onInvalid={(event) => event.preventDefault()}
                 placeholder="0.00"
                 aria-invalid={touched && !amountValid}
               />

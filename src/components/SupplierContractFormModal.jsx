@@ -91,7 +91,11 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
   }, [onClose])
 
   const missing = REQUIRED.filter((k) => !String(form[k] ?? '').trim())
-  const valid = missing.length === 0
+  // Coherencia de fechas: Expiration no puede ser anterior a Start (bug
+  // reportado — se pudo crear un contrato con Expiration < Start sin aviso).
+  const dateOrderValid =
+    !form.startDate || !form.expirationDate || form.expirationDate >= form.startDate
+  const valid = missing.length === 0 && dateOrderValid
 
   function set(key, value) {
     setForm((prev) => {
@@ -175,6 +179,8 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
               const value = form[field.key] ?? ''
               const isMissing = field.required && touched && !String(value).trim()
               const showDup = field.key === 'contractNumber' && dupError
+              const isExpiration = field.key === 'expirationDate'
+              const showDateOrderError = isExpiration && touched && !dateOrderValid
               return (
                 <div className="field" key={field.key}>
                   <label className="field__label" htmlFor={`sc-${field.key}`}>
@@ -185,13 +191,17 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
                     id={`sc-${field.key}`}
                     ref={index === 0 ? firstRef : undefined}
                     type={field.type === 'date' ? 'date' : 'text'}
-                    className={`field__input${isMissing || showDup ? ' field__input--error' : ''}`}
+                    min={isExpiration ? form.startDate || undefined : undefined}
+                    className={`field__input${isMissing || showDup || showDateOrderError ? ' field__input--error' : ''}`}
                     value={value}
                     onChange={(e) => set(field.key, e.target.value)}
                     onBlur={() => setTouched(true)}
                     autoComplete="off"
                   />
                   {isMissing && <span className="field__error">This field is required.</span>}
+                  {showDateOrderError && (
+                    <span className="field__error">Expiration Date cannot be before Start Date.</span>
+                  )}
                 </div>
               )
             })}

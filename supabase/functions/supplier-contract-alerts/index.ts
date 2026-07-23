@@ -101,6 +101,11 @@ Deno.serve(async (req) => {
       if (threshold === null) continue;
 
       if (c.is_priority_supplier) {
+        // Sin destinatarios prioritarios configurados: no encolar (fallaría
+        // con "Recipients: None") ni marcar supplier_alert_log como enviado —
+        // así se reintenta el día que sí haya destinatarios configurados.
+        if (priorityRecipients.length === 0) continue;
+
         // PRIORITY → email diario hasta que se accione. Anti-doble-envío: 1 por día.
         const { data: sentToday } = await supabase
           .from("supplier_alert_log")
@@ -140,7 +145,9 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // NO priority → 1 email por umbral cruzado.
+      // NO priority → 1 email por umbral cruzado. Mismo criterio: sin
+      // destinatarios de equipo configurados, no encolar ni marcar como enviado.
+      if (teamRecipients.length === 0) continue;
       const { data: already } = await supabase
         .from("supplier_alert_log")
         .select("id")

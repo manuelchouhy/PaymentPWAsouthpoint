@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { CircleDollarSign, X } from 'lucide-react'
+import { AlertCircle, CircleDollarSign, X } from 'lucide-react'
 import { getCurrencySymbol } from '../lib/currenciesData'
 
 function todayISO() {
@@ -85,6 +85,11 @@ export function RegisterCollectionModal({ invoice, outstanding, collected, curre
   }
 
   const willComplete = amountValid && amountNum >= outstanding - 0.005
+  // Distinto de "!amountValid" a secas: un campo vacío o en blanco no es un
+  // sobrepago, así que el mensaje de error específico solo aparece cuando
+  // realmente hay un número y ese número excede el saldo pendiente.
+  const isOverpayment =
+    amount !== '' && Number.isFinite(amountNum) && amountNum > outstanding + 0.005
 
   return (
     <motion.div
@@ -150,6 +155,7 @@ export function RegisterCollectionModal({ invoice, outstanding, collected, curre
                 className={`field__input${touched && !amountValid ? ' field__input--error' : ''}`}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
+                onInvalid={(e) => e.preventDefault()}
                 aria-invalid={touched && !amountValid}
               />
             </div>
@@ -203,11 +209,17 @@ export function RegisterCollectionModal({ invoice, outstanding, collected, curre
             />
           </div>
 
-          <p className="modal__note">
-            <CircleDollarSign size={14} aria-hidden="true" />
-            {willComplete
-              ? 'This collection completes the invoice → moves to Collected.'
-              : 'Partial collection: the invoice remains in Partial Collection.'}
+          <p className={`modal__note${isOverpayment ? ' modal__note--error' : ''}`}>
+            {isOverpayment ? (
+              <AlertCircle size={14} aria-hidden="true" />
+            ) : (
+              <CircleDollarSign size={14} aria-hidden="true" />
+            )}
+            {isOverpayment
+              ? `Amount exceeds the outstanding balance (${sym}${formatAmount(outstanding)}).`
+              : willComplete
+                ? 'This collection completes the invoice → moves to Collected.'
+                : 'Partial collection: the invoice remains in Partial Collection.'}
           </p>
 
           {submitError && (
