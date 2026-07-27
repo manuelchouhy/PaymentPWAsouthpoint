@@ -406,6 +406,21 @@ export async function createInvoice({
     return { ok: true, mode: 'demo', invoice }
   }
 
+  // No hay constraint único en supplier_invoice_number todavía (hay duplicados
+  // históricos que requieren revisión manual antes de poder agregarlo), así que
+  // se valida acá para bloquear NUEVOS duplicados sin tocar los existentes.
+  const { data: existing, error: existingError } = await supabase
+    .from('invoices')
+    .select('id')
+    .eq('supplier_invoice_number', supplierInvoiceNumber)
+    .limit(1)
+  if (existingError) throw new Error(existingError.message)
+  if (existing.length > 0) {
+    const err = new Error('That supplier invoice number already exists. Please use a different one.')
+    err.code = 'duplicate'
+    throw err
+  }
+
   // entry_ids en Supabase es bigint[]; filtramos cualquier id no-numérico.
   const numericIds = entryIds
     .map((id) => (typeof id === 'number' ? id : Number(id)))
