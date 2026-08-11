@@ -6,9 +6,14 @@ import { FolderPlus, Save, X } from 'lucide-react'
 const FIELDS = [
   { key: 'client', label: 'Client', required: true },
   { key: 'projectName', label: 'Project Name', required: true },
-  { key: 'projectNumber', label: 'Project Number', required: true },
-  { key: 'contractNumber', label: 'Contract Number', required: true },
-  { key: 'contractExpirationDate', label: 'Contract Expiration Date', required: true, type: 'date' },
+  // No required: 0022_projects_relax_legacy_required_fields.sql aflojó estas
+  // tres a nullable porque el wizard de Projects and SOW no las pide — deben
+  // poder editarse (o guardarse en blanco) en proyectos creados por el wizard,
+  // que nunca tienen contractNumber/contractExpirationDate y a veces tampoco
+  // projectNumber (proyectos con stages).
+  { key: 'projectNumber', label: 'Project Number' },
+  { key: 'contractNumber', label: 'Contract Number' },
+  { key: 'contractExpirationDate', label: 'Contract Expiration Date', type: 'date' },
   { key: 'customerName', label: 'Customer Name' },
   { key: 'customerCode', label: 'Customer Code' },
   { key: 'proposalName', label: 'Proposal Name' },

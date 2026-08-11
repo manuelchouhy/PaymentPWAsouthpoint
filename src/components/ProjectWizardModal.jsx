@@ -80,14 +80,17 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     function onKeyDown(e) {
-      if (e.key === 'Escape') onClose()
+      // Igual que el botón Cancel (disabled={submitting}): no se puede
+      // cerrar el wizard mientras el alta está en vuelo — si no, el usuario
+      // cree que canceló y el proyecto igual aparece segundos después.
+      if (e.key === 'Escape' && !submitting) onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
       document.body.style.overflow = prev
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [onClose])
+  }, [onClose, submitting])
 
   function set(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -100,7 +103,14 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
       return
     }
     set('sowFile', file)
-    if (file.type !== DOCX_MIME) return // PDF: sin auto-extract, se completa a mano
+    // El navegador no siempre resuelve el MIME type de un .docx (falta la
+    // asociación en el SO → llega '' o 'application/octet-stream'); en ese
+    // caso confiamos en la extensión, igual que uploadSowFile en projectsData.js.
+    const isDocx =
+      file.type === DOCX_MIME ||
+      ((!file.type || file.type === 'application/octet-stream') &&
+        file.name.toLowerCase().endsWith('.docx'))
+    if (!isDocx) return // PDF: sin auto-extract, se completa a mano
 
     setParsing(true)
     try {
@@ -204,15 +214,17 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
     sowFile: !form.hasStages && !form.sowFile,
     stages: form.hasStages && (form.stages.length === 0 || form.stages.some(stageMissing)),
   }
+  // !(n > 0) en vez de n <= 0: Number(x) <= 0 es false para NaN (un valor no
+  // numérico colaría como "válido"), !(NaN > 0) es true — rechaza tanto NaN
+  // como vacío/cero/negativo en una sola condición.
   const step2Missing = {
-    budgetHours: !form.budgetHours || Number(form.budgetHours) <= 0,
+    budgetHours: !(Number(form.budgetHours) > 0),
     periodStart: !form.periodStart,
     periodEnd: !form.periodEnd,
   }
   const step3Missing = {
-    hoursPool: form.maintenanceEnabled && (!form.maintenanceHoursPool || Number(form.maintenanceHoursPool) <= 0),
-    durationMonths:
-      form.maintenanceEnabled && (!form.maintenanceDurationMonths || Number(form.maintenanceDurationMonths) <= 0),
+    hoursPool: form.maintenanceEnabled && !(Number(form.maintenanceHoursPool) > 0),
+    durationMonths: form.maintenanceEnabled && !(Number(form.maintenanceDurationMonths) > 0),
   }
   const step1Valid = !Object.values(step1Missing).some(Boolean)
   const step2Valid = !Object.values(step2Missing).some(Boolean)
@@ -237,7 +249,12 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
         clientId: form.clientId,
         client: form.clientName,
         projectName: form.projectName.trim(),
-        projectNumber: form.hasStages ? null : form.sowNumber.trim(),
+        // No reusar el SOW number como project_number: el SOW number es por
+        // cliente, project_number es único global (0004_projects.sql) — dos
+        // clientes con el mismo número de SOW chocarían. project_number
+        // queda sin poblar (ya es nullable desde 0022); el SOW number real
+        // vive en sowNumber/sow_number.
+        projectNumber: null,
         sowNumber: form.hasStages ? null : form.sowNumber.trim(),
         sowFile: form.hasStages ? null : form.sowFile,
         hasStages: form.hasStages,

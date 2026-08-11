@@ -566,11 +566,14 @@ export async function getProjectDocumentUrl(path) {
  */
 export async function recordProjectDocument({ subjectType, subjectId, fileUrl, uploadedBy }) {
   if (!isSupabaseConfigured) return
-  const { count } = await supabase
+  const { count, error: countError } = await supabase
     .from('project_documents')
     .select('id', { count: 'exact', head: true })
     .eq('subject_type', subjectType)
     .eq('subject_id', subjectId)
+  if (countError) {
+    console.warn('[projects] no se pudo contar versiones previas del documento —', countError.message)
+  }
   const { error } = await supabase.from('project_documents').insert({
     subject_type: subjectType,
     subject_id: subjectId,
@@ -581,8 +584,8 @@ export async function recordProjectDocument({ subjectType, subjectId, fileUrl, u
   if (error) console.warn('[projects] no se pudo registrar el documento —', error.message)
 }
 
-// ---------- Stages (Fase 4d) — un proyecto con has_stages=true tiene N stages,
-// cada uno con su propio SOW ----------
+// ---------- Stages y Tasks del SOW (Fase 4d) — helpers CRUD compartidos,
+// mappers de fila y funciones específicas de cada uno más abajo ----------
 
 function rowToStage(row) {
   return {
@@ -760,17 +763,52 @@ export async function createProjectFromWizard(payload, createdBy) {
   const { stages, tasks, sowFile, ...projectFields } = payload
 
   const sowUrl = payload.hasStages ? null : await uploadSowFile(sowFile)
-  const stagesWithUrls = payload.hasStages
-    ? await Promise.all(
-        (stages ?? []).map(async (stage) => ({
-          stageName: stage.stageName,
-          sowNumber: stage.sowNumber,
-          sowUrl: await uploadSowFile(stage.sowFile),
-        })),
+
+  // allSettled, no all: si el stage 3 de 3 falla, los stages 1 y 2 ya
+  // terminaron de subirse a Storage — necesitamos sus paths para poder
+  // limpiarlos, cosa que Promise.all no nos da (rechaza sin resultados).
+  const stageUploads = payload.hasStages
+    ? await Promise.allSettled(
+        (stages ?? []).map((stage) =>
+          uploadSowFile(stage.sowFile).then((url) => ({
+            stageName: stage.stageName,
+            sowNumber: stage.sowNumber,
+            sowUrl: url,
+          })),
+        ),
       )
     : []
+  const firstStageFailure = stageUploads.find((r) => r.status === 'rejected')
+  const stageUploadPaths = stageUploads
+    .filter((r) => r.status === 'fulfilled')
+    .map((r) => r.value.sowUrl)
+  if (firstStageFailure) {
+    if (isSupabaseConfigured && stageUploadPaths.length) {
+      const { error: removeError } = await supabase.storage.from(SOW_BUCKET).remove(stageUploadPaths)
+      if (removeError) {
+        console.warn('[projects] no se pudieron limpiar los SOW subidos tras el fallo —', removeError.message)
+      }
+    }
+    throw firstStageFailure.reason
+  }
+  const stagesWithUrls = stageUploads.map((r) => r.value)
 
-  const project = await createProject({ ...projectFields, sowUrl }, createdBy)
+  const uploadedPaths = [sowUrl, ...stageUploadPaths].filter(Boolean)
+  let project
+  try {
+    project = await createProject({ ...projectFields, sowUrl }, createdBy)
+  } catch (error) {
+    // El proyecto no se llegó a crear — a diferencia de projects (que no se
+    // borra, se conserva historial), un archivo de Storage sin ninguna fila
+    // que lo referencie es pura basura: lo limpiamos para no dejarlo huérfano.
+    if (isSupabaseConfigured && uploadedPaths.length) {
+      const { error: removeError } = await supabase.storage.from(SOW_BUCKET).remove(uploadedPaths)
+      if (removeError) {
+        console.warn('[projects] no se pudieron limpiar los SOW subidos tras el fallo —', removeError.message)
+      }
+    }
+    throw error
+  }
 
   try {
     if (!payload.hasStages && sowUrl) {
