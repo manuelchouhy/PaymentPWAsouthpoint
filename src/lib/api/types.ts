@@ -135,16 +135,69 @@ export interface Payment {
   createdBy: string | null
 }
 
+export interface Client {
+  id: string | number
+  clientName: string
+  email?: string | null
+  domain?: string | null
+  primaryContactName: string
+  primaryContactEmail: string
+  msaUrl: string
+  createdAt: string
+  updatedAt: string
+  createdBy: string | null
+}
+
+export interface ProviderAssignment {
+  id: string | number
+  projectId: string | number
+  taskName: string
+  providerName: string
+  authorizedHours: number
+  consumedHours?: number
+  remainingHours?: number
+  createdAt: string
+  updatedAt: string
+  createdBy: string | null
+}
+
 export interface Project {
   id: string | number
   client: string
+  clientId?: string | number | null
+  baseBudgetHours?: number | null
   projectName: string
   projectNumber: string
   contractNumber?: string
   contractExpirationDate: string | null
   leadDeveloper?: string
   approver?: string
+  hasStages?: boolean
+  stageName?: string | null
+  maintenanceEnabled?: boolean
+  slaTemplate?: 'Standard' | 'Premium' | 'Custom' | null
   [key: string]: unknown
+}
+
+export interface ProjectStage {
+  id: string | number
+  projectId: string | number
+  position: number
+  stageName: string
+  sowNumber: string
+  sowUrl?: string | null
+  createdAt: string
+  createdBy: string | null
+}
+
+export interface ProjectTask {
+  id: string | number
+  projectId: string | number
+  taskName: string
+  role?: string | null
+  estimatedHours: number
+  createdAt: string
+  createdBy: string | null
 }
 
 export interface SupplierContract {
@@ -265,6 +318,23 @@ export interface ApiClient {
     updateAlertSettings(settings: Record<string, unknown>, updatedBy?: string | null): Promise<Record<string, unknown>>
   }
 
+  clients: {
+    list(): Promise<Client[]>
+    create(payload: Partial<Client>, createdBy?: string | null): Promise<Client>
+    uploadMsa(file: File): Promise<string>
+    getMsaUrl(msaUrl: string): Promise<string | null>
+  }
+
+  assignments: {
+    list(project: { id: string | number; projectName: string }): Promise<ProviderAssignment[]>
+    create(payload: Partial<ProviderAssignment>, createdBy?: string | null): Promise<ProviderAssignment>
+    updateHours(
+      id: string | number,
+      authorizedHours: number,
+      updatedBy?: string | null,
+    ): Promise<ProviderAssignment>
+  }
+
   projects: {
     list(): Promise<Project[]>
     create(payload: Partial<Project>, createdBy?: string | null): Promise<Project>
@@ -272,6 +342,29 @@ export interface ApiClient {
     getHistory(projectId: string | number): Promise<unknown[]>
     getContractAlertSettings(): Promise<Record<string, unknown>>
     updateContractAlertSettings(settings: Record<string, unknown>, updatedBy?: string | null): Promise<Record<string, unknown>>
+    uploadSowFile(file: File): Promise<string>
+    getDocumentUrl(path: string): Promise<string | null>
+    recordDocument(params: {
+      subjectType: 'msa' | 'sow' | 'change_request'
+      subjectId: string | number
+      fileUrl: string
+      uploadedBy?: string | null
+    }): Promise<void>
+    getStages(projectId: string | number): Promise<ProjectStage[]>
+    createStages(
+      projectId: string | number,
+      stages: Array<{ stageName: string; sowNumber: string; sowUrl?: string | null }>,
+      createdBy?: string | null,
+    ): Promise<ProjectStage[]>
+  }
+
+  projectTasks: {
+    list(projectId: string | number): Promise<ProjectTask[]>
+    create(
+      projectId: string | number,
+      tasks: Array<{ taskName: string; role?: string | null; estimatedHours: number }>,
+      createdBy?: string | null,
+    ): Promise<ProjectTask[]>
   }
 
   supplierContracts: {

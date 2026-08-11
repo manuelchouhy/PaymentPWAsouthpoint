@@ -84,6 +84,28 @@ export const httpApiClient = {
     getLog: () => notImplemented('sync.getLog'),
   },
 
+  clients: {
+    // GET /api/clients → Client[]
+    list: () => notImplemented('clients.list'),
+    // POST /api/clients { clientName, email, domain, primaryContactName,
+    //   primaryContactEmail, msaUrl, createdBy } → Client
+    create: () => notImplemented('clients.create'),
+    // POST /api/clients/msa (multipart) → { path }
+    uploadMsa: () => notImplemented('clients.uploadMsa'),
+    // GET /api/clients/msa-url?path=X → string | null
+    getMsaUrl: () => notImplemented('clients.getMsaUrl'),
+  },
+
+  assignments: {
+    // GET /api/projects/:id/assignments → ProviderAssignment[]
+    list: () => notImplemented('assignments.list'),
+    // POST /api/assignments { projectId, taskName, providerName,
+    //   authorizedHours, createdBy } → ProviderAssignment
+    create: () => notImplemented('assignments.create'),
+    // PATCH /api/assignments/:id/hours { authorizedHours, updatedBy } → ProviderAssignment
+    updateHours: () => notImplemented('assignments.updateHours'),
+  },
+
   collections: {
     // GET /api/collections → Collection[]
     list: () => notImplemented('collections.list'),
@@ -123,6 +145,23 @@ export const httpApiClient = {
     getContractAlertSettings: () => notImplemented('projects.getContractAlertSettings'),
     // PATCH /api/projects/contract-alert-settings
     updateContractAlertSettings: () => notImplemented('projects.updateContractAlertSettings'),
+    // POST /api/projects/sow-file (multipart) → { path }
+    uploadSowFile: () => notImplemented('projects.uploadSowFile'),
+    // GET /api/projects/document-url?path=X → string | null
+    getDocumentUrl: () => notImplemented('projects.getDocumentUrl'),
+    // POST /api/projects/documents { subjectType, subjectId, fileUrl, uploadedBy }
+    recordDocument: () => notImplemented('projects.recordDocument'),
+    // GET /api/projects/:id/stages → ProjectStage[]
+    getStages: () => notImplemented('projects.getStages'),
+    // POST /api/projects/:id/stages → ProjectStage[]
+    createStages: () => notImplemented('projects.createStages'),
+  },
+
+  projectTasks: {
+    // GET /api/projects/:id/tasks → ProjectTask[]
+    list: () => notImplemented('projectTasks.list'),
+    // POST /api/projects/:id/tasks → ProjectTask[]
+    create: () => notImplemented('projectTasks.create'),
   },
 
   supplierContracts: {

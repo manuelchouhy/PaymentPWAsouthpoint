@@ -26,6 +26,8 @@ import { supabase, isSupabaseConfigured } from './supabase'
 // Campos editables ↔ columnas, para mapeo y auditoría.
 const FIELD_TO_COLUMN = {
   client: 'client',
+  clientId: 'client_id',
+  baseBudgetHours: 'base_budget_hours',
   projectName: 'project_name',
   projectNumber: 'project_number',
   customerName: 'customer_name',
@@ -37,6 +39,21 @@ const FIELD_TO_COLUMN = {
   leadDeveloper: 'lead_developer',
   contractNumber: 'contract_number',
   contractExpirationDate: 'contract_expiration_date',
+  // Wizard de Projects and SOW (Fase 4a-4d) — faltaban, el alta del wizard
+  // los mandaba pero se perdían silenciosamente antes de este fix.
+  sowNumber: 'sow_number',
+  sowUrl: 'sow_url',
+  hasStages: 'has_stages',
+  stageName: 'stage_name',
+  model: 'model',
+  periodStart: 'period_start',
+  periodEnd: 'period_end',
+  maintenanceEnabled: 'maintenance_enabled',
+  slaTemplate: 'sla_template',
+  maintenanceTransition: 'maintenance_transition',
+  maintenanceHoursPool: 'maintenance_hours_pool',
+  maintenanceDurationMonths: 'maintenance_duration_months',
+  maintenanceSlaTiers: 'maintenance_sla_tiers',
 }
 
 /** @type {Project[]} */
@@ -141,11 +158,15 @@ const MOCK_PROJECTS = [
 // Estado demo en memoria (para que crear/editar funcione sin Supabase).
 let demoProjects = MOCK_PROJECTS.map((p) => ({ ...p }))
 const demoHistory = {}
+const demoStages = {} // projectId -> ProjectStage[]
+const demoTasks = {} // projectId -> ProjectTask[]
 
 function rowToProject(row) {
   return {
     id: row.id,
     client: row.client,
+    clientId: row.client_id ?? null,
+    baseBudgetHours: row.base_budget_hours != null ? Number(row.base_budget_hours) : null,
     projectName: row.project_name,
     projectNumber: row.project_number,
     customerName: row.customer_name ?? null,
@@ -158,6 +179,19 @@ function rowToProject(row) {
     contractNumber: row.contract_number,
     contractExpirationDate: row.contract_expiration_date,
     zohoStatus: row.zoho_status ?? null,
+    sowNumber: row.sow_number ?? null,
+    sowUrl: row.sow_url ?? null,
+    hasStages: row.has_stages ?? false,
+    stageName: row.stage_name ?? null,
+    model: row.model ?? null,
+    periodStart: row.period_start ?? null,
+    periodEnd: row.period_end ?? null,
+    maintenanceEnabled: row.maintenance_enabled ?? false,
+    slaTemplate: row.sla_template ?? null,
+    maintenanceTransition: row.maintenance_transition ?? null,
+    maintenanceHoursPool: row.maintenance_hours_pool != null ? Number(row.maintenance_hours_pool) : null,
+    maintenanceDurationMonths: row.maintenance_duration_months != null ? Number(row.maintenance_duration_months) : null,
+    maintenanceSlaTiers: row.maintenance_sla_tiers ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     createdBy: row.created_by ?? null,
@@ -167,7 +201,9 @@ function rowToProject(row) {
 function projectToRow(project) {
   const row = {}
   for (const [field, column] of Object.entries(FIELD_TO_COLUMN)) {
-    if (project[field] !== undefined) row[column] = project[field] || null
+    if (project[field] === undefined) continue
+    // '' -> null para campos de texto; preserva 0 en campos numéricos (baseBudgetHours).
+    row[column] = project[field] === '' ? null : project[field] ?? null
   }
   return row
 }
@@ -321,7 +357,7 @@ export async function getProjects() {
 export async function createProject(payload, createdBy) {
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 300))
-    if (demoProjects.some((p) => p.projectNumber === payload.projectNumber)) {
+    if (payload.projectNumber && demoProjects.some((p) => p.projectNumber === payload.projectNumber)) {
       const err = new Error('Project Number already exists.')
       err.code = 'duplicate'
       throw err
@@ -454,4 +490,216 @@ export async function getProjectHistory(projectId) {
     changedAt: row.changed_at,
     changedBy: row.changed_by,
   }))
+}
+
+// ---------- Documentos (SOW / MSA / CR) — bucket 'project-documents' ----------
+
+const SOW_BUCKET = 'project-documents'
+const DOC_MAX_BYTES = 20 * 1024 * 1024 // 20 MB
+
+/**
+ * Sube el archivo del SOW a Storage. Acepta .docx (se parsea para
+ * autocompletar Alcance) o PDF (SOW ya firmado).
+ * @param {File} file
+ * @returns {Promise<string>} path en el bucket
+ */
+export async function uploadSowFile(file) {
+  if (!file) {
+    const e = new Error('The SOW file is missing.')
+    e.code = 'no_file'
+    throw e
+  }
+  const okType =
+    file.type === 'application/pdf' ||
+    file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  if (!okType) {
+    const e = new Error('The SOW must be a .docx or .pdf file.')
+    e.code = 'bad_type'
+    throw e
+  }
+  if (file.size > DOC_MAX_BYTES) {
+    const e = new Error('The SOW file cannot exceed 20 MB.')
+    e.code = 'too_big'
+    throw e
+  }
+
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 300))
+    return `demo/${Date.now()}-${file.name}`
+  }
+
+  const path = `${Date.now()}-${file.name}`
+  const { error } = await supabase.storage
+    .from(SOW_BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: false })
+  if (error) throw new Error(error.message)
+  return path
+}
+
+/** URL firmada (60s) para descargar un documento del bucket 'project-documents'. */
+export async function getProjectDocumentUrl(path) {
+  if (!path) return null
+  if (!isSupabaseConfigured) return null
+  const { data, error } = await supabase.storage.from(SOW_BUCKET).createSignedUrl(path, 60)
+  if (error) return null
+  return data.signedUrl
+}
+
+/**
+ * Registra una versión de documento (MSA/SOW/CR) en el historial. No falla
+ * el flujo que la llama si algo sale mal — solo loggea, como logAudit.
+ * @param {{ subjectType: 'msa'|'sow'|'change_request', subjectId: string|number, fileUrl: string, uploadedBy?: ?string }} params
+ */
+export async function recordProjectDocument({ subjectType, subjectId, fileUrl, uploadedBy }) {
+  if (!isSupabaseConfigured) return
+  const { count } = await supabase
+    .from('project_documents')
+    .select('id', { count: 'exact', head: true })
+    .eq('subject_type', subjectType)
+    .eq('subject_id', subjectId)
+  const { error } = await supabase.from('project_documents').insert({
+    subject_type: subjectType,
+    subject_id: subjectId,
+    file_url: fileUrl,
+    version: (count ?? 0) + 1,
+    uploaded_by: uploadedBy || null,
+  })
+  if (error) console.warn('[projects] no se pudo registrar el documento —', error.message)
+}
+
+// ---------- Stages (Fase 4d) — un proyecto con has_stages=true tiene N stages,
+// cada uno con su propio SOW ----------
+
+function rowToStage(row) {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    position: row.position,
+    stageName: row.stage_name,
+    sowNumber: row.sow_number,
+    sowUrl: row.sow_url ?? null,
+    createdAt: row.created_at,
+    createdBy: row.created_by ?? null,
+  }
+}
+
+/** @returns {Promise<Array>} stages de un proyecto, ordenados por posición. */
+export async function getProjectStages(projectId) {
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 150))
+    return demoStages[projectId] ?? []
+  }
+  const { data, error } = await supabase
+    .from('project_stages')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('position', { ascending: true })
+  if (error) throw new Error(error.message)
+  return data.map(rowToStage)
+}
+
+/**
+ * Crea los stages de un proyecto recién creado (alta en bloque, en el orden
+ * en que se agregaron en el wizard).
+ * @param {string|number} projectId
+ * @param {Array<{ stageName: string, sowNumber: string, sowUrl: ?string }>} stages
+ * @param {?string} createdBy
+ * @returns {Promise<Array>}
+ */
+export async function createProjectStages(projectId, stages, createdBy) {
+  if (!stages?.length) return []
+
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 200))
+    const created = stages.map((s, i) => ({
+      id: `stg-demo-${Date.now()}-${i}`,
+      projectId,
+      position: i,
+      stageName: s.stageName,
+      sowNumber: s.sowNumber,
+      sowUrl: s.sowUrl ?? null,
+      createdAt: new Date().toISOString(),
+      createdBy: createdBy || null,
+    }))
+    demoStages[projectId] = [...(demoStages[projectId] ?? []), ...created]
+    return created
+  }
+
+  const rows = stages.map((s, i) => ({
+    project_id: projectId,
+    position: i,
+    stage_name: s.stageName,
+    sow_number: s.sowNumber,
+    sow_url: s.sowUrl ?? null,
+    created_by: createdBy || null,
+  }))
+  const { data, error } = await supabase.from('project_stages').insert(rows).select()
+  if (error) throw new Error(error.message)
+  return data.map(rowToStage)
+}
+
+// ---------- Tasks del SOW (Fase 4d) ----------
+
+function rowToTask(row) {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    taskName: row.task_name,
+    role: row.role ?? null,
+    estimatedHours: Number(row.estimated_hours),
+    createdAt: row.created_at,
+    createdBy: row.created_by ?? null,
+  }
+}
+
+/** @returns {Promise<Array>} tasks del SOW de un proyecto. */
+export async function getProjectTasks(projectId) {
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 150))
+    return demoTasks[projectId] ?? []
+  }
+  const { data, error } = await supabase
+    .from('project_tasks')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('id', { ascending: true })
+  if (error) throw new Error(error.message)
+  return data.map(rowToTask)
+}
+
+/**
+ * Crea las tasks del SOW de un proyecto recién creado (alta en bloque).
+ * @param {string|number} projectId
+ * @param {Array<{ taskName: string, role: ?string, estimatedHours: number }>} tasks
+ * @param {?string} createdBy
+ * @returns {Promise<Array>}
+ */
+export async function createProjectTasks(projectId, tasks, createdBy) {
+  if (!tasks?.length) return []
+
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 200))
+    const created = tasks.map((t, i) => ({
+      id: `tsk-demo-${Date.now()}-${i}`,
+      projectId,
+      taskName: t.taskName,
+      role: t.role ?? null,
+      estimatedHours: Number(t.estimatedHours),
+      createdAt: new Date().toISOString(),
+      createdBy: createdBy || null,
+    }))
+    demoTasks[projectId] = [...(demoTasks[projectId] ?? []), ...created]
+    return created
+  }
+
+  const rows = tasks.map((t) => ({
+    project_id: projectId,
+    task_name: t.taskName,
+    role: t.role || null,
+    estimated_hours: Number(t.estimatedHours),
+    created_by: createdBy || null,
+  }))
+  const { data, error } = await supabase.from('project_tasks').insert(rows).select()
+  if (error) throw new Error(error.message)
+  return data.map(rowToTask)
 }

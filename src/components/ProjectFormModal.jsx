@@ -115,7 +115,7 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
       >
         <div className="modal__head">
           <div>
-            <span className="modal__kicker">Projects &amp; Contracts</span>
+            <span className="modal__kicker">Projects and SOW</span>
             <h2 className="modal__title" id="project-form-title">
               {isEdit ? 'Edit project' : 'New project'}
             </h2>

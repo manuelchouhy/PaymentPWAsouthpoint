@@ -1,8 +1,11 @@
 node_modules
 dist
 dist-ssr
+build
 *.local
 .DS_Store
+Thumbs.db
+*.swp
 .vite
 
 # Archivos generados por vite-plugin-pwa en el build
@@ -12,12 +15,21 @@ dev-dist
 .env
 .env.local
 .env.*.local
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
 
 .vercel
 
 # Artifacts de herramientas locales (Playwright MCP, IDEs)
 .playwright-mcp
 supabase/.idea
+
+# Scratch (issues técnicos locales)
+.scratch
 
 # Playwright — reportes y resultados de test runs
 /test-results

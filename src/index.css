@@ -3516,13 +3516,65 @@ th.col-pop { text-align: center; }
 /* --- Formulario de alta/edición de proyecto ------------------------------ */
 .modal--form { max-width: 640px; }
 
+/* --- Wizard de Projects and SOW (pestañas) -------------------------------- */
+.wizard-steps {
+  display: flex;
+  gap: 18px;
+  margin-top: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.wizard-steps__item {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-ghost);
+}
+.wizard-steps__item.is-done { color: var(--text-soft); }
+.wizard-steps__item.is-active { color: var(--accent-text); font-weight: 600; }
+
 .project-form__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px 16px;
 }
+.project-form__grid--single { grid-template-columns: 1fr; }
 @media (max-width: 560px) {
   .project-form__grid { grid-template-columns: 1fr; }
+}
+
+/* Fase 4d: wizard más ancho para las pestañas de Mantenimiento y Tasks
+   (tabla de severidad / tasks necesitan más aire que un form de 2 columnas). */
+.modal--wizard { max-width: 760px; }
+
+/* --- Stages (Fase 4d): lista repetible, un SOW por stage ------------------ */
+.stage-list { display: flex; flex-direction: column; gap: 14px; }
+.stage-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--line-strong);
+}
+.stage-row__remove { margin-top: 22px; }
+@media (max-width: 720px) {
+  .stage-row { grid-template-columns: 1fr; }
+  .stage-row__remove { margin-top: 0; justify-self: flex-end; }
+}
+
+.link-add { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; }
+
+/* --- Tablas editables (severidad / tasks) — no son filas clickeables ------ */
+.table--form { table-layout: auto; }
+.table--form tbody tr { cursor: default; user-select: text; }
+.table--form tbody tr:nth-child(4n+3) td, .table--form tbody tr:nth-child(4n+4) td { background: transparent; }
+.table--form tbody tr:hover td { background: transparent; box-shadow: none; }
+.table--form td { padding: 8px 10px; }
+.table--form input.field__input { height: 34px; }
+.table--form tfoot td {
+  padding: 12px 10px;
+  font-weight: 600;
+  border-top: 2px solid var(--line-strong);
 }
 
 /* --- KPI chips por estado de contrato (FR-08) ---------------------------- */

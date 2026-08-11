@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
   Clock,
+  Building2,
   FolderKanban,
   Landmark,
   CreditCard,
@@ -17,7 +18,8 @@ import {
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', end: true, Icon: LayoutDashboard },
   { to: '/time-entries', label: 'Time Entries', Icon: Clock },
-  { to: '/projects', label: 'Projects & Contracts', Icon: FolderKanban },
+  { to: '/clients', label: 'Clients', Icon: Building2 },
+  { to: '/projects', label: 'Projects and SOW', Icon: FolderKanban },
   { to: '/collections', label: 'Collections', Icon: Landmark },
   { to: '/payments', label: 'Payments', Icon: CreditCard },
   { to: '/supplier-contracts', label: 'Supplier Contracts', Icon: FileText },

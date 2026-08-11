@@ -79,7 +79,7 @@ export function ContractAlertSettingsPage() {
       >
         <div className="masthead__top">
           <Link to="/projects" className="back-link">
-            <ArrowLeft size={14} aria-hidden="true" /> Projects &amp; Contracts
+            <ArrowLeft size={14} aria-hidden="true" /> Projects and SOW
           </Link>
           <span className="masthead__rule" aria-hidden="true" />
         </div>

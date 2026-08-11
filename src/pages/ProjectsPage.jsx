@@ -13,6 +13,7 @@ import { formatDate } from '../lib/format'
 import { ContractBadge } from '../components/ContractBadge'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ProjectFormModal } from '../components/ProjectFormModal'
+import { ProjectWizardModal } from '../components/ProjectWizardModal'
 import { ProjectDetailDrawer } from '../components/ProjectDetailDrawer'
 import { Toast } from '../components/Toast'
 import { ExportDropdown } from '../components/ExportDropdown'
@@ -38,7 +39,8 @@ export function ProjectsPage() {
     expTo: '',
   })
   const [statusFilter, setStatusFilter] = useState(null) // null | 'Expired' | …
-  const [form, setForm] = useState(null) // null | { mode:'new' } | { mode:'edit', project }
+  const [form, setForm] = useState(null) // null | { mode:'edit', project }
+  const [wizardOpen, setWizardOpen] = useState(false)
   const [detail, setDetail] = useState(null)
   const [toast, setToast] = useState(null)
 
@@ -123,15 +125,64 @@ export function ProjectsPage() {
       contractStatus: contractStatus(daysRemaining(p.contractExpirationDate)),
       daysLeft: daysRemaining(p.contractExpirationDate),
     }))
-    exportGrid({ rows: exportRows, columns: cols, title: 'Projects & Contracts', gridName: 'projects', format, generatedBy: user?.email ?? '' })
+    exportGrid({ rows: exportRows, columns: cols, title: 'Projects and SOW', gridName: 'projects', format, generatedBy: user?.email ?? '' })
   }
 
-  async function handleCreate(payload) {
-    const created = await api.projects.create(payload, user?.email ?? null)
-    api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'project.create', resourceType: 'project', resourceId: created.id, after: { projectNumber: created.projectNumber, projectName: created.projectName, client: created.client } })
+  /**
+   * Alta desde el wizard de Projects and SOW: sube el/los SOW (uno por
+   * stage si hasStages, uno solo si no), crea el proyecto, versiona
+   * cada documento y crea las tasks del SOW.
+   */
+  async function handleCreateFromWizard(payload) {
+    const { stages, tasks, sowFile, ...projectFields } = payload
+    const uploadedBy = user?.email ?? null
+
+    const sowUrl = payload.hasStages ? null : await api.projects.uploadSowFile(sowFile)
+    const created = await api.projects.create({ ...projectFields, sowUrl }, uploadedBy)
+
+    if (!payload.hasStages && sowUrl) {
+      await api.projects.recordDocument({
+        subjectType: 'sow',
+        subjectId: created.id,
+        fileUrl: sowUrl,
+        uploadedBy,
+      })
+    }
+
+    if (payload.hasStages && stages?.length) {
+      const stagesWithUrls = []
+      for (const stage of stages) {
+        const stageUrl = await api.projects.uploadSowFile(stage.sowFile)
+        stagesWithUrls.push({ stageName: stage.stageName, sowNumber: stage.sowNumber, sowUrl: stageUrl })
+      }
+      const createdStages = await api.projects.createStages(created.id, stagesWithUrls, uploadedBy)
+      await Promise.all(
+        createdStages.map((stage, i) =>
+          api.projects.recordDocument({
+            subjectType: 'sow',
+            subjectId: stage.id,
+            fileUrl: stagesWithUrls[i].sowUrl,
+            uploadedBy,
+          }),
+        ),
+      )
+    }
+
+    if (tasks?.length) {
+      await api.projectTasks.create(created.id, tasks, uploadedBy)
+    }
+
+    api.audit.log({
+      actorEmail: user?.email,
+      actorRole: profile?.roles?.[0] ?? null,
+      action: 'project.create',
+      resourceType: 'project',
+      resourceId: created.id,
+      after: { projectNumber: created.projectNumber, projectName: created.projectName, client: created.client },
+    })
     setProjects((prev) => sortByExp([created, ...prev]))
-    setForm(null)
-    setToast({ id: Date.now(), message: `Project created: ${created.projectNumber}` })
+    setWizardOpen(false)
+    setToast({ id: Date.now(), message: `Project created: ${created.projectName}` })
   }
 
   async function handleUpdate(payload) {
@@ -154,10 +205,10 @@ export function ProjectsPage() {
           <span className="masthead__kicker">Client contract management</span>
           <span className="masthead__rule" aria-hidden="true" />
         </div>
-        <h1 className="masthead__title">Projects &amp; Contracts</h1>
+        <h1 className="masthead__title">Projects and SOW</h1>
         <p className="masthead__sub">
-          Master list of client-side projects and contracts, sorted by upcoming
-          expiration date.
+          Master list of projects and their SOWs, with client, budget hours and
+          scope.
         </p>
       </motion.header>
 
@@ -208,7 +259,7 @@ export function ProjectsPage() {
                 <button
                   type="button"
                   className="btn btn--pay proj-new-btn"
-                  onClick={() => setForm({ mode: 'new' })}
+                  onClick={() => setWizardOpen(true)}
                 >
                   <Plus size={16} strokeWidth={2.4} aria-hidden="true" />
                   New Project
@@ -350,10 +401,20 @@ export function ProjectsPage() {
       <AnimatePresence>
         {form && (
           <ProjectFormModal
-            key={form.mode === 'edit' ? `edit-${form.project.id}` : 'new'}
-            initial={form.mode === 'edit' ? form.project : null}
+            key={`edit-${form.project.id}`}
+            initial={form.project}
             onClose={() => setForm(null)}
-            onSubmit={form.mode === 'edit' ? handleUpdate : handleCreate}
+            onSubmit={handleUpdate}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {wizardOpen && (
+          <ProjectWizardModal
+            key="project-wizard"
+            onClose={() => setWizardOpen(false)}
+            onSubmit={handleCreateFromWizard}
           />
         )}
       </AnimatePresence>

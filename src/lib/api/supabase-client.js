@@ -28,6 +28,19 @@ import {
 } from '../authData'
 
 import {
+  createClient as createClientRecord,
+  getClientMsaUrl,
+  getClients,
+  uploadClientMsa,
+} from '../clientsData'
+
+import {
+  createAssignment,
+  getAssignments,
+  updateAssignmentHours,
+} from '../assignmentsData'
+
+import {
   createCollection,
   getCollectionAlertSettings,
   getCollections,
@@ -44,11 +57,18 @@ import {
 
 import {
   createProject,
+  createProjectStages,
+  createProjectTasks,
   getContractAlertSettings,
+  getProjectDocumentUrl,
   getProjectHistory,
   getProjects,
+  getProjectStages,
+  getProjectTasks,
+  recordProjectDocument,
   updateContractAlertSettings,
   updateProject,
+  uploadSowFile,
 } from '../projectsData'
 
 import {
@@ -226,6 +246,19 @@ export const supabaseApiClient = {
     updateAlertSettings: updatePaymentAlertSettings,
   },
 
+  clients: {
+    list: getClients,
+    create: createClientRecord,
+    uploadMsa: uploadClientMsa,
+    getMsaUrl: getClientMsaUrl,
+  },
+
+  assignments: {
+    list: getAssignments,
+    create: createAssignment,
+    updateHours: updateAssignmentHours,
+  },
+
   projects: {
     list: getProjects,
     create: createProject,
@@ -233,6 +266,16 @@ export const supabaseApiClient = {
     getHistory: getProjectHistory,
     getContractAlertSettings,
     updateContractAlertSettings,
+    uploadSowFile,
+    getDocumentUrl: getProjectDocumentUrl,
+    recordDocument: recordProjectDocument,
+    getStages: getProjectStages,
+    createStages: createProjectStages,
+  },
+
+  projectTasks: {
+    list: getProjectTasks,
+    create: createProjectTasks,
   },
 
   supplierContracts: {

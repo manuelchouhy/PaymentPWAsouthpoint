@@ -29,10 +29,16 @@ const MATRIX = {
   // Payments al contractor
   'payments.view': ALL,
   'payments.create': [ROLES.OPERATIONS, ROLES.FINANCE, ROLES.ADMIN],
+  // Clients
+  'clients.view': ALL,
+  'clients.create': [ROLES.OPERATIONS, ROLES.ADMIN],
   // Projects & Contracts
   'projects.view': ALL,
   'projects.create': [ROLES.OPERATIONS, ROLES.ADMIN],
   'projects.edit': [ROLES.OPERATIONS, ROLES.ADMIN],
+  // Asignaciones de horas por proveedor/task (vive dentro de Projects and SOW)
+  'assignments.view': ALL,
+  'assignments.edit': [ROLES.OPERATIONS, ROLES.ADMIN],
   // Supplier Contracts
   'suppliers.view': ALL,
   'suppliers.edit': [ROLES.OPERATIONS, ROLES.ADMIN],
