@@ -509,9 +509,16 @@ export async function uploadSowFile(file) {
     e.code = 'no_file'
     throw e
   }
+  // El navegador no siempre resuelve el MIME type de un .docx/.pdf (falta la
+  // asociación en el SO → llega '' o 'application/octet-stream'). El <input>
+  // ya filtra por accept=".docx,.pdf" antes de esto, así que si el MIME type
+  // vino vacío/genérico confiamos en la extensión del nombre de archivo.
+  const name = file.name.toLowerCase()
   const okType =
     file.type === 'application/pdf' ||
-    file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    ((!file.type || file.type === 'application/octet-stream') &&
+      (name.endsWith('.docx') || name.endsWith('.pdf')))
   if (!okType) {
     const e = new Error('The SOW must be a .docx or .pdf file.')
     e.code = 'bad_type'
@@ -528,10 +535,15 @@ export async function uploadSowFile(file) {
     return `demo/${Date.now()}-${file.name}`
   }
 
+  const contentType =
+    file.type ||
+    (name.endsWith('.pdf')
+      ? 'application/pdf'
+      : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
   const path = `${Date.now()}-${file.name}`
   const { error } = await supabase.storage
     .from(SOW_BUCKET)
-    .upload(path, file, { contentType: file.type, upsert: false })
+    .upload(path, file, { contentType, upsert: false })
   if (error) throw new Error(error.message)
   return path
 }
@@ -583,63 +595,6 @@ function rowToStage(row) {
   }
 }
 
-/** @returns {Promise<Array>} stages de un proyecto, ordenados por posición. */
-export async function getProjectStages(projectId) {
-  if (!isSupabaseConfigured) {
-    await new Promise((r) => setTimeout(r, 150))
-    return demoStages[projectId] ?? []
-  }
-  const { data, error } = await supabase
-    .from('project_stages')
-    .select('*')
-    .eq('project_id', projectId)
-    .order('position', { ascending: true })
-  if (error) throw new Error(error.message)
-  return data.map(rowToStage)
-}
-
-/**
- * Crea los stages de un proyecto recién creado (alta en bloque, en el orden
- * en que se agregaron en el wizard).
- * @param {string|number} projectId
- * @param {Array<{ stageName: string, sowNumber: string, sowUrl: ?string }>} stages
- * @param {?string} createdBy
- * @returns {Promise<Array>}
- */
-export async function createProjectStages(projectId, stages, createdBy) {
-  if (!stages?.length) return []
-
-  if (!isSupabaseConfigured) {
-    await new Promise((r) => setTimeout(r, 200))
-    const created = stages.map((s, i) => ({
-      id: `stg-demo-${Date.now()}-${i}`,
-      projectId,
-      position: i,
-      stageName: s.stageName,
-      sowNumber: s.sowNumber,
-      sowUrl: s.sowUrl ?? null,
-      createdAt: new Date().toISOString(),
-      createdBy: createdBy || null,
-    }))
-    demoStages[projectId] = [...(demoStages[projectId] ?? []), ...created]
-    return created
-  }
-
-  const rows = stages.map((s, i) => ({
-    project_id: projectId,
-    position: i,
-    stage_name: s.stageName,
-    sow_number: s.sowNumber,
-    sow_url: s.sowUrl ?? null,
-    created_by: createdBy || null,
-  }))
-  const { data, error } = await supabase.from('project_stages').insert(rows).select()
-  if (error) throw new Error(error.message)
-  return data.map(rowToStage)
-}
-
-// ---------- Tasks del SOW (Fase 4d) ----------
-
 function rowToTask(row) {
   return {
     id: row.id,
@@ -652,19 +607,94 @@ function rowToTask(row) {
   }
 }
 
-/** @returns {Promise<Array>} tasks del SOW de un proyecto. */
-export async function getProjectTasks(projectId) {
+/**
+ * Trae los hijos de un proyecto (stages o tasks) — misma forma de consulta
+ * para ambos, solo cambia la tabla, la columna de orden y el mapper de fila.
+ */
+async function getProjectChildren(table, projectId, orderColumn, rowToEntity, demoStore) {
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 150))
-    return demoTasks[projectId] ?? []
+    return demoStore[projectId] ?? []
   }
   const { data, error } = await supabase
-    .from('project_tasks')
+    .from(table)
     .select('*')
     .eq('project_id', projectId)
-    .order('id', { ascending: true })
+    .order(orderColumn, { ascending: true })
   if (error) throw new Error(error.message)
-  return data.map(rowToTask)
+  return data.map(rowToEntity)
+}
+
+/**
+ * Alta en bloque de los hijos de un proyecto recién creado (stages o
+ * tasks) — misma forma de inserción para ambos, solo cambia cómo se arma
+ * la fila/entidad demo de cada item.
+ */
+async function createProjectChildren({ table, projectId, items, demoStore, toDemoEntity, toRow, rowToEntity }) {
+  if (!items?.length) return []
+
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 200))
+    const created = items.map(toDemoEntity)
+    demoStore[projectId] = [...(demoStore[projectId] ?? []), ...created]
+    return created
+  }
+
+  const rows = items.map(toRow)
+  const { data, error } = await supabase.from(table).insert(rows).select()
+  if (error) throw new Error(error.message)
+  return data.map(rowToEntity)
+}
+
+// ---------- Stages (Fase 4d) — un proyecto con has_stages=true tiene N stages,
+// cada uno con su propio SOW ----------
+
+/** @returns {Promise<Array>} stages de un proyecto, ordenados por posición. */
+export async function getProjectStages(projectId) {
+  return getProjectChildren('project_stages', projectId, 'position', rowToStage, demoStages)
+}
+
+/**
+ * Crea los stages de un proyecto recién creado (alta en bloque, en el orden
+ * en que se agregaron en el wizard).
+ * @param {string|number} projectId
+ * @param {Array<{ stageName: string, sowNumber: string, sowUrl: ?string }>} stages
+ * @param {?string} createdBy
+ * @returns {Promise<Array>}
+ */
+export async function createProjectStages(projectId, stages, createdBy) {
+  return createProjectChildren({
+    table: 'project_stages',
+    projectId,
+    items: stages,
+    demoStore: demoStages,
+    toDemoEntity: (s, i) => ({
+      id: `stg-demo-${Date.now()}-${i}`,
+      projectId,
+      position: i,
+      stageName: s.stageName,
+      sowNumber: s.sowNumber,
+      sowUrl: s.sowUrl ?? null,
+      createdAt: new Date().toISOString(),
+      createdBy: createdBy || null,
+    }),
+    toRow: (s, i) => ({
+      project_id: projectId,
+      position: i,
+      stage_name: s.stageName,
+      sow_number: s.sowNumber,
+      sow_url: s.sowUrl ?? null,
+      created_by: createdBy || null,
+    }),
+    rowToEntity: rowToStage,
+  })
+}
+
+// ---------- Tasks del SOW (Fase 4d) ----------
+
+/** @returns {Promise<Array>} tasks del SOW de un proyecto. */
+export async function getProjectTasks(projectId) {
+  return getProjectChildren('project_tasks', projectId, 'id', rowToTask, demoTasks)
 }
 
 /**
@@ -675,11 +705,12 @@ export async function getProjectTasks(projectId) {
  * @returns {Promise<Array>}
  */
 export async function createProjectTasks(projectId, tasks, createdBy) {
-  if (!tasks?.length) return []
-
-  if (!isSupabaseConfigured) {
-    await new Promise((r) => setTimeout(r, 200))
-    const created = tasks.map((t, i) => ({
+  return createProjectChildren({
+    table: 'project_tasks',
+    projectId,
+    items: tasks,
+    demoStore: demoTasks,
+    toDemoEntity: (t, i) => ({
       id: `tsk-demo-${Date.now()}-${i}`,
       projectId,
       taskName: t.taskName,
@@ -687,19 +718,14 @@ export async function createProjectTasks(projectId, tasks, createdBy) {
       estimatedHours: Number(t.estimatedHours),
       createdAt: new Date().toISOString(),
       createdBy: createdBy || null,
-    }))
-    demoTasks[projectId] = [...(demoTasks[projectId] ?? []), ...created]
-    return created
-  }
-
-  const rows = tasks.map((t) => ({
-    project_id: projectId,
-    task_name: t.taskName,
-    role: t.role || null,
-    estimated_hours: Number(t.estimatedHours),
-    created_by: createdBy || null,
-  }))
-  const { data, error } = await supabase.from('project_tasks').insert(rows).select()
-  if (error) throw new Error(error.message)
-  return data.map(rowToTask)
+    }),
+    toRow: (t) => ({
+      project_id: projectId,
+      task_name: t.taskName,
+      role: t.role || null,
+      estimated_hours: Number(t.estimatedHours),
+      created_by: createdBy || null,
+    }),
+    rowToEntity: rowToTask,
+  })
 }

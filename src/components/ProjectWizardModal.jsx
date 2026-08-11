@@ -218,6 +218,7 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
   function goNext() {
     setTouchedSteps((prev) => [...new Set([...prev, step])])
     if (step === 0 && !step1Valid) return
+    if (step === 1 && !step2Valid) return
     if (step === 2 && !step3Valid) return
     setStep((s) => Math.min(s + 1, STEPS.length - 1))
   }
