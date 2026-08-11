@@ -535,12 +535,14 @@ export async function uploadSowFile(file) {
     return `demo/${Date.now()}-${file.name}`
   }
 
-  const contentType =
-    file.type ||
-    (name.endsWith('.pdf')
-      ? 'application/pdf'
-      : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-  const path = `${Date.now()}-${file.name}`
+  const realType = name.endsWith('.pdf')
+    ? 'application/pdf'
+    : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  const contentType = file.type && file.type !== 'application/octet-stream' ? file.type : realType
+  // Sufijo random además de Date.now(): dos stages con el mismo nombre de
+  // archivo (ej. ambos "SOW.docx") suben en paralelo (Promise.all) y pueden
+  // caer en el mismo milisegundo, chocando con upsert:false.
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${file.name}`
   const { error } = await supabase.storage
     .from(SOW_BUCKET)
     .upload(path, file, { contentType, upsert: false })
@@ -640,10 +642,17 @@ async function createProjectChildren({ table, projectId, items, demoStore, toDem
     return created
   }
 
-  const rows = items.map(toRow)
-  const { data, error } = await supabase.from(table).insert(rows).select()
-  if (error) throw new Error(error.message)
-  return data.map(rowToEntity)
+  // Uno por vez, no `insert(rows).select()`: un insert multi-fila no
+  // garantiza que el orden de vuelta coincida con el de entrada, y el
+  // caller (ej. ProjectsPage) empareja el resultado con datos externos
+  // (la URL del SOW subido) por índice de array.
+  const created = []
+  for (const [i, item] of items.entries()) {
+    const { data, error } = await supabase.from(table).insert(toRow(item, i)).select().single()
+    if (error) throw new Error(error.message)
+    created.push(rowToEntity(data))
+  }
+  return created
 }
 
 // ---------- Stages (Fase 4d) — un proyecto con has_stages=true tiene N stages,
@@ -728,4 +737,70 @@ export async function createProjectTasks(projectId, tasks, createdBy) {
     }),
     rowToEntity: rowToTask,
   })
+}
+
+/**
+ * Alta completa de un proyecto desde el wizard: sube el/los SOW (uno por
+ * stage si hasStages, uno solo si no) antes de crear nada — es la parte más
+ * propensa a fallar (tamaño, tipo, red) — y recién con eso resuelto crea el
+ * proyecto, sus stages/tasks y versiona cada documento.
+ *
+ * projects no tiene política de borrado (se conserva el historial a
+ * propósito, ver 0004_projects.sql), así que si algo falla *después* de
+ * crear la fila del proyecto no hay rollback posible: se devuelve igual
+ * el proyecto ya creado junto con el error, para que el caller decida cómo
+ * avisarle al usuario en vez de dejar un huérfano invisible.
+ *
+ * @param {object} payload  el objeto que arma ProjectWizardModal (incluye
+ *   sowFile, stages[], tasks[] además de los campos de projects)
+ * @param {?string} createdBy
+ * @returns {Promise<{ project: Project, partialFailure: ?Error }>}
+ */
+export async function createProjectFromWizard(payload, createdBy) {
+  const { stages, tasks, sowFile, ...projectFields } = payload
+
+  const sowUrl = payload.hasStages ? null : await uploadSowFile(sowFile)
+  const stagesWithUrls = payload.hasStages
+    ? await Promise.all(
+        (stages ?? []).map(async (stage) => ({
+          stageName: stage.stageName,
+          sowNumber: stage.sowNumber,
+          sowUrl: await uploadSowFile(stage.sowFile),
+        })),
+      )
+    : []
+
+  const project = await createProject({ ...projectFields, sowUrl }, createdBy)
+
+  try {
+    if (!payload.hasStages && sowUrl) {
+      await recordProjectDocument({
+        subjectType: 'sow',
+        subjectId: project.id,
+        fileUrl: sowUrl,
+        uploadedBy: createdBy,
+      })
+    }
+
+    if (payload.hasStages && stagesWithUrls.length) {
+      const createdStages = await createProjectStages(project.id, stagesWithUrls, createdBy)
+      await Promise.all(
+        createdStages.map((stage, i) =>
+          recordProjectDocument({
+            subjectType: 'sow',
+            subjectId: stage.id,
+            fileUrl: stagesWithUrls[i].sowUrl,
+            uploadedBy: createdBy,
+          }),
+        ),
+      )
+    }
+
+    if (tasks?.length) {
+      await createProjectTasks(project.id, tasks, createdBy)
+    }
+    return { project, partialFailure: null }
+  } catch (error) {
+    return { project, partialFailure: error }
+  }
 }

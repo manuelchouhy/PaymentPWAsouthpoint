@@ -338,6 +338,14 @@ export interface ApiClient {
   projects: {
     list(): Promise<Project[]>
     create(payload: Partial<Project>, createdBy?: string | null): Promise<Project>
+    createFromWizard(
+      payload: Partial<Project> & {
+        sowFile?: File | null
+        stages?: Array<{ stageName: string; sowNumber: string; sowFile: File }>
+        tasks?: Array<{ taskName: string; role?: string | null; estimatedHours: number }>
+      },
+      createdBy?: string | null,
+    ): Promise<{ project: Project; partialFailure: Error | null }>
     update(current: Project, updates: Partial<Project>, changedBy?: string | null): Promise<Project>
     getHistory(projectId: string | number): Promise<unknown[]>
     getContractAlertSettings(): Promise<Record<string, unknown>>

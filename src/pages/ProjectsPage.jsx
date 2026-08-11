@@ -129,81 +129,37 @@ export function ProjectsPage() {
   }
 
   /**
-   * Alta desde el wizard de Projects and SOW. Sube primero todos los SOW
-   * (uno por stage si hasStages, uno solo si no) — la parte más propensa a
-   * fallar (tamaño, tipo, red) — y recién con eso resuelto crea el proyecto.
-   * projects no tiene política de borrado (se conserva el historial a
-   * propósito, ver 0004_projects.sql), así que si stages/tasks fallan
-   * *después* de crear el proyecto no hay rollback posible: el mensaje de
-   * error se lo aclara al usuario en vez de dejarlo creer que no pasó nada.
+   * Alta desde el wizard de Projects and SOW. La orquestación (subir SOWs,
+   * crear el proyecto, sus stages/tasks, versionar documentos) vive en
+   * api.projects.createFromWizard — acá solo quedan las consecuencias de UI.
    */
   async function handleCreateFromWizard(payload) {
-    const { stages, tasks, sowFile, ...projectFields } = payload
-    const uploadedBy = user?.email ?? null
+    const { project, partialFailure } = await api.projects.createFromWizard(payload, user?.email ?? null)
 
-    const sowUrl = payload.hasStages ? null : await api.projects.uploadSowFile(sowFile)
-    const stagesWithUrls = payload.hasStages
-      ? await Promise.all(
-          (stages ?? []).map(async (stage) => ({
-            stageName: stage.stageName,
-            sowNumber: stage.sowNumber,
-            sowUrl: await api.projects.uploadSowFile(stage.sowFile),
-          })),
-        )
-      : []
+    api.audit.log({
+      actorEmail: user?.email,
+      actorRole: profile?.roles?.[0] ?? null,
+      action: 'project.create',
+      resourceType: 'project',
+      resourceId: project.id,
+      after: { projectNumber: project.projectNumber, projectName: project.projectName, client: project.client },
+    })
+    setProjects((prev) => sortByExp([project, ...prev]))
+    setWizardOpen(false)
 
-    const created = await api.projects.create({ ...projectFields, sowUrl }, uploadedBy)
-
-    try {
-      if (!payload.hasStages && sowUrl) {
-        await api.projects.recordDocument({
-          subjectType: 'sow',
-          subjectId: created.id,
-          fileUrl: sowUrl,
-          uploadedBy,
-        })
-      }
-
-      if (payload.hasStages && stagesWithUrls.length) {
-        const createdStages = await api.projects.createStages(created.id, stagesWithUrls, uploadedBy)
-        await Promise.all(
-          createdStages.map((stage, i) =>
-            api.projects.recordDocument({
-              subjectType: 'sow',
-              subjectId: stage.id,
-              fileUrl: stagesWithUrls[i].sowUrl,
-              uploadedBy,
-            }),
-          ),
-        )
-      }
-
-      if (tasks?.length) {
-        await api.projectTasks.create(created.id, tasks, uploadedBy)
-      }
-      api.audit.log({
-        actorEmail: user?.email,
-        actorRole: profile?.roles?.[0] ?? null,
-        action: 'project.create',
-        resourceType: 'project',
-        resourceId: created.id,
-        after: { projectNumber: created.projectNumber, projectName: created.projectName, client: created.client },
-      })
-      setProjects((prev) => sortByExp([created, ...prev]))
-      setWizardOpen(false)
-      setToast({ id: Date.now(), message: `Project created: ${created.projectName}` })
-    } catch (error) {
+    if (partialFailure) {
       // No hay política de borrado para projects (se conserva el historial a
-      // propósito) — el proyecto ya quedó creado, así que no lo tratamos como
-      // un fallo total: se lo mostramos igual en la lista y avisamos qué falta.
-      console.error('[projects] stages/tasks no se pudieron guardar tras crear el proyecto —', error)
-      setProjects((prev) => sortByExp([created, ...prev]))
-      setWizardOpen(false)
+      // propósito, ver 0004_projects.sql) — el proyecto ya quedó creado, así
+      // que no lo tratamos como un fallo total: queda en la lista y avisamos
+      // qué falta.
+      console.error('[projects] stages/tasks no se pudieron guardar tras crear el proyecto —', partialFailure)
       setToast({
         id: Date.now(),
         tone: 'error',
-        message: `Project "${created.projectName}" was created, but stages/tasks could not be saved (${error?.message ?? 'unknown error'}). Add them from the project detail.`,
+        message: `Project "${project.projectName}" was created, but stages/tasks could not be saved (${partialFailure.message ?? 'unknown error'}). Add them from the project detail.`,
       })
+    } else {
+      setToast({ id: Date.now(), message: `Project created: ${project.projectName}` })
     }
   }
 

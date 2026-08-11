@@ -137,6 +137,8 @@ export const httpApiClient = {
     list: () => notImplemented('projects.list'),
     // POST /api/projects → Project
     create: () => notImplemented('projects.create'),
+    // POST /api/projects/from-wizard { ...payload } → { project, partialFailure }
+    createFromWizard: () => notImplemented('projects.createFromWizard'),
     // PATCH /api/projects/:id → Project
     update: () => notImplemented('projects.update'),
     // GET /api/projects/:id/history

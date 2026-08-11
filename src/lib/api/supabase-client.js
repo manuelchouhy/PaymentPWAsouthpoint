@@ -57,6 +57,7 @@ import {
 
 import {
   createProject,
+  createProjectFromWizard,
   createProjectStages,
   createProjectTasks,
   getContractAlertSettings,
@@ -262,6 +263,7 @@ export const supabaseApiClient = {
   projects: {
     list: getProjects,
     create: createProject,
+    createFromWizard: createProjectFromWizard,
     update: updateProject,
     getHistory: getProjectHistory,
     getContractAlertSettings,

@@ -150,6 +150,10 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
         maintenanceTransition: preset ? preset.transition : prev.maintenanceTransition,
         maintenanceHoursPool: preset ? preset.hoursPool : prev.maintenanceHoursPool,
         maintenanceDurationMonths: preset ? preset.durationMonths : prev.maintenanceDurationMonths,
+        // Standard/Premium muestran texto fijo de severidad — si el usuario
+        // veía ediciones de un paso previo por Custom, tienen que volver a
+        // los valores canónicos de la plantilla, no quedarse pegadas.
+        maintenanceSlaTiers: preset ? defaultSeverityTiers() : prev.maintenanceSlaTiers,
       }
     })
   }
