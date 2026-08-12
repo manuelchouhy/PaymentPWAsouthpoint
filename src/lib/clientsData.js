@@ -16,6 +16,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabase'
+import { recordProjectDocument } from './projectsData'
 
 const BUCKET = 'client-msa'
 const MSA_MAX_BYTES = 20 * 1024 * 1024 // 20 MB
@@ -126,6 +127,43 @@ export async function createClient(payload, createdBy) {
     .single()
   if (error) throw new Error(error.message)
   return rowToClient(data)
+}
+
+/**
+ * Actualiza los datos de un cliente. No hay historial por-campo para
+ * clients (a diferencia de projects/project_history) — sí queda versionado
+ * el MSA, ver recordClientMsaVersion.
+ * @param {Client} current
+ * @param {Partial<Client>} updates
+ * @param {?string} updatedBy
+ * @returns {Promise<Client>}
+ */
+export async function updateClient(current, updates) {
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 250))
+    const updated = { ...current, ...updates, updatedAt: new Date().toISOString() }
+    demoClients = demoClients.map((c) => (c.id === current.id ? updated : c))
+    return updated
+  }
+
+  const { data, error } = await supabase
+    .from('clients')
+    .update({ ...clientToRow(updates), updated_at: new Date().toISOString() })
+    .eq('id', current.id)
+    .select()
+    .single()
+  if (error) throw new Error(error.message)
+  return rowToClient(data)
+}
+
+/**
+ * Registra una nueva versión del MSA en el historial versionado
+ * (project_documents, subject_type='msa') — el archivo anterior nunca se
+ * borra, solo deja de ser el `msa_url` vigente del cliente.
+ * @param {{ clientId: string|number, fileUrl: string, uploadedBy?: ?string }} params
+ */
+export async function recordClientMsaVersion({ clientId, fileUrl, uploadedBy }) {
+  await recordProjectDocument({ subjectType: 'msa', subjectId: clientId, fileUrl, uploadedBy })
 }
 
 /**

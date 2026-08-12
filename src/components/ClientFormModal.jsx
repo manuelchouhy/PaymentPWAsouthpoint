@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { UserPlus2, X } from 'lucide-react'
+import { Save, UserPlus2, X } from 'lucide-react'
 
 const TEXT_FIELDS = [
   { key: 'clientName', label: 'Client Name', required: true },
@@ -11,20 +11,45 @@ const TEXT_FIELDS = [
 ]
 const REQUIRED = ['clientName', 'primaryContactName', 'primaryContactEmail']
 
+// El path guardado lleva un prefijo de timestamp para evitar colisiones en
+// Storage (ver uploadClientMsa) — para mostrarlo se pela ese prefijo.
+function msaFileName(msaUrl) {
+  if (!msaUrl) return ''
+  return msaUrl.split('/').pop().replace(/^\d+-/, '')
+}
+
 function emptyForm() {
   return { clientName: '', email: '', domain: '', primaryContactName: '', primaryContactEmail: '' }
 }
 
 /**
- * Modal de alta de Client (módulo nuevo, reunión de requerimientos 2026-08-05).
- * Solo alta — no hay edición pedida todavía.
+ * Modal de alta / edición de Client (módulo nuevo, reunión de requerimientos
+ * 2026-08-05). En edición, el MSA no es obligatorio — solo se reemplaza si
+ * el usuario elige "Replace" (la versión anterior queda en el historial,
+ * nunca se borra, ver recordClientMsaVersion).
  *
- * @param {{ onClose: () => void, onSubmit: (payload, msaFile: File) => Promise<void> }} props
+ * @param {{
+ *   initial?: object | null,   // cliente a editar (null = alta)
+ *   onClose: () => void,
+ *   onSubmit: (payload, msaFile: File | null) => Promise<void>,
+ * }} props
  */
-export function ClientFormModal({ onClose, onSubmit }) {
-  const [form, setForm] = useState(emptyForm)
+export function ClientFormModal({ initial = null, onClose, onSubmit }) {
+  const isEdit = Boolean(initial)
+  const [form, setForm] = useState(() =>
+    initial
+      ? {
+          clientName: initial.clientName ?? '',
+          email: initial.email ?? '',
+          domain: initial.domain ?? '',
+          primaryContactName: initial.primaryContactName ?? '',
+          primaryContactEmail: initial.primaryContactEmail ?? '',
+        }
+      : emptyForm(),
+  )
   const [msaFile, setMsaFile] = useState(null)
   const [msaError, setMsaError] = useState('')
+  const [replacingMsa, setReplacingMsa] = useState(false)
   const [touched, setTouched] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -68,7 +93,7 @@ export function ClientFormModal({ onClose, onSubmit }) {
   }, [onClose])
 
   const missing = REQUIRED.filter((k) => !String(form[k] ?? '').trim())
-  const valid = missing.length === 0 && Boolean(msaFile)
+  const valid = missing.length === 0 && (isEdit || Boolean(msaFile))
 
   function set(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -121,7 +146,9 @@ export function ClientFormModal({ onClose, onSubmit }) {
         <div className="modal__head">
           <div>
             <span className="modal__kicker">Clients</span>
-            <h2 className="modal__title" id="client-form-title">New client</h2>
+            <h2 className="modal__title" id="client-form-title">
+              {isEdit ? `Edit client · ${initial.clientName}` : 'New client'}
+            </h2>
           </div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
@@ -158,21 +185,35 @@ export function ClientFormModal({ onClose, onSubmit }) {
           <div className="field">
             <label className="field__label" htmlFor="client-msa">
               MSA
-              <span className="field__req">required</span>
+              {!isEdit && <span className="field__req">required</span>}
               <span className="field__hint">PDF · max 20 MB</span>
             </label>
-            <input
-              id="client-msa"
-              type="file"
-              accept="application/pdf,.pdf"
-              className="field__input field__input--file"
-              onChange={(e) => onPickMsa(e.target.files?.[0] ?? null)}
-            />
+            {isEdit && !replacingMsa ? (
+              <div className="field__input" style={{ justifyContent: 'space-between' }}>
+                <span className="field__filename">{msaFileName(initial.msaUrl)}</span>
+                <button type="button" className="btn btn--ghost btn--sm" onClick={() => setReplacingMsa(true)}>
+                  Replace
+                </button>
+              </div>
+            ) : (
+              <input
+                id="client-msa"
+                type="file"
+                accept="application/pdf,.pdf"
+                className="field__input field__input--file"
+                onChange={(e) => onPickMsa(e.target.files?.[0] ?? null)}
+              />
+            )}
             {msaFile && <span className="field__filename">{msaFile.name}</span>}
-            {touched && !msaFile && !msaError && (
+            {touched && !isEdit && !msaFile && !msaError && (
               <span className="field__error">The MSA file is required.</span>
             )}
             {msaError && <span className="field__error">{msaError}</span>}
+            {isEdit && replacingMsa && (
+              <span className="field__hint">
+                Replacing uploads a new version — the previous one stays in history, never deleted.
+              </span>
+            )}
           </div>
 
           {submitError && (
@@ -186,8 +227,14 @@ export function ClientFormModal({ onClose, onSubmit }) {
             <motion.button type="submit" className="btn btn--pay"
               disabled={!valid || submitting}
               whileTap={valid && !submitting ? { scale: 0.97 } : undefined}>
-              {submitting ? <span className="spinner" aria-hidden="true" /> : <UserPlus2 size={16} strokeWidth={2.2} />}
-              {submitting ? 'Saving…' : 'Create client'}
+              {submitting ? (
+                <span className="spinner" aria-hidden="true" />
+              ) : isEdit ? (
+                <Save size={16} strokeWidth={2.2} />
+              ) : (
+                <UserPlus2 size={16} strokeWidth={2.2} />
+              )}
+              {submitting ? 'Saving…' : isEdit ? 'Save changes' : 'Create client'}
             </motion.button>
           </div>
         </form>

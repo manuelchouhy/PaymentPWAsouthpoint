@@ -31,6 +31,8 @@ import {
   createClient as createClientRecord,
   getClientMsaUrl,
   getClients,
+  recordClientMsaVersion,
+  updateClient,
   uploadClientMsa,
 } from '../clientsData'
 
@@ -250,8 +252,10 @@ export const supabaseApiClient = {
   clients: {
     list: getClients,
     create: createClientRecord,
+    update: updateClient,
     uploadMsa: uploadClientMsa,
     getMsaUrl: getClientMsaUrl,
+    recordMsaVersion: recordClientMsaVersion,
   },
 
   assignments: {

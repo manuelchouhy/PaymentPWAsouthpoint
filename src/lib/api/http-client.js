@@ -90,10 +90,14 @@ export const httpApiClient = {
     // POST /api/clients { clientName, email, domain, primaryContactName,
     //   primaryContactEmail, msaUrl, createdBy } → Client
     create: () => notImplemented('clients.create'),
+    // PATCH /api/clients/:id { ...updates } → Client
+    update: () => notImplemented('clients.update'),
     // POST /api/clients/msa (multipart) → { path }
     uploadMsa: () => notImplemented('clients.uploadMsa'),
     // GET /api/clients/msa-url?path=X → string | null
     getMsaUrl: () => notImplemented('clients.getMsaUrl'),
+    // POST /api/clients/:id/msa-version { fileUrl, uploadedBy } → void
+    recordMsaVersion: () => notImplemented('clients.recordMsaVersion'),
   },
 
   assignments: {

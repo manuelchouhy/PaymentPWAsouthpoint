@@ -13,6 +13,7 @@ export function ClientsPage() {
   const [clients, setClients] = useState([])
   const [status, setStatus] = useState('loading')
   const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState(null)
   const [detail, setDetail] = useState(null)
   const [toast, setToast] = useState(null)
 
@@ -38,6 +39,7 @@ export function ClientsPage() {
   async function handleCreate(payload, msaFile) {
     const msaUrl = await api.clients.uploadMsa(msaFile)
     const created = await api.clients.create({ ...payload, msaUrl }, user?.email ?? null)
+    await api.clients.recordMsaVersion({ clientId: created.id, fileUrl: msaUrl, uploadedBy: user?.email ?? null })
     api.audit.log({
       actorEmail: user?.email,
       action: 'client.create',
@@ -48,6 +50,32 @@ export function ClientsPage() {
     setClients((prev) => [...prev, created].sort((a, b) => a.clientName.localeCompare(b.clientName, 'es')))
     setFormOpen(false)
     setToast({ id: Date.now(), message: `Client created: ${created.clientName}` })
+  }
+
+  async function handleUpdate(payload, msaFile) {
+    let msaUrl = editing.msaUrl
+    if (msaFile) {
+      msaUrl = await api.clients.uploadMsa(msaFile)
+    }
+    const updated = await api.clients.update(editing, { ...payload, msaUrl })
+    if (msaFile) {
+      await api.clients.recordMsaVersion({ clientId: updated.id, fileUrl: msaUrl, uploadedBy: user?.email ?? null })
+    }
+    api.audit.log({
+      actorEmail: user?.email,
+      action: 'client.update',
+      resourceType: 'client',
+      resourceId: updated.id,
+      before: { clientName: editing.clientName },
+      after: { clientName: updated.clientName },
+    })
+    setClients((prev) =>
+      [...prev.map((c) => (c.id === updated.id ? updated : c))].sort((a, b) =>
+        a.clientName.localeCompare(b.clientName, 'es'),
+      ),
+    )
+    setEditing(null)
+    setToast({ id: Date.now(), message: `Client updated: ${updated.clientName}` })
   }
 
   return (
@@ -147,6 +175,17 @@ export function ClientsPage() {
       </AnimatePresence>
 
       <AnimatePresence>
+        {editing && (
+          <ClientFormModal
+            key={`edit-client-${editing.id}`}
+            initial={editing}
+            onClose={() => setEditing(null)}
+            onSubmit={handleUpdate}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {detail && (
           <ClientDetailDrawer
             key={`client-detail-${detail.id}`}
@@ -154,7 +193,7 @@ export function ClientsPage() {
             onClose={() => setDetail(null)}
             onEdit={() => {
               setDetail(null)
-              setToast({ id: Date.now(), message: 'Editing clients is coming in the next update.' })
+              setEditing(detail)
             }}
           />
         )}
