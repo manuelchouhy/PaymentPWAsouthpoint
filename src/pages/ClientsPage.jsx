@@ -5,6 +5,7 @@ import { AlertTriangle, Plus } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatDateTime } from '../lib/format'
 import { ClientFormModal } from '../components/ClientFormModal'
+import { ClientDetailDrawer } from '../components/ClientDetailDrawer'
 import { Toast } from '../components/Toast'
 
 export function ClientsPage() {
@@ -12,6 +13,7 @@ export function ClientsPage() {
   const [clients, setClients] = useState([])
   const [status, setStatus] = useState('loading')
   const [formOpen, setFormOpen] = useState(false)
+  const [detail, setDetail] = useState(null)
   const [toast, setToast] = useState(null)
 
   useEffect(() => {
@@ -116,6 +118,8 @@ export function ClientsPage() {
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.3, delay: Math.min(index * 0.02, 0.3) }}
+                      onClick={() => setDetail(c)}
+                      title={`View ${c.clientName}`}
                     >
                       <td className="cell-strong">{c.clientName}</td>
                       <td className="cell-soft">{c.email || '—'}</td>
@@ -138,6 +142,20 @@ export function ClientsPage() {
             key="new-client"
             onClose={() => setFormOpen(false)}
             onSubmit={handleCreate}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {detail && (
+          <ClientDetailDrawer
+            key={`client-detail-${detail.id}`}
+            client={detail}
+            onClose={() => setDetail(null)}
+            onEdit={() => {
+              setDetail(null)
+              setToast({ id: Date.now(), message: 'Editing clients is coming in the next update.' })
+            }}
           />
         )}
       </AnimatePresence>
