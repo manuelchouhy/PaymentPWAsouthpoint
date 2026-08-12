@@ -498,6 +498,17 @@ const SOW_BUCKET = 'project-documents'
 const DOC_MAX_BYTES = 20 * 1024 * 1024 // 20 MB
 
 /**
+ * El navegador no siempre resuelve el MIME type de un .docx/.pdf (falta la
+ * asociación en el SO → llega '' o 'application/octet-stream'). Se usa acá y
+ * en ProjectWizardModal's onPickSowFile — un solo lugar para la definición de
+ * "MIME genérico, hay que confiar en la extensión" en vez de dos.
+ * @param {string} mimeType
+ */
+export function isGenericFileType(mimeType) {
+  return !mimeType || mimeType === 'application/octet-stream'
+}
+
+/**
  * Sube el archivo del SOW a Storage. Acepta .docx (se parsea para
  * autocompletar Alcance) o PDF (SOW ya firmado).
  * @param {File} file
@@ -517,8 +528,7 @@ export async function uploadSowFile(file) {
   const okType =
     file.type === 'application/pdf' ||
     file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-    ((!file.type || file.type === 'application/octet-stream') &&
-      (name.endsWith('.docx') || name.endsWith('.pdf')))
+    (isGenericFileType(file.type) && (name.endsWith('.docx') || name.endsWith('.pdf')))
   if (!okType) {
     const e = new Error('The SOW must be a .docx or .pdf file.')
     e.code = 'bad_type'
@@ -538,7 +548,7 @@ export async function uploadSowFile(file) {
   const realType = name.endsWith('.pdf')
     ? 'application/pdf'
     : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  const contentType = file.type && file.type !== 'application/octet-stream' ? file.type : realType
+  const contentType = isGenericFileType(file.type) ? realType : file.type
   // Sufijo random además de Date.now(): dos stages con el mismo nombre de
   // archivo (ej. ambos "SOW.docx") suben en paralelo (Promise.all) y pueden
   // caer en el mismo milisegundo, chocando con upsert:false.

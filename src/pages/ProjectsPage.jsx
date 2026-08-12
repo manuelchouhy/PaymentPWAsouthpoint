@@ -156,7 +156,7 @@ export function ProjectsPage() {
       setToast({
         id: Date.now(),
         tone: 'error',
-        message: `Project "${project.projectName}" was created, but stages/tasks could not be saved (${partialFailure.message ?? 'unknown error'}). Add them from the project detail.`,
+        message: `Project "${project.projectName}" was created, but its stages/tasks could not be saved (${partialFailure.message ?? 'unknown error'}). Contact an admin to add them.`,
       })
     } else {
       setToast({ id: Date.now(), message: `Project created: ${project.projectName}` })
@@ -168,7 +168,7 @@ export function ProjectsPage() {
     api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'project.update', resourceType: 'project', resourceId: updated.id, before: { projectNumber: form.project.projectNumber }, after: { projectNumber: updated.projectNumber, projectName: updated.projectName, client: updated.client } })
     setProjects((prev) => sortByExp(prev.map((p) => (p.id === updated.id ? updated : p))))
     setForm(null)
-    setToast({ id: Date.now(), message: `Project updated: ${updated.projectNumber}` })
+    setToast({ id: Date.now(), message: `Project updated: ${updated.projectName}` })
   }
 
   return (

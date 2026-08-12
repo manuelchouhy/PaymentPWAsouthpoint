@@ -1,16 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FolderPlus, Save, X } from 'lucide-react'
 
-// Definición de campos (orden, label, requerido, tipo).
+// Definición de campos (orden, label, tipo). "required" queda resuelto por
+// proyecto en requiredKeys() más abajo, no acá — ver por qué.
 const FIELDS = [
-  { key: 'client', label: 'Client', required: true },
-  { key: 'projectName', label: 'Project Name', required: true },
-  // No required: 0022_projects_relax_legacy_required_fields.sql aflojó estas
-  // tres a nullable porque el wizard de Projects and SOW no las pide — deben
-  // poder editarse (o guardarse en blanco) en proyectos creados por el wizard,
-  // que nunca tienen contractNumber/contractExpirationDate y a veces tampoco
-  // projectNumber (proyectos con stages).
+  { key: 'client', label: 'Client' },
+  { key: 'projectName', label: 'Project Name' },
   { key: 'projectNumber', label: 'Project Number' },
   { key: 'contractNumber', label: 'Contract Number' },
   { key: 'contractExpirationDate', label: 'Contract Expiration Date', type: 'date' },
@@ -23,7 +19,22 @@ const FIELDS = [
   { key: 'leadDeveloper', label: 'Lead Developer' },
 ]
 
-const REQUIRED = FIELDS.filter((f) => f.required).map((f) => f.key)
+const ALWAYS_REQUIRED = ['client', 'projectName']
+
+// 0022_projects_relax_legacy_required_fields.sql aflojó estas tres a
+// nullable porque el wizard de Projects and SOW no las pide. Pero un
+// proyecto legacy que YA las tenía cargadas (sync de Zoho, alta vieja) no
+// puede perderlas por accidente al editar otro campo — quedan requeridas
+// solo para el proyecto que las tenía, no globalmente.
+const CONDITIONALLY_REQUIRED = ['projectNumber', 'contractNumber', 'contractExpirationDate']
+
+function requiredKeys(initial) {
+  const req = new Set(ALWAYS_REQUIRED)
+  for (const key of CONDITIONALLY_REQUIRED) {
+    if (String(initial?.[key] ?? '').trim()) req.add(key)
+  }
+  return req
+}
 
 function emptyForm() {
   return Object.fromEntries(FIELDS.map((f) => [f.key, '']))
@@ -50,6 +61,7 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
   const [dupError, setDupError] = useState(false)
   const dialogRef = useRef(null)
   const firstRef = useRef(null)
+  const required = useMemo(() => requiredKeys(initial), [initial])
 
   useEffect(() => {
     firstRef.current?.focus()
@@ -68,7 +80,7 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
-  const missing = REQUIRED.filter((k) => !String(form[k] ?? '').trim())
+  const missing = [...required].filter((k) => !String(form[k] ?? '').trim())
   const valid = missing.length === 0
 
   function setField(key, value) {
@@ -134,25 +146,37 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
           <div className="project-form__grid">
             {FIELDS.map((field, index) => {
               const value = form[field.key] ?? ''
-              const isMissing = field.required && touched && !String(value).trim()
+              const isRequired = required.has(field.key)
+              const isMissing = isRequired && touched && !String(value).trim()
               const showDup = field.key === 'projectNumber' && dupError
+              // El texto libre "Client" quedó de la alta vieja. Un proyecto
+              // creado por el wizard tiene clientId (FK real a clients) —
+              // dejarlo editable acá lo desincroniza del cliente vinculado
+              // (autopopulado de MSA, futuras vistas por cliente, etc.).
+              const clientLinked = field.key === 'client' && Boolean(initial?.clientId)
               return (
                 <div className="field" key={field.key}>
                   <label className="field__label" htmlFor={`pf-${field.key}`}>
                     {field.label}
-                    {field.required && <span className="field__req">required</span>}
+                    {isRequired && <span className="field__req">required</span>}
                   </label>
-                  <input
-                    id={`pf-${field.key}`}
-                    ref={index === 0 ? firstRef : undefined}
-                    type={field.type === 'date' ? 'date' : 'text'}
-                    className={`field__input${isMissing || showDup ? ' field__input--error' : ''}`}
-                    value={value}
-                    onChange={(e) => setField(field.key, e.target.value)}
-                    onBlur={() => setTouched(true)}
-                    autoComplete="off"
-                    aria-invalid={isMissing || showDup}
-                  />
+                  {clientLinked ? (
+                    <div className="field__input" style={{ color: 'var(--text-soft)' }}>
+                      {value} <span className="field__hint">linked client, edit from Clients</span>
+                    </div>
+                  ) : (
+                    <input
+                      id={`pf-${field.key}`}
+                      ref={index === 0 ? firstRef : undefined}
+                      type={field.type === 'date' ? 'date' : 'text'}
+                      className={`field__input${isMissing || showDup ? ' field__input--error' : ''}`}
+                      value={value}
+                      onChange={(e) => setField(field.key, e.target.value)}
+                      onBlur={() => setTouched(true)}
+                      autoComplete="off"
+                      aria-invalid={isMissing || showDup}
+                    />
+                  )}
                   {isMissing && <span className="field__error">This field is required.</span>}
                 </div>
               )

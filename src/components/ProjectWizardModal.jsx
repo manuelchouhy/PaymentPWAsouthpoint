@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { ArrowRight, ArrowLeft, FileUp, Loader2, Plus, X } from 'lucide-react'
 import { ClientPicker } from './ClientPicker'
 import { parseSowDocument } from '../lib/sowParser'
+import { isGenericFileType } from '../lib/projectsData'
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
@@ -75,6 +76,7 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const dialogRef = useRef(null)
+  const sowPickTokenRef = useRef(0)
 
   useEffect(() => {
     const prev = document.body.style.overflow
@@ -98,6 +100,10 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
 
   async function onPickSowFile(file) {
     setParseWarnings([])
+    // Token de la selección actual: si el usuario cambia de archivo antes de
+    // que este parse termine, el resultado viejo no debe pisar el form —
+    // parseSowDocument no tiene forma de cancelarse a mitad de camino.
+    const token = ++sowPickTokenRef.current
     if (!file) {
       set('sowFile', null)
       return
@@ -107,14 +113,13 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
     // asociación en el SO → llega '' o 'application/octet-stream'); en ese
     // caso confiamos en la extensión, igual que uploadSowFile en projectsData.js.
     const isDocx =
-      file.type === DOCX_MIME ||
-      ((!file.type || file.type === 'application/octet-stream') &&
-        file.name.toLowerCase().endsWith('.docx'))
+      file.type === DOCX_MIME || (isGenericFileType(file.type) && file.name.toLowerCase().endsWith('.docx'))
     if (!isDocx) return // PDF: sin auto-extract, se completa a mano
 
     setParsing(true)
     try {
       const parsed = await parseSowDocument(file)
+      if (sowPickTokenRef.current !== token) return // el usuario ya eligió otro archivo
       setForm((prev) => ({
         ...prev,
         sowNumber: prev.sowNumber || parsed.sowNumber || '',
@@ -124,7 +129,7 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
       }))
       setParseWarnings(parsed.warnings)
     } finally {
-      setParsing(false)
+      if (sowPickTokenRef.current === token) setParsing(false)
     }
   }
 
