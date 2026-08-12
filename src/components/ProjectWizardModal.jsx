@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, ArrowLeft, FileUp, Loader2, Plus, X } from 'lucide-react'
+import { ArrowRight, ArrowLeft, FileUp, Loader2, Plus, Save, X } from 'lucide-react'
 import { ClientPicker } from './ClientPicker'
 import { parseSowDocument } from '../lib/sowParser'
 import { isGenericFileType } from '../lib/projectsData'
+import { fileNameFromPath } from '../lib/format'
+import { api } from '../lib/api'
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
@@ -59,24 +61,88 @@ function emptyForm() {
   }
 }
 
+// Seed del form en edición: todo lo que ya vive como columna en `projects`
+// (getProjects() ya lo trae). Stages/tasks NO se precargan en `form` acá —
+// en edición se muestran de solo lectura (fetched aparte, ver
+// existingStages/existingTasks) hasta que su propio CRUD se construya
+// (issues 03b/03c); esto evita que la validación de "stages" del paso 1,
+// pensada para las filas editables del alta, se dispare sobre datos que acá
+// todavía no son editables.
+function initialFormState(initial) {
+  if (!initial) return emptyForm()
+  return {
+    clientId: initial.clientId,
+    clientName: initial.client,
+    projectName: initial.projectName ?? '',
+    sowNumber: initial.sowNumber ?? '',
+    sowFile: null,
+    hasStages: initial.hasStages ?? false,
+    stages: [],
+    proposalNumber: initial.proposalNumber ?? '',
+    budgetHours: initial.baseBudgetHours != null ? String(initial.baseBudgetHours) : '',
+    periodStart: initial.periodStart ?? '',
+    periodEnd: initial.periodEnd ?? '',
+    maintenanceEnabled: initial.maintenanceEnabled ?? false,
+    slaTemplate: initial.slaTemplate ?? 'Standard',
+    maintenanceTransition: initial.maintenanceTransition ?? SLA_PRESETS.Standard.transition,
+    maintenanceHoursPool:
+      initial.maintenanceHoursPool != null ? String(initial.maintenanceHoursPool) : SLA_PRESETS.Standard.hoursPool,
+    maintenanceDurationMonths:
+      initial.maintenanceDurationMonths != null
+        ? String(initial.maintenanceDurationMonths)
+        : SLA_PRESETS.Standard.durationMonths,
+    maintenanceSlaTiers: initial.maintenanceSlaTiers ?? defaultSeverityTiers(),
+    tasks: [],
+  }
+}
+
 /**
- * Wizard por pestañas de alta de proyecto (Projects and SOW). Solo alta —
- * editar un proyecto existente sigue usando ProjectFormModal para los campos
- * legacy; el detalle/edición del SOW, stages, mantenimiento y tasks queda
- * para el carrusel de detalle (fuera de este slice).
+ * Wizard por pestañas de alta/edición de proyecto (Projects and SOW). Solo
+ * proyectos linkeados a un cliente (clientId, siempre presentes en
+ * proyectos creados por este wizard) usan esta edición tabulada — los
+ * proyectos legacy (clientId null) siguen editándose con ProjectFormModal,
+ * que tiene sus propios campos (Contract Number, Customer Name, etc.) sin
+ * equivalente acá. En edición, stages y tasks se muestran de solo lectura
+ * (su propio CRUD llega en issues 03b/03c) — Identification/Scope/
+ * Maintenance sí son editables.
  *
- * @param {{ onClose: () => void, onSubmit: (payload: object) => Promise<void> }} props
+ * @param {{
+ *   initial?: object | null,   // proyecto a editar (null = alta)
+ *   onClose: () => void,
+ *   onSubmit: (payload: object, newSowFile?: File | null) => Promise<void>,
+ * }} props
  */
-export function ProjectWizardModal({ onClose, onSubmit }) {
+export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
+  const isEdit = Boolean(initial)
   const [step, setStep] = useState(0)
-  const [form, setForm] = useState(emptyForm)
+  const [form, setForm] = useState(() => initialFormState(initial))
   const [touchedSteps, setTouchedSteps] = useState([])
   const [parsing, setParsing] = useState(false)
   const [parseWarnings, setParseWarnings] = useState([])
+  const [replacingSow, setReplacingSow] = useState(false)
+  const [existingStages, setExistingStages] = useState([])
+  const [existingTasks, setExistingTasks] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const dialogRef = useRef(null)
   const sowPickTokenRef = useRef(0)
+
+  useEffect(() => {
+    if (!isEdit) return
+    let cancelled = false
+    Promise.all([api.projects.getStages(initial.id), api.projectTasks.list(initial.id)])
+      .then(([stages, tasks]) => {
+        if (cancelled) return
+        setExistingStages(stages)
+        setExistingTasks(tasks)
+      })
+      .catch((error) => {
+        console.error('No se pudieron cargar stages/tasks del proyecto:', error)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     const prev = document.body.style.overflow
@@ -217,12 +283,18 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
   const tasksTotalHours = form.tasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0)
 
   const stageMissing = (s) => !s.stageName.trim() || !s.sowNumber.trim() || !s.sowFile
+  // En edición ya hay un SOW subido (initial.sowUrl) — no reemplazarlo no es
+  // un error, solo "no hay archivo nuevo". Y las stages/tasks de un proyecto
+  // en edición son de solo lectura acá (issues 03b/03c), así que su validez
+  // no se vuelve a chequear contra `form.stages` (que en edición queda
+  // vacío a propósito, ver initialFormState).
+  const hasSowFileNow = isEdit ? Boolean(initial.sowUrl) || Boolean(form.sowFile) : Boolean(form.sowFile)
   const step1Missing = {
-    clientId: !form.clientId,
+    clientId: !isEdit && !form.clientId,
     projectName: !form.projectName.trim(),
     sowNumber: !form.hasStages && !form.sowNumber.trim(),
-    sowFile: !form.hasStages && !form.sowFile,
-    stages: form.hasStages && (form.stages.length === 0 || form.stages.some(stageMissing)),
+    sowFile: !form.hasStages && !hasSowFileNow,
+    stages: !isEdit && form.hasStages && (form.stages.length === 0 || form.stages.some(stageMissing)),
   }
   // !(n > 0) en vez de n <= 0: Number(x) <= 0 es false para NaN (un valor no
   // numérico colaría como "válido"), !(NaN > 0) es true — rechaza tanto NaN
@@ -249,49 +321,71 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
     setStep((s) => Math.min(s + 1, STEPS.length - 1))
   }
 
+  function maintenanceFields() {
+    return {
+      maintenanceEnabled: form.maintenanceEnabled,
+      slaTemplate: form.maintenanceEnabled ? form.slaTemplate : null,
+      maintenanceTransition: form.maintenanceEnabled ? form.maintenanceTransition : null,
+      maintenanceHoursPool: form.maintenanceEnabled ? Number(form.maintenanceHoursPool) : null,
+      maintenanceDurationMonths: form.maintenanceEnabled ? Number(form.maintenanceDurationMonths) : null,
+      maintenanceSlaTiers: form.maintenanceEnabled && form.slaTemplate === 'Custom' ? form.maintenanceSlaTiers : null,
+    }
+  }
+
   async function handleFinish() {
     setTouchedSteps([0, 1, 2, 3])
     if (!step1Valid || !step2Valid || !step3Valid || submitting) return
     setSubmitError('')
     setSubmitting(true)
     try {
-      await onSubmit({
-        clientId: form.clientId,
-        client: form.clientName,
-        projectName: form.projectName.trim(),
-        // No reusar el SOW number como project_number: el SOW number es por
-        // cliente, project_number es único global (0004_projects.sql) — dos
-        // clientes con el mismo número de SOW chocarían. project_number
-        // queda sin poblar (ya es nullable desde 0022); el SOW number real
-        // vive en sowNumber/sow_number.
-        projectNumber: null,
-        sowNumber: form.hasStages ? null : form.sowNumber.trim(),
-        sowFile: form.hasStages ? null : form.sowFile,
-        hasStages: form.hasStages,
-        stageName: null, // reemplazado por project_stages cuando hasStages
-        stages: form.hasStages
-          ? form.stages.map((s) => ({ stageName: s.stageName.trim(), sowNumber: s.sowNumber.trim(), sowFile: s.sowFile }))
-          : [],
-        proposalNumber: form.proposalNumber.trim() || null,
-        baseBudgetHours: Number(form.budgetHours),
-        model: 'Time & Materials',
-        periodStart: form.periodStart,
-        periodEnd: form.periodEnd,
-        maintenanceEnabled: form.maintenanceEnabled,
-        slaTemplate: form.maintenanceEnabled ? form.slaTemplate : null,
-        maintenanceTransition: form.maintenanceEnabled ? form.maintenanceTransition : null,
-        maintenanceHoursPool: form.maintenanceEnabled ? Number(form.maintenanceHoursPool) : null,
-        maintenanceDurationMonths: form.maintenanceEnabled ? Number(form.maintenanceDurationMonths) : null,
-        maintenanceSlaTiers:
-          form.maintenanceEnabled && form.slaTemplate === 'Custom' ? form.maintenanceSlaTiers : null,
-        tasks: form.tasks
-          .filter((t) => t.taskName.trim())
-          .map((t) => ({
-            taskName: t.taskName.trim(),
-            role: t.role.trim() || null,
-            estimatedHours: Number(t.estimatedHours) || 0,
-          })),
-      })
+      if (isEdit) {
+        // Stages/tasks quedan afuera del payload de edición (solo lectura
+        // acá, ver initialFormState) — solo se manda sowNumber/sowFile si el
+        // proyecto no tiene stages (con stages, el SOW vive por-stage, sin
+        // equivalente a nivel proyecto).
+        const updates = {
+          projectName: form.projectName.trim(),
+          proposalNumber: form.proposalNumber.trim() || null,
+          baseBudgetHours: Number(form.budgetHours),
+          periodStart: form.periodStart,
+          periodEnd: form.periodEnd,
+          ...maintenanceFields(),
+        }
+        if (!form.hasStages) updates.sowNumber = form.sowNumber.trim()
+        await onSubmit(updates, form.hasStages ? null : form.sowFile)
+      } else {
+        await onSubmit({
+          clientId: form.clientId,
+          client: form.clientName,
+          projectName: form.projectName.trim(),
+          // No reusar el SOW number como project_number: el SOW number es por
+          // cliente, project_number es único global (0004_projects.sql) — dos
+          // clientes con el mismo número de SOW chocarían. project_number
+          // queda sin poblar (ya es nullable desde 0022); el SOW number real
+          // vive en sowNumber/sow_number.
+          projectNumber: null,
+          sowNumber: form.hasStages ? null : form.sowNumber.trim(),
+          sowFile: form.hasStages ? null : form.sowFile,
+          hasStages: form.hasStages,
+          stageName: null, // reemplazado por project_stages cuando hasStages
+          stages: form.hasStages
+            ? form.stages.map((s) => ({ stageName: s.stageName.trim(), sowNumber: s.sowNumber.trim(), sowFile: s.sowFile }))
+            : [],
+          proposalNumber: form.proposalNumber.trim() || null,
+          baseBudgetHours: Number(form.budgetHours),
+          model: 'Time & Materials',
+          periodStart: form.periodStart,
+          periodEnd: form.periodEnd,
+          ...maintenanceFields(),
+          tasks: form.tasks
+            .filter((t) => t.taskName.trim())
+            .map((t) => ({
+              taskName: t.taskName.trim(),
+              role: t.role.trim() || null,
+              estimatedHours: Number(t.estimatedHours) || 0,
+            })),
+        })
+      }
     } catch (error) {
       setSubmitting(false)
       setSubmitError(error?.message ?? 'Could not save.')
@@ -322,7 +416,9 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
         <div className="modal__head">
           <div>
             <span className="modal__kicker">Projects and SOW</span>
-            <h2 className="modal__title" id="project-wizard-title">New project</h2>
+            <h2 className="modal__title" id="project-wizard-title">
+              {isEdit ? `Edit project · ${initial.projectName}` : 'New project'}
+            </h2>
           </div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
@@ -345,14 +441,23 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
         <div className="modal__form project-form">
           {step === 0 && (
             <div className="project-form__grid">
-              <ClientPicker
-                value={form.clientId}
-                onChange={(id, client) => {
-                  set('clientId', id)
-                  set('clientName', client?.clientName ?? '')
-                }}
-                error={touched(0) && step1Missing.clientId ? 'Pick a client to continue.' : ''}
-              />
+              {isEdit ? (
+                <div className="field">
+                  <label className="field__label">Client</label>
+                  <div className="field__input" style={{ color: 'var(--text-soft)' }}>
+                    {form.clientName}
+                  </div>
+                </div>
+              ) : (
+                <ClientPicker
+                  value={form.clientId}
+                  onChange={(id, client) => {
+                    set('clientId', id)
+                    set('clientName', client?.clientName ?? '')
+                  }}
+                  error={touched(0) && step1Missing.clientId ? 'Pick a client to continue.' : ''}
+                />
+              )}
 
               <div className="field">
                 <label className="field__label" htmlFor="wz-project-name">
@@ -389,17 +494,26 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
                   <div className="field">
                     <label className="field__label" htmlFor="wz-sow-file">
                       SOW File
-                      <span className="field__req">required</span>
+                      {!isEdit && <span className="field__req">required</span>}
                       <span className="field__hint">.docx (auto-fills Scope) or PDF</span>
                     </label>
-                    <input
-                      id="wz-sow-file"
-                      type="file"
-                      accept=".docx,application/pdf,.pdf"
-                      className="field__input field__input--file"
-                      disabled={!form.clientId}
-                      onChange={(e) => onPickSowFile(e.target.files?.[0] ?? null)}
-                    />
+                    {isEdit && !replacingSow ? (
+                      <div className="field__input" style={{ justifyContent: 'space-between' }}>
+                        <span className="field__filename">{fileNameFromPath(initial.sowUrl)}</span>
+                        <button type="button" className="btn btn--ghost btn--sm" onClick={() => setReplacingSow(true)}>
+                          Replace
+                        </button>
+                      </div>
+                    ) : (
+                      <input
+                        id="wz-sow-file"
+                        type="file"
+                        accept=".docx,application/pdf,.pdf"
+                        className="field__input field__input--file"
+                        disabled={!form.clientId}
+                        onChange={(e) => onPickSowFile(e.target.files?.[0] ?? null)}
+                      />
+                    )}
                     {parsing && (
                       <span className="field__hint">
                         <Loader2 size={13} className="icon-spin" aria-hidden="true" /> Reading SOW…
@@ -418,21 +532,63 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
                         {w}
                       </span>
                     ))}
+                    {isEdit && replacingSow && (
+                      <span className="field__hint">
+                        Replacing uploads a new version — the previous one stays in history, never deleted.
+                      </span>
+                    )}
                   </div>
                 </>
               )}
 
-              <label className="settings-check">
-                <input
-                  type="checkbox"
-                  checked={form.hasStages}
-                  disabled={!form.clientId}
-                  onChange={(e) => toggleHasStages(e.target.checked)}
-                />
-                Has stages?
-              </label>
+              {isEdit ? (
+                <div className="field">
+                  <label className="field__label">Has stages?</label>
+                  <div className="field__input" style={{ color: 'var(--text-soft)' }}>
+                    {form.hasStages ? 'Yes' : 'No'}
+                  </div>
+                </div>
+              ) : (
+                <label className="settings-check">
+                  <input
+                    type="checkbox"
+                    checked={form.hasStages}
+                    disabled={!form.clientId}
+                    onChange={(e) => toggleHasStages(e.target.checked)}
+                  />
+                  Has stages?
+                </label>
+              )}
 
-              {form.hasStages && (
+              {form.hasStages && isEdit && (
+                <div className="stage-list">
+                  {existingStages.map((s) => (
+                    <div className="stage-row" key={s.id}>
+                      <div className="field">
+                        <label className="field__label">Stage Name</label>
+                        <div className="field__input" style={{ color: 'var(--text-soft)' }}>
+                          {s.stageName}
+                        </div>
+                      </div>
+                      <div className="field">
+                        <label className="field__label">SOW Number</label>
+                        <div className="field__input cell-mono" style={{ color: 'var(--text-soft)' }}>
+                          {s.sowNumber}
+                        </div>
+                      </div>
+                      <div className="field">
+                        <label className="field__label">SOW File</label>
+                        <div className="field__input" style={{ color: 'var(--text-soft)' }}>
+                          {fileNameFromPath(s.sowUrl)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <p className="field__hint">Stage editing arrives in a future update.</p>
+                </div>
+              )}
+
+              {form.hasStages && !isEdit && (
                 <div className="stage-list">
                   {form.stages.map((s, i) => (
                     <div className="stage-row" key={s.localId}>
@@ -716,7 +872,40 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
             </div>
           )}
 
-          {step === 3 && (
+          {step === 3 && isEdit && (
+            <div className="project-form__grid project-form__grid--single">
+              <p className="field__hint">
+                Estimated hours per task. Actual hours and deviation are calculated later against Entries.
+              </p>
+              {existingTasks.length > 0 ? (
+                <div className="table-wrap">
+                  <table className="table table--form">
+                    <thead>
+                      <tr>
+                        <th scope="col">Task Name</th>
+                        <th scope="col">Role</th>
+                        <th scope="col" className="col-num">Est. Hours</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {existingTasks.map((t) => (
+                        <tr key={t.id}>
+                          <td>{t.taskName}</td>
+                          <td>{t.role || '—'}</td>
+                          <td className="col-num">{t.estimatedHours}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="field__hint">No tasks recorded.</p>
+              )}
+              <p className="field__hint">Task editing arrives in a future update.</p>
+            </div>
+          )}
+
+          {step === 3 && !isEdit && (
             <div className="project-form__grid project-form__grid--single">
               <p className="field__hint">
                 Optional — estimated hours per task. Actual hours and deviation are calculated later against Entries.
@@ -822,8 +1011,12 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
                 disabled={submitting}
                 whileTap={!submitting ? { scale: 0.97 } : undefined}
               >
-                {submitting ? <span className="spinner" aria-hidden="true" /> : null}
-                {submitting ? 'Saving…' : 'Finish'}
+                {submitting ? (
+                  <span className="spinner" aria-hidden="true" />
+                ) : isEdit ? (
+                  <Save size={16} aria-hidden="true" />
+                ) : null}
+                {submitting ? 'Saving…' : isEdit ? 'Save changes' : 'Finish'}
               </motion.button>
             )}
           </div>

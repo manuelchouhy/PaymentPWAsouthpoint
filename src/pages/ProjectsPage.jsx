@@ -39,8 +39,9 @@ export function ProjectsPage() {
     expTo: '',
   })
   const [statusFilter, setStatusFilter] = useState(null) // null | 'Expired' | …
-  const [form, setForm] = useState(null) // null | { mode:'edit', project }
+  const [form, setForm] = useState(null) // null | { mode:'edit', project } — edición legacy (sin clientId)
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardEditing, setWizardEditing] = useState(null) // proyecto con clientId → edición tabulada
   const [detail, setDetail] = useState(null)
   const [toast, setToast] = useState(null)
 
@@ -168,6 +169,45 @@ export function ProjectsPage() {
     api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'project.update', resourceType: 'project', resourceId: updated.id, before: { projectNumber: form.project.projectNumber }, after: { projectNumber: updated.projectNumber, projectName: updated.projectName, client: updated.client } })
     setProjects((prev) => sortByExp(prev.map((p) => (p.id === updated.id ? updated : p))))
     setForm(null)
+    setToast({ id: Date.now(), message: `Project updated: ${updated.projectName}` })
+  }
+
+  /**
+   * Edición tabulada (ProjectWizardModal en modo edit, issue 03a) — solo
+   * proyectos con clientId. `newSowFile` es el reemplazo del SOW si el
+   * usuario tocó "Replace" (null si no); se sube y versiona antes de
+   * actualizar el proyecto, mismo orden que el resto de los reemplazos de
+   * documento (upload → update row → recordDocument).
+   */
+  async function handleUpdateFromWizard(updates, newSowFile) {
+    let sowUrl = wizardEditing.sowUrl
+    if (newSowFile) {
+      sowUrl = await api.projects.uploadSowFile(newSowFile)
+    }
+    const updated = await api.projects.update(
+      wizardEditing,
+      newSowFile ? { ...updates, sowUrl } : updates,
+      user?.email ?? null,
+    )
+    if (newSowFile) {
+      await api.projects.recordDocument({
+        subjectType: 'sow',
+        subjectId: updated.id,
+        fileUrl: sowUrl,
+        uploadedBy: user?.email ?? null,
+      })
+    }
+    api.audit.log({
+      actorEmail: user?.email,
+      actorRole: profile?.roles?.[0] ?? null,
+      action: 'project.update',
+      resourceType: 'project',
+      resourceId: updated.id,
+      before: { projectNumber: wizardEditing.projectNumber },
+      after: { projectNumber: updated.projectNumber, projectName: updated.projectName, client: updated.client },
+    })
+    setProjects((prev) => sortByExp(prev.map((p) => (p.id === updated.id ? updated : p))))
+    setWizardEditing(null)
     setToast({ id: Date.now(), message: `Project updated: ${updated.projectName}` })
   }
 
@@ -398,6 +438,17 @@ export function ProjectsPage() {
       </AnimatePresence>
 
       <AnimatePresence>
+        {wizardEditing && (
+          <ProjectWizardModal
+            key={`edit-wizard-${wizardEditing.id}`}
+            initial={wizardEditing}
+            onClose={() => setWizardEditing(null)}
+            onSubmit={handleUpdateFromWizard}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {detail && (
           <ProjectDetailDrawer
             key={`detail-${detail.id}`}
@@ -406,7 +457,15 @@ export function ProjectsPage() {
             onEdit={() => {
               const project = detail
               setDetail(null)
-              setForm({ mode: 'edit', project })
+              // clientId presente = proyecto creado por el wizard nuevo → edición
+              // tabulada; sin clientId = legacy (sync viejo), sigue con el form
+              // plano (Contract Number, Customer Name, etc. no tienen equivalente
+              // en el wizard).
+              if (project.clientId) {
+                setWizardEditing(project)
+              } else {
+                setForm({ mode: 'edit', project })
+              }
             }}
           />
         )}
