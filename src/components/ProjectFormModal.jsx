@@ -28,16 +28,20 @@ const ALWAYS_REQUIRED = ['client', 'projectName']
 // solo para el proyecto que las tenía, no globalmente.
 const CONDITIONALLY_REQUIRED = ['projectNumber', 'contractNumber', 'contractExpirationDate']
 
+// Un proyecto con clientId ya tiene su cliente resuelto por la FK — el texto
+// libre "client" queda de solo lectura (ver el render más abajo), no
+// required, y no cuenta para el autofocus del primer campo. Única fuente de
+// verdad para esas tres decisiones, en vez de repetir `Boolean(initial?.clientId)`.
+function isClientLinked(initial) {
+  return Boolean(initial?.clientId)
+}
+
 function requiredKeys(initial) {
   const req = new Set(ALWAYS_REQUIRED)
   for (const key of CONDITIONALLY_REQUIRED) {
     if (String(initial?.[key] ?? '').trim()) req.add(key)
   }
-  // Un proyecto con clientId ya tiene su cliente resuelto por la FK — el
-  // texto libre "client" queda de solo lectura acá (ver clientLinked más
-  // abajo), así que no puede seguir siendo requerido o un proyecto cuyo
-  // texto legacy esté vacío quedaría imposible de guardar.
-  if (initial?.clientId) req.delete('client')
+  if (isClientLinked(initial)) req.delete('client')
   return req
 }
 
@@ -67,10 +71,12 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
   const dialogRef = useRef(null)
   const firstRef = useRef(null)
   const required = useMemo(() => requiredKeys(initial), [initial])
-  // "client" es siempre FIELDS[0]; si está linkeado a un cliente real (ver
-  // clientLinked abajo) no es focuseable y el autofocus debe caer en el
-  // siguiente campo.
-  const firstFocusableIndex = initial?.clientId ? 1 : 0
+  // El autofocus al abrir debe caer en el primer campo que sea un <input>
+  // real — "client" no lo es si está linkeado (ver render más abajo).
+  const firstFocusableIndex = useMemo(
+    () => FIELDS.findIndex((f) => !(f.key === 'client' && isClientLinked(initial))),
+    [initial],
+  )
 
   useEffect(() => {
     firstRef.current?.focus()
@@ -168,7 +174,7 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
               // creado por el wizard tiene clientId (FK real a clients) —
               // dejarlo editable acá lo desincroniza del cliente vinculado
               // (autopopulado de MSA, futuras vistas por cliente, etc.).
-              const clientLinked = field.key === 'client' && Boolean(initial?.clientId)
+              const clientLinked = field.key === 'client' && isClientLinked(initial)
               return (
                 <div className="field" key={field.key}>
                   <label className="field__label" htmlFor={clientLinked ? undefined : `pf-${field.key}`}>

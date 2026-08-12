@@ -203,7 +203,10 @@ function projectToRow(project) {
   for (const [field, column] of Object.entries(FIELD_TO_COLUMN)) {
     if (project[field] === undefined) continue
     // '' -> null para campos de texto; preserva 0 en campos numéricos (baseBudgetHours).
-    row[column] = project[field] === '' ? null : project[field] ?? null
+    // "client" es la excepción: `text not null` en la DB (0004_projects.sql,
+    // nunca relajada) — mandarle null revienta el UPDATE/INSERT en vez de
+    // guardar el resto del proyecto (proyecto linkeado con texto legacy vacío).
+    row[column] = field === 'client' ? (project[field] ?? '') : project[field] === '' ? null : project[field] ?? null
   }
   return row
 }
