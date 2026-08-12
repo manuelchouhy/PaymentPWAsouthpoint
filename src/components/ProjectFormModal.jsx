@@ -33,6 +33,11 @@ function requiredKeys(initial) {
   for (const key of CONDITIONALLY_REQUIRED) {
     if (String(initial?.[key] ?? '').trim()) req.add(key)
   }
+  // Un proyecto con clientId ya tiene su cliente resuelto por la FK — el
+  // texto libre "client" queda de solo lectura acá (ver clientLinked más
+  // abajo), así que no puede seguir siendo requerido o un proyecto cuyo
+  // texto legacy esté vacío quedaría imposible de guardar.
+  if (initial?.clientId) req.delete('client')
   return req
 }
 
@@ -62,6 +67,10 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
   const dialogRef = useRef(null)
   const firstRef = useRef(null)
   const required = useMemo(() => requiredKeys(initial), [initial])
+  // El campo "client" (índice 0) no es focuseable cuando está linkeado a un
+  // cliente real (ver clientLinked abajo) — el autofocus al abrir debe caer
+  // en el primer campo que sí sea un <input>, no en un índice fijo.
+  const firstFocusableIndex = FIELDS.findIndex((f) => !(f.key === 'client' && Boolean(initial?.clientId)))
 
   useEffect(() => {
     firstRef.current?.focus()
@@ -156,18 +165,19 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
               const clientLinked = field.key === 'client' && Boolean(initial?.clientId)
               return (
                 <div className="field" key={field.key}>
-                  <label className="field__label" htmlFor={`pf-${field.key}`}>
+                  <label className="field__label" htmlFor={clientLinked ? undefined : `pf-${field.key}`}>
                     {field.label}
                     {isRequired && <span className="field__req">required</span>}
                   </label>
                   {clientLinked ? (
                     <div className="field__input" style={{ color: 'var(--text-soft)' }}>
-                      {value} <span className="field__hint">linked client, edit from Clients</span>
+                      {value || <span className="field__hint">no client name on file</span>}{' '}
+                      <span className="field__hint">linked client, edit from Clients</span>
                     </div>
                   ) : (
                     <input
                       id={`pf-${field.key}`}
-                      ref={index === 0 ? firstRef : undefined}
+                      ref={index === firstFocusableIndex ? firstRef : undefined}
                       type={field.type === 'date' ? 'date' : 'text'}
                       className={`field__input${isMissing || showDup ? ' field__input--error' : ''}`}
                       value={value}

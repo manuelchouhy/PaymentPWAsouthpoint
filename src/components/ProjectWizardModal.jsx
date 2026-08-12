@@ -104,6 +104,11 @@ export function ProjectWizardModal({ onClose, onSubmit }) {
     // que este parse termine, el resultado viejo no debe pisar el form —
     // parseSowDocument no tiene forma de cancelarse a mitad de camino.
     const token = ++sowPickTokenRef.current
+    // Cualquier selección nueva invalida un parse anterior en vuelo, así que
+    // apaga su spinner ya mismo — su propio finally también chequea el
+    // token, pero si esta selección no llega a setParsing(true) (los early
+    // return de abajo) nadie más lo va a apagar.
+    setParsing(false)
     if (!file) {
       set('sowFile', null)
       return
