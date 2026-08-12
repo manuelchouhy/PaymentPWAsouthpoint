@@ -67,10 +67,10 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
   const dialogRef = useRef(null)
   const firstRef = useRef(null)
   const required = useMemo(() => requiredKeys(initial), [initial])
-  // El campo "client" (índice 0) no es focuseable cuando está linkeado a un
-  // cliente real (ver clientLinked abajo) — el autofocus al abrir debe caer
-  // en el primer campo que sí sea un <input>, no en un índice fijo.
-  const firstFocusableIndex = FIELDS.findIndex((f) => !(f.key === 'client' && Boolean(initial?.clientId)))
+  // "client" es siempre FIELDS[0]; si está linkeado a un cliente real (ver
+  // clientLinked abajo) no es focuseable y el autofocus debe caer en el
+  // siguiente campo.
+  const firstFocusableIndex = initial?.clientId ? 1 : 0
 
   useEffect(() => {
     firstRef.current?.focus()
@@ -105,7 +105,13 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
     setSubmitting(true)
     try {
       const payload = {}
-      for (const f of FIELDS) payload[f.key] = String(form[f.key] ?? '').trim() || null
+      for (const f of FIELDS) {
+        const trimmed = String(form[f.key] ?? '').trim()
+        // "client" es `text not null` en la DB (0004_projects.sql, nunca
+        // relajada) — a diferencia del resto, no puede mandarse null aunque
+        // ya no sea required acá (proyecto linkeado con texto legacy vacío).
+        payload[f.key] = f.key === 'client' ? trimmed : trimmed || null
+      }
       await onSubmit(payload)
     } catch (error) {
       setSubmitting(false)
@@ -171,7 +177,7 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
                   </label>
                   {clientLinked ? (
                     <div className="field__input" style={{ color: 'var(--text-soft)' }}>
-                      {value || <span className="field__hint">no client name on file</span>}{' '}
+                      {String(value).trim() ? value : <span className="field__hint">no client name on file</span>}{' '}
                       <span className="field__hint">linked client, edit from Clients</span>
                     </div>
                   ) : (
