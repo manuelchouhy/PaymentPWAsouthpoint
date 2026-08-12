@@ -28,6 +28,7 @@ function msaFileName(msaUrl) {
 export function ClientDetailDrawer({ client, onClose, onEdit }) {
   const [opening, setOpening] = useState(false)
   const [msaMsg, setMsaMsg] = useState('')
+  const isDemoMsa = typeof client.msaUrl === 'string' && client.msaUrl.startsWith('demo/')
 
   useEffect(() => {
     const prev = document.body.style.overflow
@@ -44,6 +45,10 @@ export function ClientDetailDrawer({ client, onClose, onEdit }) {
 
   async function handleViewMsa() {
     setMsaMsg('')
+    if (isDemoMsa) {
+      setMsaMsg('Demo mode: the MSA cannot be downloaded (only the filename was saved).')
+      return
+    }
     setOpening(true)
     try {
       const url = await api.clients.getMsaUrl(client.msaUrl)
