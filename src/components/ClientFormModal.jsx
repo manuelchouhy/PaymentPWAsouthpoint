@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Save, UserPlus2, X } from 'lucide-react'
+import { fileNameFromPath } from '../lib/format'
 
 const TEXT_FIELDS = [
   { key: 'clientName', label: 'Client Name', required: true },
@@ -10,13 +11,6 @@ const TEXT_FIELDS = [
   { key: 'primaryContactEmail', label: 'Primary Contact Email', required: true, type: 'email' },
 ]
 const REQUIRED = ['clientName', 'primaryContactName', 'primaryContactEmail']
-
-// El path guardado lleva un prefijo de timestamp para evitar colisiones en
-// Storage (ver uploadClientMsa) — para mostrarlo se pela ese prefijo.
-function msaFileName(msaUrl) {
-  if (!msaUrl) return ''
-  return msaUrl.split('/').pop().replace(/^\d+-/, '')
-}
 
 function emptyForm() {
   return { clientName: '', email: '', domain: '', primaryContactName: '', primaryContactEmail: '' }
@@ -93,7 +87,11 @@ export function ClientFormModal({ initial = null, onClose, onSubmit }) {
   }, [onClose])
 
   const missing = REQUIRED.filter((k) => !String(form[k] ?? '').trim())
-  const valid = missing.length === 0 && (isEdit || Boolean(msaFile))
+  // En alta el MSA es obligatorio; en edición es opcional (solo si se
+  // reemplaza), pero un archivo de reemplazo inválido (msaError) igual debe
+  // bloquear el submit — si no, "Save changes" guarda silenciosamente
+  // dejando el MSA viejo sin avisar que el reemplazo no se aplicó.
+  const valid = missing.length === 0 && !msaError && (isEdit || Boolean(msaFile))
 
   function set(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -190,7 +188,7 @@ export function ClientFormModal({ initial = null, onClose, onSubmit }) {
             </label>
             {isEdit && !replacingMsa ? (
               <div className="field__input" style={{ justifyContent: 'space-between' }}>
-                <span className="field__filename">{msaFileName(initial.msaUrl)}</span>
+                <span className="field__filename">{fileNameFromPath(initial.msaUrl)}</span>
                 <button type="button" className="btn btn--ghost btn--sm" onClick={() => setReplacingMsa(true)}>
                   Replace
                 </button>

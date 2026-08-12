@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FileText, Pencil, X } from 'lucide-react'
 import { api } from '../lib/api'
-import { formatDateTime } from '../lib/format'
+import { fileNameFromPath, formatDateTime } from '../lib/format'
 
 const FIELDS = [
   { key: 'email', label: 'Email' },
@@ -11,21 +11,13 @@ const FIELDS = [
   { key: 'primaryContactEmail', label: 'Contact Email' },
 ]
 
-// El path guardado lleva un prefijo de timestamp para evitar colisiones en
-// Storage (ver uploadClientMsa) — para mostrarlo se pela ese prefijo y
-// cualquier carpeta demo/.
-function msaFileName(msaUrl) {
-  if (!msaUrl) return null
-  return msaUrl.split('/').pop().replace(/^\d+-/, '')
-}
-
 /**
  * Drawer de detalle de Client (step 1 del flujo de dos pasos, igual que
- * Projects): campos en modo lectura + botón Edit.
+ * Projects): campos en modo lectura + botón Edit (si `canEdit`).
  *
- * @param {{ client: object, onClose: () => void, onEdit: () => void }} props
+ * @param {{ client: object, canEdit?: boolean, onClose: () => void, onEdit: () => void }} props
  */
-export function ClientDetailDrawer({ client, onClose, onEdit }) {
+export function ClientDetailDrawer({ client, canEdit = false, onClose, onEdit }) {
   const [opening, setOpening] = useState(false)
   const [msaMsg, setMsaMsg] = useState('')
   const isDemoMsa = typeof client.msaUrl === 'string' && client.msaUrl.startsWith('demo/')
@@ -110,7 +102,7 @@ export function ClientDetailDrawer({ client, onClose, onEdit }) {
                     onClick={handleViewMsa}
                     disabled={opening}
                   >
-                    <FileText size={14} aria-hidden="true" /> {msaFileName(client.msaUrl)}
+                    <FileText size={14} aria-hidden="true" /> {fileNameFromPath(client.msaUrl)}
                   </button>
                 ) : (
                   '—'
@@ -125,12 +117,14 @@ export function ClientDetailDrawer({ client, onClose, onEdit }) {
           </dl>
         </div>
 
-        <div className="drawer__actions">
-          <button type="button" className="btn btn--pay drawer__advance" onClick={onEdit}>
-            <Pencil size={16} strokeWidth={2.2} aria-hidden="true" />
-            Edit
-          </button>
-        </div>
+        {canEdit && (
+          <div className="drawer__actions">
+            <button type="button" className="btn btn--pay drawer__advance" onClick={onEdit}>
+              <Pencil size={16} strokeWidth={2.2} aria-hidden="true" />
+              Edit
+            </button>
+          </div>
+        )}
       </motion.aside>
     </motion.div>
   )

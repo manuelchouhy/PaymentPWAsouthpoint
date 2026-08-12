@@ -8,6 +8,8 @@ import { ClientFormModal } from '../components/ClientFormModal'
 import { ClientDetailDrawer } from '../components/ClientDetailDrawer'
 import { Toast } from '../components/Toast'
 
+const sortByName = (list) => [...list].sort((a, b) => a.clientName.localeCompare(b.clientName, 'es'))
+
 export function ClientsPage() {
   const { user, can } = useOutletContext()
   const [clients, setClients] = useState([])
@@ -47,7 +49,7 @@ export function ClientsPage() {
       resourceId: created.id,
       after: { clientName: created.clientName },
     })
-    setClients((prev) => [...prev, created].sort((a, b) => a.clientName.localeCompare(b.clientName, 'es')))
+    setClients((prev) => sortByName([...prev, created]))
     setFormOpen(false)
     setToast({ id: Date.now(), message: `Client created: ${created.clientName}` })
   }
@@ -69,11 +71,7 @@ export function ClientsPage() {
       before: { clientName: editing.clientName },
       after: { clientName: updated.clientName },
     })
-    setClients((prev) =>
-      [...prev.map((c) => (c.id === updated.id ? updated : c))].sort((a, b) =>
-        a.clientName.localeCompare(b.clientName, 'es'),
-      ),
-    )
+    setClients((prev) => sortByName(prev.map((c) => (c.id === updated.id ? updated : c))))
     setEditing(null)
     setToast({ id: Date.now(), message: `Client updated: ${updated.clientName}` })
   }
@@ -190,6 +188,7 @@ export function ClientsPage() {
           <ClientDetailDrawer
             key={`client-detail-${detail.id}`}
             client={detail}
+            canEdit={can('clients.edit')}
             onClose={() => setDetail(null)}
             onEdit={() => {
               setDetail(null)

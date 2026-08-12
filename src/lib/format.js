@@ -103,3 +103,16 @@ export function formatDateTime(iso = '') {
   const time = date.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })
   return `${day} · ${time}`
 }
+
+/**
+ * Nombre de archivo legible a partir de un path de Storage. Los paths
+ * llevan un prefijo de timestamp para evitar colisiones (ver
+ * uploadClientMsa/uploadSowFile) y a veces una carpeta demo/ — ambos se pelan
+ * acá para mostrar solo el nombre real.
+ * @param {?string} path
+ * @returns {string}
+ */
+export function fileNameFromPath(path) {
+  if (!path) return ''
+  return path.split('/').pop().replace(/^\d+-/, '')
+}

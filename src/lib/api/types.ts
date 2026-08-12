@@ -321,8 +321,14 @@ export interface ApiClient {
   clients: {
     list(): Promise<Client[]>
     create(payload: Partial<Client>, createdBy?: string | null): Promise<Client>
+    update(current: Client, updates: Partial<Client>): Promise<Client>
     uploadMsa(file: File): Promise<string>
     getMsaUrl(msaUrl: string): Promise<string | null>
+    recordMsaVersion(params: {
+      clientId: string | number
+      fileUrl: string
+      uploadedBy?: string | null
+    }): Promise<void>
   }
 
   assignments: {
