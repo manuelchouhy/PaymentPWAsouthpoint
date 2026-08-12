@@ -27,6 +27,7 @@ function msaFileName(msaUrl) {
  */
 export function ClientDetailDrawer({ client, onClose, onEdit }) {
   const [opening, setOpening] = useState(false)
+  const [msaMsg, setMsaMsg] = useState('')
 
   useEffect(() => {
     const prev = document.body.style.overflow
@@ -42,10 +43,12 @@ export function ClientDetailDrawer({ client, onClose, onEdit }) {
   }, [onClose])
 
   async function handleViewMsa() {
+    setMsaMsg('')
     setOpening(true)
     try {
       const url = await api.clients.getMsaUrl(client.msaUrl)
       if (url) window.open(url, '_blank', 'noopener,noreferrer')
+      else setMsaMsg('Could not generate the download link.')
     } finally {
       setOpening(false)
     }
@@ -107,6 +110,7 @@ export function ClientDetailDrawer({ client, onClose, onEdit }) {
                 ) : (
                   '—'
                 )}
+                {msaMsg && <p className="drawer__empty">{msaMsg}</p>}
               </dd>
             </div>
             <div className="drawer__fact">
