@@ -98,6 +98,10 @@ async function getConsumedHoursByProject(projectName) {
  * genere una asignación huérfana que nunca matchee con sus horas.
  * @returns {Promise<string[]>} ordenados alfabéticamente.
  */
+function dedupeSorted(values) {
+  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
+}
+
 export async function getProviderNames() {
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 150))
@@ -105,7 +109,7 @@ export async function getProviderNames() {
     // cargó horas alguna vez", no "a quién ya le asignamos" (si no, el primer
     // alta de un proyecto nunca tendría a nadie para elegir).
     const entries = await getTimeEntries()
-    return [...new Set(entries.map((e) => e.user).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
+    return dedupeSorted(entries.map((e) => e.user))
   }
   // Solo la columna que se necesita y con tope: time_entries es la tabla más
   // grande de la app (miles de filas) y esto alimenta un dropdown.
@@ -115,7 +119,7 @@ export async function getProviderNames() {
     .order('user_name', { ascending: true })
     .limit(5000)
   if (error) throw new Error(error.message)
-  return [...new Set((data ?? []).map((r) => r.user_name).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
+  return dedupeSorted((data ?? []).map((r) => r.user_name))
 }
 
 /**
@@ -134,14 +138,24 @@ export async function getProviderNames() {
 export async function getProjectTaskNames(projectName) {
   if (!isSupabaseConfigured) {
     const entries = await getTimeEntries()
-    return [...new Set(entries.filter((e) => e.project === projectName).map((e) => e.task).filter(Boolean))].sort(
-      (a, b) => a.localeCompare(b, 'es'),
+    return dedupeSorted(
+      entries.filter((e) => e.project === projectName && e.status === 'Approved').map((e) => e.task),
     )
   }
   if (!projectName) return []
-  const { data, error } = await supabase.from('time_entries').select('task').eq('project', projectName).limit(5000)
+  // status Approved: es exactamente el universo que suma
+  // getConsumedHoursByProject. Ofrecer un task que solo tiene horas pendientes
+  // mostraría "Consumed 0" hasta que se aprueben y después saltaría a overage
+  // sin aviso.
+  const { data, error } = await supabase
+    .from('time_entries')
+    .select('task')
+    .eq('project', projectName)
+    .eq('status', 'Approved')
+    .order('task', { ascending: true })
+    .limit(5000)
   if (error) throw new Error(error.message)
-  return [...new Set((data ?? []).map((r) => r.task).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
+  return dedupeSorted((data ?? []).map((r) => r.task))
 }
 
 /**

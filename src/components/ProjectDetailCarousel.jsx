@@ -368,6 +368,7 @@ function AssignmentsSlide({ project, createdBy, canEdit }) {
   const [assignments, setAssignments] = useState([])
   const [providers, setProviders] = useState([])
   const [tasks, setTasks] = useState([])
+  const [tasksFromSow, setTasksFromSow] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [catalogError, setCatalogError] = useState(false)
@@ -392,7 +393,17 @@ function AssignmentsSlide({ project, createdBy, canEdit }) {
     Promise.allSettled([
       Promise.resolve().then(() => api.assignments.list(project)),
       Promise.resolve().then(() => api.assignments.providerNames()),
-      Promise.resolve().then(() => api.assignments.taskNames(project.projectName)),
+      Promise.resolve().then(async () => {
+        const logged = await api.assignments.taskNames(project.projectName)
+        // Si el proyecto todavía no tiene horas aprobadas no hay texto de Zoho
+        // que ofrecer, y sin opciones no se puede autorizar a nadie — que es
+        // lo que uno hace justamente ANTES de que carguen la primera hora.
+        // En ese caso se cae a las tasks del SOW; en cuanto haya horas, manda
+        // el texto real (que es el que matchea al calcular lo consumido).
+        if (logged.length) return { names: logged, fromSow: false }
+        const sowTasks = await api.projectTasks.list(project.id)
+        return { names: sowTasks.map((t) => t.taskName), fromSow: true }
+      }),
     ])
       .then(([assignmentsResult, providersResult, tasksResult]) => {
         if (cancelled) return
@@ -409,8 +420,10 @@ function AssignmentsSlide({ project, createdBy, canEdit }) {
           console.error('No se pudo cargar la lista de proveedores:', providersResult.reason)
           setCatalogError(true)
         }
-        if (tasksResult.status === 'fulfilled') setTasks(tasksResult.value)
-        else {
+        if (tasksResult.status === 'fulfilled') {
+          setTasks(tasksResult.value.names)
+          setTasksFromSow(tasksResult.value.fromSow)
+        } else {
           console.error('No se pudieron cargar los task de las horas cargadas:', tasksResult.reason)
           setCatalogError(true)
         }
@@ -546,8 +559,14 @@ function AssignmentsSlide({ project, createdBy, canEdit }) {
                 <option key={name} value={name}>{name}</option>
               ))}
             </select>
+            {tasksFromSow && tasks.length > 0 && (
+              <span className="field__hint">
+                From the SOW — no approved hours logged yet, so consumed will stay 0 until the task
+                text logged in Zoho matches.
+              </span>
+            )}
             {tasks.length === 0 && !catalogError && (
-              <span className="field__hint">No hours logged on this project yet — nothing to assign against.</span>
+              <span className="field__hint">No tasks to assign against yet.</span>
             )}
             {catalogError && (
               <span className="field__error">
@@ -629,9 +648,14 @@ function ChangeRequestsSlide({
   const [error, setError] = useState('')
   const [decidingId, setDecidingId] = useState(null)
 
-  // 0 no es un cambio de presupuesto — un CR con delta 0 no hace nada y
-  // ensucia el historial.
-  const deltaValid = Number.isFinite(Number(form.deltaHours)) && Number(form.deltaHours) !== 0
+  // Un expand_budget con delta 0 no cambia nada y ensucia el historial; los
+  // otros tipos registran el hecho (un write-off, una nota de alcance) y su
+  // delta es informativo, así que 0 es legítimo ahí.
+  const deltaNumber = Number(form.deltaHours)
+  const deltaValid =
+    String(form.deltaHours).trim() !== '' &&
+    Number.isFinite(deltaNumber) &&
+    (form.type !== 'expand_budget' || deltaNumber !== 0)
   const canSubmit = deltaValid && form.reason.trim() && !saving
 
   async function handleCreate() {
