@@ -172,6 +172,8 @@ export const httpApiClient = {
     list: () => notImplemented('projectTasks.list'),
     // POST /api/projects/:id/tasks → ProjectTask[]
     create: () => notImplemented('projectTasks.create'),
+    // PATCH /api/projects/tasks/:id → ProjectTask
+    update: () => notImplemented('projectTasks.update'),
   },
 
   supplierContracts: {

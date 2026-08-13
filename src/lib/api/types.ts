@@ -385,6 +385,10 @@ export interface ApiClient {
       tasks: Array<{ taskName: string; role?: string | null; estimatedHours: number }>,
       createdBy?: string | null,
     ): Promise<ProjectTask[]>
+    update(
+      current: { id: string | number; projectId: string | number },
+      updates: { taskName?: string; role?: string | null; estimatedHours?: number },
+    ): Promise<ProjectTask>
   }
 
   supplierContracts: {

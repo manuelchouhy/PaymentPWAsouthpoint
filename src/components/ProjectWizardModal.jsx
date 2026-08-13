@@ -112,8 +112,12 @@ function initialFormState(initial) {
  *   onSubmit: (
  *     payload: object,
  *     newSowFile?: File | null,
- *     // en edición: stages cambiadas/agregadas (issue 03b), undefined en alta
- *     stageChanges?: { changedStages: Array, addedStages: Array },
+ *     // en edición: stages/tasks cambiadas o agregadas (issues 03b/03c),
+ *     // undefined en alta
+ *     childChanges?: {
+ *       changedStages: Array, addedStages: Array, existingStagesCount: number,
+ *       changedTasks: Array, addedTasks: Array,
+ *     },
  *   ) => Promise<void>,
  * }} props
  */
@@ -135,10 +139,11 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
   const [submitError, setSubmitError] = useState('')
   const dialogRef = useRef(null)
   const sowPickTokenRef = useRef(0)
-  // Snapshot de como llegaron las stages del fetch — para el submit, solo se
-  // manda updateProjectStage() de las que realmente cambiaron (nombre,
-  // número, o archivo reemplazado), no todas en cada guardado.
+  // Snapshot de como llegaron las stages/tasks del fetch — para el submit,
+  // solo se manda update() de las que realmente cambiaron, no todas en cada
+  // guardado.
   const originalStagesRef = useRef([])
+  const originalTasksRef = useRef([])
 
   function setExistingStageField(id, key, value) {
     setExistingStages((prev) => prev.map((s) => (s.id === id ? { ...s, [key]: value } : s)))
@@ -150,6 +155,10 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
 
   function pickStageReplacementSow(id, file) {
     setStageReplacementFiles((prev) => ({ ...prev, [id]: file }))
+  }
+
+  function setExistingTaskField(id, key, value) {
+    setExistingTasks((prev) => prev.map((t) => (t.id === id ? { ...t, [key]: value } : t)))
   }
 
   useEffect(() => {
@@ -175,6 +184,7 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
       }
       if (tasksResult.status === 'fulfilled') {
         setExistingTasks(tasksResult.value)
+        originalTasksRef.current = tasksResult.value
       } else {
         console.error('No se pudieron cargar las tasks del proyecto:', tasksResult.reason)
         setTasksLoadError('Tasks could not be loaded — try reopening this project.')
@@ -336,7 +346,9 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
     }))
   }
 
-  const tasksTotalHours = form.tasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0)
+  const tasksTotalHours =
+    form.tasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0) +
+    (isEdit ? existingTasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0) : 0)
 
   // Una stage recién agregada en esta sesión (form.stages) necesita sus 3
   // campos; una ya persistida (existingStages, issue 03b) no puede perder
@@ -354,7 +366,12 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
     sowFile: !form.hasStages && !hasSowFileNow,
     stages:
       form.hasStages &&
-      ((isEdit && existingStages.some(existingStageMissing)) ||
+      // Si el fetch de stages falló, existingStagesCount (existingStages.length)
+      // quedaría en 0 aunque el proyecto ya tenga stages reales — guardar en
+      // ese estado haría que las agregadas nuevas choquen de posición con
+      // las que ya existen y no se llegaron a traer. Bloquea el guardado
+      // hasta reabrir el modal (el error ya se muestra en la sección).
+      ((isEdit && (Boolean(stagesLoadError) || existingStages.some(existingStageMissing))) ||
         form.stages.some(stageMissing) ||
         (!isEdit && form.stages.length === 0)),
   }
@@ -370,9 +387,16 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
     hoursPool: form.maintenanceEnabled && !(Number(form.maintenanceHoursPool) > 0),
     durationMonths: form.maintenanceEnabled && !(Number(form.maintenanceDurationMonths) > 0),
   }
+  // Igual que las stages: una task existente (issue 03c) no puede perder su
+  // nombre (`text not null`) ni quedar con horas inválidas (`check >= 0`).
+  const existingTaskMissing = (t) => !t.taskName.trim() || !(Number(t.estimatedHours) >= 0)
+  const step4Missing = {
+    tasks: isEdit && existingTasks.some(existingTaskMissing),
+  }
   const step1Valid = !Object.values(step1Missing).some(Boolean)
   const step2Valid = !Object.values(step2Missing).some(Boolean)
   const step3Valid = !Object.values(step3Missing).some(Boolean)
+  const step4Valid = !Object.values(step4Missing).some(Boolean)
   const touched = (s) => touchedSteps.includes(s)
 
   function goNext() {
@@ -396,15 +420,13 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
 
   async function handleFinish() {
     setTouchedSteps([0, 1, 2, 3])
-    if (!step1Valid || !step2Valid || !step3Valid || submitting) return
+    if (!step1Valid || !step2Valid || !step3Valid || !step4Valid || submitting) return
     setSubmitError('')
     setSubmitting(true)
     try {
       if (isEdit) {
-        // Tasks quedan afuera del payload de edición (solo lectura acá, ver
-        // initialFormState/issue 03c) — solo se manda sowNumber/sowFile si
-        // el proyecto no tiene stages (con stages, el SOW vive por-stage,
-        // sin equivalente a nivel proyecto).
+        // Solo se manda sowNumber/sowFile si el proyecto no tiene stages (con
+        // stages, el SOW vive por-stage, sin equivalente a nivel proyecto).
         const updates = {
           projectName: form.projectName.trim(),
           proposalNumber: form.proposalNumber.trim() || null,
@@ -431,7 +453,13 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                 )
               })
               .map((s) => ({
-                id: s.id,
+                // El resto de los campos del stage original (position,
+                // sowUrl, createdAt, createdBy) viaja completo — updateStage
+                // en modo demo hace `{...current, ...updates}`, y si acá
+                // solo mandáramos {id, stageName, sowNumber} el resto se
+                // perdería del registro guardado (el path real de Supabase
+                // solo usa current.id, así que no cambia nada ahí).
+                ...s,
                 stageName: s.stageName.trim(),
                 sowNumber: s.sowNumber.trim(),
                 sowFile: stageReplacementFiles[s.id] ?? null,
@@ -441,10 +469,43 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
           ? form.stages.map((s) => ({ stageName: s.stageName.trim(), sowNumber: s.sowNumber.trim(), sowFile: s.sowFile }))
           : []
 
+        // Tasks (issue 03c): mismo criterio que stages — solo las que
+        // cambiaron contra el snapshot del fetch, más las agregadas en esta
+        // sesión (sin archivo, a diferencia de las stages).
+        const changedTasks = existingTasks
+          .filter((t) => {
+            const original = originalTasksRef.current.find((o) => o.id === t.id)
+            return (
+              !original ||
+              t.taskName !== original.taskName ||
+              (t.role || null) !== (original.role || null) ||
+              Number(t.estimatedHours) !== Number(original.estimatedHours)
+            )
+          })
+          .map((t) => ({
+            // Igual que con las stages: el resto de los campos originales
+            // (projectId, createdAt, createdBy) viaja completo — el merge en
+            // modo demo de updateProjectTask los necesita, el path real de
+            // Supabase solo usa t.id.
+            ...t,
+            taskName: t.taskName.trim(),
+            role: t.role.trim() || null,
+            estimatedHours: Number(t.estimatedHours),
+          }))
+        const addedTasks = form.tasks
+          .filter((t) => t.taskName.trim())
+          .map((t) => ({
+            taskName: t.taskName.trim(),
+            role: t.role.trim() || null,
+            estimatedHours: Number(t.estimatedHours) || 0,
+          }))
+
         await onSubmit(updates, form.hasStages ? null : form.sowFile, {
           changedStages,
           addedStages,
           existingStagesCount: existingStages.length,
+          changedTasks,
+          addedTasks,
         })
       } else {
         await onSubmit({
@@ -1002,46 +1063,15 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
             </div>
           )}
 
-          {step === 3 && isEdit && (
+          {step === 3 && (
             <div className="project-form__grid project-form__grid--single">
               <p className="field__hint">
-                Estimated hours per task. Actual hours and deviation are calculated later against Entries.
+                {isEdit
+                  ? 'Estimated hours per task. Actual hours and deviation are calculated later against Entries.'
+                  : 'Optional — estimated hours per task. Actual hours and deviation are calculated later against Entries.'}
               </p>
-              {existingTasks.length > 0 ? (
-                <div className="table-wrap">
-                  <table className="table table--form">
-                    <thead>
-                      <tr>
-                        <th scope="col">Task Name</th>
-                        <th scope="col">Role</th>
-                        <th scope="col" className="col-num">Est. Hours</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {existingTasks.map((t) => (
-                        <tr key={t.id}>
-                          <td>{t.taskName}</td>
-                          <td>{t.role || '—'}</td>
-                          <td className="col-num">{t.estimatedHours}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="field__hint">No tasks recorded.</p>
-              )}
-              {tasksLoadError && <p className="field__error">{tasksLoadError}</p>}
-              <p className="field__hint">Task editing arrives in a future update.</p>
-            </div>
-          )}
-
-          {step === 3 && !isEdit && (
-            <div className="project-form__grid project-form__grid--single">
-              <p className="field__hint">
-                Optional — estimated hours per task. Actual hours and deviation are calculated later against Entries.
-              </p>
-              {form.tasks.length > 0 && (
+              {isEdit && tasksLoadError && <p className="field__error">{tasksLoadError}</p>}
+              {(existingTasks.length > 0 || form.tasks.length > 0) && (
                 <div className="table-wrap">
                   <table className="table table--form">
                     <thead>
@@ -1053,6 +1083,41 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                       </tr>
                     </thead>
                     <tbody>
+                      {isEdit &&
+                        existingTasks.map((t) => {
+                          const missing = touched(3) && existingTaskMissing(t)
+                          return (
+                            <tr key={t.id}>
+                              <td>
+                                <input
+                                  className={`field__input${missing && !t.taskName.trim() ? ' field__input--error' : ''}`}
+                                  value={t.taskName}
+                                  onChange={(e) => setExistingTaskField(t.id, 'taskName', e.target.value)}
+                                  autoComplete="off"
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  className="field__input"
+                                  value={t.role ?? ''}
+                                  onChange={(e) => setExistingTaskField(t.id, 'role', e.target.value)}
+                                  autoComplete="off"
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.5"
+                                  className={`field__input${missing && !(Number(t.estimatedHours) >= 0) ? ' field__input--error' : ''}`}
+                                  value={t.estimatedHours}
+                                  onChange={(e) => setExistingTaskField(t.id, 'estimatedHours', e.target.value)}
+                                />
+                              </td>
+                              <td />
+                            </tr>
+                          )
+                        })}
                       {form.tasks.map((t) => (
                         <tr key={t.localId}>
                           <td>
@@ -1094,15 +1159,13 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                         </tr>
                       ))}
                     </tbody>
-                    {form.tasks.length > 0 && (
-                      <tfoot>
-                        <tr>
-                          <td colSpan={2}>Total</td>
-                          <td className="col-num">{tasksTotalHours}</td>
-                          <td />
-                        </tr>
-                      </tfoot>
-                    )}
+                    <tfoot>
+                      <tr>
+                        <td colSpan={2}>Total</td>
+                        <td className="col-num">{tasksTotalHours}</td>
+                        <td />
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               )}

@@ -178,10 +178,11 @@ export function ProjectsPage() {
    * proyecto si el usuario tocó "Replace" (null si no); se sube y versiona
    * antes de actualizar el proyecto, mismo orden que el resto de los
    * reemplazos de documento (upload → update row → recordDocument).
-   * `stageChanges` (issue 03b, undefined si el proyecto no tiene stages):
-   * { changedStages, addedStages, existingStagesCount }.
+   * `childChanges` (issues 03b/03c): { changedStages, addedStages,
+   * existingStagesCount, changedTasks, addedTasks } — stages solo si el
+   * proyecto las tiene, tasks siempre.
    */
-  async function handleUpdateFromWizard(updates, newSowFile, stageChanges) {
+  async function handleUpdateFromWizard(updates, newSowFile, childChanges) {
     let sowUrl = wizardEditing.sowUrl
     if (newSowFile) {
       sowUrl = await api.projects.uploadSowFile(newSowFile)
@@ -213,48 +214,68 @@ export function ProjectsPage() {
       })
     }
 
-    for (const stage of stageChanges?.changedStages ?? []) {
-      let stageSowUrl = null
-      if (stage.sowFile) {
-        stageSowUrl = await api.projects.uploadSowFile(stage.sowFile)
-      }
-      try {
-        await api.projects.updateStage(
-          { id: stage.id, projectId: updated.id },
-          { stageName: stage.stageName, sowNumber: stage.sowNumber, ...(stageSowUrl ? { sowUrl: stageSowUrl } : {}) },
-        )
-      } catch (error) {
-        if (stageSowUrl) await api.projects.removeSowFiles([stageSowUrl])
-        throw error
-      }
-      if (stageSowUrl) {
-        await api.projects.recordDocument({
-          subjectType: 'sow',
-          subjectId: stage.id,
-          fileUrl: stageSowUrl,
-          uploadedBy: user?.email ?? null,
-        })
-      }
-    }
+    // Cada stage cambiada es independiente de las demás — en paralelo, igual
+    // que el bloque de abajo para las agregadas (antes era un for-of
+    // secuencial sin motivo, multiplicaba la latencia por cantidad de stages).
+    await Promise.all(
+      (childChanges?.changedStages ?? []).map(async (stage) => {
+        let stageSowUrl = null
+        if (stage.sowFile) {
+          stageSowUrl = await api.projects.uploadSowFile(stage.sowFile)
+        }
+        try {
+          // `stage` viaja completo (id, projectId, position, sowUrl, etc. —
+          // ver ProjectWizardModal) porque updateStage en modo demo hace
+          // `{...current, ...updates}`; el path real de Supabase solo usa
+          // stage.id.
+          await api.projects.updateStage(stage, {
+            stageName: stage.stageName,
+            sowNumber: stage.sowNumber,
+            ...(stageSowUrl ? { sowUrl: stageSowUrl } : {}),
+          })
+        } catch (error) {
+          if (stageSowUrl) await api.projects.removeSowFiles([stageSowUrl])
+          throw error
+        }
+        if (stageSowUrl) {
+          await api.projects.recordDocument({
+            subjectType: 'sow',
+            subjectId: stage.id,
+            fileUrl: stageSowUrl,
+            uploadedBy: user?.email ?? null,
+          })
+        }
+      }),
+    )
 
-    if (stageChanges?.addedStages?.length) {
-      const uploaded = await Promise.all(
-        stageChanges.addedStages.map((s) =>
+    if (childChanges?.addedStages?.length) {
+      // allSettled, no all: si uno de los uploads falla, los que sí
+      // terminaron no deben quedar huérfanos en Storage sin limpiar (mismo
+      // motivo que createProjectFromWizard ya documenta para el alta).
+      const uploadResults = await Promise.allSettled(
+        childChanges.addedStages.map((s) =>
           api.projects
             .uploadSowFile(s.sowFile)
             .then((sowUrl) => ({ stageName: s.stageName, sowNumber: s.sowNumber, sowUrl })),
         ),
       )
+      const firstUploadFailure = uploadResults.find((r) => r.status === 'rejected')
+      const uploadedPaths = uploadResults.filter((r) => r.status === 'fulfilled').map((r) => r.value.sowUrl)
+      if (firstUploadFailure) {
+        await api.projects.removeSowFiles(uploadedPaths)
+        throw firstUploadFailure.reason
+      }
+      const uploaded = uploadResults.map((r) => r.value)
       let createdStages
       try {
         createdStages = await api.projects.createStages(
           updated.id,
           uploaded,
           user?.email ?? null,
-          stageChanges.existingStagesCount,
+          childChanges.existingStagesCount,
         )
       } catch (error) {
-        await api.projects.removeSowFiles(uploaded.map((u) => u.sowUrl))
+        await api.projects.removeSowFiles(uploadedPaths)
         throw error
       }
       await Promise.all(
@@ -267,6 +288,21 @@ export function ProjectsPage() {
           }),
         ),
       )
+    }
+
+    // Tasks (issue 03c): sin archivo, no hay riesgo de huérfano en Storage —
+    // update/create en paralelo, cada task es independiente de las demás.
+    await Promise.all(
+      (childChanges?.changedTasks ?? []).map((task) =>
+        api.projectTasks.update(task, {
+          taskName: task.taskName,
+          role: task.role,
+          estimatedHours: task.estimatedHours,
+        }),
+      ),
+    )
+    if (childChanges?.addedTasks?.length) {
+      await api.projectTasks.create(updated.id, childChanges.addedTasks, user?.email ?? null)
     }
 
     api.audit.log({

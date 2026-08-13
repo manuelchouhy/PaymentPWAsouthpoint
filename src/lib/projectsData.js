@@ -800,6 +800,32 @@ export async function createProjectTasks(projectId, tasks, createdBy) {
 }
 
 /**
+ * Actualiza una task existente (nombre, rol, horas estimadas). Sin delete —
+ * 0023_project_tasks_update_policy.sql solo agregó update, mismo patrón
+ * "nadie borra" del resto de la app.
+ * @param {{ id: string|number, projectId: string|number }} current
+ * @param {{ taskName?: string, role?: ?string, estimatedHours?: number }} updates
+ * @returns {Promise<Object>}
+ */
+export async function updateProjectTask(current, updates) {
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 150))
+    const updated = { ...current, ...updates }
+    demoTasks[current.projectId] = (demoTasks[current.projectId] ?? []).map((t) =>
+      t.id === current.id ? updated : t,
+    )
+    return updated
+  }
+  const row = {}
+  if (updates.taskName !== undefined) row.task_name = updates.taskName
+  if (updates.role !== undefined) row.role = updates.role || null
+  if (updates.estimatedHours !== undefined) row.estimated_hours = Number(updates.estimatedHours)
+  const { data, error } = await supabase.from('project_tasks').update(row).eq('id', current.id).select().single()
+  if (error) throw new Error(error.message)
+  return rowToTask(data)
+}
+
+/**
  * Alta completa de un proyecto desde el wizard: sube el/los SOW (uno por
  * stage si hasStages, uno solo si no) antes de crear nada — es la parte más
  * propensa a fallar (tamaño, tipo, red) — y recién con eso resuelto crea el
