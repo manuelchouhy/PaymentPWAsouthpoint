@@ -114,6 +114,10 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
     ['Payment Terms', contract.paymentTerms],
     ['Renewal Type', contract.renewalType],
     ['Priority Supplier', contract.isPrioritySupplier ? 'Yes' : 'No'],
+    [
+      'Contracted Hours/Week',
+      contract.weeklyContractedHours == null ? '—' : contract.weeklyContractedHours,
+    ],
   ]
 
   return (

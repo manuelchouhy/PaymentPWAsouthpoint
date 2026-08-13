@@ -98,12 +98,14 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
   // reportado — se pudo crear un contrato con Expiration < Start sin aviso).
   const dateOrderValid =
     !form.startDate || !form.expirationDate || form.expirationDate >= form.startDate
-  // Opcional: si se completa, tiene que ser un número >= 0 (misma regla que
-  // el check de la columna en supabase/migrations/0026).
-  const weeklyHoursRaw = form.weeklyContractedHours
+  // Opcional: si se completa, tiene que ser un número finito >= 0 (misma
+  // regla que el check de la columna en supabase/migrations/0026). Se
+  // calcula una sola vez y se reusa tanto para validar como para el payload,
+  // así no puede desincronizarse entre las dos lecturas.
+  const weeklyHoursTrimmed = String(form.weeklyContractedHours ?? '').trim()
+  const weeklyHoursNumber = weeklyHoursTrimmed ? Number(weeklyHoursTrimmed) : null
   const weeklyHoursValid =
-    !String(weeklyHoursRaw ?? '').trim() ||
-    (!Number.isNaN(Number(weeklyHoursRaw)) && Number(weeklyHoursRaw) >= 0)
+    weeklyHoursNumber === null || (Number.isFinite(weeklyHoursNumber) && weeklyHoursNumber >= 0)
   const valid = missing.length === 0 && dateOrderValid && weeklyHoursValid
 
   function set(key, value) {
@@ -135,9 +137,7 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
           paymentTerms: form.paymentTerms,
           renewalType: form.renewalType,
           isPrioritySupplier: form.isPrioritySupplier,
-          weeklyContractedHours: String(weeklyHoursRaw ?? '').trim()
-            ? Number(weeklyHoursRaw)
-            : null,
+          weeklyContractedHours: weeklyHoursNumber,
         },
         pdfFile,
       )
