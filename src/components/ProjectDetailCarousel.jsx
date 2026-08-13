@@ -25,7 +25,16 @@ const OVERVIEW_FIELDS = [
 const FIELD_LABELS = Object.fromEntries(OVERVIEW_FIELDS.map((f) => [f.key, f.label]))
 FIELD_LABELS.contractExpirationDate = 'Contract Expiration Date'
 
-function OverviewSlide({ project, stageCount, stageCountError, canEditSow, budgetHours, budgetExpanded }) {
+function OverviewSlide({
+  project,
+  stageCount,
+  stageCountError,
+  canEditSow,
+  budgetHours,
+  budgetExpanded,
+  budgetPending,
+  budgetError,
+}) {
   return (
     <dl className="drawer__facts">
       {OVERVIEW_FIELDS.map((field) => (
@@ -38,9 +47,20 @@ function OverviewSlide({ project, stageCount, stageCountError, canEditSow, budge
         <div className="drawer__fact">
           <dt>Budget Hours</dt>
           <dd>
-            {budgetHours ?? project.baseBudgetHours} h
-            {budgetExpanded && (
-              <span className="field__hint"> (base {project.baseBudgetHours} + approved CRs)</span>
+            {/* Sin los change requests cargados no se sabe el presupuesto
+                vigente — mostrar la base como si lo fuera haría que
+                Operations subestime lo que el cliente ya aprobó. */}
+            {budgetError ? (
+              `${project.baseBudgetHours} h (base — approved CRs could not be loaded)`
+            ) : budgetPending ? (
+              'Loading…'
+            ) : (
+              <>
+                {budgetHours ?? project.baseBudgetHours} h
+                {budgetExpanded && (
+                  <span className="field__hint"> (base {project.baseBudgetHours} + approved CRs)</span>
+                )}
+              </>
             )}
           </dd>
         </div>
@@ -372,7 +392,7 @@ function AssignmentsSlide({ project, createdBy, canEdit }) {
     Promise.allSettled([
       Promise.resolve().then(() => api.assignments.list(project)),
       Promise.resolve().then(() => api.assignments.providerNames()),
-      Promise.resolve().then(() => api.projectTasks.list(project.id)),
+      Promise.resolve().then(() => api.assignments.taskNames(project.projectName)),
     ])
       .then(([assignmentsResult, providersResult, tasksResult]) => {
         if (cancelled) return
@@ -391,7 +411,7 @@ function AssignmentsSlide({ project, createdBy, canEdit }) {
         }
         if (tasksResult.status === 'fulfilled') setTasks(tasksResult.value)
         else {
-          console.error('No se pudieron cargar las tasks del proyecto:', tasksResult.reason)
+          console.error('No se pudieron cargar los task de las horas cargadas:', tasksResult.reason)
           setCatalogError(true)
         }
       })
@@ -522,12 +542,12 @@ function AssignmentsSlide({ project, createdBy, canEdit }) {
               onChange={(e) => setForm((p) => ({ ...p, taskName: e.target.value }))}
             >
               <option value="">Select…</option>
-              {tasks.map((t) => (
-                <option key={t.id} value={t.taskName}>{t.taskName}</option>
+              {tasks.map((name) => (
+                <option key={name} value={name}>{name}</option>
               ))}
             </select>
             {tasks.length === 0 && !catalogError && (
-              <span className="field__hint">This project has no SOW tasks yet — add them from "Edit SOW &amp; Scope".</span>
+              <span className="field__hint">No hours logged on this project yet — nothing to assign against.</span>
             )}
             {catalogError && (
               <span className="field__error">
@@ -609,7 +629,9 @@ function ChangeRequestsSlide({
   const [error, setError] = useState('')
   const [decidingId, setDecidingId] = useState(null)
 
-  const deltaValid = Number.isFinite(Number(form.deltaHours)) && String(form.deltaHours).trim() !== ''
+  // 0 no es un cambio de presupuesto — un CR con delta 0 no hace nada y
+  // ensucia el historial.
+  const deltaValid = Number.isFinite(Number(form.deltaHours)) && Number(form.deltaHours) !== 0
   const canSubmit = deltaValid && form.reason.trim() && !saving
 
   async function handleCreate() {
@@ -736,7 +758,11 @@ function ChangeRequestsSlide({
           <div className="field">
             <label className="field__label" htmlFor="cr-delta">
               Δ Hours
-              <span className="field__hint">negative to reduce</span>
+              <span className="field__hint">
+                {form.type === 'expand_budget'
+                  ? 'negative to reduce'
+                  : 'recorded only — does not change the budget'}
+              </span>
             </label>
             <input
               id="cr-delta"
@@ -857,6 +883,8 @@ export function ProjectDetailCarousel({
           canEditSow={canEditSow}
           budgetHours={budgetHours}
           budgetExpanded={budgetExpanded}
+          budgetPending={loadingCrs}
+          budgetError={crsLoadError}
         />
       ),
     },
@@ -947,8 +975,16 @@ export function ProjectDetailCarousel({
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     function onKeyDown(event) {
-      if (event.key === 'Escape') onClose()
-      else if (event.key === 'ArrowLeft') goToSlide(slideIndexRef.current - 1)
+      if (event.key === 'Escape') {
+        onClose()
+        return
+      }
+      // Las flechas navegan el carrusel, pero dentro de un input/select son
+      // del usuario (mover el cursor, elegir opción) — si no, escribir en el
+      // formulario de un slide lo desmonta y se pierde lo tipeado.
+      const tag = event.target?.tagName
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || event.target?.isContentEditable) return
+      if (event.key === 'ArrowLeft') goToSlide(slideIndexRef.current - 1)
       else if (event.key === 'ArrowRight') goToSlide(slideIndexRef.current + 1)
     }
     document.addEventListener('keydown', onKeyDown)

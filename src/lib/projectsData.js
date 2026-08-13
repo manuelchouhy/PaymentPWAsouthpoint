@@ -684,10 +684,14 @@ export async function getProjectDocuments(project) {
   // Documentos se queda sin ninguna opción de SOW para un proyecto con
   // stages. Los documentos sí van vacíos: no hay tabla que consultar.
   if (!isSupabaseConfigured) {
+    // Los CRs salen de su propio módulo (igual que stages de getProjectStages)
+    // para que el selector de "a qué subo esto" pueda ofrecer el anexo de un
+    // CR recién creado también en demo.
+    const { getChangeRequests } = await import('./changeRequestsData')
     return {
       documents: [],
       stages: project.hasStages ? await getProjectStages(project.id) : [],
-      changeRequests: [],
+      changeRequests: (await getChangeRequests(project.id)).map((cr) => ({ id: cr.id, crNumber: cr.crNumber })),
     }
   }
 

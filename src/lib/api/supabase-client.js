@@ -39,6 +39,7 @@ import {
 import {
   createAssignment,
   getAssignments,
+  getProjectTaskNames,
   getProviderNames,
   updateAssignmentHours,
 } from '../assignmentsData'
@@ -277,6 +278,7 @@ export const supabaseApiClient = {
     create: createAssignment,
     updateHours: updateAssignmentHours,
     providerNames: getProviderNames,
+    taskNames: getProjectTaskNames,
   },
 
   changeRequests: {

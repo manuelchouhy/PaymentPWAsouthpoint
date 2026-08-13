@@ -366,6 +366,8 @@ export interface ApiClient {
     ): Promise<ProviderAssignment>
     /** Nombres asignables (distintos user_name de time_entries) para el dropdown. */
     providerNames(): Promise<string[]>
+    /** Tasks asignables: los distintos `task` de time_entries del proyecto. */
+    taskNames(projectName: string): Promise<string[]>
   }
 
   changeRequests: {

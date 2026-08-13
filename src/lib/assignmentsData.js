@@ -119,6 +119,32 @@ export async function getProviderNames() {
 }
 
 /**
+ * Tasks asignables de un proyecto: los distintos `task` que aparecen en sus
+ * time_entries, NO los task_name del SOW.
+ *
+ * Suena contraintuitivo, pero es lo único que funciona: las horas consumidas
+ * se cruzan matcheando ese texto (no hay FK entre time_entries y
+ * project_tasks), y el texto lo escribe el contractor en Zoho. Si el
+ * dropdown ofreciera "Backend Development" del SOW y en Zoho dice "Backend",
+ * consumed daría 0 siempre y nunca se detectaría un overage — justo lo que
+ * esta pantalla existe para mostrar.
+ * @param {string} projectName
+ * @returns {Promise<string[]>} ordenados alfabéticamente.
+ */
+export async function getProjectTaskNames(projectName) {
+  if (!isSupabaseConfigured) {
+    const entries = await getTimeEntries()
+    return [...new Set(entries.filter((e) => e.project === projectName).map((e) => e.task).filter(Boolean))].sort(
+      (a, b) => a.localeCompare(b, 'es'),
+    )
+  }
+  if (!projectName) return []
+  const { data, error } = await supabase.from('time_entries').select('task').eq('project', projectName).limit(5000)
+  if (error) throw new Error(error.message)
+  return [...new Set((data ?? []).map((r) => r.task).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
+}
+
+/**
  * @param {{ id: string|number, projectName: string }} project
  * @returns {Promise<ProviderAssignment[]>}
  */

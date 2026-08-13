@@ -155,6 +155,11 @@ async function decideChangeRequest(id, status, decidedBy) {
     for (const projectId of Object.keys(demoChangeRequests)) {
       const found = demoChangeRequests[projectId].find((cr) => cr.id === id)
       if (!found) continue
+      // Mismo guard que el path real (.eq('status','pending')): un CR ya
+      // decidido no se vuelve a decidir.
+      if (found.status !== 'pending') {
+        throw new Error('This change request was already decided — reopen the project to see its current state.')
+      }
       const updated = { ...found, status, decidedBy: decidedBy || null, decidedAt: new Date().toISOString() }
       demoChangeRequests[projectId] = demoChangeRequests[projectId].map((cr) => (cr.id === id ? updated : cr))
       return updated

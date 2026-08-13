@@ -110,6 +110,8 @@ export const httpApiClient = {
     updateHours: () => notImplemented('assignments.updateHours'),
     // GET /api/assignments/provider-names → string[]
     providerNames: () => notImplemented('assignments.providerNames'),
+    // GET /api/assignments/task-names?project=X → string[]
+    taskNames: () => notImplemented('assignments.taskNames'),
   },
 
   changeRequests: {
