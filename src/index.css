@@ -2882,7 +2882,9 @@ th.col-pop { text-align: center; }
   .masthead { padding-bottom: 24px; }
   .selbar { flex-wrap: wrap; gap: 14px 18px; padding: 16px; }
   .selbar__detail { order: 3; flex-basis: 100%; }
-  .selbar .btn--pay { margin-left: auto; }
+  /* Hijo directo: en Payments el botón cuelga de .selbar, pero en Entries vive
+     dentro de .selbar__action y estas reglas lo desarmaban. */
+  .selbar > .btn--pay { margin-left: auto; }
 }
 
 @media (max-width: 480px) {
@@ -2896,7 +2898,7 @@ th.col-pop { text-align: center; }
     border-bottom: 1px solid var(--line);
   }
   .selbar__detail { order: 0; flex-basis: auto; }
-  .selbar .btn--pay { order: 0; width: 100%; margin-left: 0; }
+  .selbar > .btn--pay { order: 0; width: 100%; margin-left: 0; }
   .toolbar { align-items: stretch; }
   .filter__control { width: 100%; }
   .filter__select { width: 100%; min-width: 0; }
@@ -4236,7 +4238,9 @@ select.field__input { cursor: pointer; }
   /* Selbar wraps earlier */
   .selbar { flex-wrap: wrap; gap: 12px 16px; }
   .selbar__detail { order: 3; flex-basis: 100%; }
-  .selbar .btn--pay { margin-left: auto; }
+  /* Hijo directo: en Payments el botón cuelga de .selbar, pero en Entries vive
+     dentro de .selbar__action y estas reglas lo desarmaban. */
+  .selbar > .btn--pay { margin-left: auto; }
 }
 
 /* --- Tablet landscape (≤900px) ---------------------------------------------- */

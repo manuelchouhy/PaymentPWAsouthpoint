@@ -46,6 +46,9 @@ export function EntriesPage() {
         if (cancelled) return
         setEntries(entryRows)
         setInvoices(invoiceRows)
+        // Los datos se releyeron: una selección armada sobre la tanda anterior
+        // puede apuntar a filas que ya se facturaron.
+        setSelectedIds(new Set())
         setStatus('ready')
       })
       .catch((error) => {
@@ -94,8 +97,15 @@ export function EntriesPage() {
 
   // Al cambiar los filtros se vuelve a la primera tanda: mantener el "ver más"
   // acumulado de la búsqueda anterior mostraría un conteo que no se pidió.
+  // La selección se limpia por el mismo motivo: la barra suma horas sobre lo
+  // visible, así que arrastrar filas de otro filtro mostraría "0.0 h · 40
+  // entries" y Apply escribiría sobre 40 filas que ya no están en pantalla.
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
+    setSelectedIds(new Set())
+    // El error habla de la selección anterior: dejarlo colgado bajo otra grilla
+    // hace desconfiar de allocations que sí se guardaron.
+    setApplyError('')
   }, [filters])
 
   const page = visible.slice(0, visibleCount)
@@ -132,19 +142,36 @@ export function EntriesPage() {
   const selectedHours = selectedEntries.reduce((sum, e) => sum + (Number(e.hours) || 0), 0)
 
   async function handleApply() {
-    if (!selectedIds.size || applying) return
+    // Se manda sólo lo que sigue visible y reclasificable, no el Set crudo: es
+    // lo que el usuario ve sumado en la barra.
+    const ids = selectedEntries.filter((e) => !isFrozen(e)).map((e) => e.id)
+    if (!ids.length || applying) return
     setApplying(true)
     setApplyError('')
-    const ids = [...selectedIds]
     try {
-      await api.timeEntries.setAllocation(ids, allocationChoice, user?.email ?? null)
+      const updatedIds = await api.timeEntries.setAllocation(
+        ids,
+        allocationChoice,
+        user?.email ?? null,
+      )
       // Se refleja en la grilla sin recargar todo: el update ya se confirmó y
       // volver a traer 500+ filas por un cambio de columna es desproporcionado.
-      const applied = new Set(ids)
+      // Se pintan sólo las filas que la base confirmó, no las pedidas.
+      const applied = new Set((updatedIds ?? []).map(String))
       setEntries((prev) =>
-        prev.map((e) => (applied.has(e.id) ? { ...e, allocation: allocationChoice } : e)),
+        prev.map((e) => (applied.has(String(e.id)) ? { ...e, allocation: allocationChoice } : e)),
       )
       setSelectedIds(new Set())
+      if (applied.size < ids.length) {
+        // Nunca mostrar un éxito que no pasó: si la base actualizó menos filas
+        // que las pedidas (factura emitida mientras tanto, o permiso denegado)
+        // hay que decirlo y releer para mostrar el estado real.
+        const skipped = ids.length - applied.size
+        setApplyError(
+          `${skipped} of ${ids.length} ${ids.length === 1 ? 'entry was' : 'entries were'} not reclassified — they may have been invoiced meanwhile. Reloading the latest data.`,
+        )
+        setReloadKey((k) => k + 1)
+      }
     } catch (error) {
       console.error('No se pudo aplicar la allocation:', error)
       setApplyError('Could not apply the allocation — please try again.')
@@ -335,7 +362,10 @@ export function EntriesPage() {
                     <button
                       type="button"
                       className="btn btn--ghost btn--sm"
-                      onClick={() => setSelectedIds(new Set())}
+                      onClick={() => {
+                        setSelectedIds(new Set())
+                        setApplyError('')
+                      }}
                       disabled={applying}
                     >
                       Clear

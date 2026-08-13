@@ -300,12 +300,16 @@ export interface ApiClient {
 
   timeEntries: {
     list(): Promise<TimeEntry[]>
-    /** Triage en bloque: asigna la misma allocation a todas las entries dadas. */
+    /**
+     * Triage en bloque: asigna la misma allocation a todas las entries dadas.
+     * Devuelve los ids realmente actualizados — las ya facturadas se descartan,
+     * así que puede ser un subconjunto de `entryIds`.
+     */
     setAllocation(
       entryIds: Array<string | number>,
       allocation: 'bill_to_client' | 'overage' | 'sp_internal',
       changedBy?: string | null,
-    ): Promise<number>
+    ): Promise<Array<string | number>>
   }
 
   invoices: {

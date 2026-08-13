@@ -342,43 +342,125 @@ export async function getTimeEntries() {
   return data.map(rowToEntry)
 }
 
+// `.in()` viaja en la query string: una selección de "todas" sobre 500+ filas
+// arma una URI de varios KB que el servidor rechaza con 414 antes de mirar el
+// dominio. Se parte en tandas.
+const ID_CHUNK = 200
+
+function chunkIds(ids) {
+  const chunks = []
+  for (let i = 0; i < ids.length; i += ID_CHUNK) chunks.push(ids.slice(i, i + ID_CHUNK))
+  return chunks
+}
+
+/**
+ * Ids de entries que ya salieron en una factura fuera de Pending, releídos de
+ * la base. La UI decide qué checkbox habilita con los datos que cargó al
+ * montar; si mientras tanto se emitió una factura en otra sesión, ese cache
+ * quedó viejo y sólo esta relectura lo detecta.
+ */
+async function getFrozenEntryIds(entryIds) {
+  // entry_ids es bigint[]: un id no numérico no puede estar ahí (mismo criterio
+  // que createInvoice).
+  const numericIds = entryIds.map(Number).filter((n) => Number.isFinite(n))
+  const frozen = new Set()
+  if (!numericIds.length) return frozen
+
+  for (const chunk of chunkIds(numericIds)) {
+    const { data, error } = await supabase
+      .from('invoices')
+      .select('entry_ids')
+      .neq('status', 'Pending')
+      .overlaps('entry_ids', chunk)
+    if (error) throw new Error(error.message)
+    for (const row of data) {
+      for (const id of row.entry_ids ?? []) frozen.add(String(id))
+    }
+  }
+  return frozen
+}
+
 /**
  * Clasifica horas (triage de Entries): asigna la misma allocation a todas las
  * entries seleccionadas de una. Es la ÚNICA forma de tocar `allocation` — la
  * grilla nunca la edita por click en la celda, porque define quién paga esas
  * horas.
  *
- * No toca entries ya facturadas: eso lo garantiza la UI deshabilitando su
- * checkbox, pero acá se filtra igual — una allocation cambiada después de
- * facturar desalinearía la factura de su justificación.
+ * No toca entries ya facturadas (factura fuera de Pending): la UI deshabilita
+ * su checkbox, pero lo hace contra los datos que cargó al montar, así que acá
+ * se revalida contra la base — una allocation cambiada después de facturar
+ * desalinearía la factura de su justificación. Las congeladas se descartan sin
+ * error: el llamador compara los ids devueltos contra los que mandó para saber
+ * qué quedó afuera.
  *
  * @param {Array<string|number>} entryIds
  * @param {'bill_to_client'|'overage'|'sp_internal'} allocation
  * @param {?string} changedBy
- * @returns {Promise<number>} cuántas filas se actualizaron.
+ * @returns {Promise<Array<string|number>>} ids realmente actualizados.
  */
 export async function setEntriesAllocation(entryIds, allocation, changedBy) {
-  if (!entryIds?.length) return 0
+  if (!entryIds?.length) return []
+  const wanted = new Set(entryIds.map(String))
+
   if (!isSupabaseConfigured) {
     await new Promise((resolve) => setTimeout(resolve, 250))
-    return entryIds.length
+    // Mutar el mock: sin esto la grilla muestra el cambio, y en el próximo
+    // Retry la clasificación desaparece — en una demo se lee como pérdida de
+    // datos, no como modo mock.
+    const frozenMock = new Set(
+      MOCK_INVOICES.filter((inv) => inv.status !== 'Pending').flatMap((inv) =>
+        (inv.entryIds ?? []).map(String),
+      ),
+    )
+    const updated = []
+    for (const entry of MOCK_TIME_ENTRIES) {
+      const id = String(entry.id)
+      if (!wanted.has(id) || frozenMock.has(id)) continue
+      entry.allocation = allocation
+      updated.push(entry.id)
+    }
+    return updated
   }
 
-  const { data, error } = await supabase
-    .from('time_entries')
-    .update({ allocation })
-    .in('id', entryIds)
-    .select('id')
-  if (error) throw new Error(error.message)
+  const frozen = await getFrozenEntryIds(entryIds)
+  const allowed = entryIds.filter((id) => !frozen.has(String(id)))
+  if (!allowed.length) return []
+
+  // Allocations previas para el audit: sin el `before`, una reclasificación
+  // discutida no se puede reconstruir — y esto define quién paga esas horas.
+  const previous = new Map()
+  for (const chunk of chunkIds(allowed)) {
+    const { data, error } = await supabase
+      .from('time_entries')
+      .select('id, allocation')
+      .in('id', chunk)
+    if (error) throw new Error(error.message)
+    for (const row of data) previous.set(String(row.id), row.allocation ?? null)
+  }
+
+  const updatedIds = []
+  for (const chunk of chunkIds(allowed)) {
+    const { data, error } = await supabase
+      .from('time_entries')
+      .update({ allocation })
+      .in('id', chunk)
+      .select('id')
+    if (error) throw new Error(error.message)
+    for (const row of data) updatedIds.push(row.id)
+  }
+  if (!updatedIds.length) return []
 
   await logAudit({
     actorEmail: changedBy,
     action: 'entries.allocate',
     resourceType: 'time_entries',
     resourceId: null,
-    after: { allocation, entryCount: data.length },
+    before: {
+      entries: updatedIds.map((id) => ({ id, allocation: previous.get(String(id)) ?? null })),
+    },
+    after: { allocation, entryIds: updatedIds, entryCount: updatedIds.length },
   })
-  return data.length
+  return updatedIds
 }
 
 // NOTA: el módulo de Payments al contractor (FR-10) vive en `paymentsData.js`.
