@@ -24,7 +24,7 @@ const OVERVIEW_FIELDS = [
 const FIELD_LABELS = Object.fromEntries(OVERVIEW_FIELDS.map((f) => [f.key, f.label]))
 FIELD_LABELS.contractExpirationDate = 'Contract Expiration Date'
 
-function OverviewSlide({ project }) {
+function OverviewSlide({ project, stageCount, canEditSow }) {
   return (
     <dl className="drawer__facts">
       {OVERVIEW_FIELDS.map((field) => (
@@ -36,7 +36,12 @@ function OverviewSlide({ project }) {
       {project.hasStages && (
         <div className="drawer__fact">
           <dt>Stages</dt>
-          <dd>Multiple — see "Edit SOW &amp; Scope" for the full breakdown</dd>
+          <dd>
+            {stageCount == null
+              ? 'Loading…'
+              : `${stageCount} stage${stageCount === 1 ? '' : 's'}`}
+            {canEditSow && ' — see "Edit SOW & Scope" for the full breakdown'}
+          </dd>
         </div>
       )}
       <div className="drawer__fact">
@@ -67,6 +72,7 @@ function OverviewSlide({ project }) {
 export function ProjectDetailCarousel({ project, onClose, onEdit, onEditSow }) {
   const [history, setHistory] = useState([])
   const [loadingHistory, setLoadingHistory] = useState(true)
+  const [stageCount, setStageCount] = useState(null)
   const [slideIndex, setSlideIndex] = useState(0)
   const dialogRef = useRef(null)
   // El keydown handler lee el índice actual acá en vez de por closure — así
@@ -77,8 +83,19 @@ export function ProjectDetailCarousel({ project, onClose, onEdit, onEditSow }) {
 
   const days = daysRemaining(project.contractExpirationDate)
   const status = contractStatus(days)
+  // Mismo gate que el botón "Edit SOW & Scope" de acá abajo — el texto del
+  // slide Overview que lo referencia solo debe aparecer cuando el botón
+  // realmente se va a renderizar (clientId puede ser null incluso con
+  // hasStages=true).
+  const canEditSow = Boolean(project.clientId && onEditSow)
 
-  const slides = [{ key: 'overview', label: 'Overview', content: <OverviewSlide project={project} /> }]
+  const slides = [
+    {
+      key: 'overview',
+      label: 'Overview',
+      content: <OverviewSlide project={project} stageCount={stageCount} canEditSow={canEditSow} />,
+    },
+  ]
   const slide = slides[Math.min(slideIndex, slides.length - 1)]
 
   function goToSlide(i) {
@@ -96,6 +113,17 @@ export function ProjectDetailCarousel({ project, onClose, onEdit, onEditSow }) {
       cancelled = true
     }
   }, [project.id])
+
+  useEffect(() => {
+    if (!project.hasStages) return
+    let cancelled = false
+    api.projects.getStages(project.id)
+      .then((stages) => !cancelled && setStageCount(stages.length))
+      .catch(() => !cancelled && setStageCount(0))
+    return () => {
+      cancelled = true
+    }
+  }, [project.id, project.hasStages])
 
   useEffect(() => {
     const prev = document.body.style.overflow
