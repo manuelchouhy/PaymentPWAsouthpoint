@@ -388,10 +388,17 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
     durationMonths: form.maintenanceEnabled && !(Number(form.maintenanceDurationMonths) > 0),
   }
   // Igual que las stages: una task existente (issue 03c) no puede perder su
-  // nombre (`text not null`) ni quedar con horas inválidas (`check >= 0`).
+  // nombre (`text not null`) ni quedar con horas inválidas (`check >= 0`,
+  // el input numérico con min="0" no impide tipear un signo "-"). Una task
+  // nueva (form.tasks, alta o agregada en edición) con nombre pero horas
+  // inválidas tiene el mismo problema — si no, llega a Supabase y el check
+  // constraint la rechaza con un error crudo en vez de bloquear acá.
   const existingTaskMissing = (t) => !t.taskName.trim() || !(Number(t.estimatedHours) >= 0)
+  const newTaskInvalid = (t) => t.taskName.trim() && !(Number(t.estimatedHours) >= 0)
   const step4Missing = {
-    tasks: isEdit && existingTasks.some(existingTaskMissing),
+    tasks:
+      (isEdit && (Boolean(tasksLoadError) || existingTasks.some(existingTaskMissing))) ||
+      form.tasks.some(newTaskInvalid),
   }
   const step1Valid = !Object.values(step1Missing).some(Boolean)
   const step2Valid = !Object.values(step2Missing).some(Boolean)
@@ -489,7 +496,9 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
             // Supabase solo usa t.id.
             ...t,
             taskName: t.taskName.trim(),
-            role: t.role.trim() || null,
+            // t.role puede venir null de la DB (rowToTask) — a diferencia de
+            // form.tasks, donde siempre arranca en '' (ver emptyTask()).
+            role: (t.role ?? '').trim() || null,
             estimatedHours: Number(t.estimatedHours),
           }))
         const addedTasks = form.tasks
@@ -1071,6 +1080,9 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                   : 'Optional — estimated hours per task. Actual hours and deviation are calculated later against Entries.'}
               </p>
               {isEdit && tasksLoadError && <p className="field__error">{tasksLoadError}</p>}
+              {isEdit && existingTasks.length === 0 && form.tasks.length === 0 && !tasksLoadError && (
+                <p className="field__hint">No tasks recorded.</p>
+              )}
               {(existingTasks.length > 0 || form.tasks.length > 0) && (
                 <div className="table-wrap">
                   <table className="table table--form">
@@ -1141,7 +1153,7 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                               type="number"
                               min="0"
                               step="0.5"
-                              className="field__input"
+                              className={`field__input${touched(3) && newTaskInvalid(t) ? ' field__input--error' : ''}`}
                               value={t.estimatedHours}
                               onChange={(e) => setTaskField(t.localId, 'estimatedHours', e.target.value)}
                             />
