@@ -18,8 +18,14 @@
 
 import { supabase, isSupabaseConfigured } from './supabase'
 import { logAudit } from './auditData'
+import { getTimeEntries } from './data'
 
 const FIELD_TO_COLUMN = {
+  // projectId estaba faltando: provider_assignments.project_id es NOT NULL
+  // (0019), así que sin esta entrada el insert lo omitía y Postgres lo
+  // rechazaba. No se notaba porque el modo demo hace spread del payload en
+  // vez de mapear columnas, y hasta ahora nadie consumía este módulo.
+  projectId: 'project_id',
   taskName: 'task_name',
   providerName: 'provider_name',
   authorizedHours: 'authorized_hours',
@@ -95,9 +101,19 @@ async function getConsumedHoursByProject(projectName) {
 export async function getProviderNames() {
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 150))
-    return [...new Set(demoAssignments.map((a) => a.providerName))].sort((a, b) => a.localeCompare(b, 'es'))
+    // De los time entries demo, no de demoAssignments: la lista es "quién
+    // cargó horas alguna vez", no "a quién ya le asignamos" (si no, el primer
+    // alta de un proyecto nunca tendría a nadie para elegir).
+    const entries = await getTimeEntries()
+    return [...new Set(entries.map((e) => e.user).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
   }
-  const { data, error } = await supabase.from('time_entries').select('user_name')
+  // Solo la columna que se necesita y con tope: time_entries es la tabla más
+  // grande de la app (miles de filas) y esto alimenta un dropdown.
+  const { data, error } = await supabase
+    .from('time_entries')
+    .select('user_name')
+    .order('user_name', { ascending: true })
+    .limit(5000)
   if (error) throw new Error(error.message)
   return [...new Set((data ?? []).map((r) => r.user_name).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
 }

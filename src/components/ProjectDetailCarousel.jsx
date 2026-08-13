@@ -324,9 +324,18 @@ function DocumentsSlide({ project, uploadedBy }) {
  * no las `pill` del mockup, que no existen en index.css.
  */
 function assignmentStatus(remainingHours) {
-  if (remainingHours > 0) return { label: 'ok', cls: 'badge--ok' }
-  if (remainingHours === 0) return { label: 'exhausted', cls: 'badge--pending' }
+  // Tolerancia en vez de === 0: remaining es una resta de sumas de floats
+  // (8.1 + 8.1 + 8.1 contra 24.3 deja 3.55e-15), que compararía "ok" cuando
+  // en realidad está agotada.
+  const EPSILON = 0.001
+  if (remainingHours > EPSILON) return { label: 'ok', cls: 'badge--ok' }
+  if (remainingHours >= -EPSILON) return { label: 'exhausted', cls: 'badge--pending' }
   return { label: 'exceeded · overage', cls: 'badge--no' }
+}
+
+/** Horas legibles: sin decimales de ruido binario ni ceros al pedo. */
+function formatHours(hours) {
+  return Number(Number(hours).toFixed(2)).toString()
 }
 
 /**
@@ -341,15 +350,22 @@ function AssignmentsSlide({ project, createdBy, canEdit }) {
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
+  const [catalogError, setCatalogError] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ providerName: '', taskName: '', authorizedHours: '' })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
 
+  async function loadAssignments() {
+    const rows = await api.assignments.list(project)
+    setAssignments(rows)
+  }
+
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setLoadError(false)
+    setCatalogError(false)
     // allSettled sobre las tres: que falle el catálogo de proveedores/tasks
     // (solo alimenta el alta) no debería impedir ver las asignaciones que ya
     // existen, que es lo principal de este slide.
@@ -365,10 +381,19 @@ function AssignmentsSlide({ project, createdBy, canEdit }) {
           console.error('No se pudieron cargar las asignaciones:', assignmentsResult.reason)
           setLoadError(true)
         }
+        // Un catálogo que falló NO es un catálogo vacío: sin esta distinción
+        // el form diría "este proyecto no tiene tasks" y mandaría al usuario
+        // a crear tasks que ya existen.
         if (providersResult.status === 'fulfilled') setProviders(providersResult.value)
-        else console.error('No se pudo cargar la lista de proveedores:', providersResult.reason)
+        else {
+          console.error('No se pudo cargar la lista de proveedores:', providersResult.reason)
+          setCatalogError(true)
+        }
         if (tasksResult.status === 'fulfilled') setTasks(tasksResult.value)
-        else console.error('No se pudieron cargar las tasks del proyecto:', tasksResult.reason)
+        else {
+          console.error('No se pudieron cargar las tasks del proyecto:', tasksResult.reason)
+          setCatalogError(true)
+        }
       })
       .finally(() => !cancelled && setLoading(false))
     return () => {
@@ -378,34 +403,42 @@ function AssignmentsSlide({ project, createdBy, canEdit }) {
 
   const hoursValid = Number(form.authorizedHours) > 0
   const canSubmit = form.providerName && form.taskName && hoursValid && !saving
+  // El índice único (project_id, task_name, provider_name) de 0019 rechaza un
+  // duplicado, así que si el par ya existe esto es una ampliación de la
+  // autorización, no un alta — es el único camino a updateAssignmentHours.
+  const existing = assignments.find(
+    (a) => a.providerName === form.providerName && a.taskName === form.taskName,
+  )
 
-  async function handleCreate() {
+  async function handleSubmit() {
     if (!canSubmit) return
     setSaving(true)
     setSaveError('')
     try {
-      const created = await api.assignments.create(
-        {
-          projectId: project.id,
-          providerName: form.providerName,
-          taskName: form.taskName,
-          authorizedHours: Number(form.authorizedHours),
-        },
-        createdBy,
-      )
-      // createAssignment no devuelve consumed/remaining (los calcula
-      // getAssignments contra time_entries) — para una asignación recién
-      // creada, lo consumido es lo que ya haya cargado ese proveedor en esa
-      // task, que acá no conocemos. Se recalcula al reabrir el slide; por
-      // ahora se muestra la autorización completa como restante.
-      setAssignments((prev) => [
-        { ...created, consumedHours: created.consumedHours ?? 0, remainingHours: created.authorizedHours },
-        ...prev,
-      ])
+      if (existing) {
+        await api.assignments.updateHours(existing.id, Number(form.authorizedHours), createdBy)
+      } else {
+        await api.assignments.create(
+          {
+            projectId: project.id,
+            providerName: form.providerName,
+            taskName: form.taskName,
+            authorizedHours: Number(form.authorizedHours),
+          },
+          createdBy,
+        )
+      }
+      // Se recarga en vez de insertar una fila optimista: consumed/remaining
+      // los calcula getAssignments contra time_entries, y un proveedor puede
+      // tener horas cargadas de antes de formalizar la autorización —
+      // mostrar "consumed 0 / ok" ahí sería mentirle al PM justo cuando está
+      // decidiendo cuántas horas autorizar.
+      await loadAssignments()
       setForm({ providerName: '', taskName: '', authorizedHours: '' })
       setShowForm(false)
     } catch (error) {
-      setSaveError(error?.message ?? 'Could not save the assignment.')
+      console.error('No se pudo guardar la asignación:', error)
+      setSaveError('Could not save the assignment — please try again.')
     } finally {
       setSaving(false)
     }
@@ -446,9 +479,9 @@ function AssignmentsSlide({ project, createdBy, canEdit }) {
                     <tr key={a.id}>
                       <td>{a.providerName}</td>
                       <td className="cell-soft">{a.taskName}</td>
-                      <td className="col-num">{a.authorizedHours}</td>
-                      <td className="col-num">{a.consumedHours}</td>
-                      <td className="col-num">{a.remainingHours}</td>
+                      <td className="col-num">{formatHours(a.authorizedHours)}</td>
+                      <td className="col-num">{formatHours(a.consumedHours)}</td>
+                      <td className="col-num">{formatHours(a.remainingHours)}</td>
                       <td>
                         <span className={`badge ${st.cls}`}>{st.label}</span>
                       </td>
@@ -476,7 +509,9 @@ function AssignmentsSlide({ project, createdBy, canEdit }) {
                 <option key={name} value={name}>{name}</option>
               ))}
             </select>
-            {providers.length === 0 && <span className="field__hint">No providers with logged hours yet.</span>}
+            {providers.length === 0 && !catalogError && (
+              <span className="field__hint">No providers with logged hours yet.</span>
+            )}
           </div>
           <div className="field">
             <label className="field__label" htmlFor="assign-task">Task</label>
@@ -491,8 +526,13 @@ function AssignmentsSlide({ project, createdBy, canEdit }) {
                 <option key={t.id} value={t.taskName}>{t.taskName}</option>
               ))}
             </select>
-            {tasks.length === 0 && (
+            {tasks.length === 0 && !catalogError && (
               <span className="field__hint">This project has no SOW tasks yet — add them from "Edit SOW &amp; Scope".</span>
+            )}
+            {catalogError && (
+              <span className="field__error">
+                The provider/task lists could not be loaded — try reopening this project.
+              </span>
             )}
           </div>
           <div className="field">
@@ -507,12 +547,25 @@ function AssignmentsSlide({ project, createdBy, canEdit }) {
               onChange={(e) => setForm((p) => ({ ...p, authorizedHours: e.target.value }))}
             />
           </div>
+          {existing && (
+            <span className="field__hint">
+              {existing.providerName} is already assigned to {existing.taskName} for{' '}
+              {formatHours(existing.authorizedHours)} h — saving replaces that authorization.
+            </span>
+          )}
           {saveError && <span className="field__error">{saveError}</span>}
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-            <button type="button" className="btn btn--pay btn--sm" onClick={handleCreate} disabled={!canSubmit}>
-              {saving ? 'Saving…' : 'Assign'}
+            <button type="button" className="btn btn--pay btn--sm" onClick={handleSubmit} disabled={!canSubmit}>
+              {saving ? 'Saving…' : existing ? 'Update authorized hours' : 'Assign'}
             </button>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setShowForm(false)}>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={() => {
+                setSaveError('')
+                setShowForm(false)
+              }}
+            >
               Cancel
             </button>
           </div>
