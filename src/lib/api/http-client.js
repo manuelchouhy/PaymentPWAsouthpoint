@@ -112,6 +112,17 @@ export const httpApiClient = {
     providerNames: () => notImplemented('assignments.providerNames'),
   },
 
+  changeRequests: {
+    // GET /api/projects/:id/change-requests → ChangeRequest[]
+    list: () => notImplemented('changeRequests.list'),
+    // POST /api/change-requests { projectId, type, deltaHours, reason } → ChangeRequest
+    create: () => notImplemented('changeRequests.create'),
+    // POST /api/change-requests/:id/approve → ChangeRequest
+    approve: () => notImplemented('changeRequests.approve'),
+    // POST /api/change-requests/:id/reject → ChangeRequest
+    reject: () => notImplemented('changeRequests.reject'),
+  },
+
   collections: {
     // GET /api/collections → Collection[]
     list: () => notImplemented('collections.list'),

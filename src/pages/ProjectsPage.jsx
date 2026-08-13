@@ -563,6 +563,8 @@ export function ProjectsPage() {
             project={detail}
             uploadedBy={user?.email ?? null}
             canEditAssignments={can('assignments.edit')}
+            canCreateChangeRequests={can('changeRequests.create')}
+            canDecideChangeRequests={can('changeRequests.decide')}
             onClose={() => setDetail(null)}
             onEdit={() => {
               // Siempre disponible, para cualquier proyecto: Contract Number,

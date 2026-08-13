@@ -44,6 +44,13 @@ import {
 } from '../assignmentsData'
 
 import {
+  approveChangeRequest,
+  createChangeRequest,
+  getChangeRequests,
+  rejectChangeRequest,
+} from '../changeRequestsData'
+
+import {
   createCollection,
   getCollectionAlertSettings,
   getCollections,
@@ -269,6 +276,13 @@ export const supabaseApiClient = {
     create: createAssignment,
     updateHours: updateAssignmentHours,
     providerNames: getProviderNames,
+  },
+
+  changeRequests: {
+    list: getChangeRequests,
+    create: createChangeRequest,
+    approve: approveChangeRequest,
+    reject: rejectChangeRequest,
   },
 
   projects: {

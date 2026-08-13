@@ -40,6 +40,11 @@ const MATRIX = {
   // Asignaciones de horas por proveedor/task (vive dentro de Projects and SOW)
   'assignments.view': ALL,
   'assignments.edit': [ROLES.OPERATIONS, ROLES.ADMIN],
+  // Change Requests: crear lo puede Operations, pero la decisión (aprobar o
+  // rechazar) queda en Administrator — mueve plata pactada con el cliente.
+  'changeRequests.view': ALL,
+  'changeRequests.create': [ROLES.OPERATIONS, ROLES.ADMIN],
+  'changeRequests.decide': [ROLES.ADMIN],
   // Supplier Contracts
   'suppliers.view': ALL,
   'suppliers.edit': [ROLES.OPERATIONS, ROLES.ADMIN],

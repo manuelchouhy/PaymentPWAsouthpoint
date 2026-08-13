@@ -200,6 +200,21 @@ export interface ProjectTask {
   createdBy: string | null
 }
 
+export interface ChangeRequest {
+  id: string | number
+  projectId: string | number
+  crNumber: string
+  type: 'expand_budget' | 'write_off_overage' | 'other'
+  deltaHours: number
+  reason: string | null
+  requestedBy: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  decidedBy: string | null
+  decidedAt: string | null
+  createdAt: string
+  createdBy: string | null
+}
+
 export interface ProjectDocument {
   id: string | number
   subjectType: 'msa' | 'sow' | 'change_request'
@@ -351,6 +366,21 @@ export interface ApiClient {
     ): Promise<ProviderAssignment>
     /** Nombres asignables (distintos user_name de time_entries) para el dropdown. */
     providerNames(): Promise<string[]>
+  }
+
+  changeRequests: {
+    list(projectId: string | number): Promise<ChangeRequest[]>
+    create(
+      payload: {
+        projectId: string | number
+        type: 'expand_budget' | 'write_off_overage' | 'other'
+        deltaHours: number
+        reason?: string | null
+      },
+      createdBy?: string | null,
+    ): Promise<ChangeRequest>
+    approve(id: string | number, decidedBy?: string | null): Promise<ChangeRequest>
+    reject(id: string | number, decidedBy?: string | null): Promise<ChangeRequest>
   }
 
   projects: {
