@@ -24,7 +24,7 @@ const OVERVIEW_FIELDS = [
 const FIELD_LABELS = Object.fromEntries(OVERVIEW_FIELDS.map((f) => [f.key, f.label]))
 FIELD_LABELS.contractExpirationDate = 'Contract Expiration Date'
 
-function OverviewSlide({ project, stageCount, canEditSow }) {
+function OverviewSlide({ project, stageCount, stageCountError, canEditSow }) {
   return (
     <dl className="drawer__facts">
       {OVERVIEW_FIELDS.map((field) => (
@@ -37,10 +37,16 @@ function OverviewSlide({ project, stageCount, canEditSow }) {
         <div className="drawer__fact">
           <dt>Stages</dt>
           <dd>
-            {stageCount == null
-              ? 'Loading…'
-              : `${stageCount} stage${stageCount === 1 ? '' : 's'}`}
-            {canEditSow && ' — see "Edit SOW & Scope" for the full breakdown'}
+            {stageCountError ? (
+              'Could not load — try reopening this project.'
+            ) : stageCount == null ? (
+              'Loading…'
+            ) : (
+              <>
+                {stageCount} stage{stageCount === 1 ? '' : 's'}
+                {canEditSow && ' — see "Edit SOW & Scope" for the full breakdown'}
+              </>
+            )}
           </dd>
         </div>
       )}
@@ -73,6 +79,7 @@ export function ProjectDetailCarousel({ project, onClose, onEdit, onEditSow }) {
   const [history, setHistory] = useState([])
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [stageCount, setStageCount] = useState(null)
+  const [stageCountError, setStageCountError] = useState(false)
   const [slideIndex, setSlideIndex] = useState(0)
   const dialogRef = useRef(null)
   // El keydown handler lee el índice actual acá en vez de por closure — así
@@ -93,7 +100,14 @@ export function ProjectDetailCarousel({ project, onClose, onEdit, onEditSow }) {
     {
       key: 'overview',
       label: 'Overview',
-      content: <OverviewSlide project={project} stageCount={stageCount} canEditSow={canEditSow} />,
+      content: (
+        <OverviewSlide
+          project={project}
+          stageCount={stageCount}
+          stageCountError={stageCountError}
+          canEditSow={canEditSow}
+        />
+      ),
     },
   ]
   const slide = slides[Math.min(slideIndex, slides.length - 1)]
@@ -117,9 +131,19 @@ export function ProjectDetailCarousel({ project, onClose, onEdit, onEditSow }) {
   useEffect(() => {
     if (!project.hasStages) return
     let cancelled = false
-    api.projects.getStages(project.id)
+    setStageCountError(false)
+    // Promise.resolve().then(...) en vez de llamar getStages directo:
+    // absorbe un throw síncrono (el stub de http-client.js tira en vez de
+    // rechazar una promise) en el mismo .catch de abajo, no como una
+    // excepción sin capturar que tumbaría el efecto entero.
+    Promise.resolve()
+      .then(() => api.projects.getStages(project.id))
       .then((stages) => !cancelled && setStageCount(stages.length))
-      .catch(() => !cancelled && setStageCount(0))
+      .catch((error) => {
+        if (cancelled) return
+        console.error('No se pudo cargar la cantidad de stages del proyecto:', error)
+        setStageCountError(true)
+      })
     return () => {
       cancelled = true
     }
@@ -169,7 +193,7 @@ export function ProjectDetailCarousel({ project, onClose, onEdit, onEditSow }) {
             </h2>
           </div>
           <div className="modal__head-actions">
-            {project.clientId && onEditSow && (
+            {canEditSow && (
               <button type="button" className="btn btn--ghost btn--sm" onClick={onEditSow}>
                 <Settings2 size={15} strokeWidth={2.2} aria-hidden="true" />
                 Edit SOW &amp; Scope
