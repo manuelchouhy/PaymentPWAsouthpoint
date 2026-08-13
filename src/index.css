@@ -3577,6 +3577,57 @@ th.col-pop { text-align: center; }
   border-top: 2px solid var(--line-strong);
 }
 
+/* --- Carrusel de detalle de proyecto (issue 04) --------------------------- */
+.modal--carousel { max-width: 640px; }
+.modal__head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.carousel { border: 1px solid var(--line-strong); border-radius: var(--r-lg); margin-top: 4px; }
+.carousel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line-strong);
+}
+.carousel__title { font-family: var(--heading); font-size: 14px; font-weight: 600; }
+.carousel__pos { font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
+.carousel__body { padding: 18px; min-height: 220px; }
+.carousel__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  border-top: 1px solid var(--line-strong);
+}
+.carousel__dots { display: flex; gap: 6px; }
+.carousel__dot {
+  width: 16px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transform: scaleX(.65);
+  transition: transform .15s ease, background-color .15s ease;
+}
+.carousel__dot.is-active { background: var(--accent); transform: scaleX(1); }
+.carousel__arrow {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-soft);
+}
+.carousel__arrow:hover { background: var(--surface-2); }
+.carousel__arrow:disabled { opacity: .4; cursor: default; }
+.carousel__empty { text-align: center; padding: 36px 16px; color: var(--text-faint); }
+.carousel__empty .btn { margin-top: 14px; }
+
 /* --- KPI chips por estado de contrato (FR-08) ---------------------------- */
 .proj-kpis {
   display: flex;

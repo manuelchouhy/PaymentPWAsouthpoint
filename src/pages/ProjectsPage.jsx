@@ -14,7 +14,7 @@ import { ContractBadge } from '../components/ContractBadge'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ProjectFormModal } from '../components/ProjectFormModal'
 import { ProjectWizardModal } from '../components/ProjectWizardModal'
-import { ProjectDetailDrawer } from '../components/ProjectDetailDrawer'
+import { ProjectDetailCarousel } from '../components/ProjectDetailCarousel'
 import { Toast } from '../components/Toast'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { exportGrid } from '../lib/exportGrid'
@@ -558,7 +558,7 @@ export function ProjectsPage() {
 
       <AnimatePresence>
         {detail && (
-          <ProjectDetailDrawer
+          <ProjectDetailCarousel
             key={`detail-${detail.id}`}
             project={detail}
             onClose={() => setDetail(null)}

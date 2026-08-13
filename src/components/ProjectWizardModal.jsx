@@ -98,7 +98,7 @@ function initialFormState(initial) {
 
 /**
  * Wizard por pestañas de alta/edición de proyecto (Projects and SOW). En
- * edición ("Edit SOW & Scope" desde ProjectDetailDrawer, solo visible para
+ * edición ("Edit SOW & Scope" desde ProjectDetailCarousel, solo visible para
  * proyectos con clientId) cubre Identification/Scope/Maintenance — los
  * campos legacy (Contract Number, Customer Name, Approver, etc., sin
  * equivalente acá) siguen editándose con ProjectFormModal ("Edit", siempre
