@@ -433,7 +433,12 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
 
   async function handleFinish() {
     setTouchedSteps([0, 1, 2, 3])
-    if (!step1Valid || !step2Valid || !step3Valid || !step4Valid || submitting) return
+    // loadingChildren: si el fetch de stages/tasks todavía no resolvió,
+    // existingStages/existingTasks están en su default vacío — guardar en
+    // ese estado mandaría existingStagesCount=0 (colisión de posición con
+    // las stages reales todavía no traídas) y pisaría ediciones concurrentes
+    // a tasks existentes sin que este submit las viera.
+    if (!step1Valid || !step2Valid || !step3Valid || !step4Valid || loadingChildren || submitting) return
     setSubmitError('')
     setSubmitting(true)
     try {
@@ -731,7 +736,9 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
 
               {form.hasStages && (
                 <div className="stage-list">
+                  {isEdit && loadingChildren && <p className="field__hint">Loading…</p>}
                   {isEdit &&
+                    !loadingChildren &&
                     existingStages.map((s) => {
                       const missing = touched(0) && existingStageMissing(s)
                       const isReplacing = replacingStageIds.has(s.id)
@@ -1223,8 +1230,8 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                 type="button"
                 className="btn btn--pay"
                 onClick={handleFinish}
-                disabled={submitting}
-                whileTap={!submitting ? { scale: 0.97 } : undefined}
+                disabled={submitting || loadingChildren}
+                whileTap={!submitting && !loadingChildren ? { scale: 0.97 } : undefined}
               >
                 {submitting ? (
                   <span className="spinner" aria-hidden="true" />
