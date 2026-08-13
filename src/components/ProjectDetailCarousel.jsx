@@ -33,6 +33,12 @@ function OverviewSlide({ project }) {
           <dd>{project[field.key] || '—'}</dd>
         </div>
       ))}
+      {project.hasStages && (
+        <div className="drawer__fact">
+          <dt>Stages</dt>
+          <dd>Multiple — see "Edit SOW &amp; Scope" for the full breakdown</dd>
+        </div>
+      )}
       <div className="drawer__fact">
         <dt>Contract Expiration</dt>
         <dd>{project.contractExpirationDate ? formatDate(project.contractExpirationDate) : '—'}</dd>
