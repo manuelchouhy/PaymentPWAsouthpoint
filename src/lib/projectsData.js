@@ -811,12 +811,7 @@ export async function createProjectFromWizard(payload, createdBy) {
     .filter((r) => r.status === 'fulfilled')
     .map((r) => r.value.sowUrl)
   if (firstStageFailure) {
-    if (isSupabaseConfigured && stageUploadPaths.length) {
-      const { error: removeError } = await supabase.storage.from(SOW_BUCKET).remove(stageUploadPaths)
-      if (removeError) {
-        console.warn('[projects] no se pudieron limpiar los SOW subidos tras el fallo —', removeError.message)
-      }
-    }
+    await removeSowFiles(stageUploadPaths)
     throw firstStageFailure.reason
   }
   const stagesWithUrls = stageUploads.map((r) => r.value)
@@ -829,12 +824,7 @@ export async function createProjectFromWizard(payload, createdBy) {
     // El proyecto no se llegó a crear — a diferencia de projects (que no se
     // borra, se conserva historial), un archivo de Storage sin ninguna fila
     // que lo referencie es pura basura: lo limpiamos para no dejarlo huérfano.
-    if (isSupabaseConfigured && uploadedPaths.length) {
-      const { error: removeError } = await supabase.storage.from(SOW_BUCKET).remove(uploadedPaths)
-      if (removeError) {
-        console.warn('[projects] no se pudieron limpiar los SOW subidos tras el fallo —', removeError.message)
-      }
-    }
+    await removeSowFiles(uploadedPaths)
     throw error
   }
 

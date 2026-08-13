@@ -121,7 +121,8 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
   const [replacingSow, setReplacingSow] = useState(false)
   const [existingStages, setExistingStages] = useState([])
   const [existingTasks, setExistingTasks] = useState([])
-  const [loadError, setLoadError] = useState('')
+  const [stagesLoadError, setStagesLoadError] = useState('')
+  const [tasksLoadError, setTasksLoadError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const dialogRef = useRef(null)
@@ -141,18 +142,18 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
       api.projectTasks.list(initial.id),
     ]).then(([stagesResult, tasksResult]) => {
       if (cancelled) return
-      let failed = false
-      if (stagesResult.status === 'fulfilled') setExistingStages(stagesResult.value)
-      else {
+      if (stagesResult.status === 'fulfilled') {
+        setExistingStages(stagesResult.value)
+      } else {
         console.error('No se pudieron cargar los stages del proyecto:', stagesResult.reason)
-        failed = true
+        setStagesLoadError('Stages could not be loaded — try reopening this project.')
       }
-      if (tasksResult.status === 'fulfilled') setExistingTasks(tasksResult.value)
-      else {
+      if (tasksResult.status === 'fulfilled') {
+        setExistingTasks(tasksResult.value)
+      } else {
         console.error('No se pudieron cargar las tasks del proyecto:', tasksResult.reason)
-        failed = true
+        setTasksLoadError('Tasks could not be loaded — try reopening this project.')
       }
-      if (failed) setLoadError('Some data could not be loaded — try reopening this project.')
     })
     return () => {
       cancelled = true
@@ -614,7 +615,7 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                       </div>
                     </div>
                   ))}
-                  {loadError && <p className="field__error">{loadError}</p>}
+                  {stagesLoadError && <p className="field__error">{stagesLoadError}</p>}
                   <p className="field__hint">Stage editing arrives in a future update.</p>
                 </div>
               )}
@@ -932,7 +933,7 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
               ) : (
                 <p className="field__hint">No tasks recorded.</p>
               )}
-              {loadError && <p className="field__error">{loadError}</p>}
+              {tasksLoadError && <p className="field__error">{tasksLoadError}</p>}
               <p className="field__hint">Task editing arrives in a future update.</p>
             </div>
           )}

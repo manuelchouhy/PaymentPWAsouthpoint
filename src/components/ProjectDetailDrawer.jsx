@@ -169,17 +169,19 @@ export function ProjectDetailDrawer({ project, onClose, onEdit, onEditSow }) {
           )}
         </div>
 
-        <div className="drawer__actions" style={{ display: 'flex', gap: 8 }}>
-          <button type="button" className="btn btn--pay drawer__advance" onClick={onEdit}>
-            <Pencil size={16} strokeWidth={2.2} aria-hidden="true" />
-            Edit
-          </button>
-          {project.clientId && onEditSow && (
-            <button type="button" className="btn btn--ghost" onClick={onEditSow}>
-              <Settings2 size={16} strokeWidth={2.2} aria-hidden="true" />
-              Edit SOW &amp; Scope
+        <div className="drawer__actions">
+          <div className="drawer__actions-row">
+            {project.clientId && onEditSow && (
+              <button type="button" className="btn btn--ghost" onClick={onEditSow}>
+                <Settings2 size={16} strokeWidth={2.2} aria-hidden="true" />
+                Edit SOW &amp; Scope
+              </button>
+            )}
+            <button type="button" className="btn btn--pay drawer__advance" onClick={onEdit}>
+              <Pencil size={16} strokeWidth={2.2} aria-hidden="true" />
+              Edit
             </button>
-          )}
+          </div>
         </div>
       </motion.aside>
     </motion.div>
