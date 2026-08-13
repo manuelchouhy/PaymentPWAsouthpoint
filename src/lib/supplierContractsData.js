@@ -313,11 +313,13 @@ export async function updateSupplierContract(current, updates, changedBy) {
     const updated = { ...current, ...updates, updatedAt: new Date().toISOString() }
     demoContracts = demoContracts.map((c) => (c.id === current.id ? updated : c))
     demoHistory[current.id] = [
+      // Mismo formato que la rama Supabase (String() salvo null): así 0/false
+      // no quedan indistinguibles de "sin valor" al renderizarse en el drawer.
       ...changes.map((c, i) => ({
         id: `sh-${Date.now()}-${i}`,
         fieldName: c.field,
-        oldValue: c.before,
-        newValue: c.after,
+        oldValue: c.before == null ? null : String(c.before),
+        newValue: c.after == null ? null : String(c.after),
         changedAt: new Date().toISOString(),
         changedBy: changedBy || null,
       })),
@@ -450,6 +452,7 @@ export async function renewSupplierContract(oldContract, payload, by) {
       renewalDate: payload.renewalDate,
       paymentTerms: oldContract.paymentTerms,
       renewalType: oldContract.renewalType,
+      weeklyContractedHours: oldContract.weeklyContractedHours ?? null,
       status: 'Active',
       pdfUrl: payload.pdfUrl ?? null,
       archived: false,
@@ -479,6 +482,7 @@ export async function renewSupplierContract(oldContract, payload, by) {
       renewal_date: payload.renewalDate,
       payment_terms: oldContract.paymentTerms,
       renewal_type: oldContract.renewalType,
+      weekly_contracted_hours: oldContract.weeklyContractedHours ?? null,
       status: 'Active',
       pdf_url: payload.pdfUrl ?? null,
       parent_contract_id: oldContract.id,

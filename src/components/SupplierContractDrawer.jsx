@@ -16,6 +16,7 @@ const FIELD_LABELS = {
   paymentTerms: 'Payment Terms',
   renewalType: 'Renewal Type',
   isPrioritySupplier: 'Priority Supplier',
+  weeklyContractedHours: 'Contracted Hours/Week',
 }
 
 const ACTION_LABELS = {
