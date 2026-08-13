@@ -62,12 +62,12 @@ function emptyForm() {
 }
 
 // Seed del form en edición: todo lo que ya vive como columna en `projects`
-// (getProjects() ya lo trae). Stages/tasks NO se precargan en `form` acá —
-// en edición se muestran de solo lectura (fetched aparte, ver
-// existingStages/existingTasks) hasta que su propio CRUD se construya
-// (issues 03b/03c); esto evita que la validación de "stages" del paso 1,
-// pensada para las filas editables del alta, se dispare sobre datos que acá
-// todavía no son editables.
+// (getProjects() ya lo trae). Stages/tasks existentes NO se precargan en
+// `form` acá — viven en `existingStages`/`existingTasks` (fetched aparte,
+// tienen su propio id real) para poder diferenciar "cambié esta" de "esta es
+// nueva" al armar el payload de edición. `form.stages`/`form.tasks` en
+// edición son solo las que se agregan en esta sesión (alta nueva sobre un
+// proyecto existente), igual que en el alta.
 function initialFormState(initial) {
   if (!initial) return emptyForm()
   return {
@@ -102,13 +102,19 @@ function initialFormState(initial) {
  * proyectos con clientId) cubre Identification/Scope/Maintenance — los
  * campos legacy (Contract Number, Customer Name, Approver, etc., sin
  * equivalente acá) siguen editándose con ProjectFormModal ("Edit", siempre
- * disponible, para cualquier proyecto). En edición, stages y tasks se
- * muestran de solo lectura (su propio CRUD llega en issues 03b/03c).
+ * disponible, para cualquier proyecto). En edición, stages son editables
+ * (nombre/número/reemplazo de SOW, sin delete — issue 03b) y se pueden
+ * agregar nuevas; tasks siguen de solo lectura (su CRUD llega en issue 03c).
  *
  * @param {{
  *   initial?: object | null,   // proyecto a editar (null = alta)
  *   onClose: () => void,
- *   onSubmit: (payload: object, newSowFile?: File | null) => Promise<void>,
+ *   onSubmit: (
+ *     payload: object,
+ *     newSowFile?: File | null,
+ *     // en edición: stages cambiadas/agregadas (issue 03b), undefined en alta
+ *     stageChanges?: { changedStages: Array, addedStages: Array },
+ *   ) => Promise<void>,
  * }} props
  */
 export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
@@ -123,10 +129,28 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
   const [existingTasks, setExistingTasks] = useState([])
   const [stagesLoadError, setStagesLoadError] = useState('')
   const [tasksLoadError, setTasksLoadError] = useState('')
+  const [replacingStageIds, setReplacingStageIds] = useState(() => new Set())
+  const [stageReplacementFiles, setStageReplacementFiles] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const dialogRef = useRef(null)
   const sowPickTokenRef = useRef(0)
+  // Snapshot de como llegaron las stages del fetch — para el submit, solo se
+  // manda updateProjectStage() de las que realmente cambiaron (nombre,
+  // número, o archivo reemplazado), no todas en cada guardado.
+  const originalStagesRef = useRef([])
+
+  function setExistingStageField(id, key, value) {
+    setExistingStages((prev) => prev.map((s) => (s.id === id ? { ...s, [key]: value } : s)))
+  }
+
+  function startReplacingStageSow(id) {
+    setReplacingStageIds((prev) => new Set(prev).add(id))
+  }
+
+  function pickStageReplacementSow(id, file) {
+    setStageReplacementFiles((prev) => ({ ...prev, [id]: file }))
+  }
 
   useEffect(() => {
     if (!isEdit) return
@@ -144,6 +168,7 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
       if (cancelled) return
       if (stagesResult.status === 'fulfilled') {
         setExistingStages(stagesResult.value)
+        originalStagesRef.current = stagesResult.value
       } else {
         console.error('No se pudieron cargar los stages del proyecto:', stagesResult.reason)
         setStagesLoadError('Stages could not be loaded — try reopening this project.')
@@ -313,19 +338,25 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
 
   const tasksTotalHours = form.tasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0)
 
+  // Una stage recién agregada en esta sesión (form.stages) necesita sus 3
+  // campos; una ya persistida (existingStages, issue 03b) no puede perder
+  // nombre/número (sigue siendo `text not null`), pero su SOW File es
+  // opcional de reemplazar — el que ya tiene sigue siendo válido.
   const stageMissing = (s) => !s.stageName.trim() || !s.sowNumber.trim() || !s.sowFile
+  const existingStageMissing = (s) => !s.stageName.trim() || !s.sowNumber.trim()
   // En edición ya hay un SOW subido (initial.sowUrl) — no reemplazarlo no es
-  // un error, solo "no hay archivo nuevo". Y las stages/tasks de un proyecto
-  // en edición son de solo lectura acá (issues 03b/03c), así que su validez
-  // no se vuelve a chequear contra `form.stages` (que en edición queda
-  // vacío a propósito, ver initialFormState).
+  // un error, solo "no hay archivo nuevo".
   const hasSowFileNow = isEdit ? Boolean(initial.sowUrl) || Boolean(form.sowFile) : Boolean(form.sowFile)
   const step1Missing = {
     clientId: !isEdit && !form.clientId,
     projectName: !form.projectName.trim(),
     sowNumber: !form.hasStages && !form.sowNumber.trim(),
     sowFile: !form.hasStages && !hasSowFileNow,
-    stages: !isEdit && form.hasStages && (form.stages.length === 0 || form.stages.some(stageMissing)),
+    stages:
+      form.hasStages &&
+      ((isEdit && existingStages.some(existingStageMissing)) ||
+        form.stages.some(stageMissing) ||
+        (!isEdit && form.stages.length === 0)),
   }
   // !(n > 0) en vez de n <= 0: Number(x) <= 0 es false para NaN (un valor no
   // numérico colaría como "válido"), !(NaN > 0) es true — rechaza tanto NaN
@@ -370,10 +401,10 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
     setSubmitting(true)
     try {
       if (isEdit) {
-        // Stages/tasks quedan afuera del payload de edición (solo lectura
-        // acá, ver initialFormState) — solo se manda sowNumber/sowFile si el
-        // proyecto no tiene stages (con stages, el SOW vive por-stage, sin
-        // equivalente a nivel proyecto).
+        // Tasks quedan afuera del payload de edición (solo lectura acá, ver
+        // initialFormState/issue 03c) — solo se manda sowNumber/sowFile si
+        // el proyecto no tiene stages (con stages, el SOW vive por-stage,
+        // sin equivalente a nivel proyecto).
         const updates = {
           projectName: form.projectName.trim(),
           proposalNumber: form.proposalNumber.trim() || null,
@@ -383,7 +414,38 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
           ...maintenanceFields(),
         }
         if (!form.hasStages) updates.sowNumber = form.sowNumber.trim()
-        await onSubmit(updates, form.hasStages ? null : form.sowFile)
+
+        // Stages (issue 03b): solo se manda update de las que realmente
+        // cambiaron (nombre/número/archivo) contra el snapshot del fetch —
+        // no tiene sentido re-escribir las que el usuario no tocó. Las
+        // agregadas en esta sesión (form.stages) van aparte, como alta.
+        const changedStages = form.hasStages
+          ? existingStages
+              .filter((s) => {
+                const original = originalStagesRef.current.find((o) => o.id === s.id)
+                return (
+                  !original ||
+                  s.stageName !== original.stageName ||
+                  s.sowNumber !== original.sowNumber ||
+                  stageReplacementFiles[s.id]
+                )
+              })
+              .map((s) => ({
+                id: s.id,
+                stageName: s.stageName.trim(),
+                sowNumber: s.sowNumber.trim(),
+                sowFile: stageReplacementFiles[s.id] ?? null,
+              }))
+          : []
+        const addedStages = form.hasStages
+          ? form.stages.map((s) => ({ stageName: s.stageName.trim(), sowNumber: s.sowNumber.trim(), sowFile: s.sowFile }))
+          : []
+
+        await onSubmit(updates, form.hasStages ? null : form.sowFile, {
+          changedStages,
+          addedStages,
+          existingStagesCount: existingStages.length,
+        })
       } else {
         await onSubmit({
           clientId: form.clientId,
@@ -591,37 +653,71 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                 </label>
               )}
 
-              {form.hasStages && isEdit && (
+              {form.hasStages && (
                 <div className="stage-list">
-                  {existingStages.map((s) => (
-                    <div className="stage-row" key={s.id}>
-                      <div className="field">
-                        <label className="field__label">Stage Name</label>
-                        <div className="field__input" style={{ color: 'var(--text-soft)' }}>
-                          {s.stageName}
+                  {isEdit &&
+                    existingStages.map((s) => {
+                      const missing = touched(0) && existingStageMissing(s)
+                      const isReplacing = replacingStageIds.has(s.id)
+                      return (
+                        <div className="stage-row" key={s.id}>
+                          <div className="field">
+                            <label className="field__label" htmlFor={`wz-existing-stage-name-${s.id}`}>
+                              Stage Name
+                              <span className="field__req">required</span>
+                            </label>
+                            <input
+                              id={`wz-existing-stage-name-${s.id}`}
+                              className={`field__input${missing && !s.stageName.trim() ? ' field__input--error' : ''}`}
+                              value={s.stageName}
+                              onChange={(e) => setExistingStageField(s.id, 'stageName', e.target.value)}
+                              autoComplete="off"
+                            />
+                          </div>
+                          <div className="field">
+                            <label className="field__label" htmlFor={`wz-existing-stage-sow-number-${s.id}`}>
+                              SOW Number
+                              <span className="field__req">required</span>
+                            </label>
+                            <input
+                              id={`wz-existing-stage-sow-number-${s.id}`}
+                              className={`field__input cell-mono${missing && !s.sowNumber.trim() ? ' field__input--error' : ''}`}
+                              value={s.sowNumber}
+                              onChange={(e) => setExistingStageField(s.id, 'sowNumber', e.target.value)}
+                              autoComplete="off"
+                            />
+                          </div>
+                          <div className="field">
+                            <label className="field__label">SOW File</label>
+                            {isReplacing ? (
+                              <input
+                                type="file"
+                                accept=".docx,application/pdf,.pdf"
+                                className="field__input field__input--file"
+                                onChange={(e) => pickStageReplacementSow(s.id, e.target.files?.[0] ?? null)}
+                              />
+                            ) : (
+                              <div className="field__input" style={{ justifyContent: 'space-between' }}>
+                                <span className="field__filename">{fileNameFromPath(s.sowUrl)}</span>
+                                <button
+                                  type="button"
+                                  className="btn btn--ghost btn--sm"
+                                  onClick={() => startReplacingStageSow(s.id)}
+                                >
+                                  Replace
+                                </button>
+                              </div>
+                            )}
+                            {stageReplacementFiles[s.id] && (
+                              <span className="field__filename">
+                                <FileUp size={13} aria-hidden="true" /> {stageReplacementFiles[s.id].name}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="field">
-                        <label className="field__label">SOW Number</label>
-                        <div className="field__input cell-mono" style={{ color: 'var(--text-soft)' }}>
-                          {s.sowNumber}
-                        </div>
-                      </div>
-                      <div className="field">
-                        <label className="field__label">SOW File</label>
-                        <div className="field__input" style={{ color: 'var(--text-soft)' }}>
-                          {fileNameFromPath(s.sowUrl)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {stagesLoadError && <p className="field__error">{stagesLoadError}</p>}
-                  <p className="field__hint">Stage editing arrives in a future update.</p>
-                </div>
-              )}
-
-              {form.hasStages && !isEdit && (
-                <div className="stage-list">
+                      )
+                    })}
+                  {isEdit && stagesLoadError && <p className="field__error">{stagesLoadError}</p>}
                   {form.stages.map((s, i) => (
                     <div className="stage-row" key={s.localId}>
                       <div className="field">
@@ -673,8 +769,10 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                         className="icon-btn stage-row__remove"
                         onClick={() => removeStage(s.localId)}
                         aria-label={`Remove stage ${i + 1}`}
-                        disabled={form.stages.length === 1}
-                        title={form.stages.length === 1 ? 'A project with stages needs at least one' : 'Remove stage'}
+                        disabled={!isEdit && form.stages.length === 1}
+                        title={
+                          !isEdit && form.stages.length === 1 ? 'A project with stages needs at least one' : 'Remove stage'
+                        }
                       >
                         <X size={16} />
                       </button>

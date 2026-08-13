@@ -700,9 +700,12 @@ export async function getProjectStages(projectId) {
  * @param {string|number} projectId
  * @param {Array<{ stageName: string, sowNumber: string, sowUrl: ?string }>} stages
  * @param {?string} createdBy
+ * @param {number} startPosition  0 al crear el proyecto; longitud de los
+ *   stages ya existentes cuando se agregan más en edición (issue 03b) — si
+ *   no, la posición de los nuevos chocaría con la de los que ya están.
  * @returns {Promise<Array>}
  */
-export async function createProjectStages(projectId, stages, createdBy) {
+export async function createProjectStages(projectId, stages, createdBy, startPosition = 0) {
   return createProjectChildren({
     table: 'project_stages',
     projectId,
@@ -711,7 +714,7 @@ export async function createProjectStages(projectId, stages, createdBy) {
     toDemoEntity: (s, i) => ({
       id: `stg-demo-${Date.now()}-${i}`,
       projectId,
-      position: i,
+      position: startPosition + i,
       stageName: s.stageName,
       sowNumber: s.sowNumber,
       sowUrl: s.sowUrl ?? null,
@@ -720,7 +723,7 @@ export async function createProjectStages(projectId, stages, createdBy) {
     }),
     toRow: (s, i) => ({
       project_id: projectId,
-      position: i,
+      position: startPosition + i,
       stage_name: s.stageName,
       sow_number: s.sowNumber,
       sow_url: s.sowUrl ?? null,
@@ -728,6 +731,32 @@ export async function createProjectStages(projectId, stages, createdBy) {
     }),
     rowToEntity: rowToStage,
   })
+}
+
+/**
+ * Actualiza un stage existente (nombre, SOW number, y su SOW URL si se
+ * reemplazó el archivo). Sin delete — 0025_project_stages_update_policy.sql
+ * solo agregó update, mismo patrón "nadie borra" del resto de la app.
+ * @param {{ id: string|number, projectId: string|number }} current
+ * @param {{ stageName?: string, sowNumber?: string, sowUrl?: ?string }} updates
+ * @returns {Promise<Object>}
+ */
+export async function updateProjectStage(current, updates) {
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 150))
+    const updated = { ...current, ...updates }
+    demoStages[current.projectId] = (demoStages[current.projectId] ?? []).map((s) =>
+      s.id === current.id ? updated : s,
+    )
+    return updated
+  }
+  const row = {}
+  if (updates.stageName !== undefined) row.stage_name = updates.stageName
+  if (updates.sowNumber !== undefined) row.sow_number = updates.sowNumber
+  if (updates.sowUrl !== undefined) row.sow_url = updates.sowUrl
+  const { data, error } = await supabase.from('project_stages').update(row).eq('id', current.id).select().single()
+  if (error) throw new Error(error.message)
+  return rowToStage(data)
 }
 
 // ---------- Tasks del SOW (Fase 4d) ----------

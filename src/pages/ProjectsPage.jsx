@@ -174,12 +174,14 @@ export function ProjectsPage() {
 
   /**
    * Edición tabulada (ProjectWizardModal en modo edit, issue 03a) — solo
-   * proyectos con clientId. `newSowFile` es el reemplazo del SOW si el
-   * usuario tocó "Replace" (null si no); se sube y versiona antes de
-   * actualizar el proyecto, mismo orden que el resto de los reemplazos de
-   * documento (upload → update row → recordDocument).
+   * proyectos con clientId. `newSowFile` es el reemplazo del SOW a nivel
+   * proyecto si el usuario tocó "Replace" (null si no); se sube y versiona
+   * antes de actualizar el proyecto, mismo orden que el resto de los
+   * reemplazos de documento (upload → update row → recordDocument).
+   * `stageChanges` (issue 03b, undefined si el proyecto no tiene stages):
+   * { changedStages, addedStages, existingStagesCount }.
    */
-  async function handleUpdateFromWizard(updates, newSowFile) {
+  async function handleUpdateFromWizard(updates, newSowFile, stageChanges) {
     let sowUrl = wizardEditing.sowUrl
     if (newSowFile) {
       sowUrl = await api.projects.uploadSowFile(newSowFile)
@@ -210,6 +212,63 @@ export function ProjectsPage() {
         uploadedBy: user?.email ?? null,
       })
     }
+
+    for (const stage of stageChanges?.changedStages ?? []) {
+      let stageSowUrl = null
+      if (stage.sowFile) {
+        stageSowUrl = await api.projects.uploadSowFile(stage.sowFile)
+      }
+      try {
+        await api.projects.updateStage(
+          { id: stage.id, projectId: updated.id },
+          { stageName: stage.stageName, sowNumber: stage.sowNumber, ...(stageSowUrl ? { sowUrl: stageSowUrl } : {}) },
+        )
+      } catch (error) {
+        if (stageSowUrl) await api.projects.removeSowFiles([stageSowUrl])
+        throw error
+      }
+      if (stageSowUrl) {
+        await api.projects.recordDocument({
+          subjectType: 'sow',
+          subjectId: stage.id,
+          fileUrl: stageSowUrl,
+          uploadedBy: user?.email ?? null,
+        })
+      }
+    }
+
+    if (stageChanges?.addedStages?.length) {
+      const uploaded = await Promise.all(
+        stageChanges.addedStages.map((s) =>
+          api.projects
+            .uploadSowFile(s.sowFile)
+            .then((sowUrl) => ({ stageName: s.stageName, sowNumber: s.sowNumber, sowUrl })),
+        ),
+      )
+      let createdStages
+      try {
+        createdStages = await api.projects.createStages(
+          updated.id,
+          uploaded,
+          user?.email ?? null,
+          stageChanges.existingStagesCount,
+        )
+      } catch (error) {
+        await api.projects.removeSowFiles(uploaded.map((u) => u.sowUrl))
+        throw error
+      }
+      await Promise.all(
+        createdStages.map((stage, i) =>
+          api.projects.recordDocument({
+            subjectType: 'sow',
+            subjectId: stage.id,
+            fileUrl: uploaded[i].sowUrl,
+            uploadedBy: user?.email ?? null,
+          }),
+        ),
+      )
+    }
+
     api.audit.log({
       actorEmail: user?.email,
       actorRole: profile?.roles?.[0] ?? null,

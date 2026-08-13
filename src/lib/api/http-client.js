@@ -163,6 +163,8 @@ export const httpApiClient = {
     getStages: () => notImplemented('projects.getStages'),
     // POST /api/projects/:id/stages → ProjectStage[]
     createStages: () => notImplemented('projects.createStages'),
+    // PATCH /api/projects/stages/:id → ProjectStage
+    updateStage: () => notImplemented('projects.updateStage'),
   },
 
   projectTasks: {

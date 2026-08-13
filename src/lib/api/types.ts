@@ -370,7 +370,12 @@ export interface ApiClient {
       projectId: string | number,
       stages: Array<{ stageName: string; sowNumber: string; sowUrl?: string | null }>,
       createdBy?: string | null,
+      startPosition?: number,
     ): Promise<ProjectStage[]>
+    updateStage(
+      current: { id: string | number; projectId: string | number },
+      updates: { stageName?: string; sowNumber?: string; sowUrl?: string | null },
+    ): Promise<ProjectStage>
   }
 
   projectTasks: {

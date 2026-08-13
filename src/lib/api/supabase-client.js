@@ -72,6 +72,7 @@ import {
   removeSowFiles,
   updateContractAlertSettings,
   updateProject,
+  updateProjectStage,
   uploadSowFile,
 } from '../projectsData'
 
@@ -279,6 +280,7 @@ export const supabaseApiClient = {
     recordDocument: recordProjectDocument,
     getStages: getProjectStages,
     createStages: createProjectStages,
+    updateStage: updateProjectStage,
   },
 
   projectTasks: {
