@@ -16,6 +16,7 @@ const FIELD_LABELS = {
   paymentTerms: 'Payment Terms',
   renewalType: 'Renewal Type',
   isPrioritySupplier: 'Priority Supplier',
+  weeklyContractedHours: 'Contracted Hours/Week',
 }
 
 const ACTION_LABELS = {
@@ -113,6 +114,7 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
     ['Payment Terms', contract.paymentTerms],
     ['Renewal Type', contract.renewalType],
     ['Priority Supplier', contract.isPrioritySupplier ? 'Yes' : 'No'],
+    ['Contracted Hours/Week', contract.weeklyContractedHours],
   ]
 
   return (
@@ -170,7 +172,9 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
             {facts.map(([label, value]) => (
               <div className="drawer__fact" key={label}>
                 <dt>{label}</dt>
-                <dd>{value || '—'}</dd>
+                {/* == null / '' -> '—' (no ||: un 0 real, como 0 h/sem, es un
+                    valor legítimo y no debe colapsar al placeholder). */}
+                <dd>{value === '' || value == null ? '—' : value}</dd>
               </div>
             ))}
           </dl>

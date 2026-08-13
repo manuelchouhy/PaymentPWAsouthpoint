@@ -12,6 +12,7 @@
  * @property {'Net 15'|'Net 30'|'Net 45'} paymentTerms
  * @property {'Manual'|'Auto-notify'} renewalType
  * @property {string} status
+ * @property {?number} weeklyContractedHours
  * @property {?string} pdfUrl
  * @property {boolean} archived
  * @property {?(string|number)} parentContractId
@@ -42,6 +43,7 @@ const FIELD_TO_COLUMN = {
   renewalDate: 'renewal_date',
   paymentTerms: 'payment_terms',
   renewalType: 'renewal_type',
+  weeklyContractedHours: 'weekly_contracted_hours',
 }
 
 /** Estado calculado por días restantes (la columna 'Renewal in Progress' es manual). */
@@ -211,6 +213,11 @@ function rowToContract(row) {
     paymentTerms: row.payment_terms,
     renewalType: row.renewal_type,
     status: row.status,
+    // Number(): PostgREST puede serializar numeric como string para no perder
+    // precisión; sin la coerción, sumar horas en Capacidad concatenaría en
+    // vez de sumar (mismo patrón que amountReceived/amountPaid/etc.).
+    weeklyContractedHours:
+      row.weekly_contracted_hours == null ? null : Number(row.weekly_contracted_hours),
     pdfUrl: row.pdf_url ?? null,
     archived: Boolean(row.archived),
     parentContractId: row.parent_contract_id ?? null,
@@ -310,11 +317,13 @@ export async function updateSupplierContract(current, updates, changedBy) {
     const updated = { ...current, ...updates, updatedAt: new Date().toISOString() }
     demoContracts = demoContracts.map((c) => (c.id === current.id ? updated : c))
     demoHistory[current.id] = [
+      // Mismo formato que la rama Supabase (String() salvo null): así 0/false
+      // no quedan indistinguibles de "sin valor" al renderizarse en el drawer.
       ...changes.map((c, i) => ({
         id: `sh-${Date.now()}-${i}`,
         fieldName: c.field,
-        oldValue: c.before,
-        newValue: c.after,
+        oldValue: c.before == null ? null : String(c.before),
+        newValue: c.after == null ? null : String(c.after),
         changedAt: new Date().toISOString(),
         changedBy: changedBy || null,
       })),
@@ -447,6 +456,7 @@ export async function renewSupplierContract(oldContract, payload, by) {
       renewalDate: payload.renewalDate,
       paymentTerms: oldContract.paymentTerms,
       renewalType: oldContract.renewalType,
+      weeklyContractedHours: oldContract.weeklyContractedHours ?? null,
       status: 'Active',
       pdfUrl: payload.pdfUrl ?? null,
       archived: false,
@@ -476,6 +486,7 @@ export async function renewSupplierContract(oldContract, payload, by) {
       renewal_date: payload.renewalDate,
       payment_terms: oldContract.paymentTerms,
       renewal_type: oldContract.renewalType,
+      weekly_contracted_hours: oldContract.weeklyContractedHours ?? null,
       status: 'Active',
       pdf_url: payload.pdfUrl ?? null,
       parent_contract_id: oldContract.id,
