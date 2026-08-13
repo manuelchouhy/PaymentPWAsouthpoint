@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
@@ -25,6 +26,11 @@ const ALLOCATION_LABELS = {
 }
 
 export function EntriesPage() {
+  const { user, can } = useOutletContext()
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [allocationChoice, setAllocationChoice] = useState('bill_to_client')
+  const [applying, setApplying] = useState(false)
+  const [applyError, setApplyError] = useState('')
   const [entries, setEntries] = useState([])
   const [invoices, setInvoices] = useState([])
   const [status, setStatus] = useState('loading')
@@ -94,6 +100,58 @@ export function EntriesPage() {
 
   const page = visible.slice(0, visibleCount)
   const unallocatedCount = visible.filter((e) => e.allocation == null).length
+  const canAllocate = can('entries.allocate')
+
+  // Una hora ya facturada no se reclasifica: la factura ya salió con esa
+  // justificación. Cualquier otra sí, tenga o no allocation puesta —
+  // corregir una clasificación mal hecha es parte del triage.
+  const isFrozen = (entry) => (invoiceByEntryId.get(String(entry.id))?.status ?? 'Pending') !== 'Pending'
+  const selectableOnPage = page.filter((e) => !isFrozen(e))
+  const allPageSelected =
+    selectableOnPage.length > 0 && selectableOnPage.every((e) => selectedIds.has(e.id))
+
+  function toggleRow(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAllOnPage() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allPageSelected) selectableOnPage.forEach((e) => next.delete(e.id))
+      else selectableOnPage.forEach((e) => next.add(e.id))
+      return next
+    })
+  }
+
+  const selectedEntries = visible.filter((e) => selectedIds.has(e.id))
+  const selectedHours = selectedEntries.reduce((sum, e) => sum + (Number(e.hours) || 0), 0)
+
+  async function handleApply() {
+    if (!selectedIds.size || applying) return
+    setApplying(true)
+    setApplyError('')
+    const ids = [...selectedIds]
+    try {
+      await api.timeEntries.setAllocation(ids, allocationChoice, user?.email ?? null)
+      // Se refleja en la grilla sin recargar todo: el update ya se confirmó y
+      // volver a traer 500+ filas por un cambio de columna es desproporcionado.
+      const applied = new Set(ids)
+      setEntries((prev) =>
+        prev.map((e) => (applied.has(e.id) ? { ...e, allocation: allocationChoice } : e)),
+      )
+      setSelectedIds(new Set())
+    } catch (error) {
+      console.error('No se pudo aplicar la allocation:', error)
+      setApplyError('Could not apply the allocation — please try again.')
+    } finally {
+      setApplying(false)
+    }
+  }
 
   return (
     <>
@@ -185,6 +243,17 @@ export function EntriesPage() {
                 <table className="table proj-table">
                   <thead>
                     <tr>
+                      {canAllocate && (
+                        <th scope="col" style={{ width: 34 }}>
+                          <input
+                            type="checkbox"
+                            checked={allPageSelected}
+                            onChange={toggleAllOnPage}
+                            disabled={selectableOnPage.length === 0}
+                            aria-label="Select all selectable rows on this page"
+                          />
+                        </th>
+                      )}
                       <th scope="col">User</th>
                       <th scope="col">Project</th>
                       <th scope="col">Client</th>
@@ -201,8 +270,21 @@ export function EntriesPage() {
                     {page.map((entry) => {
                       const allocation = entry.allocation ? ALLOCATION_LABELS[entry.allocation] : null
                       const billingStatus = invoiceByEntryId.get(String(entry.id))?.status ?? 'Pending'
+                      const frozen = isFrozen(entry)
                       return (
                         <tr key={entry.id}>
+                          {canAllocate && (
+                            <td>
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(entry.id)}
+                                onChange={() => toggleRow(entry.id)}
+                                disabled={frozen}
+                                title={frozen ? 'Already invoiced — cannot be reclassified' : undefined}
+                                aria-label={`Select entry ${entry.id}`}
+                              />
+                            </td>
+                          )}
                           <td>{entry.user}</td>
                           <td className="cell-strong">{entry.project || '—'}</td>
                           <td className="cell-soft">{entry.client || '—'}</td>
@@ -229,6 +311,40 @@ export function EntriesPage() {
                   </tbody>
                 </table>
               </div>
+              {canAllocate && selectedIds.size > 0 && (
+                <div className="selbar">
+                  <span className="selbar__count">
+                    Selected: <b>{formatHours(selectedHours)} h</b> · {selectedIds.size}{' '}
+                    {selectedIds.size === 1 ? 'entry' : 'entries'}
+                  </span>
+                  <div className="selbar__action">
+                    <span className="selbar__label">Set allocation</span>
+                    <select
+                      className="field__input"
+                      value={allocationChoice}
+                      onChange={(e) => setAllocationChoice(e.target.value)}
+                      aria-label="Allocation to apply"
+                    >
+                      {Object.entries(ALLOCATION_LABELS).map(([value, { label }]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                    <button type="button" className="btn btn--pay btn--sm" onClick={handleApply} disabled={applying}>
+                      {applying ? 'Applying…' : 'Apply'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      onClick={() => setSelectedIds(new Set())}
+                      disabled={applying}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              )}
+              {applyError && <p className="field__error">{applyError}</p>}
+
               {visibleCount < visible.length && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
                   <button

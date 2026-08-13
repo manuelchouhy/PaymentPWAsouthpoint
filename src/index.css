@@ -3577,6 +3577,15 @@ th.col-pop { text-align: center; }
   border-top: 2px solid var(--line-strong);
 }
 
+.selbar__action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.selbar__action .field__input { width: auto; min-width: 150px; }
+
 /* --- Allocation de horas (Entries, issue 08) ------------------------------
    Paleta propia: reusar badge--invoiced/--pending haría que "SP internal" se
    viera igual que "sin clasificar", que es la distinción que esta pantalla

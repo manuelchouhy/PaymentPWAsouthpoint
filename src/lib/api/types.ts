@@ -67,6 +67,8 @@ export interface TimeEntry {
   date: string // ISO YYYY-MM-DD
   hours: number
   status: 'Approved' | 'Rejected'
+  /** null = sin clasificar (triage manual en Entries). */
+  allocation?: 'bill_to_client' | 'overage' | 'sp_internal' | null
 }
 
 export type BillingStatus = 'Pending' | 'Invoiced' | 'Collected' | 'Paid'
@@ -298,6 +300,12 @@ export interface ApiClient {
 
   timeEntries: {
     list(): Promise<TimeEntry[]>
+    /** Triage en bloque: asigna la misma allocation a todas las entries dadas. */
+    setAllocation(
+      entryIds: Array<string | number>,
+      allocation: 'bill_to_client' | 'overage' | 'sp_internal',
+      changedBy?: string | null,
+    ): Promise<number>
   }
 
   invoices: {

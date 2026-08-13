@@ -14,6 +14,7 @@ import {
   getSyncLog,
   getSyncStatus,
   getTimeEntries,
+  setEntriesAllocation,
   triggerSync,
   updateInvoiceStatus,
 } from '../data'
@@ -234,6 +235,7 @@ export const supabaseApiClient = {
 
   timeEntries: {
     list: getTimeEntries,
+    setAllocation: setEntriesAllocation,
   },
 
   invoices: {

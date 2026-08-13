@@ -40,6 +40,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabase'
+import { logAudit } from './auditData'
 
 /** @type {TimeEntry[]} */
 const MOCK_TIME_ENTRIES = [
@@ -339,6 +340,45 @@ export async function getTimeEntries() {
 
   if (error) throw new Error(error.message)
   return data.map(rowToEntry)
+}
+
+/**
+ * Clasifica horas (triage de Entries): asigna la misma allocation a todas las
+ * entries seleccionadas de una. Es la ÚNICA forma de tocar `allocation` — la
+ * grilla nunca la edita por click en la celda, porque define quién paga esas
+ * horas.
+ *
+ * No toca entries ya facturadas: eso lo garantiza la UI deshabilitando su
+ * checkbox, pero acá se filtra igual — una allocation cambiada después de
+ * facturar desalinearía la factura de su justificación.
+ *
+ * @param {Array<string|number>} entryIds
+ * @param {'bill_to_client'|'overage'|'sp_internal'} allocation
+ * @param {?string} changedBy
+ * @returns {Promise<number>} cuántas filas se actualizaron.
+ */
+export async function setEntriesAllocation(entryIds, allocation, changedBy) {
+  if (!entryIds?.length) return 0
+  if (!isSupabaseConfigured) {
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    return entryIds.length
+  }
+
+  const { data, error } = await supabase
+    .from('time_entries')
+    .update({ allocation })
+    .in('id', entryIds)
+    .select('id')
+  if (error) throw new Error(error.message)
+
+  await logAudit({
+    actorEmail: changedBy,
+    action: 'entries.allocate',
+    resourceType: 'time_entries',
+    resourceId: null,
+    after: { allocation, entryCount: data.length },
+  })
+  return data.length
 }
 
 // NOTA: el módulo de Payments al contractor (FR-10) vive en `paymentsData.js`.

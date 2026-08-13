@@ -60,6 +60,8 @@ export const httpApiClient = {
   timeEntries: {
     // GET /api/time-entries?user_name=X&from=Y&to=Z → TimeEntry[]
     list: () => notImplemented('timeEntries.list'),
+    // PATCH /api/time-entries/allocation { entryIds, allocation } → { updated }
+    setAllocation: () => notImplemented('timeEntries.setAllocation'),
   },
 
   invoices: {
