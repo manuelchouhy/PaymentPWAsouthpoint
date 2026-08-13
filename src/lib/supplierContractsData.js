@@ -213,7 +213,11 @@ function rowToContract(row) {
     paymentTerms: row.payment_terms,
     renewalType: row.renewal_type,
     status: row.status,
-    weeklyContractedHours: row.weekly_contracted_hours ?? null,
+    // Number(): PostgREST puede serializar numeric como string para no perder
+    // precisión; sin la coerción, sumar horas en Capacidad concatenaría en
+    // vez de sumar (mismo patrón que amountReceived/amountPaid/etc.).
+    weeklyContractedHours:
+      row.weekly_contracted_hours == null ? null : Number(row.weekly_contracted_hours),
     pdfUrl: row.pdf_url ?? null,
     archived: Boolean(row.archived),
     parentContractId: row.parent_contract_id ?? null,
