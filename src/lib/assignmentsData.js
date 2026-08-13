@@ -85,6 +85,24 @@ async function getConsumedHoursByProject(projectName) {
 }
 
 /**
+ * Nombres de proveedor asignables: los distintos `user_name` que ya
+ * existen en time_entries. No se acotan a este proyecto a propósito — lo
+ * normal es autorizar horas a alguien *antes* de que cargue la primera en
+ * este proyecto. Es una lista cerrada (no texto libre) para que un typo no
+ * genere una asignación huérfana que nunca matchee con sus horas.
+ * @returns {Promise<string[]>} ordenados alfabéticamente.
+ */
+export async function getProviderNames() {
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 150))
+    return [...new Set(demoAssignments.map((a) => a.providerName))].sort((a, b) => a.localeCompare(b, 'es'))
+  }
+  const { data, error } = await supabase.from('time_entries').select('user_name')
+  if (error) throw new Error(error.message)
+  return [...new Set((data ?? []).map((r) => r.user_name).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
+}
+
+/**
  * @param {{ id: string|number, projectName: string }} project
  * @returns {Promise<ProviderAssignment[]>}
  */

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, ChevronLeft, ChevronRight, FileText, Pencil, Settings2, Upload, X } from 'lucide-react'
+import { ArrowRight, ChevronLeft, ChevronRight, FileText, Pencil, Plus, Settings2, Upload, X } from 'lucide-react'
 import { ContractBadge } from './ContractBadge'
 import { contractStatus, daysRemaining } from '../lib/projectsData'
 import { api } from '../lib/api'
@@ -295,6 +295,219 @@ function DocumentsSlide({ project, uploadedBy }) {
 }
 
 /**
+ * ok / exhausted / exceeded según lo que queda de la autorización. Usa las
+ * clases badge--* reales de la app (mismo vocabulario que ContractBadge),
+ * no las `pill` del mockup, que no existen en index.css.
+ */
+function assignmentStatus(remainingHours) {
+  if (remainingHours > 0) return { label: 'ok', cls: 'badge--ok' }
+  if (remainingHours === 0) return { label: 'exhausted', cls: 'badge--pending' }
+  return { label: 'exceeded · overage', cls: 'badge--no' }
+}
+
+/**
+ * Slide Asignaciones (issue 06): horas autorizadas por proveedor/task.
+ * Consumed/Remaining los calcula assignmentsData contra time_entries (no se
+ * guardan). Proveedor y task salen de listas cerradas — un typo generaría
+ * una asignación que nunca matchearía con sus horas.
+ */
+function AssignmentsSlide({ project, createdBy, canEdit }) {
+  const [assignments, setAssignments] = useState([])
+  const [providers, setProviders] = useState([])
+  const [tasks, setTasks] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ providerName: '', taskName: '', authorizedHours: '' })
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setLoadError(false)
+    // allSettled sobre las tres: que falle el catálogo de proveedores/tasks
+    // (solo alimenta el alta) no debería impedir ver las asignaciones que ya
+    // existen, que es lo principal de este slide.
+    Promise.allSettled([
+      Promise.resolve().then(() => api.assignments.list(project)),
+      Promise.resolve().then(() => api.assignments.providerNames()),
+      Promise.resolve().then(() => api.projectTasks.list(project.id)),
+    ])
+      .then(([assignmentsResult, providersResult, tasksResult]) => {
+        if (cancelled) return
+        if (assignmentsResult.status === 'fulfilled') setAssignments(assignmentsResult.value)
+        else {
+          console.error('No se pudieron cargar las asignaciones:', assignmentsResult.reason)
+          setLoadError(true)
+        }
+        if (providersResult.status === 'fulfilled') setProviders(providersResult.value)
+        else console.error('No se pudo cargar la lista de proveedores:', providersResult.reason)
+        if (tasksResult.status === 'fulfilled') setTasks(tasksResult.value)
+        else console.error('No se pudieron cargar las tasks del proyecto:', tasksResult.reason)
+      })
+      .finally(() => !cancelled && setLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [project])
+
+  const hoursValid = Number(form.authorizedHours) > 0
+  const canSubmit = form.providerName && form.taskName && hoursValid && !saving
+
+  async function handleCreate() {
+    if (!canSubmit) return
+    setSaving(true)
+    setSaveError('')
+    try {
+      const created = await api.assignments.create(
+        {
+          projectId: project.id,
+          providerName: form.providerName,
+          taskName: form.taskName,
+          authorizedHours: Number(form.authorizedHours),
+        },
+        createdBy,
+      )
+      // createAssignment no devuelve consumed/remaining (los calcula
+      // getAssignments contra time_entries) — para una asignación recién
+      // creada, lo consumido es lo que ya haya cargado ese proveedor en esa
+      // task, que acá no conocemos. Se recalcula al reabrir el slide; por
+      // ahora se muestra la autorización completa como restante.
+      setAssignments((prev) => [
+        { ...created, consumedHours: created.consumedHours ?? 0, remainingHours: created.authorizedHours },
+        ...prev,
+      ])
+      setForm({ providerName: '', taskName: '', authorizedHours: '' })
+      setShowForm(false)
+    } catch (error) {
+      setSaveError(error?.message ?? 'Could not save the assignment.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <p className="drawer__empty">Loading assignments…</p>
+  if (loadError) return <p className="drawer__empty">Assignments could not be loaded — try reopening this project.</p>
+
+  return (
+    <div>
+      {assignments.length === 0 && !showForm ? (
+        <div className="carousel__empty">
+          <p>No providers assigned yet.</p>
+          {canEdit && (
+            <button type="button" className="btn btn--pay btn--sm" onClick={() => setShowForm(true)}>
+              <Plus size={14} aria-hidden="true" /> Assign provider
+            </button>
+          )}
+        </div>
+      ) : (
+        assignments.length > 0 && (
+          <div className="table-wrap">
+            <table className="table table--form">
+              <thead>
+                <tr>
+                  <th scope="col">Provider</th>
+                  <th scope="col">Task</th>
+                  <th scope="col" className="col-num">Authorized</th>
+                  <th scope="col" className="col-num">Consumed</th>
+                  <th scope="col" className="col-num">Remaining</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {assignments.map((a) => {
+                  const st = assignmentStatus(a.remainingHours)
+                  return (
+                    <tr key={a.id}>
+                      <td>{a.providerName}</td>
+                      <td className="cell-soft">{a.taskName}</td>
+                      <td className="col-num">{a.authorizedHours}</td>
+                      <td className="col-num">{a.consumedHours}</td>
+                      <td className="col-num">{a.remainingHours}</td>
+                      <td>
+                        <span className={`badge ${st.cls}`}>{st.label}</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
+
+      {showForm ? (
+        <div className="field-grid" style={{ marginTop: 12 }}>
+          <div className="field">
+            <label className="field__label" htmlFor="assign-provider">Provider</label>
+            <select
+              id="assign-provider"
+              className="field__input"
+              value={form.providerName}
+              onChange={(e) => setForm((p) => ({ ...p, providerName: e.target.value }))}
+            >
+              <option value="">Select…</option>
+              {providers.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+            {providers.length === 0 && <span className="field__hint">No providers with logged hours yet.</span>}
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="assign-task">Task</label>
+            <select
+              id="assign-task"
+              className="field__input"
+              value={form.taskName}
+              onChange={(e) => setForm((p) => ({ ...p, taskName: e.target.value }))}
+            >
+              <option value="">Select…</option>
+              {tasks.map((t) => (
+                <option key={t.id} value={t.taskName}>{t.taskName}</option>
+              ))}
+            </select>
+            {tasks.length === 0 && (
+              <span className="field__hint">This project has no SOW tasks yet — add them from "Edit SOW &amp; Scope".</span>
+            )}
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="assign-hours">Authorized Hours</label>
+            <input
+              id="assign-hours"
+              type="number"
+              min="0"
+              step="0.5"
+              className="field__input"
+              value={form.authorizedHours}
+              onChange={(e) => setForm((p) => ({ ...p, authorizedHours: e.target.value }))}
+            />
+          </div>
+          {saveError && <span className="field__error">{saveError}</span>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <button type="button" className="btn btn--pay btn--sm" onClick={handleCreate} disabled={!canSubmit}>
+              {saving ? 'Saving…' : 'Assign'}
+            </button>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setShowForm(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        canEdit &&
+        assignments.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setShowForm(true)}>
+              <Plus size={14} aria-hidden="true" /> Assign provider
+            </button>
+          </div>
+        )
+      )}
+    </div>
+  )
+}
+
+/**
  * Carrusel de detalle de proyecto (Projects and SOW · issue 04). Reemplaza a
  * ProjectDetailDrawer — arranca con un solo slide real (Overview); las
  * issues 05/06/07 agregan Documentos/Asignaciones/Change Requests a este
@@ -303,12 +516,13 @@ function DocumentsSlide({ project, uploadedBy }) {
  * @param {{
  *   project: object,
  *   uploadedBy: ?string,          // email del usuario actual — para versionar documentos (issue 05)
+ *   canEditAssignments?: boolean, // permiso assignments.edit (issue 06)
  *   onClose: () => void,
  *   onEdit: () => void,           // campos legacy (contrato, customer, etc.) — siempre disponible
  *   onEditSow?: () => void,       // SOW/Scope/Maintenance del wizard — solo si el proyecto tiene clientId
  * }} props
  */
-export function ProjectDetailCarousel({ project, uploadedBy, onClose, onEdit, onEditSow }) {
+export function ProjectDetailCarousel({ project, uploadedBy, canEditAssignments, onClose, onEdit, onEditSow }) {
   const [history, setHistory] = useState([])
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [stageCount, setStageCount] = useState(null)
@@ -346,6 +560,11 @@ export function ProjectDetailCarousel({ project, uploadedBy, onClose, onEdit, on
       key: 'documents',
       label: 'Documentos',
       content: <DocumentsSlide project={project} uploadedBy={uploadedBy} />,
+    },
+    {
+      key: 'assignments',
+      label: 'Asignaciones',
+      content: <AssignmentsSlide project={project} createdBy={uploadedBy} canEdit={canEditAssignments} />,
     },
   ]
   const slide = slides[Math.min(slideIndex, slides.length - 1)]

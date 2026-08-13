@@ -562,6 +562,7 @@ export function ProjectsPage() {
             key={`detail-${detail.id}`}
             project={detail}
             uploadedBy={user?.email ?? null}
+            canEditAssignments={can('assignments.edit')}
             onClose={() => setDetail(null)}
             onEdit={() => {
               // Siempre disponible, para cualquier proyecto: Contract Number,

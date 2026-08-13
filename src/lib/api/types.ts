@@ -349,6 +349,8 @@ export interface ApiClient {
       authorizedHours: number,
       updatedBy?: string | null,
     ): Promise<ProviderAssignment>
+    /** Nombres asignables (distintos user_name de time_entries) para el dropdown. */
+    providerNames(): Promise<string[]>
   }
 
   projects: {

@@ -108,6 +108,8 @@ export const httpApiClient = {
     create: () => notImplemented('assignments.create'),
     // PATCH /api/assignments/:id/hours { authorizedHours, updatedBy } → ProviderAssignment
     updateHours: () => notImplemented('assignments.updateHours'),
+    // GET /api/assignments/provider-names → string[]
+    providerNames: () => notImplemented('assignments.providerNames'),
   },
 
   collections: {
