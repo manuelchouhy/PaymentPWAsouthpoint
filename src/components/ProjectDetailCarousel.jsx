@@ -33,12 +33,6 @@ function OverviewSlide({ project }) {
           <dd>{project[field.key] || '—'}</dd>
         </div>
       ))}
-      {project.hasStages && project.stageName && (
-        <div className="drawer__fact">
-          <dt>Stage</dt>
-          <dd>{project.stageName}</dd>
-        </div>
-      )}
       <div className="drawer__fact">
         <dt>Contract Expiration</dt>
         <dd>{project.contractExpirationDate ? formatDate(project.contractExpirationDate) : '—'}</dd>
@@ -69,6 +63,11 @@ export function ProjectDetailCarousel({ project, onClose, onEdit, onEditSow }) {
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [slideIndex, setSlideIndex] = useState(0)
   const dialogRef = useRef(null)
+  // El keydown handler lee el índice actual acá en vez de por closure — así
+  // el efecto que lo registra no necesita `slideIndex` en sus deps y no
+  // hay que desuscribir/re-suscribir el listener global en cada navegación.
+  const slideIndexRef = useRef(0)
+  slideIndexRef.current = slideIndex
 
   const days = daysRemaining(project.contractExpirationDate)
   const status = contractStatus(days)
@@ -97,15 +96,15 @@ export function ProjectDetailCarousel({ project, onClose, onEdit, onEditSow }) {
     document.body.style.overflow = 'hidden'
     function onKeyDown(event) {
       if (event.key === 'Escape') onClose()
-      else if (event.key === 'ArrowLeft') goToSlide(slideIndex - 1)
-      else if (event.key === 'ArrowRight') goToSlide(slideIndex + 1)
+      else if (event.key === 'ArrowLeft') goToSlide(slideIndexRef.current - 1)
+      else if (event.key === 'ArrowRight') goToSlide(slideIndexRef.current + 1)
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
       document.body.style.overflow = prev
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [onClose, slideIndex])
+  }, [onClose])
 
   return (
     <motion.div

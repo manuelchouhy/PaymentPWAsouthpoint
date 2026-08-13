@@ -3578,7 +3578,8 @@ th.col-pop { text-align: center; }
 }
 
 /* --- Carrusel de detalle de proyecto (issue 04) --------------------------- */
-.modal--carousel { max-width: 640px; }
+/* .modal--carousel no fija max-width propio: modal--form ya deja 640px, y son
+   siempre las dos clases juntas en ProjectDetailCarousel. */
 .modal__head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .carousel { border: 1px solid var(--line-strong); border-radius: var(--r-lg); margin-top: 4px; }
 .carousel__head {
@@ -3625,8 +3626,6 @@ th.col-pop { text-align: center; }
 }
 .carousel__arrow:hover { background: var(--surface-2); }
 .carousel__arrow:disabled { opacity: .4; cursor: default; }
-.carousel__empty { text-align: center; padding: 36px 16px; color: var(--text-faint); }
-.carousel__empty .btn { margin-top: 14px; }
 
 /* --- KPI chips por estado de contrato (FR-08) ---------------------------- */
 .proj-kpis {
