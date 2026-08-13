@@ -588,28 +588,57 @@ export async function getProjectDocumentUrl(path) {
 }
 
 /**
- * Registra una versión de documento (MSA/SOW/CR) en el historial. No falla
- * el flujo que la llama si algo sale mal — solo loggea, como logAudit.
+ * Registra una versión de documento (MSA/SOW/CR) en el historial y devuelve
+ * la fila creada — la versión sale del insert real, no de una cuenta local
+ * del caller (dos subidas simultáneas al mismo subject darían el mismo
+ * número si cada uno la adivina por su lado).
+ *
+ * Tira si falla. Los flujos donde versionar es un efecto secundario del
+ * alta/edición usan recordProjectDocument (wrapper best-effort de abajo);
+ * los que le muestran el resultado al usuario — como el slide Documentos,
+ * donde subir un documento ES la acción — necesitan enterarse del error.
+ *
  * @param {{ subjectType: 'msa'|'sow'|'change_request', subjectId: string|number, fileUrl: string, uploadedBy?: ?string }} params
+ * @returns {Promise<?Object>} la versión creada (null en modo demo).
  */
-export async function recordProjectDocument({ subjectType, subjectId, fileUrl, uploadedBy }) {
-  if (!isSupabaseConfigured) return
+export async function recordProjectDocumentStrict({ subjectType, subjectId, fileUrl, uploadedBy }) {
+  if (!isSupabaseConfigured) return null
   const { count, error: countError } = await supabase
     .from('project_documents')
     .select('id', { count: 'exact', head: true })
     .eq('subject_type', subjectType)
     .eq('subject_id', subjectId)
-  if (countError) {
-    console.warn('[projects] no se pudo contar versiones previas del documento —', countError.message)
+  if (countError) throw new Error(countError.message)
+
+  const { data, error } = await supabase
+    .from('project_documents')
+    .insert({
+      subject_type: subjectType,
+      subject_id: subjectId,
+      file_url: fileUrl,
+      version: (count ?? 0) + 1,
+      uploaded_by: uploadedBy || null,
+    })
+    .select()
+    .single()
+  if (error) throw new Error(error.message)
+  return rowToDocument(data)
+}
+
+/**
+ * Igual que recordProjectDocumentStrict pero best-effort: no falla el flujo
+ * que la llama si algo sale mal, solo loggea (como logAudit). Para versionar
+ * como efecto secundario de otra acción — el alta del wizard, un reemplazo
+ * de SOW al editar — donde el trabajo principal ya se guardó y tumbar todo
+ * por el historial sería peor que perderlo.
+ * @param {{ subjectType: 'msa'|'sow'|'change_request', subjectId: string|number, fileUrl: string, uploadedBy?: ?string }} params
+ */
+export async function recordProjectDocument(params) {
+  try {
+    await recordProjectDocumentStrict(params)
+  } catch (error) {
+    console.warn('[projects] no se pudo registrar el documento —', error.message)
   }
-  const { error } = await supabase.from('project_documents').insert({
-    subject_type: subjectType,
-    subject_id: subjectId,
-    file_url: fileUrl,
-    version: (count ?? 0) + 1,
-    uploaded_by: uploadedBy || null,
-  })
-  if (error) console.warn('[projects] no se pudo registrar el documento —', error.message)
 }
 
 function rowToDocument(row) {
@@ -637,7 +666,17 @@ function rowToDocument(row) {
  * @returns {Promise<{ documents: Array, stages: Array, changeRequests: Array }>}
  */
 export async function getProjectDocuments(project) {
-  if (!isSupabaseConfigured) return { documents: [], stages: [], changeRequests: [] }
+  // En demo igual se devuelven los stages (de demoStages, como
+  // getProjectStages) — sin ellos el selector de "a qué subo esto" del slide
+  // Documentos se queda sin ninguna opción de SOW para un proyecto con
+  // stages. Los documentos sí van vacíos: no hay tabla que consultar.
+  if (!isSupabaseConfigured) {
+    return {
+      documents: [],
+      stages: project.hasStages ? await getProjectStages(project.id) : [],
+      changeRequests: [],
+    }
+  }
 
   const orParts = []
   const labelFor = {} // `${subjectType}:${subjectId}` -> texto para "Linked to"
@@ -647,14 +686,19 @@ export async function getProjectDocuments(project) {
     labelFor[`msa:${project.clientId}`] = `${project.client || 'Client'} · MSA`
   }
 
-  let stages = []
+  // Las dos consultas son independientes entre sí (ambas solo dependen de
+  // project.id) — en paralelo, no una atrás de la otra.
+  const [stageResult, crResult] = await Promise.all([
+    project.hasStages
+      ? supabase.from('project_stages').select('id, stage_name').eq('project_id', project.id)
+      : Promise.resolve({ data: [], error: null }),
+    supabase.from('change_requests').select('id, cr_number').eq('project_id', project.id),
+  ])
+  if (stageResult.error) throw new Error(stageResult.error.message)
+  if (crResult.error) throw new Error(crResult.error.message)
+
+  const stages = (stageResult.data ?? []).map((r) => ({ id: r.id, stageName: r.stage_name }))
   if (project.hasStages) {
-    const { data: stageRows, error: stageError } = await supabase
-      .from('project_stages')
-      .select('id, stage_name')
-      .eq('project_id', project.id)
-    if (stageError) throw new Error(stageError.message)
-    stages = (stageRows ?? []).map((r) => ({ id: r.id, stageName: r.stage_name }))
     stages.forEach((s) => {
       labelFor[`sow:${s.id}`] = `${s.stageName} · SOW`
     })
@@ -664,12 +708,7 @@ export async function getProjectDocuments(project) {
     labelFor[`sow:${project.id}`] = 'This project · SOW'
   }
 
-  const { data: crRows, error: crError } = await supabase
-    .from('change_requests')
-    .select('id, cr_number')
-    .eq('project_id', project.id)
-  if (crError) throw new Error(crError.message)
-  const changeRequests = (crRows ?? []).map((r) => ({ id: r.id, crNumber: r.cr_number }))
+  const changeRequests = (crResult.data ?? []).map((r) => ({ id: r.id, crNumber: r.cr_number }))
   changeRequests.forEach((cr) => {
     labelFor[`change_request:${cr.id}`] = `${cr.crNumber} · annex`
   })

@@ -129,6 +129,11 @@ function DocumentsSlide({ project, uploadedBy }) {
           : await api.projects.getDocumentUrl(doc.fileUrl)
       if (url) window.open(url, '_blank', 'noopener,noreferrer')
       else setViewMsg(doc.fileUrl.startsWith('demo/') ? 'Demo mode: this document cannot be downloaded.' : 'Could not generate the download link.')
+    } catch (error) {
+      // Sin este catch, un backend que tira (en vez de devolver null) deja
+      // el error como unhandled rejection y el usuario no ve nada.
+      console.error('No se pudo abrir el documento:', error)
+      setViewMsg('Could not generate the download link.')
     } finally {
       setViewingId(null)
     }
@@ -141,24 +146,30 @@ function DocumentsSlide({ project, uploadedBy }) {
     try {
       const [subjectType, subjectIdRaw] = uploadTarget.split(':')
       const subjectId = subjectType === 'msa' ? project.clientId : Number(subjectIdRaw)
+      // Solo la subida ramifica por bucket (el MSA vive en 'client-msa', el
+      // resto en 'project-documents'); el registro de la versión es la misma
+      // tabla para los tres tipos.
       const fileUrl =
         subjectType === 'msa' ? await api.clients.uploadMsa(uploadFile) : await api.projects.uploadSowFile(uploadFile)
-      if (subjectType === 'msa') {
-        await api.clients.recordMsaVersion({ clientId: subjectId, fileUrl, uploadedBy })
-      } else {
-        await api.projects.recordDocument({ subjectType, subjectId, fileUrl, uploadedBy })
-      }
+      // Strict, no la variante best-effort: acá subir el documento ES la
+      // acción del usuario, así que un fallo al registrarlo tiene que
+      // avisarse, no dejar una fila fantasma que desaparece al recargar.
+      const created = await api.projects.recordDocumentStrict({ subjectType, subjectId, fileUrl, uploadedBy })
       const label = uploadTargets.find((t) => t.value === uploadTarget)?.label ?? subjectType
-      const version = documents.filter((d) => d.subjectType === subjectType && d.subjectId === subjectId).length + 1
       setDocuments((prev) => [
         {
-          id: `local-${Date.now()}`,
-          subjectType,
-          subjectId,
-          fileUrl,
-          version,
-          uploadedAt: new Date().toISOString(),
-          uploadedBy,
+          // La versión sale de la fila que devolvió el insert, no de una
+          // cuenta local — dos usuarios subiendo a la vez la calcularían
+          // igual y uno mostraría un número que no es el suyo.
+          ...(created ?? {
+            id: `demo-${Date.now()}`,
+            subjectType,
+            subjectId,
+            fileUrl,
+            version: 1,
+            uploadedAt: new Date().toISOString(),
+            uploadedBy,
+          }),
           linkedToLabel: label,
         },
         ...prev,

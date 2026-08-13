@@ -161,6 +161,9 @@ export const httpApiClient = {
     getDocuments: () => notImplemented('projects.getDocuments'),
     // POST /api/projects/documents { subjectType, subjectId, fileUrl, uploadedBy }
     recordDocument: () => notImplemented('projects.recordDocument'),
+    // POST /api/projects/documents (igual que recordDocument pero propaga el
+    // error y devuelve la versión creada) → ProjectDocument
+    recordDocumentStrict: () => notImplemented('projects.recordDocumentStrict'),
     // GET /api/projects/:id/stages → ProjectStage[]
     getStages: () => notImplemented('projects.getStages'),
     // POST /api/projects/:id/stages → ProjectStage[]

@@ -385,6 +385,13 @@ export interface ApiClient {
       fileUrl: string
       uploadedBy?: string | null
     }): Promise<void>
+    /** Igual que recordDocument pero propaga el error y devuelve la versión creada (null en demo). */
+    recordDocumentStrict(params: {
+      subjectType: 'msa' | 'sow' | 'change_request'
+      subjectId: string | number
+      fileUrl: string
+      uploadedBy?: string | null
+    }): Promise<ProjectDocument | null>
     getStages(projectId: string | number): Promise<ProjectStage[]>
     createStages(
       projectId: string | number,
