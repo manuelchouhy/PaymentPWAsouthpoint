@@ -175,7 +175,9 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
             {facts.map(([label, value]) => (
               <div className="drawer__fact" key={label}>
                 <dt>{label}</dt>
-                <dd>{value || '—'}</dd>
+                {/* == null / '' -> '—' (no ||: un 0 real, como 0 h/sem, es un
+                    valor legítimo y no debe colapsar al placeholder). */}
+                <dd>{value === '' || value == null ? '—' : value}</dd>
               </div>
             ))}
           </dl>
