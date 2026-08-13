@@ -3577,6 +3577,16 @@ th.col-pop { text-align: center; }
   border-top: 2px solid var(--line-strong);
 }
 
+/* --- Allocation de horas (Entries, issue 08) ------------------------------
+   Paleta propia: reusar badge--invoiced/--pending haría que "SP internal" se
+   viera igual que "sin clasificar", que es la distinción que esta pantalla
+   existe para mostrar. */
+.badge--alloc-bill { background: hsl(var(--primary) / .15); color: hsl(var(--primary)); border-color: hsl(var(--primary) / .3); }
+.badge--alloc-overage { background: rgba(251, 146, 60, .14); color: #C2410C; border-color: rgba(251, 146, 60, .3); }
+.dark .badge--alloc-overage { color: #FDBA74; }
+.badge--alloc-internal { background: rgba(139, 92, 246, .14); color: #6D28D9; border-color: rgba(139, 92, 246, .32); }
+.dark .badge--alloc-internal { color: #C4B5FD; }
+
 /* --- Carrusel de detalle de proyecto (issue 04) --------------------------- */
 /* .modal--carousel no fija max-width propio: modal--form ya deja 640px, y son
    siempre las dos clases juntas en ProjectDetailCarousel. */

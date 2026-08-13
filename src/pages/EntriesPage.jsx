@@ -2,18 +2,26 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
-import { formatDate, formatWeek } from '../lib/format'
+import { formatDate, formatHours, formatWeek } from '../lib/format'
 import { useEntryFilters, applyEntryFilters } from '../lib/useEntryFilters'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
+import { StatusBadge } from '../components/StatusBadge'
+import { BillingBadge } from '../components/BillingBadge'
 
 const PAGE_SIZE = 100
 
+const sortedUnique = (values) =>
+  [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
+
 // null = sin clasificar. El triage es 100% manual (ver PRD, "Entries"): ninguna
 // hora llega con allocation puesta.
+// Clases propias (definidas en index.css): reusar las de billing/status haría
+// que "SP internal" se viera igual que "sin clasificar" y que "bill to client"
+// se confundiera con la columna Billing, que significa otra cosa.
 const ALLOCATION_LABELS = {
-  bill_to_client: { label: 'bill to client', cls: 'badge--invoiced' },
-  overage: { label: 'overage', cls: 'badge--no' },
-  sp_internal: { label: 'SP internal', cls: 'badge--pending' },
+  bill_to_client: { label: 'bill to client', cls: 'badge--alloc-bill' },
+  overage: { label: 'overage', cls: 'badge--alloc-overage' },
+  sp_internal: { label: 'SP internal', cls: 'badge--alloc-internal' },
 }
 
 export function EntriesPage() {
@@ -21,6 +29,7 @@ export function EntriesPage() {
   const [invoices, setInvoices] = useState([])
   const [status, setStatus] = useState('loading')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const [reloadKey, setReloadKey] = useState(0)
   const { filters, toggleValue, setField, clear, isActive } = useEntryFilters()
 
   useEffect(() => {
@@ -41,7 +50,7 @@ export function EntriesPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reloadKey])
 
   // id de entry -> factura, para resolver Billing status sin recorrer las
   // facturas por cada fila.
@@ -55,9 +64,11 @@ export function EntriesPage() {
 
   const options = useMemo(
     () => ({
-      contractors: [...new Set(entries.map((e) => e.user).filter(Boolean))].sort(),
-      clients: [...new Set(entries.map((e) => e.client).filter(Boolean))].sort(),
-      projects: [...new Set(entries.map((e) => e.project).filter(Boolean))].sort(),
+      // localeCompare 'es': un .sort() plano manda los acentuados (Álvaro,
+      // Ñandú) al final del dropdown, donde nadie los busca.
+      contractors: sortedUnique(entries.map((e) => e.user)),
+      clients: sortedUnique(entries.map((e) => e.client)),
+      projects: sortedUnique(entries.map((e) => e.project)),
     }),
     [entries],
   )
@@ -109,6 +120,9 @@ export function EntriesPage() {
         <div className="state state--error">
           <AlertTriangle size={28} strokeWidth={1.8} />
           <h2 className="state__title">Could not load entries</h2>
+          <button type="button" className="btn btn--ghost" onClick={() => setReloadKey((k) => k + 1)}>
+            Retry
+          </button>
         </div>
       )}
 
@@ -195,8 +209,10 @@ export function EntriesPage() {
                           <td className="cell-soft">{entry.task || '—'}</td>
                           <td className="cell-mono">{entry.date ? formatDate(entry.date) : '—'}</td>
                           <td className="cell-mono">{entry.date ? formatWeek(entry.date) : '—'}</td>
-                          <td className="col-num cell-mono">{entry.hours}</td>
-                          <td>{entry.status}</td>
+                          <td className="col-num cell-mono">{formatHours(entry.hours)}</td>
+                          <td>
+                            <StatusBadge status={entry.status} />
+                          </td>
                           <td>
                             {allocation ? (
                               <span className={`badge ${allocation.cls}`}>{allocation.label}</span>
@@ -204,7 +220,9 @@ export function EntriesPage() {
                               <span className="badge badge--pending">— unallocated —</span>
                             )}
                           </td>
-                          <td className="cell-soft">{billingStatus}</td>
+                          <td>
+                            <BillingBadge status={billingStatus} />
+                          </td>
                         </tr>
                       )
                     })}
