@@ -131,6 +131,10 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
   const [replacingSow, setReplacingSow] = useState(false)
   const [existingStages, setExistingStages] = useState([])
   const [existingTasks, setExistingTasks] = useState([])
+  // Arranca en true en edición: existingTasks/existingStages están en su
+  // default vacío hasta que el fetch resuelve — sin esto, "Loading…" y
+  // "vacío de verdad" son indistinguibles el instante en que se abre el modal.
+  const [loadingChildren, setLoadingChildren] = useState(isEdit)
   const [stagesLoadError, setStagesLoadError] = useState('')
   const [tasksLoadError, setTasksLoadError] = useState('')
   const [replacingStageIds, setReplacingStageIds] = useState(() => new Set())
@@ -189,6 +193,7 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
         console.error('No se pudieron cargar las tasks del proyecto:', tasksResult.reason)
         setTasksLoadError('Tasks could not be loaded — try reopening this project.')
       }
+      setLoadingChildren(false)
     })
     return () => {
       cancelled = true
@@ -393,8 +398,9 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
   // nueva (form.tasks, alta o agregada en edición) con nombre pero horas
   // inválidas tiene el mismo problema — si no, llega a Supabase y el check
   // constraint la rechaza con un error crudo en vez de bloquear acá.
-  const existingTaskMissing = (t) => !t.taskName.trim() || !(Number(t.estimatedHours) >= 0)
-  const newTaskInvalid = (t) => t.taskName.trim() && !(Number(t.estimatedHours) >= 0)
+  const hoursInvalid = (hours) => !(Number(hours) >= 0)
+  const existingTaskMissing = (t) => !t.taskName.trim() || hoursInvalid(t.estimatedHours)
+  const newTaskInvalid = (t) => t.taskName.trim() && hoursInvalid(t.estimatedHours)
   const step4Missing = {
     tasks:
       (isEdit && (Boolean(tasksLoadError) || existingTasks.some(existingTaskMissing))) ||
@@ -1079,10 +1085,13 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                   ? 'Estimated hours per task. Actual hours and deviation are calculated later against Entries.'
                   : 'Optional — estimated hours per task. Actual hours and deviation are calculated later against Entries.'}
               </p>
+              {isEdit && loadingChildren && <p className="field__hint">Loading…</p>}
               {isEdit && tasksLoadError && <p className="field__error">{tasksLoadError}</p>}
-              {isEdit && existingTasks.length === 0 && form.tasks.length === 0 && !tasksLoadError && (
-                <p className="field__hint">No tasks recorded.</p>
-              )}
+              {isEdit &&
+                !loadingChildren &&
+                existingTasks.length === 0 &&
+                form.tasks.length === 0 &&
+                !tasksLoadError && <p className="field__hint">No tasks recorded.</p>}
               {(existingTasks.length > 0 || form.tasks.length > 0) && (
                 <div className="table-wrap">
                   <table className="table table--form">
@@ -1121,7 +1130,7 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                                   type="number"
                                   min="0"
                                   step="0.5"
-                                  className={`field__input${missing && !(Number(t.estimatedHours) >= 0) ? ' field__input--error' : ''}`}
+                                  className={`field__input${missing && hoursInvalid(t.estimatedHours) ? ' field__input--error' : ''}`}
                                   value={t.estimatedHours}
                                   onChange={(e) => setExistingTaskField(t.id, 'estimatedHours', e.target.value)}
                                 />
