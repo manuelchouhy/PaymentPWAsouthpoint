@@ -39,9 +39,9 @@ export function ProjectsPage() {
     expTo: '',
   })
   const [statusFilter, setStatusFilter] = useState(null) // null | 'Expired' | …
-  const [form, setForm] = useState(null) // null | { mode:'edit', project } — edición legacy (sin clientId)
+  const [form, setForm] = useState(null) // null | { mode:'edit', project } — campos legacy, cualquier proyecto
   const [wizardOpen, setWizardOpen] = useState(false)
-  const [wizardEditing, setWizardEditing] = useState(null) // proyecto con clientId → edición tabulada
+  const [wizardEditing, setWizardEditing] = useState(null) // "Edit SOW & Scope" — solo proyectos con clientId
   const [detail, setDetail] = useState(null)
   const [toast, setToast] = useState(null)
 
@@ -184,11 +184,20 @@ export function ProjectsPage() {
     if (newSowFile) {
       sowUrl = await api.projects.uploadSowFile(newSowFile)
     }
-    const updated = await api.projects.update(
-      wizardEditing,
-      newSowFile ? { ...updates, sowUrl } : updates,
-      user?.email ?? null,
-    )
+    let updated
+    try {
+      updated = await api.projects.update(
+        wizardEditing,
+        newSowFile ? { ...updates, sowUrl } : updates,
+        user?.email ?? null,
+      )
+    } catch (error) {
+      // El archivo ya se subió a Storage antes del update — si el update
+      // falla, no queda ninguna fila que lo referencie (mismo riesgo de
+      // huérfano que createProjectFromWizard ya cubre para el alta).
+      if (newSowFile) await api.projects.removeSowFiles([sowUrl])
+      throw error
+    }
     if (newSowFile) {
       await api.projects.recordDocument({
         subjectType: 'sow',
@@ -455,18 +464,24 @@ export function ProjectsPage() {
             project={detail}
             onClose={() => setDetail(null)}
             onEdit={() => {
+              // Siempre disponible, para cualquier proyecto: Contract Number,
+              // Contract Expiration Date, Approver, Customer Manager, etc. no
+              // tienen equivalente en el wizard, y un proyecto con clientId
+              // también puede necesitarlos (ej. vencimiento de contrato para
+              // las alertas) — no es exclusivo de los legacy sincronizados de Zoho.
               const project = detail
               setDetail(null)
-              // clientId presente = proyecto creado por el wizard nuevo → edición
-              // tabulada; sin clientId = legacy (sync viejo), sigue con el form
-              // plano (Contract Number, Customer Name, etc. no tienen equivalente
-              // en el wizard).
-              if (project.clientId) {
-                setWizardEditing(project)
-              } else {
-                setForm({ mode: 'edit', project })
-              }
+              setForm({ mode: 'edit', project })
             }}
+            onEditSow={
+              detail.clientId
+                ? () => {
+                    const project = detail
+                    setDetail(null)
+                    setWizardEditing(project)
+                  }
+                : undefined
+            }
           />
         )}
       </AnimatePresence>

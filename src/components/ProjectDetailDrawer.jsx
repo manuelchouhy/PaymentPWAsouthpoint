@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, Pencil, X } from 'lucide-react'
+import { ArrowRight, Pencil, Settings2, X } from 'lucide-react'
 import { ContractBadge } from './ContractBadge'
 import { contractStatus, daysRemaining } from '../lib/projectsData'
 import { api } from '../lib/api'
@@ -28,9 +28,14 @@ FIELD_LABELS.contractExpirationDate = 'Contract Expiration Date'
  * Drawer de detalle de proyecto (FR-07): campos en modo lectura + botón Edit +
  * log de auditoría.
  *
- * @param {{ project: object, onClose: () => void, onEdit: () => void }} props
+ * @param {{
+ *   project: object,
+ *   onClose: () => void,
+ *   onEdit: () => void,           // campos legacy (contrato, customer, etc.) — siempre disponible
+ *   onEditSow?: () => void,       // SOW/Scope/Maintenance del wizard — solo si el proyecto tiene clientId
+ * }} props
  */
-export function ProjectDetailDrawer({ project, onClose, onEdit }) {
+export function ProjectDetailDrawer({ project, onClose, onEdit, onEditSow }) {
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const drawerRef = useRef(null)
@@ -164,11 +169,17 @@ export function ProjectDetailDrawer({ project, onClose, onEdit }) {
           )}
         </div>
 
-        <div className="drawer__actions">
+        <div className="drawer__actions" style={{ display: 'flex', gap: 8 }}>
           <button type="button" className="btn btn--pay drawer__advance" onClick={onEdit}>
             <Pencil size={16} strokeWidth={2.2} aria-hidden="true" />
             Edit
           </button>
+          {project.clientId && onEditSow && (
+            <button type="button" className="btn btn--ghost" onClick={onEditSow}>
+              <Settings2 size={16} strokeWidth={2.2} aria-hidden="true" />
+              Edit SOW &amp; Scope
+            </button>
+          )}
         </div>
       </motion.aside>
     </motion.div>

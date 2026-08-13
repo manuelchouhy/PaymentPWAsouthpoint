@@ -357,6 +357,7 @@ export interface ApiClient {
     getContractAlertSettings(): Promise<Record<string, unknown>>
     updateContractAlertSettings(settings: Record<string, unknown>, updatedBy?: string | null): Promise<Record<string, unknown>>
     uploadSowFile(file: File): Promise<string>
+    removeSowFiles(paths: string[]): Promise<void>
     getDocumentUrl(path: string): Promise<string | null>
     recordDocument(params: {
       subjectType: 'msa' | 'sow' | 'change_request'

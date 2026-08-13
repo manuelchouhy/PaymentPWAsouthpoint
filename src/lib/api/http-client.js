@@ -153,6 +153,8 @@ export const httpApiClient = {
     updateContractAlertSettings: () => notImplemented('projects.updateContractAlertSettings'),
     // POST /api/projects/sow-file (multipart) → { path }
     uploadSowFile: () => notImplemented('projects.uploadSowFile'),
+    // DELETE /api/projects/sow-files { paths } → void
+    removeSowFiles: () => notImplemented('projects.removeSowFiles'),
     // GET /api/projects/document-url?path=X → string | null
     getDocumentUrl: () => notImplemented('projects.getDocumentUrl'),
     // POST /api/projects/documents { subjectType, subjectId, fileUrl, uploadedBy }

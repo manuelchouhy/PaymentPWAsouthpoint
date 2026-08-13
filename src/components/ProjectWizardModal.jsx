@@ -97,14 +97,13 @@ function initialFormState(initial) {
 }
 
 /**
- * Wizard por pestañas de alta/edición de proyecto (Projects and SOW). Solo
- * proyectos linkeados a un cliente (clientId, siempre presentes en
- * proyectos creados por este wizard) usan esta edición tabulada — los
- * proyectos legacy (clientId null) siguen editándose con ProjectFormModal,
- * que tiene sus propios campos (Contract Number, Customer Name, etc.) sin
- * equivalente acá. En edición, stages y tasks se muestran de solo lectura
- * (su propio CRUD llega en issues 03b/03c) — Identification/Scope/
- * Maintenance sí son editables.
+ * Wizard por pestañas de alta/edición de proyecto (Projects and SOW). En
+ * edición ("Edit SOW & Scope" desde ProjectDetailDrawer, solo visible para
+ * proyectos con clientId) cubre Identification/Scope/Maintenance — los
+ * campos legacy (Contract Number, Customer Name, Approver, etc., sin
+ * equivalente acá) siguen editándose con ProjectFormModal ("Edit", siempre
+ * disponible, para cualquier proyecto). En edición, stages y tasks se
+ * muestran de solo lectura (su propio CRUD llega en issues 03b/03c).
  *
  * @param {{
  *   initial?: object | null,   // proyecto a editar (null = alta)
@@ -122,6 +121,7 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
   const [replacingSow, setReplacingSow] = useState(false)
   const [existingStages, setExistingStages] = useState([])
   const [existingTasks, setExistingTasks] = useState([])
+  const [loadError, setLoadError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const dialogRef = useRef(null)
@@ -130,15 +130,30 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
   useEffect(() => {
     if (!isEdit) return
     let cancelled = false
-    Promise.all([api.projects.getStages(initial.id), api.projectTasks.list(initial.id)])
-      .then(([stages, tasks]) => {
-        if (cancelled) return
-        setExistingStages(stages)
-        setExistingTasks(tasks)
-      })
-      .catch((error) => {
-        console.error('No se pudieron cargar stages/tasks del proyecto:', error)
-      })
+    // allSettled, no all: un fallo en una de las dos no debe tirar la otra —
+    // si no, "sin stages/tasks" (vacío real) queda indistinguible de "no se
+    // pudo cargar" (fetch falló), y el usuario ve la lista vacía sin saber
+    // cuál de las dos pasó. Stages solo se pide si el proyecto las tiene —
+    // pedirlas siempre es una query de más para la mayoría de los proyectos
+    // (sin stages), que ni se renderiza.
+    Promise.allSettled([
+      initial.hasStages ? api.projects.getStages(initial.id) : Promise.resolve([]),
+      api.projectTasks.list(initial.id),
+    ]).then(([stagesResult, tasksResult]) => {
+      if (cancelled) return
+      let failed = false
+      if (stagesResult.status === 'fulfilled') setExistingStages(stagesResult.value)
+      else {
+        console.error('No se pudieron cargar los stages del proyecto:', stagesResult.reason)
+        failed = true
+      }
+      if (tasksResult.status === 'fulfilled') setExistingTasks(tasksResult.value)
+      else {
+        console.error('No se pudieron cargar las tasks del proyecto:', tasksResult.reason)
+        failed = true
+      }
+      if (failed) setLoadError('Some data could not be loaded — try reopening this project.')
+    })
     return () => {
       cancelled = true
     }
@@ -191,13 +206,28 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
     try {
       const parsed = await parseSowDocument(file)
       if (sowPickTokenRef.current !== token) return // el usuario ya eligió otro archivo
-      setForm((prev) => ({
-        ...prev,
-        sowNumber: prev.sowNumber || parsed.sowNumber || '',
-        budgetHours: prev.budgetHours || (parsed.budgetHours != null ? String(parsed.budgetHours) : ''),
-        periodStart: prev.periodStart || parsed.periodStart || '',
-        periodEnd: prev.periodEnd || parsed.periodEnd || '',
-      }))
+      const parsedBudgetHours = parsed.budgetHours != null ? String(parsed.budgetHours) : ''
+      setForm((prev) =>
+        isEdit
+          // Reemplazo explícito en edición: el usuario acaba de elegir ESTE
+          // documento a propósito — lo parseado gana sobre lo que ya estaba
+          // precargado del proyecto (initialFormState), si no un replace
+          // nunca actualizaría nada porque esos campos ya vienen no-vacíos.
+          ? {
+              ...prev,
+              sowNumber: parsed.sowNumber || prev.sowNumber || '',
+              budgetHours: parsedBudgetHours || prev.budgetHours || '',
+              periodStart: parsed.periodStart || prev.periodStart || '',
+              periodEnd: parsed.periodEnd || prev.periodEnd || '',
+            }
+          : {
+              ...prev,
+              sowNumber: prev.sowNumber || parsed.sowNumber || '',
+              budgetHours: prev.budgetHours || parsedBudgetHours,
+              periodStart: prev.periodStart || parsed.periodStart || '',
+              periodEnd: prev.periodEnd || parsed.periodEnd || '',
+            },
+      )
       setParseWarnings(parsed.warnings)
     } finally {
       if (sowPickTokenRef.current === token) setParsing(false)
@@ -584,6 +614,7 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                       </div>
                     </div>
                   ))}
+                  {loadError && <p className="field__error">{loadError}</p>}
                   <p className="field__hint">Stage editing arrives in a future update.</p>
                 </div>
               )}
@@ -901,6 +932,7 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
               ) : (
                 <p className="field__hint">No tasks recorded.</p>
               )}
+              {loadError && <p className="field__error">{loadError}</p>}
               <p className="field__hint">Task editing arrives in a future update.</p>
             </div>
           )}

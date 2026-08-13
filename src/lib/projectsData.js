@@ -563,6 +563,21 @@ export async function uploadSowFile(file) {
   return path
 }
 
+/**
+ * Borra archivos huérfanos del bucket 'project-documents' — se sube el
+ * archivo antes de intentar el insert/update que lo referencia (evita subir
+ * dos veces si el resto falla), así que si ese paso posterior falla el
+ * archivo ya subido queda sin ninguna fila que lo referencie. Best-effort:
+ * no falla el flujo que la llama, solo loggea (mismo patrón que
+ * recordProjectDocument).
+ * @param {string[]} paths
+ */
+export async function removeSowFiles(paths) {
+  if (!isSupabaseConfigured || !paths?.length) return
+  const { error } = await supabase.storage.from(SOW_BUCKET).remove(paths)
+  if (error) console.warn('[projects] no se pudieron limpiar los SOW subidos tras el fallo —', error.message)
+}
+
 /** URL firmada (60s) para descargar un documento del bucket 'project-documents'. */
 export async function getProjectDocumentUrl(path) {
   if (!path) return null
