@@ -612,6 +612,86 @@ export async function recordProjectDocument({ subjectType, subjectId, fileUrl, u
   if (error) console.warn('[projects] no se pudo registrar el documento —', error.message)
 }
 
+function rowToDocument(row) {
+  return {
+    id: row.id,
+    subjectType: row.subject_type,
+    subjectId: row.subject_id,
+    fileUrl: row.file_url,
+    version: row.version,
+    uploadedAt: row.uploaded_at,
+    uploadedBy: row.uploaded_by ?? null,
+  }
+}
+
+/**
+ * Todas las versiones de documento relevantes para un proyecto (issue 05):
+ * el MSA de su cliente, el/los SOW del proyecto (uno por stage si
+ * hasStages, uno solo si no), y los anexos de sus Change Requests. Cada
+ * versión es su propia fila — recordProjectDocument solo inserta, nunca
+ * pisa ni borra una anterior. Devuelve también `stages`/`changeRequests`
+ * (id + nombre/número) — la UI los necesita para el selector de "a qué
+ * subo esto", y ya los tenemos acá para armar `linkedToLabel`, así que
+ * evita un segundo fetch redundante.
+ * @param {{ id: string|number, client?: string, clientId: ?(string|number), hasStages: boolean }} project
+ * @returns {Promise<{ documents: Array, stages: Array, changeRequests: Array }>}
+ */
+export async function getProjectDocuments(project) {
+  if (!isSupabaseConfigured) return { documents: [], stages: [], changeRequests: [] }
+
+  const orParts = []
+  const labelFor = {} // `${subjectType}:${subjectId}` -> texto para "Linked to"
+
+  if (project.clientId) {
+    orParts.push(`and(subject_type.eq.msa,subject_id.eq.${project.clientId})`)
+    labelFor[`msa:${project.clientId}`] = `${project.client || 'Client'} · MSA`
+  }
+
+  let stages = []
+  if (project.hasStages) {
+    const { data: stageRows, error: stageError } = await supabase
+      .from('project_stages')
+      .select('id, stage_name')
+      .eq('project_id', project.id)
+    if (stageError) throw new Error(stageError.message)
+    stages = (stageRows ?? []).map((r) => ({ id: r.id, stageName: r.stage_name }))
+    stages.forEach((s) => {
+      labelFor[`sow:${s.id}`] = `${s.stageName} · SOW`
+    })
+    if (stages.length) orParts.push(`and(subject_type.eq.sow,subject_id.in.(${stages.map((s) => s.id).join(',')}))`)
+  } else {
+    orParts.push(`and(subject_type.eq.sow,subject_id.eq.${project.id})`)
+    labelFor[`sow:${project.id}`] = 'This project · SOW'
+  }
+
+  const { data: crRows, error: crError } = await supabase
+    .from('change_requests')
+    .select('id, cr_number')
+    .eq('project_id', project.id)
+  if (crError) throw new Error(crError.message)
+  const changeRequests = (crRows ?? []).map((r) => ({ id: r.id, crNumber: r.cr_number }))
+  changeRequests.forEach((cr) => {
+    labelFor[`change_request:${cr.id}`] = `${cr.crNumber} · annex`
+  })
+  if (changeRequests.length) {
+    orParts.push(`and(subject_type.eq.change_request,subject_id.in.(${changeRequests.map((c) => c.id).join(',')}))`)
+  }
+
+  if (!orParts.length) return { documents: [], stages, changeRequests }
+
+  const { data, error } = await supabase
+    .from('project_documents')
+    .select('*')
+    .or(orParts.join(','))
+    .order('version', { ascending: false })
+  if (error) throw new Error(error.message)
+  const documents = data.map((row) => ({
+    ...rowToDocument(row),
+    linkedToLabel: labelFor[`${row.subject_type}:${row.subject_id}`] ?? row.subject_type,
+  }))
+  return { documents, stages, changeRequests }
+}
+
 // ---------- Stages y Tasks del SOW (Fase 4d) — helpers CRUD compartidos,
 // mappers de fila y funciones específicas de cada uno más abajo ----------
 

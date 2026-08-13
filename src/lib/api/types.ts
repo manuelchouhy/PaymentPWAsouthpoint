@@ -200,6 +200,16 @@ export interface ProjectTask {
   createdBy: string | null
 }
 
+export interface ProjectDocument {
+  id: string | number
+  subjectType: 'msa' | 'sow' | 'change_request'
+  subjectId: string | number
+  fileUrl: string
+  version: number
+  uploadedAt: string
+  uploadedBy: string | null
+}
+
 export interface SupplierContract {
   id: string | number
   supplierName: string
@@ -359,6 +369,16 @@ export interface ApiClient {
     uploadSowFile(file: File): Promise<string>
     removeSowFiles(paths: string[]): Promise<void>
     getDocumentUrl(path: string): Promise<string | null>
+    getDocuments(project: {
+      id: string | number
+      client?: string
+      clientId?: string | number | null
+      hasStages: boolean
+    }): Promise<{
+      documents: Array<ProjectDocument & { linkedToLabel: string }>
+      stages: Array<{ id: string | number; stageName: string }>
+      changeRequests: Array<{ id: string | number; crNumber: string }>
+    }>
     recordDocument(params: {
       subjectType: 'msa' | 'sow' | 'change_request'
       subjectId: string | number

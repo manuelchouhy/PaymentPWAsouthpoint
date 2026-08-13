@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, ChevronLeft, ChevronRight, Pencil, Settings2, X } from 'lucide-react'
+import { ArrowRight, ChevronLeft, ChevronRight, FileText, Pencil, Settings2, Upload, X } from 'lucide-react'
 import { ContractBadge } from './ContractBadge'
 import { contractStatus, daysRemaining } from '../lib/projectsData'
 import { api } from '../lib/api'
-import { formatDate, formatDateTime } from '../lib/format'
+import { fileNameFromPath, formatDate, formatDateTime } from '../lib/format'
 
 const OVERVIEW_FIELDS = [
   { key: 'client', label: 'Client' },
@@ -63,6 +63,227 @@ function OverviewSlide({ project, stageCount, stageCountError, canEditSow }) {
 }
 
 /**
+ * Slide Documentos (issue 05): historial versionado de MSA/SOW/CR-annex
+ * relevantes a este proyecto. Ver/Subir se ramifican por subjectType porque
+ * el MSA vive en el bucket 'client-msa' (api.clients.*) y SOW/CR en
+ * 'project-documents' (api.projects.*) — son buckets de Storage distintos.
+ */
+function DocumentsSlide({ project, uploadedBy }) {
+  const [documents, setDocuments] = useState([])
+  const [stages, setStages] = useState([])
+  const [changeRequests, setChangeRequests] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [viewingId, setViewingId] = useState(null)
+  const [viewMsg, setViewMsg] = useState('')
+  const [uploadTarget, setUploadTarget] = useState('')
+  const [uploadFile, setUploadFile] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const [showUploadForm, setShowUploadForm] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setLoadError(false)
+    // Promise.resolve().then(...): mismo motivo que el fetch de stages en
+    // Overview — absorbe un throw síncrono del backend (ej. un stub
+    // incompleto) en el .catch de acá abajo.
+    Promise.resolve()
+      .then(() => api.projects.getDocuments(project))
+      .then((result) => {
+        if (cancelled) return
+        setDocuments(result.documents)
+        setStages(result.stages)
+        setChangeRequests(result.changeRequests)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        console.error('No se pudieron cargar los documentos del proyecto:', error)
+        setLoadError(true)
+      })
+      .finally(() => !cancelled && setLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [project])
+
+  const uploadTargets = []
+  if (project.clientId) {
+    uploadTargets.push({ value: 'msa', label: `${project.client || 'Client'} · MSA` })
+  }
+  if (project.hasStages) {
+    stages.forEach((s) => uploadTargets.push({ value: `sow:${s.id}`, label: `${s.stageName} · SOW` }))
+  } else {
+    uploadTargets.push({ value: `sow:${project.id}`, label: 'This project · SOW' })
+  }
+  changeRequests.forEach((cr) => uploadTargets.push({ value: `change_request:${cr.id}`, label: `${cr.crNumber} · annex` }))
+
+  async function handleView(doc) {
+    setViewMsg('')
+    setViewingId(doc.id)
+    try {
+      const url =
+        doc.subjectType === 'msa'
+          ? await api.clients.getMsaUrl(doc.fileUrl)
+          : await api.projects.getDocumentUrl(doc.fileUrl)
+      if (url) window.open(url, '_blank', 'noopener,noreferrer')
+      else setViewMsg(doc.fileUrl.startsWith('demo/') ? 'Demo mode: this document cannot be downloaded.' : 'Could not generate the download link.')
+    } finally {
+      setViewingId(null)
+    }
+  }
+
+  async function handleUpload() {
+    if (!uploadFile || !uploadTarget) return
+    setUploading(true)
+    setUploadError('')
+    try {
+      const [subjectType, subjectIdRaw] = uploadTarget.split(':')
+      const subjectId = subjectType === 'msa' ? project.clientId : Number(subjectIdRaw)
+      const fileUrl =
+        subjectType === 'msa' ? await api.clients.uploadMsa(uploadFile) : await api.projects.uploadSowFile(uploadFile)
+      if (subjectType === 'msa') {
+        await api.clients.recordMsaVersion({ clientId: subjectId, fileUrl, uploadedBy })
+      } else {
+        await api.projects.recordDocument({ subjectType, subjectId, fileUrl, uploadedBy })
+      }
+      const label = uploadTargets.find((t) => t.value === uploadTarget)?.label ?? subjectType
+      const version = documents.filter((d) => d.subjectType === subjectType && d.subjectId === subjectId).length + 1
+      setDocuments((prev) => [
+        {
+          id: `local-${Date.now()}`,
+          subjectType,
+          subjectId,
+          fileUrl,
+          version,
+          uploadedAt: new Date().toISOString(),
+          uploadedBy,
+          linkedToLabel: label,
+        },
+        ...prev,
+      ])
+      setUploadFile(null)
+      setUploadTarget('')
+      setShowUploadForm(false)
+    } catch (error) {
+      setUploadError(error?.message ?? 'Could not upload.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  if (loading) return <p className="drawer__empty">Loading documents…</p>
+  if (loadError) return <p className="drawer__empty">Documents could not be loaded — try reopening this project.</p>
+
+  return (
+    <div>
+      {documents.length === 0 ? (
+        <div className="carousel__empty">
+          <p>No documents recorded yet.</p>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table className="table table--form">
+            <thead>
+              <tr>
+                <th scope="col">Document</th>
+                <th scope="col">Linked to</th>
+                <th scope="col">Version</th>
+                <th scope="col">Uploaded</th>
+                <th scope="col" aria-label="View" />
+              </tr>
+            </thead>
+            <tbody>
+              {documents.map((doc) => (
+                <tr key={doc.id}>
+                  <td>
+                    <FileText size={13} aria-hidden="true" /> {fileNameFromPath(doc.fileUrl)}
+                  </td>
+                  <td className="cell-soft">{doc.linkedToLabel}</td>
+                  <td className="cell-mono">v{doc.version}</td>
+                  <td className="cell-soft">
+                    {formatDateTime(doc.uploadedAt)}
+                    {doc.uploadedBy ? ` · ${doc.uploadedBy}` : ''}
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      onClick={() => handleView(doc)}
+                      disabled={viewingId === doc.id}
+                    >
+                      View
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {viewMsg && <p className="field__error">{viewMsg}</p>}
+
+      {showUploadForm ? (
+        <div className="field-grid" style={{ marginTop: 12 }}>
+          <div className="field">
+            <label className="field__label" htmlFor="doc-upload-target">
+              Attach to
+            </label>
+            <select
+              id="doc-upload-target"
+              className="field__input"
+              value={uploadTarget}
+              onChange={(e) => setUploadTarget(e.target.value)}
+            >
+              <option value="">Select…</option>
+              {uploadTargets.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="doc-upload-file">
+              File
+            </label>
+            <input
+              id="doc-upload-file"
+              type="file"
+              accept=".docx,application/pdf,.pdf"
+              className="field__input field__input--file"
+              onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
+            />
+            {uploadFile && <span className="field__filename">{uploadFile.name}</span>}
+          </div>
+          {uploadError && <span className="field__error">{uploadError}</span>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <button
+              type="button"
+              className="btn btn--pay btn--sm"
+              onClick={handleUpload}
+              disabled={!uploadFile || !uploadTarget || uploading}
+            >
+              {uploading ? 'Uploading…' : 'Upload'}
+            </button>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setShowUploadForm(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setShowUploadForm(true)}>
+            <Upload size={14} aria-hidden="true" /> Upload document
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
  * Carrusel de detalle de proyecto (Projects and SOW · issue 04). Reemplaza a
  * ProjectDetailDrawer — arranca con un solo slide real (Overview); las
  * issues 05/06/07 agregan Documentos/Asignaciones/Change Requests a este
@@ -70,12 +291,13 @@ function OverviewSlide({ project, stageCount, stageCountError, canEditSow }) {
  *
  * @param {{
  *   project: object,
+ *   uploadedBy: ?string,          // email del usuario actual — para versionar documentos (issue 05)
  *   onClose: () => void,
  *   onEdit: () => void,           // campos legacy (contrato, customer, etc.) — siempre disponible
  *   onEditSow?: () => void,       // SOW/Scope/Maintenance del wizard — solo si el proyecto tiene clientId
  * }} props
  */
-export function ProjectDetailCarousel({ project, onClose, onEdit, onEditSow }) {
+export function ProjectDetailCarousel({ project, uploadedBy, onClose, onEdit, onEditSow }) {
   const [history, setHistory] = useState([])
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [stageCount, setStageCount] = useState(null)
@@ -108,6 +330,11 @@ export function ProjectDetailCarousel({ project, onClose, onEdit, onEditSow }) {
           canEditSow={canEditSow}
         />
       ),
+    },
+    {
+      key: 'documents',
+      label: 'Documentos',
+      content: <DocumentsSlide project={project} uploadedBy={uploadedBy} />,
     },
   ]
   const slide = slides[Math.min(slideIndex, slides.length - 1)]

@@ -157,6 +157,8 @@ export const httpApiClient = {
     removeSowFiles: () => notImplemented('projects.removeSowFiles'),
     // GET /api/projects/document-url?path=X → string | null
     getDocumentUrl: () => notImplemented('projects.getDocumentUrl'),
+    // GET /api/projects/:id/documents → ProjectDocument[]
+    getDocuments: () => notImplemented('projects.getDocuments'),
     // POST /api/projects/documents { subjectType, subjectId, fileUrl, uploadedBy }
     recordDocument: () => notImplemented('projects.recordDocument'),
     // GET /api/projects/:id/stages → ProjectStage[]

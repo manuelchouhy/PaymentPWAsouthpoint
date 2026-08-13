@@ -561,6 +561,7 @@ export function ProjectsPage() {
           <ProjectDetailCarousel
             key={`detail-${detail.id}`}
             project={detail}
+            uploadedBy={user?.email ?? null}
             onClose={() => setDetail(null)}
             onEdit={() => {
               // Siempre disponible, para cualquier proyecto: Contract Number,
