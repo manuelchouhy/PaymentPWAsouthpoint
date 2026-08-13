@@ -198,22 +198,17 @@ export function ProjectsPage() {
       if (newSowFile) await api.projects.removeSowFiles([sowUrl])
       throw error
     }
-    // El proyecto ya quedó actualizado en este punto — un fallo acá es
-    // parcial, no total (mismo criterio que handleCreateFromWizard con
-    // stages/tasks): no tiene sentido tratar "no se pudo versionar el
-    // documento" como si la edición entera hubiera fallado.
-    let recordDocumentFailure = null
+    // recordDocument (recordProjectDocument) es best-effort y nunca tira —
+    // solo loggea con console.warn si falla, como logAudit — así que no hay
+    // nada real que capturar acá; envolverlo en try/catch sería código
+    // muerto (ver la propia doc de la función en projectsData.js).
     if (newSowFile) {
-      try {
-        await api.projects.recordDocument({
-          subjectType: 'sow',
-          subjectId: updated.id,
-          fileUrl: sowUrl,
-          uploadedBy: user?.email ?? null,
-        })
-      } catch (error) {
-        recordDocumentFailure = error
-      }
+      await api.projects.recordDocument({
+        subjectType: 'sow',
+        subjectId: updated.id,
+        fileUrl: sowUrl,
+        uploadedBy: user?.email ?? null,
+      })
     }
     api.audit.log({
       actorEmail: user?.email,
@@ -226,16 +221,7 @@ export function ProjectsPage() {
     })
     setProjects((prev) => sortByExp(prev.map((p) => (p.id === updated.id ? updated : p))))
     setWizardEditing(null)
-    if (recordDocumentFailure) {
-      console.error('[projects] el SOW se reemplazó pero no se pudo versionar el documento —', recordDocumentFailure)
-      setToast({
-        id: Date.now(),
-        tone: 'error',
-        message: `Project "${updated.projectName}" was updated, but the new SOW version could not be recorded (${recordDocumentFailure.message ?? 'unknown error'}).`,
-      })
-    } else {
-      setToast({ id: Date.now(), message: `Project updated: ${updated.projectName}` })
-    }
+    setToast({ id: Date.now(), message: `Project updated: ${updated.projectName}` })
   }
 
   return (
