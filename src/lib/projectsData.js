@@ -589,40 +589,53 @@ export async function getProjectDocumentUrl(path) {
 
 /**
  * Registra una versión de documento (MSA/SOW/CR) en el historial y devuelve
- * la fila creada — la versión sale del insert real, no de una cuenta local
- * del caller (dos subidas simultáneas al mismo subject darían el mismo
- * número si cada uno la adivina por su lado).
+ * la fila creada.
+ *
+ * La versión se estima contando las previas, pero entre el count y el insert
+ * hay una ventana en la que otro puede tomar ese número — el índice único de
+ * 0027 lo rechaza (23505) y se reintenta con el siguiente libre, igual que
+ * createChangeRequest con cr_number. Si el count falla no se aborta: se
+ * arranca en 1 y el reintento encuentra el hueco (perder el historial de un
+ * documento que sí se subió es peor que una consulta de más).
  *
  * Tira si falla. Los flujos donde versionar es un efecto secundario del
  * alta/edición usan recordProjectDocument (wrapper best-effort de abajo);
- * los que le muestran el resultado al usuario — como el slide Documentos,
- * donde subir un documento ES la acción — necesitan enterarse del error.
+ * los que le muestran el resultado al usuario necesitan enterarse del error.
  *
  * @param {{ subjectType: 'msa'|'sow'|'change_request', subjectId: string|number, fileUrl: string, uploadedBy?: ?string }} params
  * @returns {Promise<?Object>} la versión creada (null en modo demo).
  */
 export async function recordProjectDocumentStrict({ subjectType, subjectId, fileUrl, uploadedBy }) {
   if (!isSupabaseConfigured) return null
+
   const { count, error: countError } = await supabase
     .from('project_documents')
     .select('id', { count: 'exact', head: true })
     .eq('subject_type', subjectType)
     .eq('subject_id', subjectId)
-  if (countError) throw new Error(countError.message)
+  if (countError) {
+    console.warn('[projects] no se pudieron contar versiones previas —', countError.message)
+  }
+  const firstGuess = countError ? 1 : (count ?? 0) + 1
 
-  const { data, error } = await supabase
-    .from('project_documents')
-    .insert({
-      subject_type: subjectType,
-      subject_id: subjectId,
-      file_url: fileUrl,
-      version: (count ?? 0) + 1,
-      uploaded_by: uploadedBy || null,
-    })
-    .select()
-    .single()
-  if (error) throw new Error(error.message)
-  return rowToDocument(data)
+  const MAX_ATTEMPTS = 5
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    const { data, error } = await supabase
+      .from('project_documents')
+      .insert({
+        subject_type: subjectType,
+        subject_id: subjectId,
+        file_url: fileUrl,
+        version: firstGuess + attempt,
+        uploaded_by: uploadedBy || null,
+      })
+      .select()
+      .single()
+    if (!error) return rowToDocument(data)
+    // 23505 = unique_violation: ese número ya lo tomó otra subida.
+    if (error.code !== '23505') throw new Error(error.message)
+  }
+  throw new Error('Could not assign a document version — please try again.')
 }
 
 /**
@@ -687,17 +700,15 @@ export async function getProjectDocuments(project) {
   }
 
   // Las dos consultas son independientes entre sí (ambas solo dependen de
-  // project.id) — en paralelo, no una atrás de la otra.
-  const [stageResult, crResult] = await Promise.all([
-    project.hasStages
-      ? supabase.from('project_stages').select('id, stage_name').eq('project_id', project.id)
-      : Promise.resolve({ data: [], error: null }),
+  // project.id) — en paralelo, no una atrás de la otra. Los stages salen de
+  // getProjectStages (no de un select suelto acá) para que el selector los
+  // liste siempre por `position`, igual que el resto de la app.
+  const [stages, crResult] = await Promise.all([
+    project.hasStages ? getProjectStages(project.id) : Promise.resolve([]),
     supabase.from('change_requests').select('id, cr_number').eq('project_id', project.id),
   ])
-  if (stageResult.error) throw new Error(stageResult.error.message)
   if (crResult.error) throw new Error(crResult.error.message)
 
-  const stages = (stageResult.data ?? []).map((r) => ({ id: r.id, stageName: r.stage_name }))
   if (project.hasStages) {
     stages.forEach((s) => {
       labelFor[`sow:${s.id}`] = `${s.stageName} · SOW`

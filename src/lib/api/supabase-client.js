@@ -50,6 +50,8 @@ import {
   rejectChangeRequest,
 } from '../changeRequestsData'
 
+import { uploadDocumentVersion } from '../projectDocumentsData'
+
 import {
   createCollection,
   getCollectionAlertSettings,
@@ -78,7 +80,6 @@ import {
   getProjectStages,
   getProjectTasks,
   recordProjectDocument,
-  recordProjectDocumentStrict,
   removeSowFiles,
   updateContractAlertSettings,
   updateProject,
@@ -298,7 +299,7 @@ export const supabaseApiClient = {
     getDocumentUrl: getProjectDocumentUrl,
     getDocuments: getProjectDocuments,
     recordDocument: recordProjectDocument,
-    recordDocumentStrict: recordProjectDocumentStrict,
+    uploadDocumentVersion,
     getStages: getProjectStages,
     createStages: createProjectStages,
     updateStage: updateProjectStage,

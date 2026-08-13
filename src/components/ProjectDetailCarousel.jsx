@@ -156,29 +156,34 @@ function DocumentsSlide({ project, uploadedBy }) {
     setUploading(true)
     setUploadError('')
     try {
-      const [subjectType, subjectIdRaw] = uploadTarget.split(':')
-      const subjectId = subjectType === 'msa' ? project.clientId : Number(subjectIdRaw)
-      // Solo la subida ramifica por bucket (el MSA vive en 'client-msa', el
-      // resto en 'project-documents'); el registro de la versión es la misma
-      // tabla para los tres tipos.
-      const fileUrl =
-        subjectType === 'msa' ? await api.clients.uploadMsa(uploadFile) : await api.projects.uploadSowFile(uploadFile)
-      // Strict, no la variante best-effort: acá subir el documento ES la
-      // acción del usuario, así que un fallo al registrarlo tiene que
-      // avisarse, no dejar una fila fantasma que desaparece al recargar.
-      const created = await api.projects.recordDocumentStrict({ subjectType, subjectId, fileUrl, uploadedBy })
+      const separator = uploadTarget.indexOf(':')
+      const subjectType = separator === -1 ? uploadTarget : uploadTarget.slice(0, separator)
+      // Sin Number(): los ids de stage en modo demo son strings
+      // ('stg-demo-…') y coercionarlos daría NaN.
+      const subjectId = subjectType === 'msa' ? project.clientId : uploadTarget.slice(separator + 1)
+      // Una sola llamada: sube al bucket que corresponde, actualiza el
+      // puntero al documento vigente (si no, el resto de la app sigue
+      // sirviendo el viejo) y versiona — con limpieza del archivo si falla.
+      const { fileUrl, document } = await api.projects.uploadDocumentVersion({
+        project,
+        subjectType,
+        subjectId,
+        file: uploadFile,
+        uploadedBy,
+      })
       const label = uploadTargets.find((t) => t.value === uploadTarget)?.label ?? subjectType
       setDocuments((prev) => [
         {
-          // La versión sale de la fila que devolvió el insert, no de una
-          // cuenta local — dos usuarios subiendo a la vez la calcularían
-          // igual y uno mostraría un número que no es el suyo.
-          ...(created ?? {
+          // La versión sale de la fila insertada. En demo no hay tabla, así
+          // que se cuenta sobre lo que ya está en pantalla para ese subject
+          // (si no, todas las subidas se mostrarían como v1).
+          ...(document ?? {
             id: `demo-${Date.now()}`,
             subjectType,
             subjectId,
             fileUrl,
-            version: 1,
+            version:
+              prev.filter((d) => d.subjectType === subjectType && String(d.subjectId) === String(subjectId)).length + 1,
             uploadedAt: new Date().toISOString(),
             uploadedBy,
           }),
@@ -190,7 +195,14 @@ function DocumentsSlide({ project, uploadedBy }) {
       setUploadTarget('')
       setShowUploadForm(false)
     } catch (error) {
-      setUploadError(error?.message ?? 'Could not upload.')
+      // El mensaje crudo de PostgREST/Storage no le dice nada al usuario
+      // (queda en consola); en pantalla, algo accionable.
+      console.error('No se pudo subir el documento:', error)
+      setUploadError(
+        error?.code === 'bad_type' || error?.code === 'too_big'
+          ? error.message // validaciones nuestras, ya están redactadas para el usuario
+          : 'Could not upload the document — please try again.',
+      )
     } finally {
       setUploading(false)
     }

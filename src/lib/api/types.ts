@@ -417,13 +417,18 @@ export interface ApiClient {
       fileUrl: string
       uploadedBy?: string | null
     }): Promise<void>
-    /** Igual que recordDocument pero propaga el error y devuelve la versión creada (null en demo). */
-    recordDocumentStrict(params: {
+    /**
+     * Sube una nueva versión: la manda al bucket que corresponde, actualiza el
+     * puntero al documento vigente y la registra en el historial. `document`
+     * es null en modo demo. Propaga el error (y limpia el archivo subido).
+     */
+    uploadDocumentVersion(params: {
+      project: Project
       subjectType: 'msa' | 'sow' | 'change_request'
       subjectId: string | number
-      fileUrl: string
+      file: File
       uploadedBy?: string | null
-    }): Promise<ProjectDocument | null>
+    }): Promise<{ fileUrl: string; document: ProjectDocument | null }>
     getStages(projectId: string | number): Promise<ProjectStage[]>
     createStages(
       projectId: string | number,
