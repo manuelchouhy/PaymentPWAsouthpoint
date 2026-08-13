@@ -12,6 +12,7 @@
  * @property {'Net 15'|'Net 30'|'Net 45'} paymentTerms
  * @property {'Manual'|'Auto-notify'} renewalType
  * @property {string} status
+ * @property {?number} weeklyContractedHours
  * @property {?string} pdfUrl
  * @property {boolean} archived
  * @property {?(string|number)} parentContractId
@@ -42,6 +43,7 @@ const FIELD_TO_COLUMN = {
   renewalDate: 'renewal_date',
   paymentTerms: 'payment_terms',
   renewalType: 'renewal_type',
+  weeklyContractedHours: 'weekly_contracted_hours',
 }
 
 /** Estado calculado por días restantes (la columna 'Renewal in Progress' es manual). */
@@ -211,6 +213,7 @@ function rowToContract(row) {
     paymentTerms: row.payment_terms,
     renewalType: row.renewal_type,
     status: row.status,
+    weeklyContractedHours: row.weekly_contracted_hours ?? null,
     pdfUrl: row.pdf_url ?? null,
     archived: Boolean(row.archived),
     parentContractId: row.parent_contract_id ?? null,

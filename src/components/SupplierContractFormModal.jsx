@@ -22,6 +22,7 @@ function emptyForm() {
     paymentTerms: PAYMENT_TERMS[1], // Net 30
     renewalType: RENEWAL_TYPES[1], // Auto-notify
     isPrioritySupplier: false,
+    weeklyContractedHours: '',
   }
 }
 
@@ -43,6 +44,8 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
       paymentTerms: initial.paymentTerms ?? PAYMENT_TERMS[1],
       renewalType: initial.renewalType ?? RENEWAL_TYPES[1],
       isPrioritySupplier: Boolean(initial.isPrioritySupplier),
+      weeklyContractedHours:
+        initial.weeklyContractedHours == null ? '' : String(initial.weeklyContractedHours),
     }
   })
   const [pdfFile, setPdfFile] = useState(null)
@@ -95,7 +98,13 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
   // reportado — se pudo crear un contrato con Expiration < Start sin aviso).
   const dateOrderValid =
     !form.startDate || !form.expirationDate || form.expirationDate >= form.startDate
-  const valid = missing.length === 0 && dateOrderValid
+  // Opcional: si se completa, tiene que ser un número >= 0 (misma regla que
+  // el check de la columna en supabase/migrations/0026).
+  const weeklyHoursRaw = form.weeklyContractedHours
+  const weeklyHoursValid =
+    !String(weeklyHoursRaw ?? '').trim() ||
+    (!Number.isNaN(Number(weeklyHoursRaw)) && Number(weeklyHoursRaw) >= 0)
+  const valid = missing.length === 0 && dateOrderValid && weeklyHoursValid
 
   function set(key, value) {
     setForm((prev) => {
@@ -126,6 +135,9 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
           paymentTerms: form.paymentTerms,
           renewalType: form.renewalType,
           isPrioritySupplier: form.isPrioritySupplier,
+          weeklyContractedHours: String(weeklyHoursRaw ?? '').trim()
+            ? Number(weeklyHoursRaw)
+            : null,
         },
         pdfFile,
       )
@@ -221,6 +233,26 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
                 onChange={(e) => set('renewalType', e.target.value)}>
                 {RENEWAL_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
+            </div>
+            <div className="field">
+              <label className="field__label" htmlFor="sc-weeklyContractedHours">
+                Contracted Hours/Week
+                <span className="field__hint">optional</span>
+              </label>
+              <input
+                id="sc-weeklyContractedHours"
+                type="number"
+                min="0"
+                step="0.5"
+                inputMode="decimal"
+                className={`field__input${touched && !weeklyHoursValid ? ' field__input--error' : ''}`}
+                value={form.weeklyContractedHours}
+                onChange={(e) => set('weeklyContractedHours', e.target.value)}
+                onBlur={() => setTouched(true)}
+              />
+              {touched && !weeklyHoursValid && (
+                <span className="field__error">Enter a number of 0 or more.</span>
+              )}
             </div>
           </div>
 
