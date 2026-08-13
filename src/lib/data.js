@@ -295,6 +295,9 @@ function rowToEntry(row) {
     date: row.log_date,
     hours: Number(row.hours),
     status: row.status ?? 'Approved',
+    // null = sin clasificar (0018). El triage manual vive en Entries; ningún
+    // flujo la asigna automáticamente.
+    allocation: row.allocation ?? null,
   }
 }
 
@@ -330,7 +333,7 @@ export async function getTimeEntries() {
   const { data, error } = await supabase
     .from('time_entries')
     .select(
-      'id, zoho_log_id, user_name, project, client, task, task_number, description, notes, log_date, hours, status',
+      'id, zoho_log_id, user_name, project, client, task, task_number, description, notes, log_date, hours, status, allocation',
     )
     .order('log_date', { ascending: false })
 

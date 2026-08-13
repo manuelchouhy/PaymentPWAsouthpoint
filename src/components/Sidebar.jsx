@@ -13,6 +13,7 @@ import {
   Mail,
   LogOut,
   Check,
+  ListChecks,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { to: '/time-entries', label: 'Time Entries', Icon: Clock },
   { to: '/clients', label: 'Clients', Icon: Building2 },
   { to: '/projects', label: 'Projects and SOW', Icon: FolderKanban },
+  { to: '/entries', label: 'Entries', Icon: ListChecks },
   { to: '/collections', label: 'Collections', Icon: Landmark },
   { to: '/payments', label: 'Payments', Icon: CreditCard },
   { to: '/supplier-contracts', label: 'Supplier Contracts', Icon: FileText },

@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import App from './App.jsx'
 import { Layout } from './components/Layout.jsx'
 import { ClientsPage } from './pages/ClientsPage.jsx'
+import { EntriesPage } from './pages/EntriesPage.jsx'
 import { ProjectsPage } from './pages/ProjectsPage.jsx'
 import { ContractAlertSettingsPage } from './pages/ContractAlertSettingsPage.jsx'
 import { CollectionsPage } from './pages/CollectionsPage.jsx'
@@ -47,6 +48,7 @@ function AuthenticatedApp() {
               <Route path="time-entries" element={<App />} />
               <Route path="clients" element={<ClientsPage />} />
               <Route path="projects" element={<ProjectsPage />} />
+              <Route path="entries" element={<EntriesPage />} />
               <Route path="contract-alerts" element={<ContractAlertSettingsPage />} />
               <Route path="collections" element={<CollectionsPage />} />
               <Route path="collection-alerts" element={<CollectionAlertSettingsPage />} />
