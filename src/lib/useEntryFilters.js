@@ -20,8 +20,15 @@ const EMPTY_FILTERS = {
   week: '',
 }
 
-export function useEntryFilters() {
-  const [filters, setFilters] = useState(EMPTY_FILTERS)
+/**
+ * @param {Partial<typeof EMPTY_FILTERS>} [initial] filtros de arranque — los usa
+ *   Client Summary al mandar a Entries ya filtrado por cliente/proyecto. Sólo
+ *   se lee en el primer render: después manda el estado del usuario.
+ */
+export function useEntryFilters(initial) {
+  const [filters, setFilters] = useState(() =>
+    initial ? { ...EMPTY_FILTERS, ...initial } : EMPTY_FILTERS,
+  )
 
   // Toggle de un valor dentro de un filtro de tipo array (multi-select).
   const toggleValue = useCallback((key, value) => {

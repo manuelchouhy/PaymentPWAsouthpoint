@@ -76,6 +76,36 @@ export async function getChangeRequests(projectId) {
 }
 
 /**
+ * Todos los CRs, indexados por proyecto. Existe para las vistas de cartera
+ * (Client Summary): pedirlos proyecto por proyecto sería una query por fila de
+ * la tabla, y el presupuesto vigente de cada proyecto los necesita.
+ * @returns {Promise<Map<string, ChangeRequest[]>>} clave = String(projectId)
+ */
+export async function getChangeRequestsByProject() {
+  const byProject = new Map()
+  const push = (cr) => {
+    const key = String(cr.projectId)
+    const list = byProject.get(key)
+    if (list) list.push(cr)
+    else byProject.set(key, [cr])
+  }
+
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 150))
+    for (const list of Object.values(demoChangeRequests)) list.forEach(push)
+    return byProject
+  }
+
+  const { data, error } = await supabase
+    .from('change_requests')
+    .select('*')
+    .order('id', { ascending: true })
+  if (error) throw new Error(error.message)
+  data.map(rowToChangeRequest).forEach(push)
+  return byProject
+}
+
+/**
  * Crea un CR con el número autogenerado. El número sale de contar los que ya
  * existen, así que dos altas simultáneas pueden pedir el mismo — el índice
  * único (change_requests_project_cr_number_idx) lo rechaza y se reintenta con

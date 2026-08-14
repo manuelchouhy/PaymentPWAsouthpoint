@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatDate, formatHours, formatWeek } from '../lib/format'
 import { useEntryFilters, applyEntryFilters } from '../lib/useEntryFilters'
+import { exportGrid } from '../lib/exportGrid'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
+import { ExportDropdown } from '../components/ExportDropdown'
 import { StatusBadge } from '../components/StatusBadge'
 import { BillingBadge } from '../components/BillingBadge'
 
@@ -36,7 +38,22 @@ export function EntriesPage() {
   const [status, setStatus] = useState('loading')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [reloadKey, setReloadKey] = useState(0)
-  const { filters, toggleValue, setField, clear, isActive } = useEntryFilters()
+  // Client Summary linkea acá con ?client=/?project=: llegar a la grilla sin
+  // filtrar obligaría a rehacer a mano el filtro que ya estaba puesto allá.
+  const [searchParams] = useSearchParams()
+  const initialFilters = useMemo(() => {
+    const clientParam = searchParams.get('client')
+    const projectParam = searchParams.get('project')
+    if (!clientParam && !projectParam) return undefined
+    return {
+      clients: clientParam ? [clientParam] : [],
+      projects: projectParam ? [projectParam] : [],
+    }
+    // Sólo el valor inicial: si se recalculara, cambiar el filtro a mano y
+    // volver atrás en el historial lo pisaría.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const { filters, toggleValue, setField, clear, isActive } = useEntryFilters(initialFilters)
 
   useEffect(() => {
     let cancelled = false
@@ -141,6 +158,46 @@ export function EntriesPage() {
   const selectedEntries = visible.filter((e) => selectedIds.has(e.id))
   const selectedHours = selectedEntries.reduce((sum, e) => sum + (Number(e.hours) || 0), 0)
 
+  function handleExport(format) {
+    const cols = [
+      { header: 'User', key: 'user' },
+      { header: 'Project', key: 'project' },
+      { header: 'Client', key: 'client' },
+      { header: 'Task', key: 'task' },
+      { header: 'Date', key: 'date' },
+      { header: 'Week', key: 'week' },
+      { header: 'Hours', key: 'hours' },
+      { header: 'Status', key: 'status' },
+      { header: 'Allocation', key: 'allocation' },
+      { header: 'Billing', key: 'billing' },
+    ]
+    // Se exporta `visible` (todo lo filtrado), no `page`: el "Show more" es una
+    // decisión de cuánto renderizar, no un filtro — quien exporta con un filtro
+    // puesto espera el filtro entero, no las primeras 100 filas.
+    const exportRows = visible.map((entry) => ({
+      user: entry.user,
+      project: entry.project ?? '',
+      client: entry.client ?? '',
+      task: entry.task ?? '',
+      date: entry.date ? formatDate(entry.date) : '',
+      week: entry.date ? formatWeek(entry.date) : '',
+      hours: Number(entry.hours) || 0,
+      status: entry.status,
+      // Mismo texto que la grilla, incluido el "unallocated": una celda vacía
+      // en el Excel se leería como "no se exportó", no como "sin clasificar".
+      allocation: entry.allocation ? ALLOCATION_LABELS[entry.allocation].label : 'unallocated',
+      billing: invoiceByEntryId.get(String(entry.id))?.status ?? 'Pending',
+    }))
+    exportGrid({
+      rows: exportRows,
+      columns: cols,
+      title: 'Entries',
+      gridName: 'entries',
+      format,
+      generatedBy: user?.email ?? '',
+    })
+  }
+
   async function handleApply() {
     // Se manda sólo lo que sigue visible y reclasificable, no el Set crudo: es
     // lo que el usuario ve sumado en la barra.
@@ -177,7 +234,7 @@ export function EntriesPage() {
         if (rejected) parts.push(`${rejected} rejected by the server — select them again and retry`)
         if (unconfirmed) {
           parts.push(
-            `${unconfirmed} were not saved and the database gave no reason — check that your session is still active`,
+            `${unconfirmed} were not saved and the database gave no reason — they may no longer exist, or your session may have expired`,
           )
         }
         setApplyError(
@@ -219,9 +276,11 @@ export function EntriesPage() {
 
       {/* Fuera del bloque `ready`: este aviso lo dispara un Apply que además
           fuerza una relectura, así que si viviera adentro de la grilla el
-          "Loading entries…" lo taparía justo cuando hay que leerlo — y si la
-          relectura falla, no se vería nunca. */}
-      {applyError && <p className="field__error">{applyError}</p>}
+          "Loading entries…" lo taparía justo cuando hay que leerlo. No se
+          limpia al terminar la relectura porque no es un estado transitorio,
+          es el resultado del Apply — pero sí se calla si la página entera
+          falló: apilarlo sobre "Could not load entries" sería ruido. */}
+      {applyError && status !== 'error' && <p className="field__error">{applyError}</p>}
 
       {status === 'loading' && <p className="state__hint">Loading entries…</p>}
 
@@ -282,8 +341,10 @@ export function EntriesPage() {
           <div className="toolbar">
             <span className="toolbar__count">
               {visible.length} {visible.length === 1 ? 'entry' : 'entries'}
+              {page.length < visible.length && ` · showing 1–${page.length}`}
               {unallocatedCount > 0 && ` · ${unallocatedCount} unallocated`}
             </span>
+            {visible.length > 0 && <ExportDropdown onExport={handleExport} />}
           </div>
 
           {visible.length === 0 ? (

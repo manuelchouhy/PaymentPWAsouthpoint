@@ -5,6 +5,10 @@ import App from './App.jsx'
 import { Layout } from './components/Layout.jsx'
 import { ClientsPage } from './pages/ClientsPage.jsx'
 import { EntriesPage } from './pages/EntriesPage.jsx'
+import { BillingPage } from './pages/BillingPage.jsx'
+import { ClientSummaryPage } from './pages/ClientSummaryPage.jsx'
+import { CapacityPage } from './pages/CapacityPage.jsx'
+import { ClientDetailPage } from './pages/ClientDetailPage.jsx'
 import { ProjectsPage } from './pages/ProjectsPage.jsx'
 import { ContractAlertSettingsPage } from './pages/ContractAlertSettingsPage.jsx'
 import { CollectionsPage } from './pages/CollectionsPage.jsx'
@@ -49,6 +53,10 @@ function AuthenticatedApp() {
               <Route path="clients" element={<ClientsPage />} />
               <Route path="projects" element={<ProjectsPage />} />
               <Route path="entries" element={<EntriesPage />} />
+              <Route path="billing" element={<BillingPage />} />
+              <Route path="client-summary" element={<ClientSummaryPage />} />
+              <Route path="capacity" element={<CapacityPage />} />
+              <Route path="client-detail" element={<ClientDetailPage />} />
               <Route path="contract-alerts" element={<ContractAlertSettingsPage />} />
               <Route path="collections" element={<CollectionsPage />} />
               <Route path="collection-alerts" element={<CollectionAlertSettingsPage />} />

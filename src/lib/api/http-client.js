@@ -122,6 +122,8 @@ export const httpApiClient = {
   changeRequests: {
     // GET /api/projects/:id/change-requests → ChangeRequest[]
     list: () => notImplemented('changeRequests.list'),
+    // GET /api/change-requests → ChangeRequest[] (todos, para vistas de cartera)
+    listByProject: () => notImplemented('changeRequests.listByProject'),
     // POST /api/change-requests { projectId, type, deltaHours, reason } → ChangeRequest
     create: () => notImplemented('changeRequests.create'),
     // POST /api/change-requests/:id/approve → ChangeRequest

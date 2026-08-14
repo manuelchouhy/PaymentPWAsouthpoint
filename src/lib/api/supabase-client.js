@@ -49,6 +49,7 @@ import {
   approveChangeRequest,
   createChangeRequest,
   getChangeRequests,
+  getChangeRequestsByProject,
   rejectChangeRequest,
 } from '../changeRequestsData'
 
@@ -285,6 +286,7 @@ export const supabaseApiClient = {
 
   changeRequests: {
     list: getChangeRequests,
+    listByProject: getChangeRequestsByProject,
     create: createChangeRequest,
     approve: approveChangeRequest,
     reject: rejectChangeRequest,

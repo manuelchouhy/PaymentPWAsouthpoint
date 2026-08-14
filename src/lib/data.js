@@ -505,14 +505,12 @@ export async function setEntriesAllocation(entryIds, allocation, changedBy) {
   const frozenTotal = skippedFrozen + frozenLate
 
   if (!updatedIds.length) {
-    // Sólo es excepción si hubo un error de verdad. Que no se haya escrito nada
-    // porque todo estaba facturado, o porque el UPDATE se filtró a cero filas y
-    // devolvió 200, se informa con los contadores: el llamador arma un mensaje
-    // por motivo y fuerza la relectura. Tirar una excepción genérica acá
-    // borraría esos contadores y dejaría al usuario reintentando horas que
-    // nunca van a ser escribibles.
-    if (failures.length) throw new Error(failures[0])
-    if (unconfirmedIds.length) {
+    // Ni siquiera acá se tira excepción: que no se haya escrito nada no borra
+    // el hecho de que 40 de las 250 pedidas estaban facturadas. Una excepción
+    // se lleva puestos los contadores y deja al usuario reintentando horas que
+    // nunca van a ser escribibles, que es justo la confusión que este módulo
+    // existe para evitar. El llamador arma el mensaje por motivo y relee.
+    if (unconfirmedIds.length && !failures.length) {
       console.error(
         'El update no alcanzó ninguna fila y no hay factura que lo explique:',
         unconfirmedIds.length,
@@ -522,7 +520,7 @@ export async function setEntriesAllocation(entryIds, allocation, changedBy) {
     return {
       updatedIds: [],
       skippedFrozen: frozenTotal,
-      failures: [],
+      failures,
       unconfirmed: unconfirmedIds.length,
     }
   }

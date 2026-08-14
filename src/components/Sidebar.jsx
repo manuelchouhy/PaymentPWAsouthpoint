@@ -14,6 +14,10 @@ import {
   LogOut,
   Check,
   ListChecks,
+  Receipt,
+  PieChart,
+  Gauge,
+  FileSearch,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -22,6 +26,10 @@ const NAV_ITEMS = [
   { to: '/clients', label: 'Clients', Icon: Building2 },
   { to: '/projects', label: 'Projects and SOW', Icon: FolderKanban },
   { to: '/entries', label: 'Entries', Icon: ListChecks },
+  { to: '/billing', label: 'Billing', Icon: Receipt },
+  { to: '/client-summary', label: 'Client Summary', Icon: PieChart },
+  { to: '/capacity', label: 'Capacity', Icon: Gauge },
+  { to: '/client-detail', label: 'Client Detail', Icon: FileSearch },
   { to: '/collections', label: 'Collections', Icon: Landmark },
   { to: '/payments', label: 'Payments', Icon: CreditCard },
   { to: '/supplier-contracts', label: 'Supplier Contracts', Icon: FileText },
