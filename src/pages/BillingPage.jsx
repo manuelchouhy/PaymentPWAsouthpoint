@@ -474,7 +474,12 @@ export function BillingPage() {
                   deshabilitado en Entries y setEntriesAllocation las rechaza, así
                   que mandar a clasificarlas termina en un control muerto. */}
               {cards.classifiable > 0
-                ? 'No hours ready to bill. Classify approved hours as “bill to client” in Entries first.'
+                ? can('entries.allocate')
+                  ? 'No hours ready to bill. Classify approved hours as “bill to client” in Entries first.'
+                  : // Billing lo ve todo el mundo, pero entries.allocate excluye
+                    // a Finance: mandarlos a Entries es otra vez un control que
+                    // no pueden usar, sólo que por rol en vez de por congelado.
+                    'No hours ready to bill. Approved hours are waiting to be classified in Entries.'
                 : cards.invoiced > 0
                   ? 'No hours ready to bill. The hours shown above are already invoiced — they stay as they were classified when billed.'
                   : 'No hours ready to bill.'}
