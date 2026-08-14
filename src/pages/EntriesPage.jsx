@@ -149,32 +149,50 @@ export function EntriesPage() {
     setApplying(true)
     setApplyError('')
     try {
-      const updatedIds = await api.timeEntries.setAllocation(
+      const result = await api.timeEntries.setAllocation(
         ids,
         allocationChoice,
         user?.email ?? null,
       )
+      const updatedIds = result?.updatedIds ?? []
       // Se refleja en la grilla sin recargar todo: el update ya se confirmó y
       // volver a traer 500+ filas por un cambio de columna es desproporcionado.
       // Se pintan sólo las filas que la base confirmó, no las pedidas.
-      const applied = new Set((updatedIds ?? []).map(String))
+      const applied = new Set(updatedIds.map(String))
       setEntries((prev) =>
         prev.map((e) => (applied.has(String(e.id)) ? { ...e, allocation: allocationChoice } : e)),
       )
       setSelectedIds(new Set())
-      if (applied.size < ids.length) {
-        // Nunca mostrar un éxito que no pasó: si la base actualizó menos filas
-        // que las pedidas (factura emitida mientras tanto, o permiso denegado)
-        // hay que decirlo y releer para mostrar el estado real.
-        const skipped = ids.length - applied.size
+
+      // Los motivos NO se suman en un único "N no se aplicaron": cada uno pide
+      // una acción distinta (resignarse, reintentar, revisar la sesión), y
+      // atribuir el total a uno solo manda al usuario a la acción equivocada.
+      const missing = ids.length - applied.size
+      const frozen = result?.skippedFrozen ?? 0
+      const unconfirmed = result?.unconfirmed ?? 0
+      const rejected = Math.max(0, missing - frozen - unconfirmed)
+      if (missing > 0) {
+        const parts = []
+        if (frozen) parts.push(`${frozen} already invoiced (those can never be reclassified)`)
+        if (rejected) parts.push(`${rejected} rejected by the server — select them again and retry`)
+        if (unconfirmed) {
+          parts.push(
+            `${unconfirmed} were not saved and the database gave no reason — check that your session is still active`,
+          )
+        }
         setApplyError(
-          `${skipped} of ${ids.length} ${ids.length === 1 ? 'entry was' : 'entries were'} not reclassified — they may have been invoiced meanwhile. Reloading the latest data.`,
+          `${missing} of ${ids.length} ${missing === 1 ? 'entry was' : 'entries were'} not reclassified: ${parts.join('; ')}.`,
         )
         setReloadKey((k) => k + 1)
       }
     } catch (error) {
       console.error('No se pudo aplicar la allocation:', error)
-      setApplyError('Could not apply the allocation — please try again.')
+      // Una excepción acá significa que no se escribió NADA: los fallos
+      // parciales vuelven por `failures`, no por throw. Por eso no se fuerza
+      // una relectura — no hay nada nuevo que traer, y si lo que falló fue la
+      // red, el reload dejaría la pantalla en "Could not load entries" sobre
+      // una operación que no cambió un solo dato.
+      setApplyError('Could not apply the allocation — nothing was changed. Please try again.')
     } finally {
       setApplying(false)
     }
@@ -198,6 +216,12 @@ export function EntriesPage() {
           classified automatically.
         </p>
       </motion.header>
+
+      {/* Fuera del bloque `ready`: este aviso lo dispara un Apply que además
+          fuerza una relectura, así que si viviera adentro de la grilla el
+          "Loading entries…" lo taparía justo cuando hay que leerlo — y si la
+          relectura falla, no se vería nunca. */}
+      {applyError && <p className="field__error">{applyError}</p>}
 
       {status === 'loading' && <p className="state__hint">Loading entries…</p>}
 
@@ -373,8 +397,6 @@ export function EntriesPage() {
                   </div>
                 </div>
               )}
-              {applyError && <p className="field__error">{applyError}</p>}
-
               {visibleCount < visible.length && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
                   <button

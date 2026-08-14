@@ -60,8 +60,10 @@ export const httpApiClient = {
   timeEntries: {
     // GET /api/time-entries?user_name=X&from=Y&to=Z → TimeEntry[]
     list: () => notImplemented('timeEntries.list'),
-    // PATCH /api/time-entries/allocation { entryIds, allocation } → { updatedIds }
-    // (las ya facturadas se descartan server-side: puede devolver menos ids)
+    // PATCH /api/time-entries/allocation { entryIds, allocation }
+    //   → { updatedIds, skippedFrozen, failures, unconfirmed }
+    // (las ya facturadas se descartan server-side; los tres contadores separan
+    //  "nunca se va a poder", "reintentable" y "se perdió en silencio")
     setAllocation: () => notImplemented('timeEntries.setAllocation'),
   },
 

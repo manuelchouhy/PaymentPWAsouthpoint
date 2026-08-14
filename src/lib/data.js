@@ -354,10 +354,15 @@ function chunkIds(ids) {
 }
 
 /**
- * Ids de entries que ya salieron en una factura fuera de Pending, releídos de
- * la base. La UI decide qué checkbox habilita con los datos que cargó al
- * montar; si mientras tanto se emitió una factura en otra sesión, ese cache
- * quedó viejo y sólo esta relectura lo detecta.
+ * Ids de entries que ya salieron en una factura, releídos de la base. La UI
+ * decide qué checkbox habilita con los datos que cargó al montar; si mientras
+ * tanto se emitió una factura en otra sesión, ese cache quedó viejo y sólo
+ * esta relectura lo detecta.
+ *
+ * Congela cualquier entry que aparezca en una factura, sin mirar su status:
+ * `invoices.status` sólo admite Invoiced/Collected/Paid (0003), y "Pending"
+ * es el estado sintético que la UI muestra cuando NO hay factura. Filtrar por
+ * `status != 'Pending'` acá parecería más estricto y no filtraría nada.
  */
 async function getFrozenEntryIds(entryIds) {
   // entry_ids es bigint[]: un id no numérico no puede estar ahí (mismo criterio
@@ -370,7 +375,6 @@ async function getFrozenEntryIds(entryIds) {
     const { data, error } = await supabase
       .from('invoices')
       .select('entry_ids')
-      .neq('status', 'Pending')
       .overlaps('entry_ids', chunk)
     if (error) throw new Error(error.message)
     for (const row of data) {
@@ -386,31 +390,38 @@ async function getFrozenEntryIds(entryIds) {
  * grilla nunca la edita por click en la celda, porque define quién paga esas
  * horas.
  *
- * No toca entries ya facturadas (factura fuera de Pending): la UI deshabilita
- * su checkbox, pero lo hace contra los datos que cargó al montar, así que acá
- * se revalida contra la base — una allocation cambiada después de facturar
- * desalinearía la factura de su justificación. Las congeladas se descartan sin
- * error: el llamador compara los ids devueltos contra los que mandó para saber
- * qué quedó afuera.
+ * No toca entries ya facturadas: la UI deshabilita su checkbox, pero lo hace
+ * contra los datos que cargó al montar, así que acá se revalida contra la base
+ * — una allocation cambiada después de facturar desalinearía la factura de su
+ * justificación.
+ *
+ * Devolver sólo los ids escritos no alcanza: quedarse corto porque una hora ya
+ * estaba facturada (definitivo, no hay nada que reintentar) y quedarse corto
+ * porque una tanda falló (transitorio, reintentable) son cosas distintas y la
+ * UI tiene que poder decir cuál fue. Por eso el resultado las separa en vez de
+ * dejar que el llamador adivine restando.
  *
  * @param {Array<string|number>} entryIds
  * @param {'bill_to_client'|'overage'|'sp_internal'} allocation
  * @param {?string} changedBy
- * @returns {Promise<Array<string|number>>} ids realmente actualizados.
+ * Los tres motivos por los que una entry pedida puede no aparecer en
+ * `updatedIds` piden mensajes distintos: `skippedFrozen` (ya facturada: nunca
+ * se va a poder), `failures` (la tanda falló: reintentable) y `unconfirmed`
+ * (la base aceptó el pedido y no devolvió la fila: se perdió en silencio).
+ *
+ * @returns {Promise<{updatedIds: Array<string|number>, skippedFrozen: number, failures: string[], unconfirmed: number}>}
  */
 export async function setEntriesAllocation(entryIds, allocation, changedBy) {
-  if (!entryIds?.length) return []
-  const wanted = new Set(entryIds.map(String))
+  if (!entryIds?.length) return { updatedIds: [], skippedFrozen: 0, failures: [], unconfirmed: 0 }
 
   if (!isSupabaseConfigured) {
     await new Promise((resolve) => setTimeout(resolve, 250))
     // Mutar el mock: sin esto la grilla muestra el cambio, y en el próximo
     // Retry la clasificación desaparece — en una demo se lee como pérdida de
     // datos, no como modo mock.
+    const wanted = new Set(entryIds.map(String))
     const frozenMock = new Set(
-      MOCK_INVOICES.filter((inv) => inv.status !== 'Pending').flatMap((inv) =>
-        (inv.entryIds ?? []).map(String),
-      ),
+      MOCK_INVOICES.flatMap((inv) => (inv.entryIds ?? []).map(String)),
     )
     const updated = []
     for (const entry of MOCK_TIME_ENTRIES) {
@@ -419,12 +430,14 @@ export async function setEntriesAllocation(entryIds, allocation, changedBy) {
       entry.allocation = allocation
       updated.push(entry.id)
     }
-    return updated
+    const skippedFrozen = [...wanted].filter((id) => frozenMock.has(id)).length
+    return { updatedIds: updated, skippedFrozen, failures: [], unconfirmed: 0 }
   }
 
   const frozen = await getFrozenEntryIds(entryIds)
   const allowed = entryIds.filter((id) => !frozen.has(String(id)))
-  if (!allowed.length) return []
+  const skippedFrozen = entryIds.length - allowed.length
+  if (!allowed.length) return { updatedIds: [], skippedFrozen, failures: [], unconfirmed: 0 }
 
   // Allocations previas para el audit: sin el `before`, una reclasificación
   // discutida no se puede reconstruir — y esto define quién paga esas horas.
@@ -438,17 +451,81 @@ export async function setEntriesAllocation(entryIds, allocation, changedBy) {
     for (const row of data) previous.set(String(row.id), row.allocation ?? null)
   }
 
+  // Cada tanda es un PATCH independiente: no hay transacción que las agrupe.
+  // Si la tercera falla, las dos primeras YA se escribieron, así que cortar con
+  // una excepción reportaría "no se aplicó nada" sobre filas que sí cambiaron
+  // y —peor— se saltearía el audit de esa plata ya movida. Se acumula el error
+  // y se sigue: el resultado dice la verdad de lo que quedó escrito.
   const updatedIds = []
+  const failures = []
+  let failedCount = 0
+  // Ids que una tanda SIN error igual no devolvió: PostgREST responde 200 con
+  // las filas que pasaron RLS, así que una fila filtrada se ve idéntica a una
+  // que no existe. Contarlas aparte es lo único que separa "se guardó" de "se
+  // perdió en silencio" cuando el resto de la tanda sí entró.
+  let unconfirmedIds = []
   for (const chunk of chunkIds(allowed)) {
     const { data, error } = await supabase
       .from('time_entries')
       .update({ allocation })
       .in('id', chunk)
       .select('id')
-    if (error) throw new Error(error.message)
+    if (error) {
+      // Se guardan todos, no sólo el último: dos tandas pueden fallar por
+      // motivos distintos (permisos y timeout) y el audit tiene que mostrarlo.
+      failures.push(error.message)
+      failedCount += chunk.length
+      console.error('Falló una tanda de allocation:', error.message)
+      continue
+    }
+    const returned = new Set(data.map((row) => String(row.id)))
     for (const row of data) updatedIds.push(row.id)
+    for (const id of chunk) if (!returned.has(String(id))) unconfirmedIds.push(id)
   }
-  if (!updatedIds.length) return []
+
+  // Una entry puede haberse facturado entre el chequeo inicial y el UPDATE: con
+  // 0029 la policy la filtra, y llega hasta acá como "no confirmada". Antes de
+  // culpar a los permisos se relee — decirle "reintentá" a alguien por horas
+  // que ya nunca van a ser escribibles es mandarlo a chocar contra una pared.
+  let frozenLate = 0
+  if (unconfirmedIds.length) {
+    // Este chequeo es informativo y corre DESPUÉS de haber escrito: si falla,
+    // no puede tumbar la función. Dejarlo propagar perdería el audit de horas
+    // ya reclasificadas y le diría al usuario "no se cambió nada" sobre un
+    // update que sí entró. Sin respuesta, esos ids quedan sin explicar.
+    try {
+      const frozenNow = await getFrozenEntryIds(unconfirmedIds)
+      const stillUnexplained = unconfirmedIds.filter((id) => !frozenNow.has(String(id)))
+      frozenLate = unconfirmedIds.length - stillUnexplained.length
+      unconfirmedIds = stillUnexplained
+    } catch (error) {
+      console.warn('No se pudo releer las facturas para explicar el faltante:', error.message)
+    }
+  }
+  const frozenTotal = skippedFrozen + frozenLate
+
+  if (!updatedIds.length) {
+    // Sólo es excepción si hubo un error de verdad. Que no se haya escrito nada
+    // porque todo estaba facturado, o porque el UPDATE se filtró a cero filas y
+    // devolvió 200, se informa con los contadores: el llamador arma un mensaje
+    // por motivo y fuerza la relectura. Tirar una excepción genérica acá
+    // borraría esos contadores y dejaría al usuario reintentando horas que
+    // nunca van a ser escribibles.
+    if (failures.length) throw new Error(failures[0])
+    if (unconfirmedIds.length) {
+      console.error(
+        'El update no alcanzó ninguna fila y no hay factura que lo explique:',
+        unconfirmedIds.length,
+        'entries — revisar permisos o sesión.',
+      )
+    }
+    return {
+      updatedIds: [],
+      skippedFrozen: frozenTotal,
+      failures: [],
+      unconfirmed: unconfirmedIds.length,
+    }
+  }
 
   await logAudit({
     actorEmail: changedBy,
@@ -458,9 +535,25 @@ export async function setEntriesAllocation(entryIds, allocation, changedBy) {
     before: {
       entries: updatedIds.map((id) => ({ id, allocation: previous.get(String(id)) ?? null })),
     },
-    after: { allocation, entryIds: updatedIds, entryCount: updatedIds.length },
+    after: {
+      allocation,
+      entryIds: updatedIds,
+      entryCount: updatedIds.length,
+      // Deja rastro de que el bloque pedido no entró entero, para que el log no
+      // parezca una clasificación prolija cuando fue parcial.
+      ...(frozenTotal ? { skippedFrozen: frozenTotal } : {}),
+      ...(failures.length
+        ? { failedChunks: failures.length, failedCount, partialFailures: failures }
+        : {}),
+      ...(unconfirmedIds.length ? { unconfirmed: unconfirmedIds.length } : {}),
+    },
   })
-  return updatedIds
+  return {
+    updatedIds,
+    skippedFrozen: frozenTotal,
+    failures,
+    unconfirmed: unconfirmedIds.length,
+  }
 }
 
 // NOTA: el módulo de Payments al contractor (FR-10) vive en `paymentsData.js`.

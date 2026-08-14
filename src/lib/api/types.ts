@@ -302,14 +302,21 @@ export interface ApiClient {
     list(): Promise<TimeEntry[]>
     /**
      * Triage en bloque: asigna la misma allocation a todas las entries dadas.
-     * Devuelve los ids realmente actualizados — las ya facturadas se descartan,
-     * así que puede ser un subconjunto de `entryIds`.
+     * `updatedIds` son las que la base confirmó; puede ser un subconjunto de
+     * `entryIds` por tres motivos que NO son equivalentes: `skippedFrozen` (ya
+     * facturadas, definitivo), `failures` (tandas que fallaron, reintentable) y
+     * `unconfirmed` (la base aceptó y no devolvió la fila: pérdida silenciosa).
      */
     setAllocation(
       entryIds: Array<string | number>,
       allocation: 'bill_to_client' | 'overage' | 'sp_internal',
       changedBy?: string | null,
-    ): Promise<Array<string | number>>
+    ): Promise<{
+      updatedIds: Array<string | number>
+      skippedFrozen: number
+      failures: string[]
+      unconfirmed: number
+    }>
   }
 
   invoices: {
