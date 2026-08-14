@@ -106,8 +106,15 @@ export function BillingPage() {
   // Las opciones de los dropdowns salen de TODAS las entries, no sólo de las
   // bill_to_client: las tarjetas de facturado cuentan sobre todas, así que un
   // cliente cuyas horas están todas sin clasificar aporta a "Invoiced" pero no
-  // aparecería en la lista. Tildar todas las opciones daría menos que no tildar
-  // ninguna — lo contrario de lo que un multi-select promete.
+  // aparecería en la lista.
+  //
+  // LIMITACIÓN que esto NO arregla: sortedUnique descarta los valores vacíos y
+  // rowToEntry normaliza client/project null a ''. Una entry sin cliente cuenta
+  // en las tarjetas pero no la alcanza ningún filtro, así que tildar todos los
+  // clientes puede dar MENOS que no tildar ninguno. No es teórico: hoy en
+  // producción 550 de 559 entries tienen client vacío. Arreglarlo pide una
+  // opción explícita tipo "—" en MultiSelectDropdown, que es compartido por
+  // varias pantallas: va en su propio slice.
   const options = useMemo(
     () => ({
       contractors: sortedUnique(entries.map((e) => e.user)),
@@ -316,7 +323,8 @@ export function BillingPage() {
         </div>
         <h1 className="masthead__title">Billing</h1>
         <p className="masthead__sub">
-          Hours classified as bill to client, ready to enter the existing invoice pipeline.
+          Hours classified as bill to client, ready to enter the existing invoice pipeline. The
+          invoiced totals cover every allocation, including hours billed before triage existed.
         </p>
       </motion.header>
 
@@ -413,6 +421,7 @@ export function BillingPage() {
                 {formatHours(cards.collected)}
                 <span className="dash-kpi__unit"> h</span>
               </span>
+              <span className="dash-kpi__hint">any allocation</span>
             </div>
             <div className="dash-kpi dash-kpi--static">
               <div className="dash-kpi__head">
@@ -422,6 +431,7 @@ export function BillingPage() {
                 {formatHours(cards.pendingCollection)}
                 <span className="dash-kpi__unit"> h</span>
               </span>
+              <span className="dash-kpi__hint">any allocation</span>
             </div>
           </div>
 
@@ -434,7 +444,14 @@ export function BillingPage() {
 
           {groups.length === 0 ? (
             <div className="empty">
-              No hours ready to bill. Classify approved hours as “bill to client” in Entries first.
+              {/* Si lo que hay bajo el filtro actual ya está facturado, mandar a
+                  clasificar es un consejo imposible: esas filas están congeladas
+                  —checkbox deshabilitado en Entries y rechazo en
+                  setEntriesAllocation— así que el usuario iría a un control que
+                  no se puede tocar. */}
+              {cards.invoiced > 0
+                ? 'No hours ready to bill. The hours shown above are already invoiced — they stay as they were classified when billed.'
+                : 'No hours ready to bill. Classify approved hours as “bill to client” in Entries first.'}
             </div>
           ) : (
             <>
