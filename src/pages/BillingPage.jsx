@@ -103,33 +103,37 @@ export function BillingPage() {
     return map
   }, [invoices])
 
-  // Toda la pantalla mira sólo horas facturables al cliente: overage y SP
-  // internal no se le cobran a nadie acá (el overage se resuelve por Change
-  // Request, en Projects and SOW).
-  const billable = useMemo(
-    () => entries.filter((e) => e.allocation === 'bill_to_client'),
+  // Las opciones de los dropdowns salen de TODAS las entries, no sólo de las
+  // bill_to_client: las tarjetas de facturado cuentan sobre todas, así que un
+  // cliente cuyas horas están todas sin clasificar aporta a "Invoiced" pero no
+  // aparecería en la lista. Tildar todas las opciones daría menos que no tildar
+  // ninguna — lo contrario de lo que un multi-select promete.
+  const options = useMemo(
+    () => ({
+      contractors: sortedUnique(entries.map((e) => e.user)),
+      clients: sortedUnique(entries.map((e) => e.client)),
+      projects: sortedUnique(entries.map((e) => e.project)),
+    }),
     [entries],
   )
 
-  const options = useMemo(
-    () => ({
-      contractors: sortedUnique(billable.map((e) => e.user)),
-      clients: sortedUnique(billable.map((e) => e.client)),
-      projects: sortedUnique(billable.map((e) => e.project)),
-    }),
-    [billable],
-  )
-
-  const filtered = useMemo(
-    () => applyEntryFilters(billable, filters, invoiceByEntryId),
-    [billable, filters, invoiceByEntryId],
-  )
-
-  // Las mismas filas pero SIN el filtro de allocation, para las tarjetas de lo
-  // ya facturado. Ver el comentario de `cards`.
+  // Todas las filas que pasan los filtros del usuario, sin mirar allocation.
   const filteredAllAllocations = useMemo(
     () => applyEntryFilters(entries, filters, invoiceByEntryId),
     [entries, filters, invoiceByEntryId],
+  )
+
+  // La grilla y "Pending to bill" miran sólo horas facturables al cliente:
+  // overage y SP internal no se le cobran a nadie acá (el overage se resuelve
+  // por Change Request, en Projects and SOW).
+  //
+  // Se deriva del conjunto de arriba en vez de volver a filtrar desde `entries`:
+  // así "las mismas filas menos el filtro de allocation" queda garantizado por
+  // construcción y no depende de que dos llamadas a applyEntryFilters sigan
+  // sincronizadas.
+  const filtered = useMemo(
+    () => filteredAllAllocations.filter((e) => e.allocation === 'bill_to_client'),
+    [filteredAllAllocations],
   )
 
   useEffect(() => {
@@ -395,6 +399,11 @@ export function BillingPage() {
                 {formatHours(cards.invoiced)}
                 <span className="dash-kpi__unit"> h</span>
               </span>
+              {/* Las tres tarjetas de facturado tienen otro alcance que la
+                  grilla y que "Pending to bill". Sin decirlo, un filtro que
+                  sólo matchea horas facturadas sin clasificar deja la grilla
+                  vacía y esta tarjeta en un número, sin explicación a la vista. */}
+              <span className="dash-kpi__hint">any allocation, incl. pre-triage hours</span>
             </div>
             <div className="dash-kpi dash-kpi--static">
               <div className="dash-kpi__head">

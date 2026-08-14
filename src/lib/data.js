@@ -70,8 +70,13 @@ const MOCK_TIME_ENTRIES = [
     notes: '',
     date: demoDate(-13),
     hours: 4,
+    // allocation null a propósito, y esta entry ESTÁ facturada (inv-mock-1):
+    // reproduce la hora anterior al triage que existe en producción. Es el
+    // único fixture que distingue el cálculo correcto de las tarjetas de
+    // facturado del bug que las dejaba en cero — sin ella, revertir ese fix no
+    // cambia ningún número del demo ni rompe ningún test.
+    allocation: null,
     status: 'Approved',
-    allocation: 'bill_to_client',
   },
   {
     id: 'te-03',
