@@ -3633,6 +3633,36 @@ th.col-pop { text-align: center; }
 .capbar__fill--usage { background: hsl(var(--warning)); }
 .capbar__fill--pace { background: hsl(var(--success)); }
 
+/* Barra saturada: llega al tope de la escala pero el valor real la excede. Sin
+   marca se lee igual que una que encaja justo. El rayado dice "se sale". */
+.capbar__fill--over {
+  background-image: repeating-linear-gradient(
+    45deg,
+    hsl(0 0% 100% / 0.35) 0 4px,
+    transparent 4px 8px
+  );
+}
+
+.capbar__over { color: hsl(var(--warning)); font-weight: 700; }
+
+/* Texto sólo para lectores de pantalla. La clase ya se usaba en
+   NodeLoader.jsx:17 pero nunca se había definido, así que su etiqueta
+   ("Loading…") se venía renderizando visible al lado de los puntos. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Misma barra, dentro de una tarjeta KPI. */
+.capbar__track--kpi { margin: 6px 0 2px; }
+
 .cap-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -17,10 +17,17 @@ const sortedUnique = (values) =>
 // pantalla de Time Entries): el número de factura y el monto son del proveedor.
 const groupKey = (entry) => `${entry.user}||${entry.project ?? ''}||${entry.task ?? ''}`
 
+// Un proyecto se identifica por cliente + nombre, no por nombre solo.
+const sowKey = (client, projectName) => `${client ?? ''}||${projectName ?? ''}`
+
 export function BillingPage() {
   const { user, profile, can } = useOutletContext()
   const [entries, setEntries] = useState([])
   const [invoices, setInvoices] = useState([])
+  const [sowByProject, setSowByProject] = useState(() => ({
+    byClientAndName: new Map(),
+    byName: new Map(),
+  }))
   const [status, setStatus] = useState('loading')
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedKeys, setSelectedKeys] = useState(() => new Set())
@@ -31,6 +38,45 @@ export function BillingPage() {
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
+    // Los proyectos son sólo para etiquetar el SOW de cada fila: van aparte de
+    // Promise.all y con catch propio para que un fallo suyo no tire la pantalla
+    // entera, que sí puede facturar sin ese dato.
+    Promise.resolve()
+      .then(() => api.projects.list())
+      .then((projectRows) => {
+        if (cancelled) return
+        // Dos claves por proyecto, porque ninguna sola alcanza:
+        //
+        // - cliente+nombre: dos clientes pueden tener un proyecto llamado igual
+        //   ("Maintenance") con SOW distintos, y con la clave sólo por nombre
+        //   el último en cargarse le pisa el número al otro.
+        // - nombre solo, como fallback: `projects.client` no siempre trae el
+        //   mismo texto que `entry.client` (el wizard escribe el nombre
+        //   canónico del cliente, las entries traen el de Zoho), así que
+        //   exigir que coincidan haría desaparecer la etiqueta.
+        //
+        // El fallback se guarda SÓLO si el nombre es inequívoco entre todos los
+        // proyectos. Ante dos proyectos homónimos se prefiere no mostrar SOW
+        // antes que mostrar el del otro: en una grilla previa a facturar, un
+        // número equivocado es peor que ninguno.
+        //
+        // Van en dos Maps separados a propósito: con uno solo, un proyecto sin
+        // cliente escribe la clave `"||Nombre"`, que es exactamente la que usa
+        // el fallback — y entonces el descarte por ambigüedad no lo borraba y
+        // terminaba sirviendo justo el SOW que había que ocultar.
+        const byClientAndName = new Map()
+        const byName = new Map()
+        for (const project of projectRows) {
+          if (!project.projectName || !project.sowNumber) continue
+          byClientAndName.set(sowKey(project.client, project.projectName), project.sowNumber)
+          const prior = byName.get(project.projectName)
+          if (prior === undefined) byName.set(project.projectName, project.sowNumber)
+          else if (prior !== project.sowNumber) byName.set(project.projectName, null)
+        }
+        setSowByProject({ byClientAndName, byName })
+      })
+      .catch((error) => console.error('No se pudieron cargar los SOW de Billing:', error))
+
     Promise.all([api.timeEntries.list(), api.invoices.list()])
       .then(([entryRows, invoiceRows]) => {
         if (cancelled) return
@@ -251,10 +297,18 @@ export function BillingPage() {
         </p>
       </motion.header>
 
-      {/* Se calla si la página falló: el aviso de una factura emitida hace un
-          rato encima de "Could not load billing data" se lee como si la
-          factura fuera la que falló. */}
-      {notice && status !== 'error' && <p className="state__hint">{notice}</p>}
+      {/* El aviso NO se oculta cuando la página falla: la factura ya está
+          persistida, y esconder su confirmación detrás de "Could not load
+          billing data" haría creer que no se emitió y llevaría a emitirla dos
+          veces. Se aclara qué fue lo que falló, que era el riesgo de dejar el
+          aviso suelto arriba del error. La staleness entre filtros ya la
+          resuelve el setNotice('') del efecto de arriba. */}
+      {notice && (
+        <p className="state__hint">
+          {notice}
+          {status === 'error' && ' The invoice was created — only the refresh below failed.'}
+        </p>
+      )}
 
       {status === 'loading' && <p className="state__hint">Loading billing data…</p>}
 
@@ -393,7 +447,20 @@ export function BillingPage() {
                         <td className="cell-strong">{group.user}</td>
                         <td>
                           {group.project || '—'}
-                          {group.task && <div className="cell-soft">{group.task}</div>}
+                          {(() => {
+                            const sow =
+                              sowByProject.byClientAndName.get(
+                                sowKey(group.client, group.project),
+                              ) ?? sowByProject.byName.get(group.project)
+                            if (!group.task && !sow) return null
+                            return (
+                              <div className="cell-soft">
+                                {group.task}
+                                {group.task && sow && ' · '}
+                                {sow}
+                              </div>
+                            )
+                          })()}
                         </td>
                         <td className="cell-soft">{group.client || '—'}</td>
                         <td className="col-num cell-mono">{formatHours(group.hours)}</td>

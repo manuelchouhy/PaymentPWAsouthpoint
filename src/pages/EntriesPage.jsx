@@ -44,8 +44,13 @@ export function EntriesPage() {
   const initialFilters = useMemo(() => {
     // getAll: un cliente comercial puede agrupar varios nombres de Zoho, y
     // Client Summary los manda todos.
-    const clientParams = searchParams.getAll('client')
-    const projectParams = searchParams.getAll('project')
+    //
+    // filter(Boolean): un `?client=` vacío (bookmark viejo, URL editada a mano)
+    // dejaría clients: [''] y, como el filtro hace includes(entry.client), la
+    // grilla saldría en cero sin forma visible de destildarlo — el dropdown sólo
+    // lista valores que existen en las entries.
+    const clientParams = searchParams.getAll('client').filter(Boolean)
+    const projectParams = searchParams.getAll('project').filter(Boolean)
     if (!clientParams.length && !projectParams.length) return undefined
     return { clients: clientParams, projects: projectParams }
     // Sólo el valor inicial: si se recalculara, cambiar el filtro a mano y
@@ -277,9 +282,16 @@ export function EntriesPage() {
           fuerza una relectura, así que si viviera adentro de la grilla el
           "Loading entries…" lo taparía justo cuando hay que leerlo. No se
           limpia al terminar la relectura porque no es un estado transitorio,
-          es el resultado del Apply — pero sí se calla si la página entera
-          falló: apilarlo sobre "Could not load entries" sería ruido. */}
-      {applyError && status !== 'error' && <p className="field__error">{applyError}</p>}
+          es el resultado del Apply.
+          Tampoco se calla si la relectura falla: es justo cuando más hace
+          falta, porque es lo único que dice qué pasó con las filas que no se
+          escribieron ("40 de 250 ya estaban facturadas").
+          Sin sufijo aclaratorio, a diferencia del aviso de BillingPage: acá el
+          único camino que deja `applyError` seteado y además fuerza la
+          relectura es el de falla parcial, así que un "lo que falló fue la
+          recarga" quedaría pegado justo al mensaje que reporta qué filas no se
+          guardaron, negándolo. */}
+      {applyError && <p className="field__error">{applyError}</p>}
 
       {status === 'loading' && <p className="state__hint">Loading entries…</p>}
 

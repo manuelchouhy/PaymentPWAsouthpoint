@@ -6,7 +6,8 @@ import { api } from '../lib/api'
 import { formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { effectiveBudgetHours } from '../lib/changeRequestsData'
-import { displaySupplierStatus } from '../lib/supplierContractsData'
+import { displaySupplierStatus, supplierContractStatus } from '../lib/supplierContractsData'
+import { daysRemaining } from '../lib/projectsData'
 import { ExportDropdown } from '../components/ExportDropdown'
 
 // Ventana para medir el uso real. 4 semanas: menos que eso y una semana de
@@ -21,9 +22,16 @@ const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000
 // El vencimiento se DERIVA de expirationDate, no se lee de la columna `status`:
 // nada en la app escribe 'Expired' ahí (el flujo de renovación sólo escribe
 // 'Active' y 'Renewal in Progress'), así que confiar en la columna dejaría
-// contratos vencidos sumando capacidad. Es la misma razón por la que
-// SupplierContractsPage usa displaySupplierStatus.
-const isActiveContract = (c) => !c.archived && displaySupplierStatus(c) !== 'Expired'
+// contratos vencidos sumando capacidad.
+//
+// Se usa supplierContractStatus(daysRemaining(...)) directo y NO
+// displaySupplierStatus: ése corta en 'Renewal in Progress' mientras el snooze
+// siga vigente, sin mirar la fecha. Un contrato que venció ayer pero tiene un
+// snooze de 30 días seguiría sumando sus horas a "Contracted capacity", cuyo
+// hint promete justamente lo contrario. Para mostrar el estado al usuario
+// displaySupplierStatus es lo correcto; para contar capacidad, no.
+const isActiveContract = (c) =>
+  !c.archived && supplierContractStatus(daysRemaining(c.expirationDate)) !== 'Expired'
 
 function weeksBetween(fromISO, toDate) {
   const from = new Date(`${fromISO}T00:00:00Z`)
@@ -92,11 +100,26 @@ export function CapacityPage() {
         contracted: 0,
         hasActiveContract: false,
         hasContract: true,
+        renewalInProgress: false,
       }
       if (active && contract.weeklyContractedHours != null) {
         row.contracted += Number(contract.weeklyContractedHours)
       }
       if (active) row.hasActiveContract = true
+      // El badge tiene que decir lo mismo que Supplier Contracts sobre el mismo
+      // contrato. Un contrato vencido con renovación en curso no suma capacidad
+      // (arriba), pero tampoco es un "contract expired" rojo: allá se ve
+      // "Renewal in Progress" y dos pantallas contradiciéndose sobre el mismo
+      // contrato es peor que una capacidad conservadora.
+      // !archived: renewSupplierContract archiva el contrato viejo sin resetear
+      // su `status`, así que un contrato renovado queda con 'Renewal in
+      // Progress' para siempre. Sin este guard, ese fantasma archivado —que
+      // Supplier Contracts ni siquiera lista— le pintaría el badge al proveedor
+      // encima de su contrato vigente vencido. Justo la contradicción entre
+      // pantallas que este flag venía a evitar.
+      if (!contract.archived && displaySupplierStatus(contract) === 'Renewal in Progress') {
+        row.renewalInProgress = true
+      }
       byProvider.set(contract.supplierName, row)
     }
     // Alguien puede estar cargando horas sin contrato cargado en el sistema:
@@ -110,6 +133,7 @@ export function CapacityPage() {
           contracted: 0,
           hasActiveContract: false,
           hasContract: false,
+          renewalInProgress: false,
         })
       }
     }
@@ -119,7 +143,7 @@ export function CapacityPage() {
         const ratio = row.contracted > 0 ? usage / row.contracted : null
         let state = 'ok'
         if (!row.hasContract) state = 'no-contract'
-        else if (!row.hasActiveContract) state = 'contract-expired'
+        else if (!row.hasActiveContract) state = row.renewalInProgress ? 'renewing' : 'contract-expired'
         else if (ratio == null) state = 'no-hours-set'
         else if (ratio > 1) state = 'over-contract'
         else if (ratio >= 0.9) state = 'at-limit'
@@ -161,11 +185,11 @@ export function CapacityPage() {
           sow: project.sowNumber || project.projectName || '—',
           remaining,
           weeksLeft: overdue ? 0 : weeksLeft,
-          // Piso de una semana: un SOW que vence pasado mañana daría "700 h/wk"
-          // y, como las tres barras comparten escala, aplastaría el panel
-          // entero a una raya. El ritmo sigue siendo enorme, pero legible.
-          requiredPace:
-            !overdue && weeksLeft && weeksLeft > 0 ? remaining / Math.max(1, weeksLeft) : null,
+          // Exacto, sin piso: este número va al KPI "Required pace" y a la
+          // columna "Required h/wk" del export, y con él se planifica staffing.
+          // Un SOW con 100 h y 3 días de plazo requiere 233 h/wk, no 100.
+          // La legibilidad de las barras se resuelve en barScale, no acá.
+          requiredPace: !overdue && weeksLeft && weeksLeft > 0 ? remaining / weeksLeft : null,
           overdue,
         }
       })
@@ -186,13 +210,25 @@ export function CapacityPage() {
       // Cobertura = cuánto de la capacidad contratada se está usando. Sin
       // capacidad cargada no es 0%, es "no se sabe".
       coverage: contracted > 0 ? (usage / contracted) * 100 : null,
+      // Para el hint de la tarjeta: cuántos proveedores aportan esas horas.
+      providersWithCapacity: providerRows.filter((r) => r.contracted > 0).length,
     }
   }, [providerRows, demandRows])
 
   // Las tres barras comparten escala: si cada una se normalizara contra sí
   // misma, "100 contratadas" y "25 requeridas" se verían igual de largas.
-  const barScale = Math.max(totals.contracted, totals.usage, totals.requiredPace, 1)
+  //
+  // La escala la fijan capacidad y uso, NO el ritmo requerido: un SOW por vencer
+  // puede exigir cientos de h/wk y, entrando en el max, aplastaría las otras dos
+  // barras a una raya. Cuando el ritmo excede la escala su barra se clava en
+  // 100% —"se sale del gráfico", que es exactamente la lectura correcta— y el
+  // valor exacto sigue impreso al lado.
+  const barScale = Math.max(totals.contracted, totals.usage, 1)
   const barWidth = (value) => `${Math.min(100, (value / barScale) * 100)}%`
+  // Una barra clavada en 100% por saturación se lee igual que una que llega
+  // justo — es decir, "demanda exactamente cubierta" en el momento en que la
+  // demanda es 9x la capacidad. Se marca para que el tope no mienta.
+  const barOverflows = (value) => value > barScale
 
   function handleExportProviders(format) {
     exportGrid({
@@ -220,7 +256,12 @@ export function CapacityPage() {
       rows: demandRows.map((r) => ({
         sow: r.sow,
         remaining: r.remaining,
-        weeks: r.weeksLeft == null ? '' : Math.round(r.weeksLeft),
+        weeks:
+          r.weeksLeft == null
+            ? ''
+            : r.weeksLeft > 0 && r.weeksLeft < 1
+              ? '<1'
+              : Math.round(r.weeksLeft),
         pace: r.requiredPace == null ? '' : Number(r.requiredPace.toFixed(1)),
       })),
       columns: [
@@ -278,7 +319,12 @@ export function CapacityPage() {
                 {formatHours(totals.contracted)}
                 <span className="dash-kpi__unit"> h/wk</span>
               </span>
-              <span className="dash-kpi__hint">excludes expired and archived contracts</span>
+              <span className="dash-kpi__hint">
+                {totals.providersWithCapacity === 1
+                  ? '1 provider, '
+                  : `${totals.providersWithCapacity} providers, `}
+                excludes expired and archived contracts
+              </span>
             </div>
             <div className="dash-kpi dash-kpi--static">
               <div className="dash-kpi__head">
@@ -307,6 +353,14 @@ export function CapacityPage() {
               <span className="dash-kpi__value">
                 {totals.coverage == null ? '—' : `${Math.round(totals.coverage)}%`}
               </span>
+              {totals.coverage != null && (
+                <div className="capbar__track capbar__track--kpi">
+                  <span
+                    className={`capbar__fill${totals.coverage > 100 ? ' capbar__fill--over' : ''}`}
+                    style={{ width: `${Math.min(100, totals.coverage)}%` }}
+                  />
+                </div>
+              )}
               <span className="dash-kpi__hint">
                 {totals.coverage == null
                   ? 'no contracted hours loaded yet'
@@ -326,10 +380,30 @@ export function CapacityPage() {
                 <div key={bar.label} className="capbar">
                   <div className="capbar__head">
                     <span>{bar.label}</span>
-                    <b>{formatHours(bar.value)} h/wk</b>
+                    <b>
+                      {barOverflows(bar.value) && (
+                        <>
+                          <span className="capbar__over" aria-hidden="true">
+                            ▸{' '}
+                          </span>
+                          {/* El ▸ y el rayado de la barra son señales puramente
+                              visuales. Va en un span sr-only y no en un
+                              aria-label sobre el <b>: sobre rol genérico los
+                              lectores de pantalla no lo anuncian de forma
+                              confiable. */}
+                          <span className="sr-only">exceeds contracted capacity: </span>
+                        </>
+                      )}
+                      {formatHours(bar.value)} h/wk
+                    </b>
                   </div>
                   <div className="capbar__track">
-                    <span className={`capbar__fill${bar.cls}`} style={{ width: barWidth(bar.value) }} />
+                    <span
+                      className={`capbar__fill${bar.cls}${
+                        barOverflows(bar.value) ? ' capbar__fill--over' : ''
+                      }`}
+                      style={{ width: barWidth(bar.value) }}
+                    />
                   </div>
                 </div>
               ))}
@@ -401,7 +475,15 @@ export function CapacityPage() {
                           <td className="cell-strong">{row.sow}</td>
                           <td className="col-num cell-mono">{formatHours(row.remaining)}</td>
                           <td className="col-num cell-mono">
-                            {row.weeksLeft == null ? '—' : Math.round(row.weeksLeft)}
+                            {/* Menos de media semana redondea a 0, y "0 weeks"
+                                al lado de un ritmo de 16.800 h/wk se lee como
+                                un bug en vez de como un SOW que vence mañana.
+                                Debajo de una semana se dice "<1". */}
+                            {row.weeksLeft == null
+                              ? '—'
+                              : row.weeksLeft > 0 && row.weeksLeft < 1
+                                ? '<1'
+                                : Math.round(row.weeksLeft)}
                           </td>
                           <td className="col-num cell-mono">
                             {row.overdue ? 'past due' : row.requiredPace == null ? '—' : formatHours(row.requiredPace)}
@@ -425,6 +507,9 @@ const PROVIDER_STATE_LABELS = {
   'at-limit': 'at limit',
   'over-contract': 'over contract',
   'contract-expired': 'contract expired',
+  // Vencido pero con renovación en curso: no suma capacidad, pero es lo mismo
+  // que muestra Supplier Contracts para ese contrato.
+  renewing: 'renewal in progress',
   'no-contract': 'no contract on file',
   'no-hours-set': 'no hours set',
 }
@@ -434,6 +519,7 @@ const PROVIDER_STATE_CLASS = {
   'at-limit': 'badge--pending',
   'over-contract': 'badge--no',
   'contract-expired': 'badge--expired',
+  renewing: 'badge--pending',
   // Falta cargar el contrato, no se cayó: no merece el rojo de "vencido".
   'no-contract': 'badge--pending',
   'no-hours-set': 'badge--pending',

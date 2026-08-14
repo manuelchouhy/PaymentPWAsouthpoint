@@ -71,6 +71,13 @@ export function ClientSummaryPage() {
     return map
   }, [entries])
 
+  // Nombres de proyecto que realmente figuran en alguna entry — los únicos que
+  // Entries ofrece como opción de filtro.
+  const projectsWithEntries = useMemo(
+    () => new Set(entries.map((e) => e.project).filter(Boolean)),
+    [entries],
+  )
+
   const clientOptions = useMemo(
     () => sortedUnique(projects.map((p) => p.customerName || UNASSIGNED)),
     [projects],
@@ -91,8 +98,6 @@ export function ClientSummaryPage() {
         projectName: project.projectName,
         sowNumber: project.sowNumber,
         zohoStatus: project.zohoStatus,
-        // El cliente tal como lo escriben las entries, para poder linkear.
-        entryClient: project.client ?? '',
         budget,
         consumed: hours.consumed,
         overage: hours.overage,
@@ -105,8 +110,13 @@ export function ClientSummaryPage() {
     const list = [...byClient.values()].sort((a, b) => a.client.localeCompare(b.client, 'es'))
     for (const group of list) {
       group.rows.sort((a, b) => (a.projectName ?? '').localeCompare(b.projectName ?? '', 'es'))
-      // Un mismo cliente comercial puede agrupar varios nombres de Zoho.
-      group.entryClients = [...new Set(group.rows.map((r) => r.entryClient).filter(Boolean))]
+      // Nombres de proyecto del grupo que además aparecen en alguna entry: el
+      // dropdown de Project en Entries se arma con los nombres presentes en las
+      // entries, así que mandar uno sin horas deja un filtro puesto que no se
+      // puede destildar porque no figura en la lista — sólo "Clear" lo saca.
+      group.projectNames = [
+        ...new Set(group.rows.map((r) => r.projectName).filter((n) => n && projectsWithEntries.has(n))),
+      ]
       group.consumed = group.rows.reduce((sum, r) => sum + r.consumed, 0)
       group.overage = group.rows.reduce((sum, r) => sum + r.overage, 0)
       // El budget del cliente suma sólo proyectos que tienen presupuesto
@@ -115,7 +125,7 @@ export function ClientSummaryPage() {
       group.budget = group.rows.reduce((sum, r) => sum + (r.budget ?? 0), 0)
     }
     return list
-  }, [projects, selectedClients, hoursByProject, crsByProject])
+  }, [projects, selectedClients, hoursByProject, crsByProject, projectsWithEntries])
 
   const totals = useMemo(
     () => ({
@@ -132,17 +142,32 @@ export function ClientSummaryPage() {
     )
   }
 
-  // OJO: el filtro de Entries corre sobre `entry.client`, que se corresponde con
-  // `projects.client` (el texto que viene de Zoho, "HSS"), NO con
-  // `customerName` ("Health Systems Solutions"), que es el nombre comercial con
-  // el que se agrupa en pantalla. Mandar el nombre de agrupación llevaría a
-  // Entries con el dropdown puesto y cero filas.
-  function goToEntries({ entryClients, project }) {
+  // El drill-down filtra por NOMBRE DE PROYECTO, no por cliente, porque es la
+  // misma clave con la que se calculó el número clickeado (`hoursByProject` se
+  // agrupa por `entry.project`).
+  //
+  // Filtrar por cliente fallaba en las dos direcciones: de menos, porque un
+  // proyecto sin `projects.client` cargado aporta horas al total pero no tiene
+  // valor con el cual filtrarlas; y de más, porque dos grupos pueden compartir
+  // el mismo `client` de Zoho cuando difieren en `customerName`, y clickear
+  // cualquiera traía las horas de ambos.
+  //
+  // OJO, la grilla de destino NO es igual al número clickeado, y no puede serlo:
+  // Entries no filtra por status ni por allocation, así que muestra también las
+  // rechazadas y las de overage, que el consumido excluye. Es un "llevame a las
+  // horas de este proyecto", no una reconciliación. Tampoco distingue dos
+  // proyectos que se llamen igual — limitación de fondo: `hoursByProject` los
+  // mete en el mismo balde, así que la fila ya venía sumando las horas de los
+  // dos desde antes de este drill-down.
+  function goToEntries(projectNames) {
     const params = new URLSearchParams()
-    for (const value of new Set((entryClients ?? []).filter(Boolean))) {
-      params.append('client', value)
+    for (const value of new Set((projectNames ?? []).filter(Boolean))) {
+      params.append('project', value)
     }
-    if (project) params.append('project', project)
+    // Sin filtro que mandar, navegar abriría Entries con TODA la cartera
+    // presentada como si fueran las horas de este cliente. Mejor no ofrecer el
+    // drill-down (abajo el link no se dibuja) que ofrecer uno que miente.
+    if (![...params.keys()].length) return
     navigate(`/entries?${params.toString()}`)
   }
 
@@ -259,13 +284,19 @@ export function ClientSummaryPage() {
                     <Fragment key={group.client}>
                       <tr className="summary-row--client">
                         <th scope="rowgroup">
-                          <button
-                            type="button"
-                            className="linklike"
-                            onClick={() => goToEntries({ entryClients: group.entryClients })}
-                          >
-                            {group.client}
-                          </button>
+                          {group.projectNames.length ? (
+                            <button
+                              type="button"
+                              className="linklike"
+                              onClick={() => goToEntries(group.projectNames)}
+                            >
+                              {group.client}
+                            </button>
+                          ) : (
+                            // Ningún proyecto del grupo tiene nombre: no hay
+                            // filtro posible, así que tampoco link.
+                            group.client
+                          )}
                         </th>
                         <td />
                         <td className="col-num cell-mono">{formatHours(group.consumed)}</td>
@@ -279,19 +310,28 @@ export function ClientSummaryPage() {
                       {group.rows.map((row) => (
                         <tr key={row.id}>
                           <td style={{ paddingLeft: 26 }}>
-                            <button
-                              type="button"
-                              className="linklike"
-                              onClick={() =>
-                                goToEntries({
-                                  entryClients: [row.entryClient],
-                                  project: row.projectName,
-                                })
-                              }
-                            >
-                              {row.projectName || '—'}
-                              {row.sowNumber && <span className="cell-soft"> · {row.sowNumber}</span>}
-                            </button>
+                            {/* Mismo criterio que el link del grupo: un proyecto
+                                sin entries deja en Entries un filtro que no
+                                figura en el dropdown y sólo sale con "Clear". */}
+                            {projectsWithEntries.has(row.projectName) ? (
+                              <button
+                                type="button"
+                                className="linklike"
+                                onClick={() => goToEntries([row.projectName])}
+                              >
+                                {row.projectName || '—'}
+                                {row.sowNumber && (
+                                  <span className="cell-soft"> · {row.sowNumber}</span>
+                                )}
+                              </button>
+                            ) : (
+                              <>
+                                {row.projectName || '—'}
+                                {row.sowNumber && (
+                                  <span className="cell-soft"> · {row.sowNumber}</span>
+                                )}
+                              </>
+                            )}
                           </td>
                           <td className="cell-soft">{row.zohoStatus || '—'}</td>
                           <td className="col-num cell-mono">{formatHours(row.consumed)}</td>

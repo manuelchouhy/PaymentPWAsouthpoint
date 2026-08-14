@@ -221,12 +221,19 @@ export function ClientDetailPage() {
       const line = lineByTask.get(entry.task) ?? UNMAPPED
       const week = isoWeek(entry.date)
       const key = `${line}||${entry.task ?? ''}||${week ?? ''}`
-      const row = map.get(key) ?? { line, task: entry.task ?? '—', week, hours: 0 }
+      const row = map.get(key) ?? { line, task: entry.task ?? '—', week, hours: 0, firstDate: '' }
       row.hours += Number(entry.hours) || 0
+      // Misma razón que en weekView: ordenar por número de semana pondría la
+      // W52/W53 que arrastra enero al final. Se ordena por la fecha más temprana
+      // de la fila, así esta tabla y las columnas de arriba coinciden.
+      if (entry.date && (!row.firstDate || entry.date < row.firstDate)) row.firstDate = entry.date
       map.set(key, row)
     }
     return [...map.values()].sort(
-      (a, b) => a.line.localeCompare(b.line, 'es') || (a.week ?? 0) - (b.week ?? 0),
+      (a, b) =>
+        a.line.localeCompare(b.line, 'es') ||
+        a.firstDate.localeCompare(b.firstDate) ||
+        (a.task ?? '').localeCompare(b.task ?? '', 'es'),
     )
   }, [inPeriod, lineByTask])
 
