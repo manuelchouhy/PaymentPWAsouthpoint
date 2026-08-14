@@ -125,6 +125,13 @@ export function BillingPage() {
     [billable, filters, invoiceByEntryId],
   )
 
+  // Las mismas filas pero SIN el filtro de allocation, para las tarjetas de lo
+  // ya facturado. Ver el comentario de `cards`.
+  const filteredAllAllocations = useMemo(
+    () => applyEntryFilters(entries, filters, invoiceByEntryId),
+    [entries, filters, invoiceByEntryId],
+  )
+
   useEffect(() => {
     setSelectedKeys(new Set())
     // El aviso habla de la selección anterior: dejarlo bajo otra grilla filtrada
@@ -137,25 +144,37 @@ export function BillingPage() {
     let pendingCount = 0
     let invoiced = 0
     let collected = 0
+
+    // "Pending to bill" mira SÓLO bill_to_client: es lo que está por entrar al
+    // pipeline, y overage o SP internal no se le cobran a nadie acá.
     for (const entry of filtered) {
-      const hours = Number(entry.hours) || 0
+      if (invoiceByEntryId.has(String(entry.id))) continue
+      // Sólo las aprobadas están listas para facturar: una hora rechazada no
+      // se le cobra al cliente.
+      if (entry.status !== 'Approved') continue
+      pendingToBill += Number(entry.hours) || 0
+      pendingCount += 1
+    }
+
+    // Las tres tarjetas de lo ya facturado NO filtran por allocation, a
+    // diferencia de la grilla. Las facturas viejas son anteriores al triage de
+    // horas y sus entries tienen allocation en null: exigirles 'bill_to_client'
+    // deja estas tarjetas en cero para siempre, que es literalmente lo que
+    // pasaba (808 h facturadas en la base, "Invoiced 0.0 h" en pantalla).
+    // Una hora que ya se facturó está facturada, sin importar cómo se la haya
+    // clasificado después.
+    for (const entry of filteredAllAllocations) {
       const invoice = invoiceByEntryId.get(String(entry.id))
-      if (!invoice) {
-        // Sólo las aprobadas están listas para facturar: una hora rechazada no
-        // se le cobra al cliente.
-        if (entry.status === 'Approved') {
-          pendingToBill += hours
-          pendingCount += 1
-        }
-        continue
-      }
+      if (!invoice) continue
+      const hours = Number(entry.hours) || 0
       invoiced += hours
       // Collected y Paid ya se cobraron: Paid es el paso siguiente (se le pagó
       // al proveedor), no una vuelta atrás.
       if (invoice.status === 'Collected' || invoice.status === 'Paid') collected += hours
     }
+
     return { pendingToBill, pendingCount, invoiced, collected, pendingCollection: invoiced - collected }
-  }, [filtered, invoiceByEntryId])
+  }, [filtered, filteredAllAllocations, invoiceByEntryId])
 
   // La grilla agrupa por proveedor · proyecto · task, como el prototipo: nadie
   // factura hora por hora, se factura "el backend de tal SOW".
