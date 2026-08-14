@@ -184,7 +184,26 @@ export function BillingPage() {
       if (invoice.status === 'Collected' || invoice.status === 'Paid') collected += hours
     }
 
-    return { pendingToBill, pendingCount, invoiced, collected, pendingCollection: invoiced - collected }
+    // Filas que el usuario TODAVÍA PUEDE clasificar bajo el filtro actual:
+    // aprobadas, sin factura (setEntriesAllocation congela sólo las facturadas)
+    // y que aún no son bill_to_client. Es lo que decide si tiene sentido
+    // mandarlo a Entries — no alcanza con mirar si hay horas facturadas.
+    let classifiable = 0
+    for (const entry of filteredAllAllocations) {
+      if (entry.status !== 'Approved') continue
+      if (invoiceByEntryId.has(String(entry.id))) continue
+      if (entry.allocation === 'bill_to_client') continue
+      classifiable += 1
+    }
+
+    return {
+      pendingToBill,
+      pendingCount,
+      invoiced,
+      collected,
+      pendingCollection: invoiced - collected,
+      classifiable,
+    }
   }, [filtered, filteredAllAllocations, invoiceByEntryId])
 
   // La grilla agrupa por proveedor · proyecto · task, como el prototipo: nadie
@@ -444,14 +463,21 @@ export function BillingPage() {
 
           {groups.length === 0 ? (
             <div className="empty">
-              {/* Si lo que hay bajo el filtro actual ya está facturado, mandar a
-                  clasificar es un consejo imposible: esas filas están congeladas
-                  —checkbox deshabilitado en Entries y rechazo en
-                  setEntriesAllocation— así que el usuario iría a un control que
-                  no se puede tocar. */}
-              {cards.invoiced > 0
-                ? 'No hours ready to bill. The hours shown above are already invoiced — they stay as they were classified when billed.'
-                : 'No hours ready to bill. Classify approved hours as “bill to client” in Entries first.'}
+              {/* Se decide por `classifiable`, NO por si hay horas facturadas.
+                  Que existan horas facturadas no dice nada sobre si queda algo
+                  por clasificar: en producción conviven 808 h ya facturadas con
+                  cientos de entries aprobadas sin clasificar, y mirar `invoiced`
+                  hacía que la pantalla dijera "no hay nada que hacer" justo
+                  cuando había todo por hacer.
+                  El mensaje de congeladas es sólo para el caso real de que no
+                  quede nada editable: esas filas tienen el checkbox
+                  deshabilitado en Entries y setEntriesAllocation las rechaza, así
+                  que mandar a clasificarlas termina en un control muerto. */}
+              {cards.classifiable > 0
+                ? 'No hours ready to bill. Classify approved hours as “bill to client” in Entries first.'
+                : cards.invoiced > 0
+                  ? 'No hours ready to bill. The hours shown above are already invoiced — they stay as they were classified when billed.'
+                  : 'No hours ready to bill.'}
             </div>
           ) : (
             <>
