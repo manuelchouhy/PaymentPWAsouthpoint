@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
-  Clock,
   Building2,
   FolderKanban,
   Landmark,
@@ -20,9 +19,19 @@ import {
   FileSearch,
 } from 'lucide-react'
 
+// Time Entries (/time-entries → App.jsx) NO está acá a propósito. Hacía lo
+// mismo que Entries + Billing juntas pero sin el concepto de allocation, y era
+// un segundo camino para facturar que salteaba el triage: toda factura emitida
+// ahí congela entries con allocation en null. Es el origen plausible de las
+// 808 h facturadas antes del triage que había en la base.
+//
+// La ruta sigue viva porque la suite e2e (specs 01-06) y las baselines
+// visuales entran por ahí, y Billing todavía no puede reemplazarla en los
+// tests: necesita entries con allocation 'bill_to_client' y hoy no hay
+// ninguna. Se borra del todo cuando haya horas clasificadas y se reapunten los
+// tests.
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', end: true, Icon: LayoutDashboard },
-  { to: '/time-entries', label: 'Time Entries', Icon: Clock },
   { to: '/clients', label: 'Clients', Icon: Building2 },
   { to: '/projects', label: 'Projects and SOW', Icon: FolderKanban },
   { to: '/entries', label: 'Entries', Icon: ListChecks },

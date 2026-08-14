@@ -202,7 +202,9 @@ export function DashboardPage() {
           <div className="dash-kpis">
             {can('billing.create') && (
               <>
-                <Link to="/time-entries" className="dash-kpi">
+                {/* Reemplazan a /time-entries, que salió del menú: las horas
+                    sin facturar se miran en Entries y se facturan en Billing. */}
+                <Link to="/entries" className="dash-kpi">
                   <div className="dash-kpi__head">
                     <span className="dash-kpi__label">Pending Hours</span>
                     <Sparkline values={sparklines.pendingHours} />
@@ -213,7 +215,7 @@ export function DashboardPage() {
                   </span>
                   <span className="dash-kpi__hint">unbilled entries</span>
                 </Link>
-                <Link to="/time-entries" className="dash-kpi">
+                <Link to="/billing" className="dash-kpi">
                   <div className="dash-kpi__head">
                     <span className="dash-kpi__label">Invoices This Month</span>
                     <Sparkline values={sparklines.invoicesThisMonth} />
@@ -311,7 +313,7 @@ export function DashboardPage() {
           {/* Quick Actions */}
           <div className="dash-actions">
             {can('billing.create') && (
-              <Link to="/time-entries" className="dash-action-btn">
+              <Link to="/billing" className="dash-action-btn">
                 <FileText size={22} aria-hidden="true" />
                 <span>Bill Hours</span>
               </Link>
