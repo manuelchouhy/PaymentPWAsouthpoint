@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { effectiveBudgetHours } from '../lib/changeRequestsData'
+import { displaySupplierStatus } from '../lib/supplierContractsData'
 import { ExportDropdown } from '../components/ExportDropdown'
 
 // Ventana para medir el uso real. 4 semanas: menos que eso y una semana de
@@ -16,7 +17,13 @@ const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000
 // Un contrato vencido o archivado no aporta capacidad, pero el proveedor sigue
 // apareciendo en la tabla: si cargó horas esta semana con el contrato vencido,
 // esconderlo es esconder el problema.
-const isActiveContract = (c) => !c.archived && c.status !== 'Expired'
+//
+// El vencimiento se DERIVA de expirationDate, no se lee de la columna `status`:
+// nada en la app escribe 'Expired' ahí (el flujo de renovación sólo escribe
+// 'Active' y 'Renewal in Progress'), así que confiar en la columna dejaría
+// contratos vencidos sumando capacidad. Es la misma razón por la que
+// SupplierContractsPage usa displaySupplierStatus.
+const isActiveContract = (c) => !c.archived && displaySupplierStatus(c) !== 'Expired'
 
 function weeksBetween(fromISO, toDate) {
   const from = new Date(`${fromISO}T00:00:00Z`)
@@ -84,6 +91,7 @@ export function CapacityPage() {
         provider: contract.supplierName,
         contracted: 0,
         hasActiveContract: false,
+        hasContract: true,
       }
       if (active && contract.weeklyContractedHours != null) {
         row.contracted += Number(contract.weeklyContractedHours)
@@ -92,10 +100,17 @@ export function CapacityPage() {
       byProvider.set(contract.supplierName, row)
     }
     // Alguien puede estar cargando horas sin contrato cargado en el sistema:
-    // omitirlo mostraría una capacidad usada menor que la real.
+    // omitirlo mostraría una capacidad usada menor que la real. Se distingue de
+    // "contrato vencido": no tener contrato cargado es una tarea administrativa
+    // pendiente, no una alarma de contrato caído.
     for (const provider of usageByProvider.keys()) {
       if (!byProvider.has(provider)) {
-        byProvider.set(provider, { provider, contracted: 0, hasActiveContract: false })
+        byProvider.set(provider, {
+          provider,
+          contracted: 0,
+          hasActiveContract: false,
+          hasContract: false,
+        })
       }
     }
     return [...byProvider.values()]
@@ -103,7 +118,8 @@ export function CapacityPage() {
         const usage = usageByProvider.get(row.provider) ?? 0
         const ratio = row.contracted > 0 ? usage / row.contracted : null
         let state = 'ok'
-        if (!row.hasActiveContract) state = 'contract-expired'
+        if (!row.hasContract) state = 'no-contract'
+        else if (!row.hasActiveContract) state = 'contract-expired'
         else if (ratio == null) state = 'no-hours-set'
         else if (ratio > 1) state = 'over-contract'
         else if (ratio >= 0.9) state = 'at-limit'
@@ -117,12 +133,17 @@ export function CapacityPage() {
   const demandRows = useMemo(() => {
     const consumedByProject = new Map()
     for (const entry of entries) {
+      // Mismo criterio que Client Summary y Billing: rechazadas no consumen
+      // presupuesto, así que tampoco reducen la demanda pendiente.
+      if (entry.status !== 'Approved') continue
       if (entry.allocation !== 'bill_to_client') continue
       const key = entry.project ?? ''
       consumedByProject.set(key, (consumedByProject.get(key) ?? 0) + (Number(entry.hours) || 0))
     }
     const now = new Date()
     return projects
+      // Un SOW archivado no genera demanda: su saldo no hay que ejecutarlo.
+      .filter((project) => project.zohoStatus !== 'archived')
       .map((project) => {
         const budget = effectiveBudgetHours(
           project.baseBudgetHours,
@@ -140,7 +161,11 @@ export function CapacityPage() {
           sow: project.sowNumber || project.projectName || '—',
           remaining,
           weeksLeft: overdue ? 0 : weeksLeft,
-          requiredPace: !overdue && weeksLeft && weeksLeft > 0 ? remaining / weeksLeft : null,
+          // Piso de una semana: un SOW que vence pasado mañana daría "700 h/wk"
+          // y, como las tres barras comparten escala, aplastaría el panel
+          // entero a una raya. El ritmo sigue siendo enorme, pero legible.
+          requiredPace:
+            !overdue && weeksLeft && weeksLeft > 0 ? remaining / Math.max(1, weeksLeft) : null,
           overdue,
         }
       })
@@ -400,6 +425,7 @@ const PROVIDER_STATE_LABELS = {
   'at-limit': 'at limit',
   'over-contract': 'over contract',
   'contract-expired': 'contract expired',
+  'no-contract': 'no contract on file',
   'no-hours-set': 'no hours set',
 }
 
@@ -408,5 +434,7 @@ const PROVIDER_STATE_CLASS = {
   'at-limit': 'badge--pending',
   'over-contract': 'badge--no',
   'contract-expired': 'badge--expired',
+  // Falta cargar el contrato, no se cayó: no merece el rojo de "vencido".
+  'no-contract': 'badge--pending',
   'no-hours-set': 'badge--pending',
 }

@@ -163,18 +163,24 @@ export function ClientDetailPage() {
   }, [inPeriod, lineByTask])
 
   const weekView = useMemo(() => {
-    const weeks = new Set()
+    // Las semanas se ordenan por la fecha más temprana que contienen, no por su
+    // número: enero arrastra días de la W52/W53 del año anterior, y ordenar por
+    // número dejaría esa semana —la primera cronológicamente— al final.
+    const weekFirstDate = new Map()
     const map = new Map()
     for (const entry of inPeriod) {
       const week = isoWeek(entry.date)
       if (week == null) continue
-      weeks.add(week)
+      const earliest = weekFirstDate.get(week)
+      if (!earliest || entry.date < earliest) weekFirstDate.set(week, entry.date)
       const line = lineByTask.get(entry.task) ?? UNMAPPED
       const row = map.get(line) ?? new Map()
       row.set(week, (row.get(week) ?? 0) + (Number(entry.hours) || 0))
       map.set(line, row)
     }
-    const weekList = [...weeks].sort((a, b) => a - b)
+    const weekList = [...weekFirstDate.keys()].sort((a, b) =>
+      weekFirstDate.get(a).localeCompare(weekFirstDate.get(b)),
+    )
     const rows = [...map.entries()]
       .map(([line, byWeek]) => ({
         line,

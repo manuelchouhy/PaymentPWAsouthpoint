@@ -42,13 +42,12 @@ export function EntriesPage() {
   // filtrar obligaría a rehacer a mano el filtro que ya estaba puesto allá.
   const [searchParams] = useSearchParams()
   const initialFilters = useMemo(() => {
-    const clientParam = searchParams.get('client')
-    const projectParam = searchParams.get('project')
-    if (!clientParam && !projectParam) return undefined
-    return {
-      clients: clientParam ? [clientParam] : [],
-      projects: projectParam ? [projectParam] : [],
-    }
+    // getAll: un cliente comercial puede agrupar varios nombres de Zoho, y
+    // Client Summary los manda todos.
+    const clientParams = searchParams.getAll('client')
+    const projectParams = searchParams.getAll('project')
+    if (!clientParams.length && !projectParams.length) return undefined
+    return { clients: clientParams, projects: projectParams }
     // Sólo el valor inicial: si se recalculara, cambiar el filtro a mano y
     // volver atrás en el historial lo pisaría.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -55,6 +55,11 @@ export function ClientSummaryPage() {
   const hoursByProject = useMemo(() => {
     const map = new Map()
     for (const entry of entries) {
+      // Sólo aprobadas, igual que Billing y que getConsumedHoursByProject: una
+      // hora rechazada no se le imputa al presupuesto del cliente. Entries deja
+      // clasificar rechazadas, así que sin este filtro un triage masivo infla
+      // el consumido contra el budget.
+      if (entry.status !== 'Approved') continue
       if (entry.allocation !== 'bill_to_client' && entry.allocation !== 'overage') continue
       const key = entry.project ?? ''
       const acc = map.get(key) ?? { consumed: 0, overage: 0 }
@@ -86,6 +91,8 @@ export function ClientSummaryPage() {
         projectName: project.projectName,
         sowNumber: project.sowNumber,
         zohoStatus: project.zohoStatus,
+        // El cliente tal como lo escriben las entries, para poder linkear.
+        entryClient: project.client ?? '',
         budget,
         consumed: hours.consumed,
         overage: hours.overage,
@@ -98,6 +105,8 @@ export function ClientSummaryPage() {
     const list = [...byClient.values()].sort((a, b) => a.client.localeCompare(b.client, 'es'))
     for (const group of list) {
       group.rows.sort((a, b) => (a.projectName ?? '').localeCompare(b.projectName ?? '', 'es'))
+      // Un mismo cliente comercial puede agrupar varios nombres de Zoho.
+      group.entryClients = [...new Set(group.rows.map((r) => r.entryClient).filter(Boolean))]
       group.consumed = group.rows.reduce((sum, r) => sum + r.consumed, 0)
       group.overage = group.rows.reduce((sum, r) => sum + r.overage, 0)
       // El budget del cliente suma sólo proyectos que tienen presupuesto
@@ -123,12 +132,17 @@ export function ClientSummaryPage() {
     )
   }
 
-  function goToEntries({ client, project }) {
+  // OJO: el filtro de Entries corre sobre `entry.client`, que se corresponde con
+  // `projects.client` (el texto que viene de Zoho, "HSS"), NO con
+  // `customerName` ("Health Systems Solutions"), que es el nombre comercial con
+  // el que se agrupa en pantalla. Mandar el nombre de agrupación llevaría a
+  // Entries con el dropdown puesto y cero filas.
+  function goToEntries({ entryClients, project }) {
     const params = new URLSearchParams()
-    // El cliente sintético "Without client" no existe como valor en las
-    // entries: mandarlo filtraría a cero filas.
-    if (client && client !== UNASSIGNED) params.set('client', client)
-    if (project) params.set('project', project)
+    for (const value of new Set((entryClients ?? []).filter(Boolean))) {
+      params.append('client', value)
+    }
+    if (project) params.append('project', project)
     navigate(`/entries?${params.toString()}`)
   }
 
@@ -248,7 +262,7 @@ export function ClientSummaryPage() {
                           <button
                             type="button"
                             className="linklike"
-                            onClick={() => goToEntries({ client: group.client })}
+                            onClick={() => goToEntries({ entryClients: group.entryClients })}
                           >
                             {group.client}
                           </button>
@@ -269,7 +283,10 @@ export function ClientSummaryPage() {
                               type="button"
                               className="linklike"
                               onClick={() =>
-                                goToEntries({ client: group.client, project: row.projectName })
+                                goToEntries({
+                                  entryClients: [row.entryClient],
+                                  project: row.projectName,
+                                })
                               }
                             >
                               {row.projectName || '—'}

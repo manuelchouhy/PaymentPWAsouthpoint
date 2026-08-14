@@ -18,7 +18,7 @@ const sortedUnique = (values) =>
 const groupKey = (entry) => `${entry.user}||${entry.project ?? ''}||${entry.task ?? ''}`
 
 export function BillingPage() {
-  const { user, can } = useOutletContext()
+  const { user, profile, can } = useOutletContext()
   const [entries, setEntries] = useState([])
   const [invoices, setInvoices] = useState([])
   const [status, setStatus] = useState('loading')
@@ -81,6 +81,9 @@ export function BillingPage() {
 
   useEffect(() => {
     setSelectedKeys(new Set())
+    // El aviso habla de la selección anterior: dejarlo bajo otra grilla filtrada
+    // haría dudar de una factura que sí se emitió.
+    setNotice('')
   }, [filters])
 
   const cards = useMemo(() => {
@@ -206,6 +209,9 @@ export function BillingPage() {
     })
     api.audit.log({
       actorEmail: user?.email,
+      // Igual que el resto de los llamadores: sin el rol, el Audit Log muestra
+      // la fila en blanco justo donde importa quién la emitió.
+      actorRole: profile?.roles?.[0] ?? null,
       action: 'invoice.create',
       resourceType: 'invoice',
       resourceId: invoice.id,
@@ -245,7 +251,10 @@ export function BillingPage() {
         </p>
       </motion.header>
 
-      {notice && <p className="state__hint">{notice}</p>}
+      {/* Se calla si la página falló: el aviso de una factura emitida hace un
+          rato encima de "Could not load billing data" se lee como si la
+          factura fuera la que falló. */}
+      {notice && status !== 'error' && <p className="state__hint">{notice}</p>}
 
       {status === 'loading' && <p className="state__hint">Loading billing data…</p>}
 
