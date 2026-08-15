@@ -3546,46 +3546,67 @@ th.col-pop { text-align: center; }
 
 /* Fase 4d: wizard más ancho para las pestañas de Mantenimiento y Tasks
    (tabla de severidad / tasks necesitan más aire que un form de 2 columnas). */
-.modal--wizard { max-width: 760px; }
+/* Ancho generoso: la altura del wizard la manda la cantidad de stages, y a más
+   ancho entran de a dos por fila — que es lo que evita el scroll, no el tope de
+   altura. Ver .stage-list abajo. */
+.modal--wizard { max-width: 1040px; }
 
-/* El wizard crece con el contenido: cada stage agregada suma ~100px y no habia
-   tope. Con 4 stages el modal medía 919px contra una ventana de 780, y con 8
-   llegaba a 1328 — el backdrop scrollea, así que no quedaba inalcanzable, pero
-   el encabezado, las pestañas y los botones se iban de vista y el diálogo
-   dejaba de leerse como un diálogo.
-   Se le pone tope y scrollea SOLO la grilla de campos: head, pasos y acciones
-   quedan siempre a la vista. dvh y no vh por el navegador móvil, donde la barra
-   de direcciones hace que 100vh sea más alto que lo que se ve. */
-.modal--wizard {
+/* Todo modal de formulario tiene tope de altura y scroll interno.
+   Sin esto crecían con el contenido sin límite: el wizard de proyecto, con cada
+   stage sumando ~100px, medía 919px con 4 stages y 1328px con 8, contra una
+   ventana de 780. El backdrop scrollea, así que nunca quedaba inalcanzable,
+   pero el encabezado y los botones se iban de vista y dejaba de leerse como un
+   diálogo.
+   Va en .modal--form y no sólo en el wizard: el mismo problema aparece en
+   cualquier form largo (Clients con el bloque de MSA, por ejemplo) apenas la
+   ventana es baja.
+   dvh y no vh: en mobile la barra de direcciones hace que 100vh sea más alto
+   que el área visible real. */
+.modal--form {
   max-height: calc(100dvh - 48px);
   display: flex;
   flex-direction: column;
 }
-.modal--wizard > .modal__head,
-.modal--wizard > .wizard-steps { flex: none; }
-.modal--wizard > .modal__form {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  /* min-height:0 para que el hijo scrolleable pueda encogerse: sin esto un
-     item flex no baja de su tamaño de contenido y el tope no se respeta. */
-  min-height: 0;
-}
-.modal--wizard > .modal__form > .project-form__grid {
+.modal--form > .modal__head,
+.modal--form > .wizard-steps { flex: none; }
+
+/* El cuerpo scrollea; las acciones quedan pegadas abajo con sticky en vez de
+   sacarlas del flujo, así funcionan igual sin importar qué tenga adentro cada
+   formulario. min-height:0 porque un item flex no baja de su tamaño de
+   contenido, y sin eso el tope de altura no se respeta. */
+.modal--form > .modal__form {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  /* overflow-x hidden + gutter estable: al aparecer la barra vertical, la
-     grilla de 2 columnas perdía ancho y disparaba una barra HORIZONTAL además.
-     El gutter reserva el espacio de antemano, así el layout no salta cuando el
-     contenido pasa a scrollear. */
+  /* overflow-x hidden + gutter estable: al aparecer la barra vertical, las
+     grillas de 2 columnas perdían ancho y disparaban además una barra
+     HORIZONTAL. El gutter reserva el espacio de antemano y el layout no salta
+     cuando el contenido pasa a scrollear. */
   overflow-x: hidden;
   scrollbar-gutter: stable;
 }
-.modal--wizard > .modal__form > .modal__actions { flex: none; }
+.modal--form > .modal__form > .modal__actions {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  padding-top: 12px;
+  margin-top: 4px;
+}
 
 /* --- Stages (Fase 4d): lista repetible, un SOW por stage ------------------ */
-.stage-list { display: flex; flex-direction: column; gap: 14px; }
+/* Una stage por fila, ocupando las dos columnas del .project-form__grid que la
+   contiene (si no queda encajonada en media caja, 466 de 947px).
+   Se probó ponerlas de a dos para ganar alto y NO funciona: cada .stage-row es
+   a su vez una grilla de 4 columnas (nombre, SOW number, archivo, botón de
+   quitar) que necesita ~900px. Partida al medio, el selector de archivo y el
+   botón desbordan y se encima con la stage de al lado. El alto se resuelve con
+   el tope + scroll de .modal--form, no apretando las filas. */
+.stage-list {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 .stage-row {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr auto;
