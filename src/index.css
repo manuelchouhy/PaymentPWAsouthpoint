@@ -1415,6 +1415,12 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .col-invoice { width: 120px; }
 
 .col-num { text-align: right; }
+/* El encabezado de una columna numérica tiene que alinear con sus valores.
+   `.table thead th` fija text-align:left con especificidad (0,1,1) y le ganaba
+   a `.col-num` (0,1,0), así que los títulos quedaban a la izquierda y los
+   números a la derecha, sin alinear. Pasa en toda la app; se nota sobre todo en
+   las tablas angostas de Capacity. */
+.table thead th.col-num { text-align: right; }
 th.col-pop { text-align: center; }
 
 /* Truncado con ellipsis en las columnas de texto largo. Sin esto el
