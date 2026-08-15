@@ -3548,6 +3548,42 @@ th.col-pop { text-align: center; }
    (tabla de severidad / tasks necesitan más aire que un form de 2 columnas). */
 .modal--wizard { max-width: 760px; }
 
+/* El wizard crece con el contenido: cada stage agregada suma ~100px y no habia
+   tope. Con 4 stages el modal medía 919px contra una ventana de 780, y con 8
+   llegaba a 1328 — el backdrop scrollea, así que no quedaba inalcanzable, pero
+   el encabezado, las pestañas y los botones se iban de vista y el diálogo
+   dejaba de leerse como un diálogo.
+   Se le pone tope y scrollea SOLO la grilla de campos: head, pasos y acciones
+   quedan siempre a la vista. dvh y no vh por el navegador móvil, donde la barra
+   de direcciones hace que 100vh sea más alto que lo que se ve. */
+.modal--wizard {
+  max-height: calc(100dvh - 48px);
+  display: flex;
+  flex-direction: column;
+}
+.modal--wizard > .modal__head,
+.modal--wizard > .wizard-steps { flex: none; }
+.modal--wizard > .modal__form {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  /* min-height:0 para que el hijo scrolleable pueda encogerse: sin esto un
+     item flex no baja de su tamaño de contenido y el tope no se respeta. */
+  min-height: 0;
+}
+.modal--wizard > .modal__form > .project-form__grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  /* overflow-x hidden + gutter estable: al aparecer la barra vertical, la
+     grilla de 2 columnas perdía ancho y disparaba una barra HORIZONTAL además.
+     El gutter reserva el espacio de antemano, así el layout no salta cuando el
+     contenido pasa a scrollear. */
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+.modal--wizard > .modal__form > .modal__actions { flex: none; }
+
 /* --- Stages (Fase 4d): lista repetible, un SOW por stage ------------------ */
 .stage-list { display: flex; flex-direction: column; gap: 14px; }
 .stage-row {
