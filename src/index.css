@@ -3493,7 +3493,15 @@ th.col-pop { text-align: center; }
 
 .proj-table {
   table-layout: auto;
-  min-width: 1320px;
+  /* Sin min-width fijo. Había un min-width: 1320px pensado para la grilla de
+     Projects (13 columnas), pero .proj-table la usan 16 tablas y varias tienen
+     3 o 4: en Capacity las dos tablas se estiraban a 1320px cada una dentro de
+     columnas de 680, con "Status" midiendo 477px, y la de Demand by SOW
+     quedaba fuera de pantalla.
+     No hace falta: el `white-space: nowrap` de abajo ya impide que las columnas
+     se compriman por debajo de su contenido, así que las tablas anchas siguen
+     desbordando y scrolleando igual dentro de .table-wrap--scroll, y las
+     angostas se quedan del ancho que realmente necesitan. */
 }
 .proj-table th,
 .proj-table td { white-space: nowrap; }
