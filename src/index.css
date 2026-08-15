@@ -3881,8 +3881,11 @@ th.col-pop { text-align: center; }
 .dark .badge--alloc-internal { color: #C4B5FD; }
 
 /* --- Carrusel de detalle de proyecto (issue 04) --------------------------- */
-/* .modal--carousel no fija max-width propio: modal--form ya deja 640px, y son
-   siempre las dos clases juntas en ProjectDetailCarousel. */
+/* Los 640px que hereda de .modal--form no alcanzan: los slides 2, 3 y 4 traen
+   tablas de 4 a 6 columnas (documento/vinculado a/version/subido,
+   proveedor/task/autorizadas/consumidas/restantes/estado) que quedaban
+   scrolleando en horizontal dentro de su .table-wrap. */
+.modal--carousel { max-width: 980px; }
 /* nowrap + flex-shrink:0: con el número de SOW en el título, el encabezado se
    hizo más ancho y los botones envolvían, dejando la ✕ colgada en una segunda
    línea debajo de "Edit". Los controles se mantienen en una sola fila y es el
