@@ -7,9 +7,18 @@ import { CR_TYPE_LABELS, effectiveBudgetHours } from '../lib/changeRequestsData'
 import { api } from '../lib/api'
 import { fileNameFromPath, formatDate, formatDateTime } from '../lib/format'
 
+// El slide 1 muestra lo que define el mock, en su orden: Client, SOW status,
+// Project, SOW number, Budget hours, Model, Period, Stage. Es la vista del SOW,
+// no la ficha administrativa del proyecto.
 const OVERVIEW_FIELDS = [
   { key: 'client', label: 'Client' },
-  { key: 'projectName', label: 'Project Name' },
+  { key: 'projectName', label: 'Project' },
+]
+
+// El resto de la ficha —lo que trae el sync de Zoho y los datos de contrato—
+// baja a un bloque desplegable dentro del mismo slide. No se elimina: se saca
+// del golpe de vista para que el SOW no quede sepultado entre 14 campos.
+const RECORD_FIELDS = [
   { key: 'projectNumber', label: 'Project Number' },
   { key: 'customerName', label: 'Customer Name' },
   { key: 'customerCode', label: 'Customer Code' },
@@ -22,7 +31,10 @@ const OVERVIEW_FIELDS = [
 ]
 
 // Etiquetas legibles para el log de auditoría.
-const FIELD_LABELS = Object.fromEntries(OVERVIEW_FIELDS.map((f) => [f.key, f.label]))
+const FIELD_LABELS = Object.fromEntries(
+  [...OVERVIEW_FIELDS, ...RECORD_FIELDS].map((f) => [f.key, f.label]),
+)
+FIELD_LABELS.projectName = 'Project Name'
 FIELD_LABELS.contractExpirationDate = 'Contract Expiration Date'
 
 function OverviewSlide({
@@ -35,14 +47,38 @@ function OverviewSlide({
   budgetPending,
   budgetError,
 }) {
+  const period =
+    project.periodStart || project.periodEnd
+      ? `${project.periodStart ? formatDate(project.periodStart) : '—'} → ${
+          project.periodEnd ? formatDate(project.periodEnd) : '—'
+        }`
+      : '—'
+
   return (
+    <>
     <dl className="drawer__facts">
-      {OVERVIEW_FIELDS.map((field) => (
-        <div className="drawer__fact" key={field.key}>
-          <dt>{field.label}</dt>
-          <dd>{project[field.key] || '—'}</dd>
-        </div>
-      ))}
+      <div className="drawer__fact">
+        <dt>Client</dt>
+        <dd>{project.client || '—'}</dd>
+      </div>
+      <div className="drawer__fact">
+        <dt>SOW Status</dt>
+        <dd>
+          {project.zohoStatus ? (
+            <span className="badge badge--ok">{project.zohoStatus}</span>
+          ) : (
+            '—'
+          )}
+        </dd>
+      </div>
+      <div className="drawer__fact">
+        <dt>Project</dt>
+        <dd>{project.projectName || '—'}</dd>
+      </div>
+      <div className="drawer__fact">
+        <dt>SOW Number</dt>
+        <dd className="cell-mono">{project.sowNumber || '—'}</dd>
+      </div>
       {project.baseBudgetHours != null && (
         <div className="drawer__fact">
           <dt>Budget Hours</dt>
@@ -65,32 +101,52 @@ function OverviewSlide({
           </dd>
         </div>
       )}
-      {project.hasStages && (
-        <div className="drawer__fact">
-          <dt>Stages</dt>
-          <dd>
-            {stageCountError ? (
-              'Could not load — try reopening this project.'
-            ) : stageCount == null ? (
-              'Loading…'
-            ) : (
-              <>
-                {stageCount} stage{stageCount === 1 ? '' : 's'}
-                {canEditSow && ' — see "Edit SOW & Scope" for the full breakdown'}
-              </>
-            )}
-          </dd>
-        </div>
-      )}
       <div className="drawer__fact">
-        <dt>Contract Expiration</dt>
-        <dd>{project.contractExpirationDate ? formatDate(project.contractExpirationDate) : '—'}</dd>
+        <dt>Model</dt>
+        <dd>{project.model || '—'}</dd>
       </div>
       <div className="drawer__fact">
-        <dt>Zoho Status</dt>
-        <dd>{project.zohoStatus || '—'}</dd>
+        <dt>Period</dt>
+        <dd>{period}</dd>
+      </div>
+      <div className="drawer__fact">
+        <dt>Stage</dt>
+        <dd>
+          {!project.hasStages ? (
+            project.stageName || '—'
+          ) : stageCountError ? (
+            'Could not load — try reopening this project.'
+          ) : stageCount == null ? (
+            'Loading…'
+          ) : (
+            <>
+              {stageCount} stage{stageCount === 1 ? '' : 's'}
+              {canEditSow && ' — see "Edit SOW & Scope"'}
+            </>
+          )}
+        </dd>
       </div>
     </dl>
+
+    {/* Ficha administrativa: los campos que trae el sync de Zoho más los del
+        contrato. Van desplegados aparte para que el slide 1 quede como el mock
+        —ocho campos del SOW— sin perder información que ya se mostraba. */}
+    <details className="proj-record">
+      <summary>Project record</summary>
+      <dl className="drawer__facts">
+        {RECORD_FIELDS.map((field) => (
+          <div className="drawer__fact" key={field.key}>
+            <dt>{field.label}</dt>
+            <dd>{project[field.key] || '—'}</dd>
+          </div>
+        ))}
+        <div className="drawer__fact">
+          <dt>Contract Expiration</dt>
+          <dd>{project.contractExpirationDate ? formatDate(project.contractExpirationDate) : '—'}</dd>
+        </div>
+      </dl>
+    </details>
+    </>
   )
 }
 
@@ -1043,7 +1099,12 @@ export function ProjectDetailCarousel({
           <div>
             <span className="modal__kicker">Projects and SOW · project detail</span>
             <h2 className="modal__title" id="project-carousel-title">
+              {/* "Proyecto · SOW-0000", como el mock: el número de SOW es la
+                  forma en que se referencia el trabajo hacia afuera. */}
               {project.projectName}
+              {project.sowNumber && (
+                <span className="modal__title-sow"> · {project.sowNumber}</span>
+              )}
             </h2>
           </div>
           <div className="modal__head-actions">

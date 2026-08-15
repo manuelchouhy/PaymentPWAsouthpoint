@@ -2501,6 +2501,27 @@ th.col-pop { text-align: center; }
    separación explícita. */
 .modal--client-detail .drawer__actions { margin-top: 20px; }
 
+/* Número de SOW en el título del detalle de proyecto: acompaña al nombre sin
+   competirle. */
+.modal__title-sow { color: var(--text-faint); font-weight: 500; }
+
+/* Ficha administrativa del proyecto, plegada bajo el slide 1 del carrusel. */
+.proj-record { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
+.proj-record > summary {
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  list-style: none;
+}
+.proj-record > summary::-webkit-details-marker { display: none; }
+.proj-record > summary::before { content: '▸ '; }
+.proj-record[open] > summary::before { content: '▾ '; }
+.proj-record > summary:hover { color: var(--text-soft); }
+.proj-record > .drawer__facts { margin-top: 12px; }
+
 /* --- Historial de sync (FR-01) -------------------------------------------- */
 .modal--log { max-width: 560px; }
 
@@ -3600,6 +3621,14 @@ th.col-pop { text-align: center; }
   max-height: calc(100dvh - 48px);
   display: flex;
   flex-direction: column;
+  /* El contenedor scrollea por su cuenta. Hace falta para los modales que NO
+     tienen un .modal__form adentro —el carrusel de proyecto, por ejemplo, cuyos
+     hijos son head + provider + carrusel + audit log—: sin esto el tope de
+     altura los recortaba con overflow visible y el contenido se derramaba
+     ESCRITO POR ENCIMA de la página.
+     En los que sí tienen .modal__form el scroll se lo queda ese hijo (abajo) y
+     este nunca llega a activarse, así que head y acciones siguen fijos. */
+  overflow-y: auto;
 }
 .modal--form > .modal__head,
 .modal--form > .wizard-steps { flex: none; }
@@ -3854,7 +3883,11 @@ th.col-pop { text-align: center; }
 /* --- Carrusel de detalle de proyecto (issue 04) --------------------------- */
 /* .modal--carousel no fija max-width propio: modal--form ya deja 640px, y son
    siempre las dos clases juntas en ProjectDetailCarousel. */
-.modal__head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* nowrap + flex-shrink:0: con el número de SOW en el título, el encabezado se
+   hizo más ancho y los botones envolvían, dejando la ✕ colgada en una segunda
+   línea debajo de "Edit". Los controles se mantienen en una sola fila y es el
+   título el que corta de línea si hace falta. */
+.modal__head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; flex-shrink: 0; }
 .carousel { border: 1px solid var(--line-strong); border-radius: var(--r-lg); margin-top: 4px; }
 .carousel__head {
   display: flex;
