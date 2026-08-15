@@ -5,6 +5,7 @@ import { AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatDate, formatHours, formatWeek } from '../lib/format'
 import { useEntryFilters, applyEntryFilters } from '../lib/useEntryFilters'
+import { buildClientByProject, withDerivedClient } from '../lib/entryClient'
 import { exportGrid } from '../lib/exportGrid'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
@@ -62,10 +63,13 @@ export function EntriesPage() {
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
-    Promise.all([api.timeEntries.list(), api.invoices.list()])
-      .then(([entryRows, invoiceRows]) => {
+    // Los proyectos son sólo para derivar el cliente de cada hora (ver
+    // entryClient.js). Van en el mismo Promise.all: sin ellos la columna y el
+    // filtro de Cliente quedan vacíos, que es justamente lo que se arregla.
+    Promise.all([api.timeEntries.list(), api.invoices.list(), api.projects.list()])
+      .then(([entryRows, invoiceRows, projectRows]) => {
         if (cancelled) return
-        setEntries(entryRows)
+        setEntries(withDerivedClient(entryRows, buildClientByProject(projectRows)))
         setInvoices(invoiceRows)
         // Los datos se releyeron: una selección armada sobre la tanda anterior
         // puede apuntar a filas que ya se facturaron.
@@ -349,6 +353,45 @@ export function EntriesPage() {
             </div>
           </section>
 
+          {/* Debajo de los filtros y ARRIBA de la grilla: con 100 filas por
+              página, al pie quedaba fuera de la vista justo después de tildar
+              las filas de arriba, y había que bajar para encontrar el Apply. */}
+          {canAllocate && selectedIds.size > 0 && (
+            <div className="selbar">
+              <span className="selbar__count">
+                Selected: <b>{formatHours(selectedHours)} h</b> · {selectedIds.size}{' '}
+                {selectedIds.size === 1 ? 'entry' : 'entries'}
+              </span>
+              <div className="selbar__action">
+                <span className="selbar__label">Set allocation</span>
+                <select
+                  className="field__input"
+                  value={allocationChoice}
+                  onChange={(e) => setAllocationChoice(e.target.value)}
+                  aria-label="Allocation to apply"
+                >
+                  {Object.entries(ALLOCATION_LABELS).map(([value, { label }]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                <button type="button" className="btn btn--pay btn--sm" onClick={handleApply} disabled={applying}>
+                  {applying ? 'Applying…' : 'Apply'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => {
+                    setSelectedIds(new Set())
+                    setApplyError('')
+                  }}
+                  disabled={applying}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="toolbar">
             <span className="toolbar__count">
               {visible.length} {visible.length === 1 ? 'entry' : 'entries'}
@@ -363,7 +406,7 @@ export function EntriesPage() {
           ) : (
             <>
               <div className="table-wrap table-wrap--scroll">
-                <table className="table proj-table">
+                <table className="table proj-table entries-table">
                   <thead>
                     <tr>
                       {canAllocate && (
@@ -378,9 +421,9 @@ export function EntriesPage() {
                         </th>
                       )}
                       <th scope="col">User</th>
-                      <th scope="col">Project</th>
+                      <th scope="col" className="col-project">Project</th>
                       <th scope="col">Client</th>
-                      <th scope="col">Task</th>
+                      <th scope="col" className="col-task">Task</th>
                       <th scope="col">Date</th>
                       <th scope="col">Week</th>
                       <th scope="col" className="col-num">Hours</th>
@@ -409,9 +452,15 @@ export function EntriesPage() {
                             </td>
                           )}
                           <td>{entry.user}</td>
-                          <td className="cell-strong">{entry.project || '—'}</td>
+                          {/* title: al recortarse con ellipsis, el texto completo
+                              queda disponible al pasar el mouse. */}
+                          <td className="cell-strong col-project" title={entry.project || ''}>
+                            {entry.project || '—'}
+                          </td>
                           <td className="cell-soft">{entry.client || '—'}</td>
-                          <td className="cell-soft">{entry.task || '—'}</td>
+                          <td className="cell-soft col-task" title={entry.task || ''}>
+                            {entry.task || '—'}
+                          </td>
                           <td className="cell-mono">{entry.date ? formatDate(entry.date) : '—'}</td>
                           <td className="cell-mono">{entry.date ? formatWeek(entry.date) : '—'}</td>
                           <td className="col-num cell-mono">{formatHours(entry.hours)}</td>
@@ -434,41 +483,6 @@ export function EntriesPage() {
                   </tbody>
                 </table>
               </div>
-              {canAllocate && selectedIds.size > 0 && (
-                <div className="selbar">
-                  <span className="selbar__count">
-                    Selected: <b>{formatHours(selectedHours)} h</b> · {selectedIds.size}{' '}
-                    {selectedIds.size === 1 ? 'entry' : 'entries'}
-                  </span>
-                  <div className="selbar__action">
-                    <span className="selbar__label">Set allocation</span>
-                    <select
-                      className="field__input"
-                      value={allocationChoice}
-                      onChange={(e) => setAllocationChoice(e.target.value)}
-                      aria-label="Allocation to apply"
-                    >
-                      {Object.entries(ALLOCATION_LABELS).map(([value, { label }]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
-                    </select>
-                    <button type="button" className="btn btn--pay btn--sm" onClick={handleApply} disabled={applying}>
-                      {applying ? 'Applying…' : 'Apply'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--sm"
-                      onClick={() => {
-                        setSelectedIds(new Set())
-                        setApplyError('')
-                      }}
-                      disabled={applying}
-                    >
-                      Clear
-                    </button>
-                  </div>
-                </div>
-              )}
               {visibleCount < visible.length && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
                   <button

@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters } from '../lib/useEntryFilters'
+import { buildClientByProject, withDerivedClient } from '../lib/entryClient'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { BillModal } from '../components/BillModal'
@@ -28,6 +29,7 @@ export function BillingPage() {
     byClientAndName: new Map(),
     byName: new Map(),
   }))
+  const [clientByProject, setClientByProject] = useState(() => new Map())
   const [status, setStatus] = useState('loading')
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedKeys, setSelectedKeys] = useState(() => new Set())
@@ -74,6 +76,9 @@ export function BillingPage() {
           else if (prior !== project.sowNumber) byName.set(project.projectName, null)
         }
         setSowByProject({ byClientAndName, byName })
+        // El cliente de cada hora sale del proyecto: time_entries.client viene
+        // vacío del sync. Ver entryClient.js.
+        setClientByProject(buildClientByProject(projectRows))
       })
       .catch((error) => console.error('No se pudieron cargar los SOW de Billing:', error))
 
@@ -115,19 +120,26 @@ export function BillingPage() {
   // producción 550 de 559 entries tienen client vacío. Arreglarlo pide una
   // opción explícita tipo "—" en MultiSelectDropdown, que es compartido por
   // varias pantallas: va en su propio slice.
+  // Con el cliente ya resuelto desde el proyecto, para que la columna, el
+  // filtro y sus opciones hablen todos del mismo valor.
+  const entriesConCliente = useMemo(
+    () => withDerivedClient(entries, clientByProject),
+    [entries, clientByProject],
+  )
+
   const options = useMemo(
     () => ({
-      contractors: sortedUnique(entries.map((e) => e.user)),
-      clients: sortedUnique(entries.map((e) => e.client)),
-      projects: sortedUnique(entries.map((e) => e.project)),
+      contractors: sortedUnique(entriesConCliente.map((e) => e.user)),
+      clients: sortedUnique(entriesConCliente.map((e) => e.client)),
+      projects: sortedUnique(entriesConCliente.map((e) => e.project)),
     }),
-    [entries],
+    [entriesConCliente],
   )
 
   // Todas las filas que pasan los filtros del usuario, sin mirar allocation.
   const filteredAllAllocations = useMemo(
-    () => applyEntryFilters(entries, filters, invoiceByEntryId),
-    [entries, filters, invoiceByEntryId],
+    () => applyEntryFilters(entriesConCliente, filters, invoiceByEntryId),
+    [entriesConCliente, filters, invoiceByEntryId],
   )
 
   // La grilla y "Pending to bill" miran sólo horas facturables al cliente:
