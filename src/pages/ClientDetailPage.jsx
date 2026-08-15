@@ -70,9 +70,15 @@ export function ClientDetailPage() {
     }
   }, [reloadKey])
 
+  // Mismo criterio que Client Summary: `customerName` lo trae el sync de Zoho,
+  // pero el wizard guarda el cliente elegido en `client` (+ client_id) y NO
+  // escribe customer_name. Sin el fallback, un proyecto creado desde el wizard
+  // no aparecía en este desplegable y su cliente era inseleccionable.
+  const clientNameOf = (project) => project.customerName || project.client || ''
+
   const clients = useMemo(
     () =>
-      [...new Set(projects.map((p) => p.customerName).filter(Boolean))].sort((a, b) =>
+      [...new Set(projects.map(clientNameOf).filter(Boolean))].sort((a, b) =>
         a.localeCompare(b, 'es'),
       ),
     [projects],
@@ -81,7 +87,7 @@ export function ClientDetailPage() {
   // El SOW se elige dentro del cliente: ofrecer los de otro cliente sería
   // ofrecer un cruce que no existe.
   const clientProjects = useMemo(
-    () => projects.filter((p) => (p.customerName || '') === client),
+    () => projects.filter((p) => clientNameOf(p) === client),
     [projects, client],
   )
 

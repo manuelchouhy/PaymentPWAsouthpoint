@@ -78,15 +78,19 @@ export function ClientSummaryPage() {
     [entries],
   )
 
-  const clientOptions = useMemo(
-    () => sortedUnique(projects.map((p) => p.customerName || UNASSIGNED)),
-    [projects],
-  )
+  // Nombre con el que se agrupa un proyecto. `customerName` es el nombre
+  // comercial que trae el sync de Zoho; `client` es lo que escribe el wizard al
+  // elegir un cliente de la tabla clients (guarda ademas client_id, pero NO
+  // customer_name). Sin este fallback, todo proyecto creado desde el wizard
+  // caia en "Without client" aunque tuviera su cliente bien asignado.
+  const groupNameOf = (project) => project.customerName || project.client || UNASSIGNED
+
+  const clientOptions = useMemo(() => sortedUnique(projects.map(groupNameOf)), [projects])
 
   const groups = useMemo(() => {
     const byClient = new Map()
     for (const project of projects) {
-      const client = project.customerName || UNASSIGNED
+      const client = groupNameOf(project)
       if (selectedClients.length && !selectedClients.includes(client)) continue
       const hours = hoursByProject.get(project.projectName) ?? { consumed: 0, overage: 0 }
       const budget = effectiveBudgetHours(
