@@ -3722,7 +3722,13 @@ th.col-pop { text-align: center; }
 
 .cap-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, 1fr) y NO 1fr: el mínimo implícito de 1fr es auto, o sea el
+     min-content de la columna. Las dos tablas son anchas, así que cada columna
+     se resolvía a 1322px dentro de un contenedor de 1376 y la segunda —Demand
+     by SOW— arrancaba en x=1667: fuera de la pantalla y sin forma de llegar.
+     Con mínimo 0 las columnas se reparten el ancho real y cada tabla scrollea
+     adentro de su .table-wrap--scroll. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
