@@ -2327,10 +2327,21 @@ th.col-pop { text-align: center; }
 
 .drawer__facts {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, 1fr) y no 1fr: el mínimo implícito de 1fr es el min-content de la
+     columna, así que un valor largo sin espacios —un email como
+     manuel.chouhy@gmail.com— estiraba la columna y desbordaba el panel,
+     cortando el texto contra el borde. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px 16px;
   margin: 0;
 }
+/* Y que el valor largo corte de línea en vez de empujar. */
+.drawer__fact dd { overflow-wrap: anywhere; }
+/* Para valores que no se pueden partir —un botón con nombre de archivo—: fila
+   entera, y si aun así no entra, se recorta con puntos suspensivos en vez de
+   desbordar sobre la celda vecina. */
+.drawer__fact--wide { grid-column: 1 / -1; }
+.drawer__fact dd > .btn { max-width: 100%; overflow: hidden; }
 .drawer__fact dt {
   font-family: var(--sans);
   font-size: 10.5px;
@@ -2480,6 +2491,15 @@ th.col-pop { text-align: center; }
   .drawer { width: 100vw; padding: 20px; }
   .drawer__facts { grid-template-columns: 1fr; }
 }
+
+/* Detalle de cliente: modal centrado, como lo define el mock (.modal-box de
+   440px), no panel lateral. Es el paso 1 del flujo de dos pasos: ver y, desde
+   acá, Editar. */
+.modal--client-detail { max-width: 440px; }
+/* .drawer__actions trae margin-top:auto, pensado para el flex del panel
+   lateral. Dentro de un modal no hay flex que lo empuje, así que se le da una
+   separación explícita. */
+.modal--client-detail .drawer__actions { margin-top: 20px; }
 
 /* --- Historial de sync (FR-01) -------------------------------------------- */
 .modal--log { max-width: 560px; }

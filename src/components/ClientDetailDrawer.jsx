@@ -53,28 +53,33 @@ export function ClientDetailDrawer({ client, canEdit = false, onClose, onEdit })
 
   return (
     <motion.div
-      className="drawer-backdrop"
+      className="modal-backdrop"
       onClick={onClose}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
     >
-      <motion.aside
-        className="drawer"
+      {/* Modal centrado, NO panel lateral: así lo define el mock
+          (#client-drawer es un .modal-backdrop con un .modal-box de 440px) y es
+          el mismo paso 1 de dos pasos que usa Projects. Antes entraba deslizando
+          desde la derecha con x: '100%', que además dejaba el panel invisible si
+          la animación no llegaba a correr. */}
+      <motion.div
+        className="modal modal--client-detail"
         role="dialog"
         aria-modal="true"
         aria-labelledby="client-drawer-title"
         onClick={(e) => e.stopPropagation()}
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 8 }}
+        transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
       >
-        <div className="drawer__head">
+        <div className="modal__head">
           <div>
-            <span className="drawer__kicker">Client</span>
-            <h2 className="drawer__title" id="client-drawer-title">
+            <span className="modal__kicker">Client</span>
+            <h2 className="modal__title" id="client-drawer-title">
               {client.clientName}
             </h2>
           </div>
@@ -92,7 +97,9 @@ export function ClientDetailDrawer({ client, canEdit = false, onClose, onEdit })
                 <dd>{client[field.key] || '—'}</dd>
               </div>
             ))}
-            <div className="drawer__fact">
+            {/* Ancho completo: el nombre del archivo es largo y con media
+                columna desbordaba pisando el valor de al lado. */}
+            <div className="drawer__fact drawer__fact--wide">
               <dt>MSA on file</dt>
               <dd>
                 {client.msaUrl ? (
@@ -125,7 +132,7 @@ export function ClientDetailDrawer({ client, canEdit = false, onClose, onEdit })
             </button>
           </div>
         )}
-      </motion.aside>
+      </motion.div>
     </motion.div>
   )
 }
