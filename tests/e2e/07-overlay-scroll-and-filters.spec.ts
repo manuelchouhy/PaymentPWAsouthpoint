@@ -126,6 +126,18 @@ test.describe('Entries · listas de filtros entrelazadas', () => {
     const field = (label: string) => fieldOf(page, label)
     await expect(field('Contractor')).toBeVisible()
 
+    // Baseline explícito: la tab activa es "Pending to bill" y la lista de
+    // contractors NO está vacía. Sin esto el test daría verde por el motivo
+    // equivocado si el fixture no tuviera horas o si la tab de arranque
+    // cambiara — justo cuando la regresión pasaría inadvertida.
+    await expect(page.getByRole('tab', { name: /Pending to bill/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    await field('Contractor').locator('.msel__btn').click()
+    await expect(field('Contractor').locator('.msel__opt').first()).toBeVisible()
+    await page.keyboard.press('Escape')
+
     // Tab "Pendiente de facturar" (la de arranque) + Billing Status = Invoiced:
     // la grilla no puede mostrar nada, así que las listas tienen que quedar en
     // lo tildado y nada más. Cruzar con billingStatuses vacío las devolvía al
