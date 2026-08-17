@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { loginAsTestAdmin } from './helpers'
 
 /**
@@ -61,6 +61,15 @@ test.describe('Projects and SOW · scroll de fondo', () => {
   })
 })
 
+// Se ancla en el <span> del label con match exacto: `hasText` sobre el .msel
+// entero mira también el valor elegido y, con el panel abierto, las opciones —
+// un proyecto llamado "Contractor…" bindearía el dropdown equivocado.
+const fieldOf = (page: Page, label: string) =>
+  page
+    .locator('.msel')
+    .filter({ has: page.locator('.filterfield__label', { hasText: new RegExp(`^${label}$`) }) })
+    .first()
+
 test.describe('Entries · listas de filtros entrelazadas', () => {
   test('elegir un proyecto recorta los contractors a los que cargaron horas ahí', async ({
     page,
@@ -68,14 +77,7 @@ test.describe('Entries · listas de filtros entrelazadas', () => {
     await loginAsTestAdmin(page)
     await page.goto('/entries')
 
-    // Se ancla en el <span> del label con match exacto: `hasText` sobre el .msel
-    // entero mira también el valor elegido y, con el panel abierto, las opciones
-    // — un proyecto llamado "Contractor…" bindearía el dropdown equivocado.
-    const field = (label: string) =>
-      page
-        .locator('.msel')
-        .filter({ has: page.locator('.filterfield__label', { hasText: new RegExp(`^${label}$`) }) })
-        .first()
+    const field = (label: string) => fieldOf(page, label)
     const optionsOf = async (label: string) => {
       await field(label).locator('.msel__btn').click()
       const values = await field(label).locator('.msel__opt-label').allInnerTexts()
@@ -113,5 +115,30 @@ test.describe('Entries · listas de filtros entrelazadas', () => {
     const stillListed = await optionsOf('Contractor')
     const selected = await field('Contractor').locator('.msel__value').innerText()
     expect(stillListed).toContain(selected)
+  })
+
+  test('en Time Entries la tab Pending manda: un Billing Status imposible no ensancha las listas', async ({
+    page,
+  }) => {
+    await loginAsTestAdmin(page)
+    await page.goto('/time-entries')
+
+    const field = (label: string) => fieldOf(page, label)
+    await expect(field('Contractor')).toBeVisible()
+
+    // Tab "Pendiente de facturar" (la de arranque) + Billing Status = Invoiced:
+    // la grilla no puede mostrar nada, así que las listas tienen que quedar en
+    // lo tildado y nada más. Cruzar con billingStatuses vacío las devolvía al
+    // total, que es el bug que este test cubre.
+    await field('Billing Status').locator('.msel__btn').click()
+    await field('Billing Status')
+      .locator('.msel__opt', { hasText: 'Invoiced' })
+      .first()
+      .click()
+    await page.keyboard.press('Escape')
+
+    await field('Contractor').locator('.msel__btn').click()
+    await expect(field('Contractor').locator('.msel__empty')).toBeVisible()
+    await expect(field('Contractor').locator('.msel__opt')).toHaveCount(0)
   })
 })

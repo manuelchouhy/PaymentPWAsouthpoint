@@ -163,19 +163,29 @@ export default function App() {
   // cruce elimina en el resto de las dimensiones. Si además hay un Billing
   // Status tildado, se intersecan: la tab manda sobre lo que la grilla puede
   // llegar a mostrar.
-  const scopingFilters = useMemo(() => {
-    if (activeTab !== 'pending') return filters
-    return {
-      ...filters,
-      billingStatuses: filters.billingStatuses.length
-        ? filters.billingStatuses.filter((s) => s === 'Pending')
-        : ['Pending'],
+  //
+  // Cuando la intersección es vacía (tab Pending con sólo "Invoiced" tildado,
+  // por ejemplo) no hay ninguna fila posible, y eso se expresa cruzando contra
+  // una lista de entries vacía — NO con billingStatuses: [], que
+  // applyEntryFilters lee como "sin filtro de billing" y ensancharía los
+  // dropdowns al total justo cuando la grilla no puede mostrar nada. Con la
+  // lista vacía cada dimensión queda sólo con lo ya tildado, que es lo único
+  // que hace falta para poder destildarlo y salir.
+  const { scopingEntries, scopingFilters } = useMemo(() => {
+    if (activeTab !== 'pending') return { scopingEntries: entries, scopingFilters: filters }
+    const picked = filters.billingStatuses
+    if (!picked.length || picked.includes('Pending')) {
+      return {
+        scopingEntries: entries,
+        scopingFilters: { ...filters, billingStatuses: ['Pending'] },
+      }
     }
-  }, [filters, activeTab])
+    return { scopingEntries: [], scopingFilters: filters }
+  }, [entries, filters, activeTab])
 
   const filterOptions = useMemo(
-    () => buildFilterOptions(entries, scopingFilters, invoiceByEntryId),
-    [entries, scopingFilters, invoiceByEntryId],
+    () => buildFilterOptions(scopingEntries, scopingFilters, invoiceByEntryId),
+    [scopingEntries, scopingFilters, invoiceByEntryId],
   )
 
   // Billing Status de 4 estados: "Pending" si no está en ninguna factura; si no,
