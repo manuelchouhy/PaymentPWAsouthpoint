@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FolderPlus, Save, X } from 'lucide-react'
+import { useScrollLock } from '../lib/useScrollLock'
 
 // Definición de campos (orden, label, tipo). "required" queda resuelto por
 // proyecto en requiredKeys() más abajo, no acá — ver por qué.
@@ -78,13 +79,10 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
     [initial],
   )
 
+  useScrollLock()
+
   useEffect(() => {
     firstRef.current?.focus()
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
   }, [])
 
   useEffect(() => {

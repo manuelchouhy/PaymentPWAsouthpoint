@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { Paperclip, Wallet, X } from 'lucide-react'
 import { Avatar } from './Avatar'
 import { formatHours } from '../lib/format'
+import { useScrollLock } from '../lib/useScrollLock'
 
 /**
  * Modal "Procesar Pago".
@@ -21,14 +22,11 @@ export function PaymentModal({ user, entries, hours, onClose, onConfirm }) {
 
   const invoiceValid = invoiceNumber.trim().length > 0
 
-  // Foco inicial en el primer campo + bloqueo del scroll de fondo.
+  useScrollLock()
+
+  // Foco inicial en el primer campo.
   useEffect(() => {
     firstFieldRef.current?.focus()
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = previousOverflow
-    }
   }, [])
 
   // Cerrar con Escape y atrapar el foco dentro del modal.

@@ -6,6 +6,7 @@ import { contractStatus, daysRemaining } from '../lib/projectsData'
 import { CR_TYPE_LABELS, effectiveBudgetHours } from '../lib/changeRequestsData'
 import { api } from '../lib/api'
 import { fileNameFromPath, formatDate, formatDateTime } from '../lib/format'
+import { useScrollLock } from '../lib/useScrollLock'
 
 // El slide 1 muestra lo que define el mock, en su orden: Client, SOW status,
 // Project, SOW number, Budget hours, Model, Period, Stage. Es la vista del SOW,
@@ -1000,6 +1001,8 @@ export function ProjectDetailCarousel({
     setSlideIndex((i + slides.length) % slides.length)
   }
 
+  useScrollLock()
+
   useEffect(() => {
     let cancelled = false
     setLoadingHistory(true)
@@ -1052,8 +1055,6 @@ export function ProjectDetailCarousel({
   }, [project.id, project.hasStages])
 
   useEffect(() => {
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     function onKeyDown(event) {
       if (event.key === 'Escape') {
         onClose()
@@ -1069,7 +1070,6 @@ export function ProjectDetailCarousel({
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
-      document.body.style.overflow = prev
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [onClose])

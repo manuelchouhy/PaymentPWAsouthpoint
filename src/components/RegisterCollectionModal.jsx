@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { AlertCircle, CircleDollarSign, X } from 'lucide-react'
 import { getCurrencySymbol } from '../lib/currenciesData'
+import { useScrollLock } from '../lib/useScrollLock'
 
 function todayISO() {
   const now = new Date()
@@ -47,14 +48,11 @@ export function RegisterCollectionModal({ invoice, outstanding, collected, curre
   const dateValid = Boolean(collectionDate)
   const valid = amountValid && dateValid
 
+  useScrollLock()
+
   useEffect(() => {
     firstRef.current?.focus()
     firstRef.current?.select()
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
   }, [])
 
   useEffect(() => {

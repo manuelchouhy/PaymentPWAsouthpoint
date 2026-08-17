@@ -5,7 +5,7 @@ import { AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
-import { useEntryFilters, applyEntryFilters } from '../lib/useEntryFilters'
+import { useEntryFilters, applyEntryFilters, buildFilterOptions } from '../lib/useEntryFilters'
 import { buildClientByProject, withDerivedClient } from '../lib/entryClient'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
@@ -108,18 +108,6 @@ export function BillingPage() {
     return map
   }, [invoices])
 
-  // Las opciones de los dropdowns salen de TODAS las entries, no sólo de las
-  // bill_to_client: las tarjetas de facturado cuentan sobre todas, así que un
-  // cliente cuyas horas están todas sin clasificar aporta a "Invoiced" pero no
-  // aparecería en la lista.
-  //
-  // LIMITACIÓN que esto NO arregla: sortedUnique descarta los valores vacíos y
-  // rowToEntry normaliza client/project null a ''. Una entry sin cliente cuenta
-  // en las tarjetas pero no la alcanza ningún filtro, así que tildar todos los
-  // clientes puede dar MENOS que no tildar ninguno. No es teórico: hoy en
-  // producción 550 de 559 entries tienen client vacío. Arreglarlo pide una
-  // opción explícita tipo "—" en MultiSelectDropdown, que es compartido por
-  // varias pantallas: va en su propio slice.
   // Con el cliente ya resuelto desde el proyecto, para que la columna, el
   // filtro y sus opciones hablen todos del mismo valor.
   const entriesConCliente = useMemo(
@@ -127,13 +115,31 @@ export function BillingPage() {
     [entries, clientByProject],
   )
 
+  // Listas entrelazadas: cada dropdown se arma sobre lo que pasa los OTROS
+  // filtros (ver buildFilterOptions) — elegir un proyecto recorta la lista de
+  // contractors a los que cargaron horas ahí.
+  //
+  // El cruce se hace sobre todas las entries, no sólo las bill_to_client: las
+  // tarjetas de facturado cuentan sobre todas, así que un cliente cuyas horas
+  // están todas sin clasificar aporta a "Invoiced" y tiene que seguir apareciendo
+  // en la lista.
+  //
+  // LIMITACIONES que el cruce NO arregla, las dos por la misma razón (las
+  // opciones se cruzan con los filtros, no con lo que la grilla termina
+  // mostrando):
+  //  - La grilla mira sólo allocation === 'bill_to_client' (ver `filtered` más
+  //    abajo), así que un contractor ofrecido cuyas horas son todas overage o SP
+  //    internal deja la grilla vacía aunque las tarjetas muestren números.
+  //  - sortedUnique descarta los valores vacíos y rowToEntry normaliza
+  //    client/project null a ''. Una entry sin cliente cuenta en las tarjetas
+  //    pero no la alcanza ningún filtro, así que tildar todos los clientes puede
+  //    dar MENOS que no tildar ninguno. No es teórico: hoy en producción 550 de
+  //    559 entries tienen client vacío. Arreglarlo pide una opción explícita
+  //    tipo "—" en MultiSelectDropdown, que es compartido por varias pantallas:
+  //    va en su propio slice.
   const options = useMemo(
-    () => ({
-      contractors: sortedUnique(entriesConCliente.map((e) => e.user)),
-      clients: sortedUnique(entriesConCliente.map((e) => e.client)),
-      projects: sortedUnique(entriesConCliente.map((e) => e.project)),
-    }),
-    [entriesConCliente],
+    () => buildFilterOptions(entriesConCliente, filters, invoiceByEntryId),
+    [entriesConCliente, filters, invoiceByEntryId],
   )
 
   // Todas las filas que pasan los filtros del usuario, sin mirar allocation.

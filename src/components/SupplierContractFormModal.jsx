@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FilePlus2, Save, X } from 'lucide-react'
 import { PAYMENT_TERMS, RENEWAL_TYPES } from '../lib/supplierContractsData'
+import { useScrollLock } from '../lib/useScrollLock'
 
 const TEXT_FIELDS = [
   { key: 'supplierName', label: 'Supplier', required: true },
@@ -76,13 +77,10 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
     setPdfFile(file)
   }
 
+  useScrollLock()
+
   useEffect(() => {
     firstRef.current?.focus()
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
   }, [])
 
   useEffect(() => {

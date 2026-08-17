@@ -6,6 +6,7 @@ import { formatHours } from '../lib/format'
 import { CURRENCIES, getCurrencySymbol } from '../lib/currenciesData'
 import { contractStatus, daysRemaining } from '../lib/projectsData'
 import { api } from '../lib/api'
+import { useScrollLock } from '../lib/useScrollLock'
 
 // Fecha de hoy en formato ISO YYYY-MM-DD (para el default del date picker).
 function todayISO() {
@@ -52,13 +53,10 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
     [amountValid, amountNumber, currency],
   )
 
+  useScrollLock()
+
   useEffect(() => {
     firstFieldRef.current?.focus()
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = previousOverflow
-    }
   }, [])
 
   useEffect(() => {

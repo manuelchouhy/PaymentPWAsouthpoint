@@ -6,6 +6,7 @@ import { displaySupplierStatus } from '../lib/supplierContractsData'
 import { daysRemaining } from '../lib/projectsData'
 import { api } from '../lib/api'
 import { formatDate, formatDateTime } from '../lib/format'
+import { useScrollLock } from '../lib/useScrollLock'
 
 const FIELD_LABELS = {
   supplierName: 'Supplier',
@@ -72,6 +73,8 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
     }
   }
 
+  useScrollLock()
+
   useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -94,14 +97,11 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
   }, [contract.id])
 
   useEffect(() => {
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     function onKeyDown(e) {
       if (e.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
-      document.body.style.overflow = prev
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [onClose])

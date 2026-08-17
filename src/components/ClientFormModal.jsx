@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Save, UserPlus2, X } from 'lucide-react'
 import { fileNameFromPath } from '../lib/format'
+import { useScrollLock } from '../lib/useScrollLock'
 
 const TEXT_FIELDS = [
   { key: 'clientName', label: 'Client Name', required: true },
@@ -69,13 +70,10 @@ export function ClientFormModal({ initial = null, onClose, onSubmit }) {
     setMsaFile(file)
   }
 
+  useScrollLock()
+
   useEffect(() => {
     firstRef.current?.focus()
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
   }, [])
 
   useEffect(() => {

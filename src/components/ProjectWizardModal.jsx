@@ -6,6 +6,7 @@ import { parseSowDocument } from '../lib/sowParser'
 import { isGenericFileType } from '../lib/projectsData'
 import { fileNameFromPath } from '../lib/format'
 import { api } from '../lib/api'
+import { useScrollLock } from '../lib/useScrollLock'
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
@@ -165,6 +166,8 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
     setExistingTasks((prev) => prev.map((t) => (t.id === id ? { ...t, [key]: value } : t)))
   }
 
+  useScrollLock()
+
   useEffect(() => {
     if (!isEdit) return
     let cancelled = false
@@ -201,8 +204,6 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
   }, [])
 
   useEffect(() => {
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     function onKeyDown(e) {
       // Igual que el botón Cancel (disabled={submitting}): no se puede
       // cerrar el wizard mientras el alta está en vuelo — si no, el usuario
@@ -211,7 +212,6 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
-      document.body.style.overflow = prev
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [onClose, submitting])

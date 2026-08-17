@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatDate, formatHours, formatWeek } from '../lib/format'
-import { useEntryFilters, applyEntryFilters } from '../lib/useEntryFilters'
+import { useEntryFilters, applyEntryFilters, buildFilterOptions } from '../lib/useEntryFilters'
 import { buildClientByProject, withDerivedClient } from '../lib/entryClient'
 import { exportGrid } from '../lib/exportGrid'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
@@ -13,9 +13,6 @@ import { StatusBadge } from '../components/StatusBadge'
 import { BillingBadge } from '../components/BillingBadge'
 
 const PAGE_SIZE = 100
-
-const sortedUnique = (values) =>
-  [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
 
 // null = sin clasificar. El triage es 100% manual (ver PRD, "Entries"): ninguna
 // hora llega con allocation puesta.
@@ -96,15 +93,13 @@ export function EntriesPage() {
     return map
   }, [invoices])
 
+  // Listas entrelazadas: cada dropdown se arma sobre lo que pasa los otros
+  // filtros (ver buildFilterOptions), así elegir un proyecto recorta la lista de
+  // contractors a los que cargaron horas ahí. La semana sí puede vaciarlas —
+  // está documentado en buildFilterOptions.
   const options = useMemo(
-    () => ({
-      // localeCompare 'es': un .sort() plano manda los acentuados (Álvaro,
-      // Ñandú) al final del dropdown, donde nadie los busca.
-      contractors: sortedUnique(entries.map((e) => e.user)),
-      clients: sortedUnique(entries.map((e) => e.client)),
-      projects: sortedUnique(entries.map((e) => e.project)),
-    }),
-    [entries],
+    () => buildFilterOptions(entries, filters, invoiceByEntryId),
+    [entries, filters, invoiceByEntryId],
   )
 
   const visible = useMemo(() => {

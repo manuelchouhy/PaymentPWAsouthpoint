@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { FileText, Pencil, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { fileNameFromPath, formatDateTime } from '../lib/format'
+import { useScrollLock } from '../lib/useScrollLock'
 
 const FIELDS = [
   { key: 'email', label: 'Email' },
@@ -22,15 +23,14 @@ export function ClientDetailDrawer({ client, canEdit = false, onClose, onEdit })
   const [msaMsg, setMsaMsg] = useState('')
   const isDemoMsa = typeof client.msaUrl === 'string' && client.msaUrl.startsWith('demo/')
 
+  useScrollLock()
+
   useEffect(() => {
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     function onKeyDown(event) {
       if (event.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
-      document.body.style.overflow = prev
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [onClose])

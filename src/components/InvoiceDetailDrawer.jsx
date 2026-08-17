@@ -6,6 +6,7 @@ import { Avatar } from './Avatar'
 import { nextBillingStatus } from '../lib/data'
 import { api } from '../lib/api'
 import { formatDate, formatDateTime, formatHours } from '../lib/format'
+import { useScrollLock } from '../lib/useScrollLock'
 
 const ENTRY_SCROLL_THRESHOLD = 20
 
@@ -38,6 +39,8 @@ export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus 
   const next = nextBillingStatus(invoice.status) // 'Collected' | 'Paid' | null
   const totalHours = entries.reduce((sum, entry) => sum + entry.hours, 0)
 
+  useScrollLock()
+
   // Cargar el historial al abrir / cambiar de factura.
   useEffect(() => {
     let cancelled = false
@@ -61,16 +64,13 @@ export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus 
     }
   }, [invoice.id])
 
-  // Bloqueo de scroll de fondo + cierre con Escape.
+  // Cierre con Escape.
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     function onKeyDown(event) {
       if (event.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
-      document.body.style.overflow = previousOverflow
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [onClose])

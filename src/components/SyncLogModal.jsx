@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { AlertCircle, CheckCircle2, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatDateTime } from '../lib/format'
+import { useScrollLock } from '../lib/useScrollLock'
 
 /**
  * Modal con el historial de las últimas 50 corridas del sync de Zoho.
@@ -14,6 +15,8 @@ export function SyncLogModal({ onClose }) {
   const [entries, setEntries] = useState([])
   const [state, setState] = useState('loading') // 'loading' | 'ready' | 'error'
   const dialogRef = useRef(null)
+
+  useScrollLock()
 
   // Carga del historial al abrir.
   useEffect(() => {
@@ -35,16 +38,13 @@ export function SyncLogModal({ onClose }) {
     }
   }, [])
 
-  // Bloqueo del scroll de fondo + cierre con Escape.
+  // Cierre con Escape.
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     function onKeyDown(event) {
       if (event.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
-      document.body.style.overflow = previousOverflow
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [onClose])

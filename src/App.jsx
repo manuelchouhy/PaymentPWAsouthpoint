@@ -8,7 +8,7 @@ import { exportGrid } from './lib/exportGrid'
 import { api } from './lib/api'
 import { useMediaQuery } from './lib/useMediaQuery'
 import { formatHours } from './lib/format'
-import { useEntryFilters, applyEntryFilters } from './lib/useEntryFilters'
+import { useEntryFilters, applyEntryFilters, buildFilterOptions } from './lib/useEntryFilters'
 import { FilterBar } from './components/FilterBar'
 import { ViewTabs } from './components/ViewTabs'
 import { SelectionBar } from './components/SelectionBar'
@@ -152,24 +152,30 @@ export default function App() {
 
   // --- Derivados ------------------------------------------------------------
   // Opciones para los multi-selects de filtros (orden alfabético es-AR).
-  const sortedUnique = (values) =>
-    [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
+  // Entrelazadas: cada lista se arma sobre las entries que pasan los OTROS
+  // filtros (ver buildFilterOptions), así no se puede combinar un proyecto con
+  // un contractor que nunca cargó horas ahí y caer en cero.
+  //
+  // La tab entra en el cruce, no sólo los filtros: la grilla de "Pendiente de
+  // facturar" muestra únicamente lo que no está en ninguna factura (es lo mismo
+  // que Billing Status = Pending), así que ofrecer ahí un contractor con todo
+  // facturado devolvería la grilla vacía — el mismo callejón sin salida que este
+  // cruce elimina en el resto de las dimensiones. Si además hay un Billing
+  // Status tildado, se intersecan: la tab manda sobre lo que la grilla puede
+  // llegar a mostrar.
+  const scopingFilters = useMemo(() => {
+    if (activeTab !== 'pending') return filters
+    return {
+      ...filters,
+      billingStatuses: filters.billingStatuses.length
+        ? filters.billingStatuses.filter((s) => s === 'Pending')
+        : ['Pending'],
+    }
+  }, [filters, activeTab])
 
-  const users = useMemo(
-    () => sortedUnique(entries.map((entry) => entry.user)),
-    [entries],
-  )
-  const clients = useMemo(
-    () => sortedUnique(entries.map((entry) => entry.client)),
-    [entries],
-  )
-  const projects = useMemo(
-    () => sortedUnique(entries.map((entry) => entry.project)),
-    [entries],
-  )
-  const tasks = useMemo(
-    () => sortedUnique(entries.map((entry) => entry.task)),
-    [entries],
+  const filterOptions = useMemo(
+    () => buildFilterOptions(entries, scopingFilters, invoiceByEntryId),
+    [entries, scopingFilters, invoiceByEntryId],
   )
 
   // Billing Status de 4 estados: "Pending" si no está en ninguna factura; si no,
@@ -519,10 +525,10 @@ export default function App() {
             />
 
             <FilterBar
-              contractors={users}
-              clients={clients}
-              projects={projects}
-              tasks={tasks}
+              contractors={filterOptions.contractors}
+              clients={filterOptions.clients}
+              projects={filterOptions.projects}
+              tasks={filterOptions.tasks}
               filters={filters}
               toggleValue={toggleValue}
               setField={setField}

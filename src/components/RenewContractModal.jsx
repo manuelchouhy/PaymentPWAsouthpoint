@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { RefreshCw, X } from 'lucide-react'
+import { useScrollLock } from '../lib/useScrollLock'
 
 const TEXT_FIELDS = [
   { key: 'contractNumber', label: 'New Contract #', type: 'text' },
@@ -31,13 +32,10 @@ export function RenewContractModal({ contract, onClose, onSubmit }) {
   const [dupError, setDupError] = useState(false)
   const firstRef = useRef(null)
 
+  useScrollLock()
+
   useEffect(() => {
     firstRef.current?.focus()
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
   }, [])
 
   useEffect(() => {

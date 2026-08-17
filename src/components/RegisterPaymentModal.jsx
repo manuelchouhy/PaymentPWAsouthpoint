@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { Banknote, X } from 'lucide-react'
 import { BANK_METHODS } from '../lib/paymentsData'
 import { getCurrencySymbol } from '../lib/currenciesData'
+import { useScrollLock } from '../lib/useScrollLock'
 
 function todayISO() {
   const now = new Date()
@@ -54,14 +55,11 @@ export function RegisterPaymentModal({ invoice, currency = 'USD', onClose, onCon
   const rateValid = !needsExchangeRate || (exchangeRate !== '' && Number.isFinite(rateNum) && rateNum > 0)
   const valid = amountValid && dateValid && noteOk && rateValid
 
+  useScrollLock()
+
   useEffect(() => {
     firstRef.current?.focus()
     firstRef.current?.select()
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
   }, [])
 
   useEffect(() => {

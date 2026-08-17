@@ -66,6 +66,57 @@ export function useEntryFilters(initial) {
   return { filters, toggleValue, setField, clear, isActive }
 }
 
+// Dimensiones que se muestran como multi-select: clave del filtro → campo de la
+// entry del que salen sus opciones. Billing Status queda afuera a propósito: sus
+// cuatro estados son fijos y no se derivan de las entries.
+const OPTION_DIMENSIONS = {
+  contractors: (entry) => entry.user,
+  clients: (entry) => entry.client,
+  projects: (entry) => entry.project,
+  tasks: (entry) => entry.task,
+}
+
+// localeCompare 'es': un .sort() plano manda los acentuados (Álvaro, Ñandú) al
+// final del dropdown, donde nadie los busca.
+const sortedUnique = (values) =>
+  [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
+
+/**
+ * Opciones entrelazadas de los multi-selects: cada lista se arma sobre las
+ * entries que pasan TODOS los demás filtros (incluidos semana y rango de
+ * fechas), no sobre el total.
+ *
+ * Sin esto las tres listas son independientes y habilitan combinaciones que no
+ * existen — tildar Project "Call Center - Stage 2" y Contractor "Claudio Riva"
+ * daba "0 entries" sin ninguna pista de cuál de los dos sobraba. Cruzándolas, el
+ * dropdown de Contractor sólo ofrece a quienes cargaron horas en ese proyecto.
+ *
+ * El propio filtro de la dimensión se excluye del cruce (si no, tildar un
+ * cliente dejaría su lista con un solo elemento), y los valores ya tildados se
+ * agregan siempre: si el cruce con las otras dimensiones los excluye, el usuario
+ * no tendría cómo destildarlos y quedaría trabado en cero.
+ *
+ * ALCANCE de la garantía: lo que no puede dar cero es la combinación de dos
+ * dimensiones de lista entre sí. Semana y rango de fechas no son listas, así
+ * que sí pueden vaciarlas todas — con week = 53 sin horas cargadas, los tres
+ * dropdowns quedan en "No options" y la grilla en cero. Es información honesta
+ * ("no hay nada esa semana") y se sale cambiando la semana o con Clear, pero no
+ * es un caso que el cruce prevenga.
+ *
+ * @param {import('./data').TimeEntry[]} entries
+ * @param {typeof EMPTY_FILTERS} filters
+ * @param {Map<string, {status: string}>} invoiceByEntryId
+ * @returns {{contractors: string[], clients: string[], projects: string[], tasks: string[]}}
+ */
+export function buildFilterOptions(entries, filters, invoiceByEntryId) {
+  const options = {}
+  for (const [key, pick] of Object.entries(OPTION_DIMENSIONS)) {
+    const scoped = applyEntryFilters(entries, { ...filters, [key]: [] }, invoiceByEntryId)
+    options[key] = sortedUnique([...scoped.map(pick), ...(filters[key] ?? [])])
+  }
+  return options
+}
+
 /**
  * Aplica los filtros a una lista de entradas.
  *
