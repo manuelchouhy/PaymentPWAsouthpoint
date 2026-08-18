@@ -30,27 +30,74 @@ import {
 // tests: necesita entries con allocation 'bill_to_client' y hoy no hay
 // ninguna. Se borra del todo cuando haya horas clasificadas y se reapunten los
 // tests.
+// Orden y foco de la v1 (reunión 2026-08-15): Eduardo acotó la primera versión
+// a Clients, Projects and SOW, Entries, Billing y Payments. Esos cinco —más el
+// Dashboard, que sigue siendo la home— van arriba y son navegables. El resto
+// queda VISIBLE pero deshabilitado (`disabled: true`): Manuel lo pidió así en la
+// reunión ("apagar el botón para que no se pueda apretar, pero que aparezca para
+// que no confunda la vista"). No se ocultan las RUTAS a propósito: la suite e2e
+// y las baselines visuales entran por `page.goto('/collections')` etc., así que
+// esconder el ítem del menú no las rompe, pero borrar la ruta sí.
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', end: true, Icon: LayoutDashboard },
   { to: '/clients', label: 'Clients', Icon: Building2 },
   { to: '/projects', label: 'Projects and SOW', Icon: FolderKanban },
   { to: '/entries', label: 'Entries', Icon: ListChecks },
   { to: '/billing', label: 'Billing', Icon: Receipt },
-  { to: '/client-summary', label: 'Client Summary', Icon: PieChart },
-  { to: '/capacity', label: 'Capacity', Icon: Gauge },
-  { to: '/client-detail', label: 'Client Detail', Icon: FileSearch },
-  { to: '/collections', label: 'Collections', Icon: Landmark },
   { to: '/payments', label: 'Payments', Icon: CreditCard },
-  { to: '/supplier-contracts', label: 'Supplier Contracts', Icon: FileText },
-  { to: '/traceability', label: 'Traceability', Icon: GitBranch },
+  { to: '/client-summary', label: 'Client Summary', Icon: PieChart, disabled: true },
+  { to: '/capacity', label: 'Capacity', Icon: Gauge, disabled: true },
+  { to: '/client-detail', label: 'Client Detail', Icon: FileSearch, disabled: true },
+  { to: '/collections', label: 'Collections', Icon: Landmark, disabled: true },
+  { to: '/supplier-contracts', label: 'Supplier Contracts', Icon: FileText, disabled: true },
+  { to: '/traceability', label: 'Traceability', Icon: GitBranch, disabled: true },
 ]
 
+// Audit Log y Email Outbox tampoco son de la v1: se muestran (sólo a quien tiene
+// settings.view) pero deshabilitados, igual que el resto.
 const ADMIN_NAV_ITEMS = [
-  { to: '/audit-log', label: 'Audit Log', Icon: ScrollText },
-  { to: '/email-outbox', label: 'Email Outbox', Icon: Mail },
+  { to: '/audit-log', label: 'Audit Log', Icon: ScrollText, disabled: true },
+  { to: '/email-outbox', label: 'Email Outbox', Icon: Mail, disabled: true },
 ]
+
+// Un ítem deshabilitado no es un NavLink: se renderiza como <span> sin destino,
+// fuera del tab order (tabIndex -1) y con aria-disabled, para que ni el mouse ni
+// el teclado ni un lector de pantalla lo traten como navegable. La ruta sigue
+// existiendo; lo único que se apaga es este acceso desde el menú.
+function SidebarItem({ item, onNavigate }) {
+  const { to, label, end, Icon, disabled } = item
+  if (disabled) {
+    return (
+      <span
+        className="sidebar__link is-disabled"
+        aria-disabled="true"
+        tabIndex={-1}
+        title="Disponible en una próxima versión"
+      >
+        <Icon size={18} aria-hidden="true" />
+        <span className="sidebar__label">{label}</span>
+      </span>
+    )
+  }
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      onClick={onNavigate}
+      className={({ isActive }) => `sidebar__link${isActive ? ' is-active' : ''}`}
+    >
+      <Icon size={18} aria-hidden="true" />
+      <span className="sidebar__label">{label}</span>
+    </NavLink>
+  )
+}
 
 export function Sidebar({ can, open, onNavigate, user, profile, onSignOut }) {
+  // Los cinco módulos de la v1 (+ Dashboard) arriba; los diferidos, debajo de un
+  // divisor. El orden ya viene dado en NAV_ITEMS: acá sólo se parte por el flag
+  // para intercalar el divisor entre ambos tramos.
+  const activeItems = NAV_ITEMS.filter((item) => !item.disabled)
+  const deferredItems = NAV_ITEMS.filter((item) => item.disabled)
   return (
     <aside className={`sidebar${open ? ' is-open' : ''}`}>
       <div className="sidebar__brand">
@@ -61,35 +108,22 @@ export function Sidebar({ can, open, onNavigate, user, profile, onSignOut }) {
         />
       </div>
       <nav className="sidebar__nav" aria-label="Sections">
-        {NAV_ITEMS.map(({ to, label, end, Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              `sidebar__link${isActive ? ' is-active' : ''}`
-            }
-          >
-            <Icon size={18} aria-hidden="true" />
-            <span className="sidebar__label">{label}</span>
-          </NavLink>
+        {activeItems.map((item) => (
+          <SidebarItem key={item.to} item={item} onNavigate={onNavigate} />
         ))}
+        {deferredItems.length > 0 && (
+          <>
+            <span className="sidebar__nav-divider" aria-hidden="true" />
+            {deferredItems.map((item) => (
+              <SidebarItem key={item.to} item={item} onNavigate={onNavigate} />
+            ))}
+          </>
+        )}
         {can('settings.view') && (
           <>
             <span className="sidebar__nav-divider" aria-hidden="true" />
-            {ADMIN_NAV_ITEMS.map(({ to, label, Icon }) => (
-              <NavLink
-                key={to}
-                to={to}
-                onClick={onNavigate}
-                className={({ isActive }) =>
-                  `sidebar__link${isActive ? ' is-active' : ''}`
-                }
-              >
-                <Icon size={18} aria-hidden="true" />
-                <span className="sidebar__label">{label}</span>
-              </NavLink>
+            {ADMIN_NAV_ITEMS.map((item) => (
+              <SidebarItem key={item.to} item={item} onNavigate={onNavigate} />
             ))}
           </>
         )}

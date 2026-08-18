@@ -3411,6 +3411,18 @@ th.col-pop { text-align: center; }
 }
 .sidebar__link svg { flex-shrink: 0; transition: color .2s var(--ease-out); }
 
+/* Módulos diferidos (fuera de la v1): visibles pero apagados. Sin puntero, sin
+   hover, atenuados, para que se lea "existe pero todavía no" sin invitar al
+   click. pointer-events:none apaga el cursor y el click; tabIndex -1 en el
+   markup los saca del teclado. */
+.sidebar__link.is-disabled {
+  color: var(--text-faint);
+  pointer-events: none;
+  cursor: default;
+  opacity: 0.55;
+}
+.sidebar__link.is-disabled svg { color: var(--text-faint); }
+
 .sidebar__nav-divider {
   display: flex;
   align-items: center;
