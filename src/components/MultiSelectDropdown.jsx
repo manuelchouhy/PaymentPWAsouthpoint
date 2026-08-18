@@ -10,6 +10,7 @@ import { Check, ChevronDown } from 'lucide-react'
  *   selected: string[],
  *   onToggle: (value: string) => void,
  *   placeholder?: string,
+ *   getLabel?: (value: string) => string,
  * }} props
  */
 export function MultiSelectDropdown({
@@ -18,6 +19,11 @@ export function MultiSelectDropdown({
   selected,
   onToggle,
   placeholder = 'All',
+  // Los valores de opción y su texto visible no siempre coinciden: el filtro de
+  // allocation guarda 'bill_to_client' pero muestra "bill to client". Por
+  // defecto es identidad, así que los callers que pasan strings ya legibles
+  // (Cliente, Proyecto, Contractor) no cambian en nada.
+  getLabel = (value) => value,
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -43,7 +49,7 @@ export function MultiSelectDropdown({
     count === 0
       ? placeholder
       : count === 1
-        ? selected[0]
+        ? getLabel(selected[0])
         : `${count} selected`
 
   return (
@@ -56,7 +62,7 @@ export function MultiSelectDropdown({
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className="msel__value" title={count ? selected.join(', ') : undefined}>
+        <span className="msel__value" title={count ? selected.map(getLabel).join(', ') : undefined}>
           {valueLabel}
         </span>
         {count > 0 && <span className="msel__badge">{count}</span>}
@@ -82,7 +88,7 @@ export function MultiSelectDropdown({
                 <span className="msel__check" aria-hidden="true">
                   {checked && <Check size={13} strokeWidth={3} />}
                 </span>
-                <span className="msel__opt-label">{option}</span>
+                <span className="msel__opt-label">{getLabel(option)}</span>
               </button>
             )
           })}

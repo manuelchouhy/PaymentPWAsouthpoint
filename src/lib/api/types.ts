@@ -308,8 +308,10 @@ export interface ApiClient {
      * `unconfirmed` (la base aceptó y no devolvió la fila: pérdida silenciosa).
      */
     setAllocation(
+      // null vuelve la hora a "sin clasificar" (el "— sin clasificar" del
+      // dropdown de Apply); el CHECK de la base admite null sin migración.
       entryIds: Array<string | number>,
-      allocation: 'bill_to_client' | 'overage' | 'sp_internal',
+      allocation: 'bill_to_client' | 'overage' | 'sp_internal' | null,
       changedBy?: string | null,
     ): Promise<{
       updatedIds: Array<string | number>

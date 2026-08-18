@@ -15,10 +15,17 @@ const EMPTY_FILTERS = {
   projects: [],
   tasks: [],
   billingStatuses: [], // 'Pending' | 'Invoiced' | 'Collected' | 'Paid'
+  // allocation de la entry. El valor null (sin clasificar) se representa con el
+  // centinela 'unallocated' para poder tildarlo en el filtro — es justamente el
+  // caso más buscado ("ver sólo lo que falta triagear").
+  allocations: [], // 'unallocated' | 'bill_to_client' | 'overage' | 'sp_internal' | 'unknown'
   dateFrom: '',
   dateTo: '',
   week: '',
 }
+
+// Centinela del filtro para las horas sin clasificar (allocation === null).
+export const UNALLOCATED = 'unallocated'
 
 /**
  * @param {Partial<typeof EMPTY_FILTERS>} [initial] filtros de arranque — los usa
@@ -57,6 +64,7 @@ export function useEntryFilters(initial) {
       filters.projects.length > 0 ||
       filters.tasks.length > 0 ||
       filters.billingStatuses.length > 0 ||
+      filters.allocations.length > 0 ||
       Boolean(filters.dateFrom) ||
       Boolean(filters.dateTo) ||
       Boolean(filters.week),
@@ -144,6 +152,11 @@ export function applyEntryFilters(entries, filters, invoiceByEntryId) {
     if (filters.billingStatuses.length) {
       const billingStatus = invoiceByEntryId.get(String(entry.id))?.status ?? 'Pending'
       if (!filters.billingStatuses.includes(billingStatus)) return false
+    }
+    if (filters.allocations?.length) {
+      // null (sin clasificar) matchea contra el centinela 'unallocated'.
+      const allocation = entry.allocation ?? UNALLOCATED
+      if (!filters.allocations.includes(allocation)) return false
     }
     // log_date es ISO YYYY-MM-DD → la comparación de strings respeta el orden.
     if (filters.dateFrom && (!entry.date || entry.date < filters.dateFrom)) {

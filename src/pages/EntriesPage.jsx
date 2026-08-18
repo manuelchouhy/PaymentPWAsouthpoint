@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useOutletContext, useSearchParams } from 'react-router-dom'
+import { useOutletContext, useSearchParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatDate, formatHours, formatWeek } from '../lib/format'
-import { useEntryFilters, applyEntryFilters, buildFilterOptions } from '../lib/useEntryFilters'
+import { useEntryFilters, applyEntryFilters, buildFilterOptions, UNALLOCATED } from '../lib/useEntryFilters'
 import { buildClientByProject, withDerivedClient } from '../lib/entryClient'
 import { exportGrid } from '../lib/exportGrid'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
@@ -25,12 +25,36 @@ const ALLOCATION_LABELS = {
   sp_internal: { label: 'SP internal', cls: 'badge--alloc-internal' },
 }
 
+// Valor centinela del dropdown de Apply para "volver a sin clasificar": manda
+// allocation = null. Se distingue del resto porque devuelve la hora a la cola de
+// pendientes en vez de asignarle una categoría.
+const UNSET_ALLOCATION = '__unset__'
+
+// Opciones fijas del filtro de allocation (no se derivan de las entries). Incluye
+// 'unallocated' (el caso más buscado). 'unknown' (la "X") NO está acá a propósito:
+// requiere migrar el CHECK de la base (ver .scratch/.../pending-migrations) y su
+// UI completa —label, dropdown de Apply, export, badge—, así que va en su propio
+// slice. Hasta entonces 'unknown' no es un valor posible en la base.
+const ALLOCATION_FILTER_OPTIONS = [UNALLOCATED, 'bill_to_client', 'overage', 'sp_internal']
+
+// Etiqueta visible de una allocation, usada por el filtro y por el export para no
+// duplicar la regla. null o el centinela 'unallocated' → "unallocated". Tolera
+// claves fuera de las conocidas (p.ej. la futura 'unknown') cayendo al valor
+// crudo en vez de romper — el export hacía `[value].label` sin guardas y crasheaba.
+const allocationLabel = (value) =>
+  value == null || value === UNALLOCATED
+    ? 'unallocated'
+    : ALLOCATION_LABELS[value]?.label ?? value
+
 export function EntriesPage() {
   const { user, can } = useOutletContext()
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [allocationChoice, setAllocationChoice] = useState('bill_to_client')
   const [applying, setApplying] = useState(false)
   const [applyError, setApplyError] = useState('')
+  // Resultado de un Apply exitoso: qué allocation se aplicó y a cuántas horas,
+  // para el aviso con link a Billing. null = no hay Apply reciente que mostrar.
+  const [applyNotice, setApplyNotice] = useState(null)
   const [entries, setEntries] = useState([])
   const [invoices, setInvoices] = useState([])
   const [status, setStatus] = useState('loading')
@@ -123,9 +147,11 @@ export function EntriesPage() {
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
     setSelectedIds(new Set())
-    // El error habla de la selección anterior: dejarlo colgado bajo otra grilla
-    // hace desconfiar de allocations que sí se guardaron.
+    // El error y el aviso hablan de la selección anterior: dejarlos colgados
+    // bajo otra grilla filtrada hace desconfiar de allocations que sí se
+    // guardaron.
     setApplyError('')
+    setApplyNotice(null)
   }, [filters])
 
   const page = visible.slice(0, visibleCount)
@@ -188,7 +214,7 @@ export function EntriesPage() {
       status: entry.status,
       // Mismo texto que la grilla, incluido el "unallocated": una celda vacía
       // en el Excel se leería como "no se exportó", no como "sin clasificar".
-      allocation: entry.allocation ? ALLOCATION_LABELS[entry.allocation].label : 'unallocated',
+      allocation: allocationLabel(entry.allocation),
       billing: invoiceByEntryId.get(String(entry.id))?.status ?? 'Pending',
     }))
     exportGrid({
@@ -206,12 +232,18 @@ export function EntriesPage() {
     // lo que el usuario ve sumado en la barra.
     const ids = selectedEntries.filter((e) => !isFrozen(e)).map((e) => e.id)
     if (!ids.length || applying) return
+    // El centinela del dropdown devuelve la hora a "sin clasificar": manda null.
+    const allocationValue = allocationChoice === UNSET_ALLOCATION ? null : allocationChoice
+    // Horas por id, leídas de la selección ANTES de limpiarla, para poder sumar
+    // en el aviso sólo las filas que la base confirme.
+    const hoursById = new Map(selectedEntries.map((e) => [String(e.id), Number(e.hours) || 0]))
     setApplying(true)
     setApplyError('')
+    setApplyNotice(null)
     try {
       const result = await api.timeEntries.setAllocation(
         ids,
-        allocationChoice,
+        allocationValue,
         user?.email ?? null,
       )
       const updatedIds = result?.updatedIds ?? []
@@ -220,9 +252,22 @@ export function EntriesPage() {
       // Se pintan sólo las filas que la base confirmó, no las pedidas.
       const applied = new Set(updatedIds.map(String))
       setEntries((prev) =>
-        prev.map((e) => (applied.has(String(e.id)) ? { ...e, allocation: allocationChoice } : e)),
+        prev.map((e) => (applied.has(String(e.id)) ? { ...e, allocation: allocationValue } : e)),
       )
       setSelectedIds(new Set())
+
+      // Aviso de lo que SÍ entró (independiente del bloque de faltantes de
+      // abajo): confirma que la hora entró al circuito y, para bill to client,
+      // linkea a Billing. Las horas se suman de la confirmación de la base.
+      if (applied.size > 0) {
+        // El aviso de "sin clasificar" (null) muestra sólo el conteo, no las
+        // horas: no se suman en ese camino.
+        const appliedHours =
+          allocationValue === null
+            ? 0
+            : updatedIds.reduce((sum, id) => sum + (hoursById.get(String(id)) || 0), 0)
+        setApplyNotice({ allocation: allocationValue, count: applied.size, hours: appliedHours })
+      }
 
       // Los motivos NO se suman en un único "N no se aplicaron": cada uno pide
       // una acción distinta (resignarse, reintentar, revisar la sesión), y
@@ -292,6 +337,34 @@ export function EntriesPage() {
           guardaron, negándolo. */}
       {applyError && <p className="field__error">{applyError}</p>}
 
+      {/* Aviso de un Apply exitoso: confirma que la hora entró al circuito.
+          Para bill to client linkea a Billing; para overage/SP internal aclara
+          que NO van ahí; para "sin clasificar" que volvieron a la cola. Convive
+          con applyError: uno reporta lo que entró, el otro lo que no. */}
+      {applyNotice && (
+        <p className="state__hint">
+          {applyNotice.allocation === 'bill_to_client' ? (
+            <>
+              ✓ {formatHours(applyNotice.hours)} h ({applyNotice.count}{' '}
+              {applyNotice.count === 1 ? 'entry' : 'entries'}) classified as bill to client — already
+              in <Link to="/billing">Billing ↗</Link>.
+            </>
+          ) : applyNotice.allocation === null ? (
+            <>
+              ✓ {applyNotice.count} {applyNotice.count === 1 ? 'entry' : 'entries'} moved back to
+              unclassified — back in the pending queue.
+            </>
+          ) : (
+            <>
+              ✓ {formatHours(applyNotice.hours)} h ({applyNotice.count}{' '}
+              {applyNotice.count === 1 ? 'entry' : 'entries'}) classified as{' '}
+              {ALLOCATION_LABELS[applyNotice.allocation]?.label ?? applyNotice.allocation} — these
+              don’t go to Billing (not charged to the client).
+            </>
+          )}
+        </p>
+      )}
+
       {status === 'loading' && <p className="state__hint">Loading entries…</p>}
 
       {status === 'error' && (
@@ -328,6 +401,22 @@ export function EntriesPage() {
                 options={options.contractors}
                 selected={filters.contractors}
                 onToggle={(v) => toggleValue('contractors', v)}
+              />
+              {/* Opciones fijas, NO entrelazadas (a diferencia de Cliente /
+                  Proyecto / Contractor, que se cruzan en buildFilterOptions).
+                  Dos motivos: 'unallocated' tiene que seguir tildable aunque no
+                  haya ninguna en pantalla, para poder volver a ella; y una
+                  categoría vacía bajo otro filtro (Cliente X sin overage → 0
+                  filas) es información honesta y recuperable con Clear, el mismo
+                  criterio ya aceptado para el filtro de semana. Se asume el
+                  "cero sin pista" a cambio de que las cuatro categorías fijas
+                  estén siempre visibles como referencia. */}
+              <MultiSelectDropdown
+                label="Allocation"
+                options={ALLOCATION_FILTER_OPTIONS}
+                selected={filters.allocations}
+                onToggle={(v) => toggleValue('allocations', v)}
+                getLabel={allocationLabel}
               />
               <div className="filterfield">
                 <span className="filterfield__label">Week</span>
@@ -368,6 +457,10 @@ export function EntriesPage() {
                   {Object.entries(ALLOCATION_LABELS).map(([value, { label }]) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
+                  {/* Deshacer: devuelve la hora a la cola de pendientes. Va
+                      último y con guion para separarlo visualmente de las
+                      categorías reales. */}
+                  <option value={UNSET_ALLOCATION}>— sin clasificar</option>
                 </select>
                 <button type="button" className="btn btn--pay btn--sm" onClick={handleApply} disabled={applying}>
                   {applying ? 'Applying…' : 'Apply'}
