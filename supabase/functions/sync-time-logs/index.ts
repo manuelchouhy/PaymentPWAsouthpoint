@@ -185,12 +185,15 @@ function safe(obj: any, path: string, fallback: any): any {
 async function fetchGroupByProjectId(
   portalId: string,
   token: string,
-): Promise<Map<string, string> | null> {
+): Promise<{ map: Map<string, string>; groups: string[] } | null> {
   const map = new Map<string, string>();
   // Proyectos que aparecen en más de un grupo: ambiguos. Misma filosofía que las
   // guardas byKey/byName del resolver — no se adivina el cliente, se deja sin
   // grupo para que caiga a "sin cliente" y se resuelva a mano.
   const ambiguous = new Set<string>();
+  // Nombres de TODOS los grupos reales de Zoho (tengan o no proyectos). Se usa para
+  // auto-crear un cliente por grupo, incluso los que hoy no tienen proyectos.
+  const allGroups = new Set<string>();
   try {
     // Tanto la lista de grupos como los proyectos por grupo se paginan con el
     // paginador V1 (index/range): así no se truncan silenciosamente ni los grupos
@@ -215,6 +218,10 @@ async function fetchGroupByProjectId(
       const gid = String(g.id_string || g.id || "");
       const gname = g.name || g.group_name || "";
       if (!gid || !gname) continue;
+      // Pseudo-grupo interno de Zoho ("ungrouped projects"): NO es un cliente, se
+      // saltea (ni se mapea ni se auto-crea cliente).
+      if (/ungroupproj/i.test(gname)) continue;
+      allGroups.add(gname);
       // La doc de Zoho envuelve el filtro en `filter`: {"filter":{"group":[id]}}.
       // Sin ese wrapper el listado ignora el filtro o devuelve error.
       const filter = encodeURIComponent(JSON.stringify({ filter: { group: [gid] } }));
@@ -250,7 +257,7 @@ async function fetchGroupByProjectId(
     console.log("No se pudieron traer los Project Groups:", String((e as Error)?.message ?? e));
     return null;
   }
-  return map;
+  return { map, groups: [...allGroups] };
 }
 
 // Zoho log date "MM-DD-YYYY" -> ISO "YYYY-MM-DD"
@@ -447,17 +454,17 @@ function normKey(v: any): string {
 }
 
 // ---------- Auto-provisión de clientes desde los Project Groups de Zoho ----------
-// Cada grupo asignado a algún proyecto que todavía NO tenga cliente (por nombre o
-// alias) se crea como cliente: client_name = nombre del grupo, alias = mismo grupo
-// (así sobrevive a un rename del cliente), needs_review = true (datos a completar a
-// mano). Nunca pisa clientes existentes ni sus datos. Si algo falla, se loguea y el
-// sync sigue: la auto-provisión es "best effort".
+// Cada grupo REAL de Zoho (con o sin proyectos; el pseudo-grupo interno ya se excluyó
+// en fetchGroupByProjectId) que todavía NO tenga cliente (por nombre o alias) se crea
+// como cliente: client_name = nombre del grupo, alias = mismo grupo (así sobrevive a
+// un rename del cliente), needs_review = true (datos a completar a mano). Nunca pisa
+// clientes existentes ni sus datos. Si algo falla, se loguea y el sync sigue: la
+// auto-provisión es "best effort".
 async function ensureClientsForGroups(
   supabase: any,
-  groupByProjectId: Map<string, string> | null,
+  groupNames: string[],
 ): Promise<void> {
-  if (!groupByProjectId || groupByProjectId.size === 0) return;
-  const groupNames = [...new Set([...groupByProjectId.values()])];
+  if (!groupNames || groupNames.length === 0) return;
   const { data: clients, error } = await supabase
     .from("clients")
     .select("client_name, zoho_group_name");
@@ -557,16 +564,19 @@ Deno.serve(async (req) => {
       `Projects: ${projects.length} (activos ${activeProjects.length}, archivados ${archivedProjects.length})`,
     );
 
-    // Cliente = Project Group de Zoho. Se trae el mapa projectId→grupo aparte
-    // (el listado de proyectos no lo incluye). Ver fetchGroupByProjectId.
-    const groupByProjectId = await fetchGroupByProjectId(portalId, token);
+    // Cliente = Project Group de Zoho. Se trae el mapa projectId→grupo y la lista
+    // de TODOS los grupos reales aparte (el listado de proyectos no incluye el
+    // grupo). Ver fetchGroupByProjectId.
+    const groupInfo = await fetchGroupByProjectId(portalId, token);
+    const groupByProjectId = groupInfo?.map ?? null;
 
     // FR-07 · crear/actualizar el maestro de proyectos desde Zoho.
     const projectsSynced = await upsertProjects(supabase, projects, groupByProjectId);
     console.log("Proyectos sincronizados:", projectsSynced);
 
-    // Auto-provisión: un cliente por cada grupo de Zoho que aún no tenga uno.
-    await ensureClientsForGroups(supabase, groupByProjectId);
+    // Auto-provisión: un cliente por cada grupo de Zoho (con o sin proyectos) que
+    // aún no tenga uno.
+    await ensureClientsForGroups(supabase, groupInfo?.groups ?? []);
 
     // Fechas mes a mes desde enero hasta el mes actual
     const now = new Date();
