@@ -10,6 +10,7 @@ const FIELDS = [
   { key: 'domain', label: 'Domain' },
   { key: 'primaryContactName', label: 'Primary Contact' },
   { key: 'primaryContactEmail', label: 'Contact Email' },
+  { key: 'zohoGroupName', label: 'Zoho Group (alias)' },
 ]
 
 /**

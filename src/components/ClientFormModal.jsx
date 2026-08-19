@@ -10,11 +10,17 @@ const TEXT_FIELDS = [
   { key: 'domain', label: 'Domain', required: false },
   { key: 'primaryContactName', label: 'Primary Contact Name', required: true },
   { key: 'primaryContactEmail', label: 'Primary Contact Email', required: true, type: 'email' },
+  {
+    key: 'zohoGroupName',
+    label: 'Zoho Group (alias)',
+    required: false,
+    hint: 'Zoho Project Group that maps hours to this client (e.g. HSS). Leave empty if the group matches the client name.',
+  },
 ]
 const REQUIRED = ['clientName', 'primaryContactName', 'primaryContactEmail']
 
 function emptyForm() {
-  return { clientName: '', email: '', domain: '', primaryContactName: '', primaryContactEmail: '' }
+  return { clientName: '', email: '', domain: '', primaryContactName: '', primaryContactEmail: '', zohoGroupName: '' }
 }
 
 /**
@@ -39,6 +45,7 @@ export function ClientFormModal({ initial = null, onClose, onSubmit }) {
           domain: initial.domain ?? '',
           primaryContactName: initial.primaryContactName ?? '',
           primaryContactEmail: initial.primaryContactEmail ?? '',
+          zohoGroupName: initial.zohoGroupName ?? '',
         }
       : emptyForm(),
   )
@@ -109,6 +116,7 @@ export function ClientFormModal({ initial = null, onClose, onSubmit }) {
           domain: form.domain.trim(),
           primaryContactName: form.primaryContactName.trim(),
           primaryContactEmail: form.primaryContactEmail.trim(),
+          zohoGroupName: form.zohoGroupName.trim(),
         },
         msaFile,
       )
@@ -171,7 +179,13 @@ export function ClientFormModal({ initial = null, onClose, onSubmit }) {
                     onChange={(e) => set(field.key, e.target.value)}
                     onBlur={() => setTouched(true)}
                     autoComplete="off"
+                    aria-describedby={field.hint ? `client-${field.key}-hint` : undefined}
                   />
+                  {field.hint && (
+                    <span className="field__hint" id={`client-${field.key}-hint`}>
+                      {field.hint}
+                    </span>
+                  )}
                   {isMissing && <span className="field__error">This field is required.</span>}
                 </div>
               )

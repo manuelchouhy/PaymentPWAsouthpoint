@@ -17,6 +17,7 @@
 
 import { supabase, isSupabaseConfigured } from './supabase'
 import { recordProjectDocument } from './projectsData'
+import { normalizeClientKey } from './clientResolver'
 
 const BUCKET = 'client-msa'
 const MSA_MAX_BYTES = 20 * 1024 * 1024 // 20 MB
@@ -28,6 +29,56 @@ const FIELD_TO_COLUMN = {
   primaryContactName: 'primary_contact_name',
   primaryContactEmail: 'primary_contact_email',
   msaUrl: 'msa_url',
+  // Alias: el nombre del Project Group de Zoho que mapea a este cliente (ej. grupo
+  // "HSS" → cliente "HSSStaffing"). Único case-insensitive entre los no nulos
+  // (índice clients_zoho_group_name_key). '' → null vía clientToRow.
+  zohoGroupName: 'zoho_group_name',
+}
+
+// El índice único de la 0030 (clients_zoho_group_name_key) rechaza dos clientes con
+// el MISMO alias, pero como backstop de carrera: la validación de abajo ya ataja el
+// caso común antes de tocar la base. Se matchea el nombre del índice en el mensaje
+// crudo de Postgres para traducirlo a algo legible.
+const ALIAS_UNIQUE_INDEX = 'clients_zoho_group_name_key'
+function friendlyClientError(error) {
+  const msg = String(error?.message ?? error)
+  if (error?.code === '23505' && msg.includes(ALIAS_UNIQUE_INDEX)) {
+    return new Error('That Zoho group alias is already assigned to another client.')
+  }
+  return new Error(msg)
+}
+
+// Valida que el alias no colisione —normalizado— con el NOMBRE o el alias de OTRO
+// cliente. El índice de la 0030 sólo cuida alias-vs-alias, pero buildClientResolver
+// arma su índice con clientName Y zohoGroupName: un alias igual al nombre de otro
+// cliente no dispara error en la base, pero vuelve ambigua esa clave y rompe la
+// resolución grupo→cliente de AMBOS en silencio. Se ataja acá, en los dos modos
+// (Supabase y demo), con un mensaje claro. La carrera (dos altas simultáneas) la
+// cubre el índice único para alias-vs-alias; el resto es de baja probabilidad.
+async function assertAliasFree(alias, selfId) {
+  const key = normalizeClientKey(alias)
+  if (!key) return
+  let others
+  if (isSupabaseConfigured) {
+    const { data, error } = await supabase.from('clients').select('id, client_name, zoho_group_name')
+    // Fail-closed: si no se puede leer para validar, NO se escribe (un `?? []`
+    // dejaría pasar el alias sin chequear la colisión que el índice no cubre).
+    if (error) throw new Error(`Could not validate the alias: ${error.message}`)
+    others = data ?? []
+  } else {
+    others = demoClients.map((c) => ({ id: c.id, client_name: c.clientName, zoho_group_name: c.zohoGroupName ?? null }))
+  }
+  for (const c of others) {
+    if (String(c.id) === String(selfId)) continue
+    const collides =
+      normalizeClientKey(c.client_name) === key ||
+      (c.zoho_group_name && normalizeClientKey(c.zoho_group_name) === key)
+    if (collides) {
+      throw new Error(
+        `That Zoho group alias collides with client "${c.client_name}". Aliases must be unique across client names and aliases.`,
+      )
+    }
+  }
 }
 
 /** @type {Client[]} */
@@ -110,6 +161,7 @@ export async function getClients() {
  * @returns {Promise<Client>}
  */
 export async function createClient(payload, createdBy) {
+  await assertAliasFree(payload.zohoGroupName, null)
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 250))
     const client = {
@@ -128,7 +180,7 @@ export async function createClient(payload, createdBy) {
     .insert({ ...clientToRow(payload), created_by: createdBy || null })
     .select()
     .single()
-  if (error) throw new Error(error.message)
+  if (error) throw friendlyClientError(error)
   return rowToClient(data)
 }
 
@@ -142,6 +194,11 @@ export async function createClient(payload, createdBy) {
  * @returns {Promise<Client>}
  */
 export async function updateClient(current, updates) {
+  // Sólo se valida si el alias (normalizado) cambió: editar otros campos no
+  // necesita re-escanear la tabla de clientes.
+  if (normalizeClientKey(updates.zohoGroupName) !== normalizeClientKey(current.zohoGroupName)) {
+    await assertAliasFree(updates.zohoGroupName, current.id)
+  }
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 250))
     const updated = { ...current, ...updates, updatedAt: new Date().toISOString() }
@@ -155,7 +212,7 @@ export async function updateClient(current, updates) {
     .eq('id', current.id)
     .select()
     .single()
-  if (error) throw new Error(error.message)
+  if (error) throw friendlyClientError(error)
   return rowToClient(data)
 }
 
