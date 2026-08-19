@@ -6,7 +6,7 @@ import { api } from '../lib/api'
 import { formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions } from '../lib/useEntryFilters'
-import { buildClientByProject, withDerivedClient } from '../lib/entryClient'
+import { deriveEntriesClient } from '../lib/entryClient'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { BillModal } from '../components/BillModal'
@@ -29,7 +29,10 @@ export function BillingPage() {
     byClientAndName: new Map(),
     byName: new Map(),
   }))
-  const [clientByProject, setClientByProject] = useState(() => new Map())
+  // projects + clients alimentan deriveEntriesClient (cadena hora→proyecto→grupo→
+  // cliente). Ver entryClient.js / clientResolver.js.
+  const [projects, setProjects] = useState([])
+  const [clients, setClients] = useState([])
   const [status, setStatus] = useState('loading')
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedKeys, setSelectedKeys] = useState(() => new Set())
@@ -76,17 +79,18 @@ export function BillingPage() {
           else if (prior !== project.sowNumber) byName.set(project.projectName, null)
         }
         setSowByProject({ byClientAndName, byName })
-        // El cliente de cada hora sale del proyecto: time_entries.client viene
-        // vacío del sync. Ver entryClient.js.
-        setClientByProject(buildClientByProject(projectRows))
+        // Los proyectos también resuelven el cliente de cada hora (deriveEntriesClient,
+        // abajo): time_entries.client viene vacío del sync. Ver entryClient.js.
+        setProjects(projectRows)
       })
       .catch((error) => console.error('No se pudieron cargar los SOW de Billing:', error))
 
-    Promise.all([api.timeEntries.list(), api.invoices.list()])
-      .then(([entryRows, invoiceRows]) => {
+    Promise.all([api.timeEntries.list(), api.invoices.list(), api.clients.list()])
+      .then(([entryRows, invoiceRows, clientRows]) => {
         if (cancelled) return
         setEntries(entryRows)
         setInvoices(invoiceRows)
+        setClients(clientRows)
         setSelectedKeys(new Set())
         setStatus('ready')
       })
@@ -108,11 +112,13 @@ export function BillingPage() {
     return map
   }, [invoices])
 
-  // Con el cliente ya resuelto desde el proyecto, para que la columna, el
-  // filtro y sus opciones hablen todos del mismo valor.
+  // Con el cliente ya resuelto desde el proyecto (por id de Zoho → grupo →
+  // cliente), para que la columna, el filtro y sus opciones hablen todos del
+  // mismo valor. Pre-sync (columnas zoho_* vacías) degrada al texto legacy del
+  // proyecto, igual que el camino anterior.
   const entriesConCliente = useMemo(
-    () => withDerivedClient(entries, clientByProject),
-    [entries, clientByProject],
+    () => deriveEntriesClient(entries, projects, clients),
+    [entries, projects, clients],
   )
 
   // Listas entrelazadas: cada dropdown se arma sobre lo que pasa los OTROS

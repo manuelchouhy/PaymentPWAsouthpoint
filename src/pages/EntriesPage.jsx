@@ -5,7 +5,7 @@ import { AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatDate, formatHours, formatWeek } from '../lib/format'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, UNALLOCATED } from '../lib/useEntryFilters'
-import { buildClientByProject, withDerivedClient } from '../lib/entryClient'
+import { deriveEntriesClient } from '../lib/entryClient'
 import { exportGrid } from '../lib/exportGrid'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
@@ -84,13 +84,14 @@ export function EntriesPage() {
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
-    // Los proyectos son sólo para derivar el cliente de cada hora (ver
-    // entryClient.js). Van en el mismo Promise.all: sin ellos la columna y el
+    // Proyectos y clientes son sólo para derivar el cliente de cada hora
+    // (deriveEntriesClient: hora→proyecto por id de Zoho→grupo→cliente por alias;
+    // ver entryClient.js). Van en el mismo Promise.all: sin ellos la columna y el
     // filtro de Cliente quedan vacíos, que es justamente lo que se arregla.
-    Promise.all([api.timeEntries.list(), api.invoices.list(), api.projects.list()])
-      .then(([entryRows, invoiceRows, projectRows]) => {
+    Promise.all([api.timeEntries.list(), api.invoices.list(), api.projects.list(), api.clients.list()])
+      .then(([entryRows, invoiceRows, projectRows, clientRows]) => {
         if (cancelled) return
-        setEntries(withDerivedClient(entryRows, buildClientByProject(projectRows)))
+        setEntries(deriveEntriesClient(entryRows, projectRows, clientRows))
         setInvoices(invoiceRows)
         // Los datos se releyeron: una selección armada sobre la tanda anterior
         // puede apuntar a filas que ya se facturaron.

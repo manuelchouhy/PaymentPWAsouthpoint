@@ -195,8 +195,10 @@ async function fetchGroupByProjectId(
     // Tanto la lista de grupos como los proyectos por grupo se paginan con el
     // paginador V1 (index/range): así no se truncan silenciosamente ni los grupos
     // (portal con muchos clientes) ni los proyectos de un grupo grande.
+    // Sin barra final: la doc de Zoho documenta el endpoint como
+    // /restapi/portal/{id}/projects/groups (con barra da HTTP 400 en este portal).
     const groups = await fetchAllPagesV1(
-      `${ZOHO_V1}/portal/${portalId}/projects/groups/`,
+      `${ZOHO_V1}/portal/${portalId}/projects/groups`,
       ["groups", "projectgroups"],
       token,
     );
@@ -213,7 +215,9 @@ async function fetchGroupByProjectId(
       const gid = String(g.id_string || g.id || "");
       const gname = g.name || g.group_name || "";
       if (!gid || !gname) continue;
-      const filter = encodeURIComponent(JSON.stringify({ group: [gid] }));
+      // La doc de Zoho envuelve el filtro en `filter`: {"filter":{"group":[id]}}.
+      // Sin ese wrapper el listado ignora el filtro o devuelve error.
+      const filter = encodeURIComponent(JSON.stringify({ filter: { group: [gid] } }));
       // Un fallo al traer los proyectos de UN grupo no es catastrófico: ese grupo
       // queda sin proyectos mapeados (→ esos proyectos "sin cliente"), sin abortar.
       const projs = (await fetchAllPagesV1(

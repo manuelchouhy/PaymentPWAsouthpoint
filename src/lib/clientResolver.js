@@ -50,7 +50,7 @@ export function buildClientResolver(clients = []) {
   // pone 'HSS' como alias de grupo), no se adivina: la clave queda null (ambigua)
   // y el proyecto cae a 'group-unclaimed'. Es la misma guarda que buildProjectIndex
   // aplica en byName; sin ella el último cliente cargado ganaba en silencio (el
-  // mismo bug que el review marcó sobre buildClientByProject).
+  // bug de la derivación por nombre que esta cadena vino a reemplazar).
   const byKey = new Map()
   const claimKey = (key, name) => {
     if (!key || !name) return

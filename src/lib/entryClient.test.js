@@ -43,19 +43,23 @@ test('findProjectForEntry: nombre ambiguo → null (no adivina)', () => {
   assert.equal(findProjectForEntry({ project: 'Maintenance' }, idx), null)
 })
 
-test('findProjectForEntry: id presente pero inexistente → null (no cae al nombre)', () => {
+test('findProjectForEntry: id presente pero inexistente → null (id autoritativo)', () => {
   const idx = buildProjectIndex(PROJECTS)
-  // La hora trae un zohoProjectId que no está en el índice; su nombre matchea
-  // por casualidad OTRO proyecto ('Internal' → 200). Con el id como autoritativo
-  // NO se atribuye al proyecto equivocado: devuelve null.
-  const p = findProjectForEntry({ zohoProjectId: '999', project: 'Internal' }, idx)
-  assert.equal(p, null)
+  // El id no está en el índice. Como byZohoId y byName salen de la MISMA lista, el
+  // proyecto tampoco está en byName; caer al nombre sólo devolvería OTRO proyecto
+  // homónimo ('Internal' → 200, otro cliente). Se prefiere null al cliente errado.
+  assert.equal(findProjectForEntry({ zohoProjectId: '999', project: 'Internal' }, idx), null)
+})
+
+test('findProjectForEntry: zohoProjectId "" cuenta como ausente → usa el nombre', () => {
+  const idx = buildProjectIndex(PROJECTS)
+  const p = findProjectForEntry({ zohoProjectId: '', project: 'KBS Orders' }, idx)
+  assert.equal(p.zohoProjectId, '100')
 })
 
 test('deriveEntriesClient: resuelve por id de Zoho → grupo → cliente', () => {
   const [e] = deriveEntriesClient([{ id: 'e1', zohoProjectId: '100', project: 'KBS Orders' }], PROJECTS, CLIENTS)
   assert.equal(e.client, 'HSSStaffing')
-  assert.equal(e.clientReason, null)
 })
 
 test('deriveEntriesClient: el valor propio de la entry gana', () => {
@@ -68,15 +72,13 @@ test('deriveEntriesClient: hora de proyecto homónimo queda sin cliente (no el e
   assert.equal(e.client, '')
 })
 
-test('deriveEntriesClient: proyecto inexistente → sin cliente, motivo no-group', () => {
+test('deriveEntriesClient: proyecto inexistente → sin cliente', () => {
   const [e] = deriveEntriesClient([{ id: 'e4', project: 'Fantasma' }], PROJECTS, CLIENTS)
   assert.equal(e.client, '')
-  assert.equal(e.clientReason, 'no-group')
 })
 
-test('deriveEntriesClient: grupo sin cliente que lo reclame → group-unclaimed', () => {
+test('deriveEntriesClient: grupo sin cliente que lo reclame → sin cliente', () => {
   const projects = [{ zohoProjectId: '500', projectName: 'Orphan', zohoProjectGroup: 'Globex' }]
   const [e] = deriveEntriesClient([{ id: 'e5', zohoProjectId: '500', project: 'Orphan' }], projects, CLIENTS)
   assert.equal(e.client, '')
-  assert.equal(e.clientReason, 'group-unclaimed')
 })

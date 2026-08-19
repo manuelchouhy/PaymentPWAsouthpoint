@@ -354,8 +354,10 @@ export async function getTimeEntries() {
 
   const { data, error } = await supabase
     .from('time_entries')
+    // zoho_project_id habilita el join hora→proyecto por id de Zoho en
+    // deriveEntriesClient (la columna la crea la migración 0030, ya aplicada).
     .select(
-      'id, zoho_log_id, user_name, project, client, task, task_number, description, notes, log_date, hours, status, allocation',
+      'id, zoho_log_id, user_name, project, zoho_project_id, client, task, task_number, description, notes, log_date, hours, status, allocation',
     )
     .order('log_date', { ascending: false })
 

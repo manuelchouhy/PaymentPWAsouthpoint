@@ -200,6 +200,10 @@ function rowToProject(row) {
     contractNumber: row.contract_number,
     contractExpirationDate: row.contract_expiration_date,
     zohoStatus: row.zoho_status ?? null,
+    // Id de Zoho del proyecto: la clave del join hora→proyecto. buildProjectIndex
+    // arma byZohoId con esto; sin mapearlo, el join por id queda inerte y todo cae
+    // al fallback por nombre. Ver entryClient.js / slice 3.
+    zohoProjectId: row.zoho_project_id ?? null,
     // Grupo crudo de Zoho (allí el cliente vive como grupo). Lo consume
     // clientResolver para resolver proyecto→cliente por alias. Ver slice 3.
     zohoProjectGroup: row.zoho_project_group ?? null,
