@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
@@ -49,11 +49,18 @@ export function BillingPage() {
   const [status, setStatus] = useState('loading')
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedKeys, setSelectedKeys] = useState(() => new Set())
-  // Semanas que el usuario abrió/cerró a mano (respecto del default: la más
-  // reciente de cada cliente abierta, el resto colapsadas). Se guarda el "flip"
-  // en vez del estado absoluto para que un reload (facturar, cambiar filtro) no
-  // pise lo que el usuario abrió: el default se aplica en el render por posición.
-  const [toggledWeeks, setToggledWeeks] = useState(() => new Set())
+  // Semanas abiertas, estado ABSOLUTO por id de semana (no un "flip" respecto de
+  // una posición). Si se guardara el flip contra "la más reciente" y esa semana
+  // cambia (reload, otra hora), el flip se invertiría solo y una semana con filas
+  // seleccionadas podría colapsarse sin pasar por toggleWeek —dejando filas
+  // ocultas pero facturables—. Con estado absoluto una semana sólo cambia por
+  // toggleWeek (que poda la selección) o por el seed inicial (semana nueva, sin
+  // selección todavía).
+  const [openWeeks, setOpenWeeks] = useState(() => new Set())
+  // Semanas ya "sembradas" con su default (la más reciente de cada cliente
+  // abierta). Es un ref, no estado: sembrar no debe re-renderizar, y así un reload
+  // no vuelve a aplicar el default sobre lo que el usuario ya abrió/cerró.
+  const seededWeeksRef = useRef(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const { filters, toggleValue, clear, isActive } = useEntryFilters()
@@ -164,6 +171,15 @@ export function BillingPage() {
   const options = useMemo(
     () => buildFilterOptions(entriesConCliente, filters, invoiceByEntryId),
     [entriesConCliente, filters, invoiceByEntryId],
+  )
+
+  // El desplegable Client lista TODOS los clientes del maestro, no sólo los que
+  // hoy tienen horas: así un cliente sin tiempo cargado (p. ej. un grupo de Zoho
+  // recién creado) sigue siendo elegible. Se une con los que aparecen en las
+  // entries por si alguno resuelve a un nombre que no está en el maestro.
+  const clientOptions = useMemo(
+    () => sortedUnique([...options.clients, ...clients.map((c) => c.clientName)]),
+    [options.clients, clients],
   )
 
   // Todas las filas que pasan los filtros del usuario, sin mirar allocation.
@@ -279,6 +295,32 @@ export function BillingPage() {
     return map
   }, [clientGroups])
 
+  // Siembra el default de colapso: la semana más reciente de cada cliente (i===0)
+  // arranca abierta; el resto colapsadas. Sólo se siembra una semana la PRIMERA
+  // vez que aparece (seededWeeksRef), así un reload no pisa lo que el usuario
+  // abrió/cerró a mano.
+  useEffect(() => {
+    if (!seededWeeksRef.current) seededWeeksRef.current = new Set()
+    const seeded = seededWeeksRef.current
+    setOpenWeeks((prev) => {
+      let changed = false
+      const next = new Set(prev)
+      for (const group of clientGroups) {
+        if (group.isUnassigned) continue
+        group.weeks.forEach((week, i) => {
+          const wid = weekId(group.client, week)
+          if (seeded.has(wid)) return
+          seeded.add(wid)
+          if (i === 0) {
+            next.add(wid)
+            changed = true
+          }
+        })
+      }
+      return changed ? next : prev
+    })
+  }, [clientGroups])
+
   const selectedRows = [...selectedKeys].map((k) => billableRows.get(k)).filter(Boolean)
   const selectedEntries = selectedRows.flatMap((r) => r.entries)
   const selectedHours = selectedRows.reduce((sum, r) => sum + r.hours, 0)
@@ -295,16 +337,18 @@ export function BillingPage() {
     })
   }
 
-  function toggleWeek(id, willBeOpen) {
-    setToggledWeeks((prev) => {
+  function toggleWeek(id) {
+    const isOpen = openWeeks.has(id)
+    setOpenWeeks((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
-    // Al colapsar, se sacan de la selección las filas de esa semana: si quedaran
-    // seleccionadas pero ocultas, se podría facturar horas que ya no se ven.
-    if (!willBeOpen) {
+    // Al colapsar (estaba abierta), se sacan de la selección las filas de esa
+    // semana: si quedaran seleccionadas pero ocultas, se podría facturar horas
+    // que ya no se ven.
+    if (isOpen) {
       setSelectedKeys((prev) => new Set([...prev].filter((k) => !k.startsWith(`${id}||`))))
     }
   }
@@ -479,7 +523,7 @@ export function BillingPage() {
             <div className="filterbar__controls">
               <MultiSelectDropdown
                 label="Client"
-                options={options.clients}
+                options={clientOptions}
                 selected={filters.clients}
                 onToggle={(v) => toggleValue('clients', v)}
               />
@@ -614,7 +658,10 @@ export function BillingPage() {
                           </thead>
                           <tbody>
                             {group.projects.map((project) => (
-                              <tr key={project.project || '—'}>
+                              // key por el nombre crudo (único en el bucket, que
+                              // agrupa por nombre); el vacío usa un centinela para
+                              // no chocar con un proyecto llamado literalmente '—'.
+                              <tr key={project.project || 'empty'}>
                                 <td className="cell-strong">{project.project || '—'}</td>
                                 <td className="cell-soft">{reasonLabel(project.reason)}</td>
                                 <td className="col-num cell-mono">{formatHours(project.hours)}</td>
@@ -630,12 +677,11 @@ export function BillingPage() {
                         <h3 className="bill-client__name">{group.client}</h3>
                         <span className="bill-client__hours">{formatHours(group.hours)} h</span>
                       </header>
-                      {group.weeks.map((week, i) => {
+                      {group.weeks.map((week) => {
                         const wid = weekId(group.client, week)
-                        // Default: la semana más reciente (i === 0) abierta, el
-                        // resto colapsadas. toggledWeeks guarda el flip del usuario.
-                        const isRecent = i === 0
-                        const open = isRecent ? !toggledWeeks.has(wid) : toggledWeeks.has(wid)
+                        // Estado absoluto: abierta sólo si está en openWeeks (el
+                        // seed abrió la más reciente de cada cliente).
+                        const open = openWeeks.has(wid)
                         const weekRowIds = week.rows.map((row) => rowId(group.client, week, row))
                         const allWeekSelected =
                           weekRowIds.length > 0 && weekRowIds.every((k) => selectedKeys.has(k))
@@ -644,7 +690,7 @@ export function BillingPage() {
                             <button
                               type="button"
                               className="bill-week__toggle"
-                              onClick={() => toggleWeek(wid, !open)}
+                              onClick={() => toggleWeek(wid)}
                               aria-expanded={open}
                             >
                               <span className="bill-week__chev" aria-hidden="true">

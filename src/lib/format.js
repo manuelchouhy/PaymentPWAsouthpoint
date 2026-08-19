@@ -63,14 +63,26 @@ export function formatRelativeTime(iso) {
  * @param {string} iso
  * @returns {?number}
  */
-export function isoWeek(iso = '') {
+/**
+ * Jueves (UTC) de la semana ISO a la que pertenece una fecha, o null si la fecha
+ * no es válida. isoWeek e isoWeekYear parten de acá para no duplicar el parseo y
+ * el corrimiento al jueves (si se toca la aritmética, se toca en un solo lugar).
+ * @param {string} iso
+ * @returns {?Date}
+ */
+function isoThursday(iso = '') {
   const [year, month, day] = iso.split('-').map(Number)
   if (!year || !month || !day) return null
-
   const date = new Date(Date.UTC(year, month - 1, day))
   // Llevar la fecha al jueves de su semana (lun=0 … dom=6).
   const dayNum = (date.getUTCDay() + 6) % 7
   date.setUTCDate(date.getUTCDate() - dayNum + 3)
+  return date
+}
+
+export function isoWeek(iso = '') {
+  const date = isoThursday(iso)
+  if (!date) return null
 
   // Jueves de la semana 1 = jueves más cercano al 4 de enero.
   const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4))
@@ -90,12 +102,8 @@ export function isoWeek(iso = '') {
  * @returns {?number}
  */
 export function isoWeekYear(iso = '') {
-  const [year, month, day] = iso.split('-').map(Number)
-  if (!year || !month || !day) return null
-  const date = new Date(Date.UTC(year, month - 1, day))
-  const dayNum = (date.getUTCDay() + 6) % 7
-  date.setUTCDate(date.getUTCDate() - dayNum + 3) // jueves de su semana
-  return date.getUTCFullYear()
+  const date = isoThursday(iso)
+  return date ? date.getUTCFullYear() : null
 }
 
 /**
