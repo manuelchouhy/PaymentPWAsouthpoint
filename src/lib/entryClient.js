@@ -1,4 +1,4 @@
-import { buildClientResolver } from './clientResolver.js'
+import { buildClientResolver, NO_GROUP } from './clientResolver.js'
 
 // ---------------------------------------------------------------------------
 // Cliente de una entry, derivado del proyecto (cadena hora → proyecto → grupo →
@@ -63,9 +63,9 @@ export function findProjectForEntry(entry, index) {
  * Completa `client` en cada entry derivándolo del proyecto (por id → nombre) y
  * del cliente resuelto (clientResolver). El valor propio de la entry gana si
  * existe: si algún día Zoho manda el cliente en la hora, ese es dato de primera
- * mano. El motivo por el que una hora queda "sin cliente" (group-unclaimed vs
- * no-group) lo expone clientResolver en `reason`; se adjuntará a la entry en el
- * slice que lo consuma (aviso en Billing), no antes, para no cargar output muerto.
+ * mano. Adjunta `clientReason` (null si resolvió; 'group-unclaimed' | 'no-group'
+ * si no) para que Billing pueda explicar, en el bucket "Sin cliente", por qué una
+ * hora quedó sin cliente.
  *
  * @param {Array<object>} entries
  * @param {Array<object>} projects
@@ -76,9 +76,9 @@ export function deriveEntriesClient(entries = [], projects = [], clients = []) {
   const index = buildProjectIndex(projects)
   const resolve = buildClientResolver(clients)
   return entries.map((entry) => {
-    if (entry.client) return entry
+    if (entry.client) return { ...entry, clientReason: null }
     const project = findProjectForEntry(entry, index)
-    const resolution = project ? resolve(project) : { client: null }
-    return { ...entry, client: resolution.client ?? '' }
+    const resolution = project ? resolve(project) : { client: null, reason: NO_GROUP }
+    return { ...entry, client: resolution.client ?? '', clientReason: resolution.reason ?? null }
   })
 }

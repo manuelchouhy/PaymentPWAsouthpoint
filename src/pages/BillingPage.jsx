@@ -7,6 +7,7 @@ import { formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
+import { groupBillToClient } from '../lib/billingGrouping'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { BillModal } from '../components/BillModal'
@@ -14,12 +15,18 @@ import { BillModal } from '../components/BillModal'
 const sortedUnique = (values) =>
   [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
 
-// Una factura al cliente cubre horas de UN proveedor (misma regla que la
-// pantalla de Time Entries): el número de factura y el monto son del proveedor.
-const groupKey = (entry) => `${entry.user}||${entry.project ?? ''}||${entry.task ?? ''}`
-
 // Un proyecto se identifica por cliente + nombre, no por nombre solo.
 const sowKey = (client, projectName) => `${client ?? ''}||${projectName ?? ''}`
+
+// Clave de una semana dentro de un cliente (para colapsar/expandir).
+const weekId = (client, week) => `${client}||${week.weekNum ?? 'na'}`
+
+// Por qué una hora quedó "sin cliente" (motivo que expone clientResolver).
+const REASON_LABEL = {
+  'group-unclaimed': 'Project group has no client assigned',
+  'no-group': 'Project has no Zoho group',
+}
+const reasonLabel = (reason) => REASON_LABEL[reason] ?? 'Unresolved'
 
 export function BillingPage() {
   const { user, profile, can } = useOutletContext()
@@ -36,6 +43,8 @@ export function BillingPage() {
   const [status, setStatus] = useState('loading')
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedKeys, setSelectedKeys] = useState(() => new Set())
+  // Semanas colapsadas: por defecto todas menos la más reciente de cada cliente.
+  const [collapsedWeeks, setCollapsedWeeks] = useState(() => new Set())
   const [modalOpen, setModalOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const { filters, toggleValue, clear, isActive } = useEntryFilters()
@@ -230,40 +239,57 @@ export function BillingPage() {
     }
   }, [filtered, filteredAllAllocations, invoiceByEntryId])
 
-  // La grilla agrupa por proveedor · proyecto · task, como el prototipo: nadie
-  // factura hora por hora, se factura "el backend de tal SOW".
-  const groups = useMemo(() => {
-    const byKey = new Map()
-    for (const entry of filtered) {
-      if (entry.status !== 'Approved') continue
-      if (invoiceByEntryId.has(String(entry.id))) continue
-      const key = groupKey(entry)
-      const group = byKey.get(key)
-      if (group) {
-        group.hours += Number(entry.hours) || 0
-        group.entries.push(entry)
-      } else {
-        byKey.set(key, {
-          key,
-          user: entry.user,
-          project: entry.project ?? '',
-          task: entry.task ?? '',
-          client: entry.client ?? '',
-          hours: Number(entry.hours) || 0,
-          entries: [entry],
-        })
+  // Las horas facturables ordenadas por cliente → semana ISO → filas
+  // proveedor·proyecto·task (billingGrouping). "Sin cliente" queda arriba, no es
+  // facturable y muestra el motivo de no-resolución por proyecto.
+  const clientGroups = useMemo(
+    () =>
+      groupBillToClient(filtered, {
+        isInvoiced: (entry) => invoiceByEntryId.has(String(entry.id)),
+      }),
+    [filtered, invoiceByEntryId],
+  )
+
+  const billableClientCount = clientGroups.filter((g) => !g.isUnassigned).length
+
+  // Índice de filas facturables por clave única (cliente·semana·terna). La
+  // selección y la factura trabajan a nivel de fila, no de cliente: una factura
+  // cubre UN proveedor, y la misma terna proveedor·proyecto·task puede caer en dos
+  // semanas y son filas distintas. El bucket "Sin cliente" no entra: no se factura.
+  const billableRows = useMemo(() => {
+    const map = new Map()
+    for (const group of clientGroups) {
+      if (group.isUnassigned) continue
+      for (const week of group.weeks) {
+        for (const row of week.rows) {
+          const rowId = `${group.client}||${week.weekNum ?? 'na'}||${row.key}`
+          map.set(rowId, { ...row, rowId, client: group.client, week: week.week })
+        }
       }
     }
-    return [...byKey.values()].sort(
-      (a, b) => a.user.localeCompare(b.user, 'es') || b.hours - a.hours,
-    )
-  }, [filtered, invoiceByEntryId])
+    return map
+  }, [clientGroups])
 
-  const selectedGroups = groups.filter((g) => selectedKeys.has(g.key))
-  const selectedEntries = selectedGroups.flatMap((g) => g.entries)
-  const selectedHours = selectedGroups.reduce((sum, g) => sum + g.hours, 0)
-  const selectedProviders = sortedUnique(selectedGroups.map((g) => g.user))
-  const allSelected = groups.length > 0 && groups.every((g) => selectedKeys.has(g.key))
+  // Colapsa por defecto todas las semanas menos la más reciente de cada cliente
+  // (weeks[0]). Se recalcula al cambiar el conjunto (otro filtro, una factura
+  // nueva); el usuario puede abrir/cerrar a mano después.
+  useEffect(() => {
+    const collapse = new Set()
+    for (const group of clientGroups) {
+      if (group.isUnassigned) continue
+      group.weeks.forEach((week, i) => {
+        if (i > 0) collapse.add(weekId(group.client, week))
+      })
+    }
+    setCollapsedWeeks(collapse)
+  }, [clientGroups])
+
+  const selectedRows = [...selectedKeys].map((k) => billableRows.get(k)).filter(Boolean)
+  const selectedEntries = selectedRows.flatMap((r) => r.entries)
+  const selectedHours = selectedRows.reduce((sum, r) => sum + r.hours, 0)
+  const selectedProviders = sortedUnique(selectedRows.map((r) => r.user))
+  const allSelected =
+    billableRows.size > 0 && [...billableRows.keys()].every((k) => selectedKeys.has(k))
   const canCreate = can('billing.create')
   const canBill = canCreate && selectedEntries.length > 0 && selectedProviders.length === 1
 
@@ -277,25 +303,36 @@ export function BillingPage() {
   }
 
   function toggleAll() {
-    setSelectedKeys(allSelected ? new Set() : new Set(groups.map((g) => g.key)))
+    setSelectedKeys(allSelected ? new Set() : new Set(billableRows.keys()))
+  }
+
+  function toggleWeek(id) {
+    setCollapsedWeeks((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   function handleExport(format) {
     const cols = [
       { header: 'Provider', key: 'provider' },
       { header: 'Client', key: 'client' },
+      { header: 'Week', key: 'week' },
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
       { header: 'Hours', key: 'hours' },
       { header: 'Entries', key: 'entries' },
     ]
-    const rows = groups.map((g) => ({
-      provider: g.user,
-      client: g.client,
-      project: g.project,
-      task: g.task,
-      hours: g.hours,
-      entries: g.entries.length,
+    const rows = [...billableRows.values()].map((r) => ({
+      provider: r.user,
+      client: r.client,
+      week: r.week,
+      project: r.project,
+      task: r.task,
+      hours: r.hours,
+      entries: r.entries.length,
     }))
     exportGrid({
       rows,
@@ -480,12 +517,21 @@ export function BillingPage() {
 
           <div className="toolbar">
             <span className="toolbar__count">
-              Ready to bill · {groups.length} {groups.length === 1 ? 'group' : 'groups'}
+              Ready to bill · {billableClientCount}{' '}
+              {billableClientCount === 1 ? 'client' : 'clients'}
+              {canCreate && billableRows.size > 0 && (
+                <>
+                  {' · '}
+                  <button type="button" className="linklike" onClick={toggleAll}>
+                    {allSelected ? 'Clear selection' : 'Select all'}
+                  </button>
+                </>
+              )}
             </span>
-            {groups.length > 0 && <ExportDropdown onExport={handleExport} />}
+            {billableRows.size > 0 && <ExportDropdown onExport={handleExport} />}
           </div>
 
-          {groups.length === 0 ? (
+          {clientGroups.length === 0 ? (
             <div className="empty">
               {/* Se decide por `classifiable`, NO por si hay horas facturadas.
                   Que existan horas facturadas no dice nada sobre si queda algo
@@ -510,67 +556,136 @@ export function BillingPage() {
             </div>
           ) : (
             <>
-              <div className="table-wrap table-wrap--scroll">
-                <table className="table proj-table">
-                  <thead>
-                    <tr>
-                      {canCreate && (
-                        <th scope="col" style={{ width: 34 }}>
-                          <input
-                            type="checkbox"
-                            checked={allSelected}
-                            onChange={toggleAll}
-                            aria-label="Select all groups"
-                          />
-                        </th>
-                      )}
-                      <th scope="col">Provider</th>
-                      <th scope="col">Project · task</th>
-                      <th scope="col">Client</th>
-                      <th scope="col" className="col-num">Hours</th>
-                      <th scope="col">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {groups.map((group) => (
-                      <tr key={group.key}>
-                        {canCreate && (
-                          <td>
-                            <input
-                              type="checkbox"
-                              checked={selectedKeys.has(group.key)}
-                              onChange={() => toggleGroup(group.key)}
-                              aria-label={`Select ${group.user} · ${group.project}`}
-                            />
-                          </td>
-                        )}
-                        <td className="cell-strong">{group.user}</td>
-                        <td>
-                          {group.project || '—'}
-                          {(() => {
-                            const sow =
-                              sowByProject.byClientAndName.get(
-                                sowKey(group.client, group.project),
-                              ) ?? sowByProject.byName.get(group.project)
-                            if (!group.task && !sow) return null
-                            return (
-                              <div className="cell-soft">
-                                {group.task}
-                                {group.task && sow && ' · '}
-                                {sow}
+              <div className="bill-clients">
+                {clientGroups.map((group) =>
+                  group.isUnassigned ? (
+                    // "Sin cliente": visible y arriba, pero NO facturable — sin
+                    // checkboxes. Agrupa por proyecto y explica el motivo para que
+                    // se pueda accionar (asignar el Project Group a un cliente).
+                    <section
+                      key="__unassigned__"
+                      className="bill-client bill-client--unassigned"
+                    >
+                      <header className="bill-client__head">
+                        <h3 className="bill-client__name">Sin cliente</h3>
+                        <span className="bill-client__hours">{formatHours(group.hours)} h</span>
+                      </header>
+                      <p className="review-notice">
+                        These approved hours could not be matched to a client, so they are not
+                        billable yet. Assign the Zoho Project Group to a client to bill them.
+                      </p>
+                      <div className="table-wrap table-wrap--scroll">
+                        <table className="table proj-table">
+                          <thead>
+                            <tr>
+                              <th scope="col">Project</th>
+                              <th scope="col">Reason</th>
+                              <th scope="col" className="col-num">Hours</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.projects.map((project) => (
+                              <tr key={project.project || '—'}>
+                                <td className="cell-strong">{project.project || '—'}</td>
+                                <td className="cell-soft">{reasonLabel(project.reason)}</td>
+                                <td className="col-num cell-mono">{formatHours(project.hours)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+                  ) : (
+                    <section key={group.client} className="bill-client">
+                      <header className="bill-client__head">
+                        <h3 className="bill-client__name">{group.client}</h3>
+                        <span className="bill-client__hours">{formatHours(group.hours)} h</span>
+                      </header>
+                      {group.weeks.map((week) => {
+                        const id = weekId(group.client, week)
+                        const open = !collapsedWeeks.has(id)
+                        return (
+                          <div className="bill-week" key={id}>
+                            <button
+                              type="button"
+                              className="bill-week__toggle"
+                              onClick={() => toggleWeek(id)}
+                              aria-expanded={open}
+                            >
+                              <span className="bill-week__chev" aria-hidden="true">
+                                {open ? '▾' : '▸'}
+                              </span>
+                              <span className="bill-week__label">{week.week}</span>
+                              <span className="bill-week__hours">
+                                {formatHours(week.hours)} h · {week.rows.length}{' '}
+                                {week.rows.length === 1 ? 'row' : 'rows'}
+                              </span>
+                            </button>
+                            {open && (
+                              <div className="table-wrap table-wrap--scroll">
+                                <table className="table proj-table">
+                                  <thead>
+                                    <tr>
+                                      {canCreate && (
+                                        <th scope="col" style={{ width: 34 }}>
+                                          <span className="sr-only">Select</span>
+                                        </th>
+                                      )}
+                                      <th scope="col">Provider</th>
+                                      <th scope="col">Project · task</th>
+                                      <th scope="col" className="col-num">Hours</th>
+                                      <th scope="col">Status</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {week.rows.map((row) => {
+                                      const rowId = `${group.client}||${week.weekNum ?? 'na'}||${row.key}`
+                                      const sow =
+                                        sowByProject.byClientAndName.get(
+                                          sowKey(group.client, row.project),
+                                        ) ?? sowByProject.byName.get(row.project)
+                                      return (
+                                        <tr key={rowId}>
+                                          {canCreate && (
+                                            <td>
+                                              <input
+                                                type="checkbox"
+                                                checked={selectedKeys.has(rowId)}
+                                                onChange={() => toggleGroup(rowId)}
+                                                aria-label={`Select ${row.user} · ${row.project}`}
+                                              />
+                                            </td>
+                                          )}
+                                          <td className="cell-strong">{row.user}</td>
+                                          <td>
+                                            {row.project || '—'}
+                                            {(row.task || sow) && (
+                                              <div className="cell-soft">
+                                                {row.task}
+                                                {row.task && sow && ' · '}
+                                                {sow}
+                                              </div>
+                                            )}
+                                          </td>
+                                          <td className="col-num cell-mono">
+                                            {formatHours(row.hours)}
+                                          </td>
+                                          <td>
+                                            <span className="badge badge--pending">to bill</span>
+                                          </td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
                               </div>
-                            )
-                          })()}
-                        </td>
-                        <td className="cell-soft">{group.client || '—'}</td>
-                        <td className="col-num cell-mono">{formatHours(group.hours)}</td>
-                        <td>
-                          <span className="badge badge--pending">to bill</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </section>
+                  ),
+                )}
               </div>
 
               {canCreate && selectedKeys.size > 0 && (

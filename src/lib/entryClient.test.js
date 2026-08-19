@@ -72,13 +72,21 @@ test('deriveEntriesClient: hora de proyecto homónimo queda sin cliente (no el e
   assert.equal(e.client, '')
 })
 
-test('deriveEntriesClient: proyecto inexistente → sin cliente', () => {
+test('deriveEntriesClient: proyecto inexistente → sin cliente, motivo no-group', () => {
   const [e] = deriveEntriesClient([{ id: 'e4', project: 'Fantasma' }], PROJECTS, CLIENTS)
   assert.equal(e.client, '')
+  assert.equal(e.clientReason, 'no-group')
 })
 
-test('deriveEntriesClient: grupo sin cliente que lo reclame → sin cliente', () => {
+test('deriveEntriesClient: grupo sin cliente que lo reclame → sin cliente, motivo group-unclaimed', () => {
   const projects = [{ zohoProjectId: '500', projectName: 'Orphan', zohoProjectGroup: 'Globex' }]
   const [e] = deriveEntriesClient([{ id: 'e5', zohoProjectId: '500', project: 'Orphan' }], projects, CLIENTS)
   assert.equal(e.client, '')
+  assert.equal(e.clientReason, 'group-unclaimed')
+})
+
+test('deriveEntriesClient: entry con cliente propio → clientReason null', () => {
+  const [e] = deriveEntriesClient([{ id: 'e6', client: 'Cliente Zoho', project: 'x' }], PROJECTS, CLIENTS)
+  assert.equal(e.client, 'Cliente Zoho')
+  assert.equal(e.clientReason, null)
 })
