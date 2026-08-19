@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useOutletContext, useSearchParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Info } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatDate, formatHours, formatWeek } from '../lib/format'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, UNALLOCATED } from '../lib/useEntryFilters'
@@ -11,6 +11,7 @@ import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { StatusBadge } from '../components/StatusBadge'
 import { BillingBadge } from '../components/BillingBadge'
+import { EntryDetailDrawer } from '../components/EntryDetailDrawer'
 
 const PAGE_SIZE = 100
 
@@ -49,6 +50,8 @@ const allocationLabel = (value) =>
 export function EntriesPage() {
   const { user, can } = useOutletContext()
   const [selectedIds, setSelectedIds] = useState(() => new Set())
+  // Hora abierta en el drawer de detalle (null = cerrado).
+  const [detailEntry, setDetailEntry] = useState(null)
   const [allocationChoice, setAllocationChoice] = useState('bill_to_client')
   const [applying, setApplying] = useState(false)
   const [applyError, setApplyError] = useState('')
@@ -519,6 +522,9 @@ export function EntriesPage() {
                       <th scope="col">Status</th>
                       <th scope="col">Allocation</th>
                       <th scope="col">Billing</th>
+                      <th scope="col" style={{ width: 34 }}>
+                        <span className="sr-only">Detail</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -526,14 +532,27 @@ export function EntriesPage() {
                       const allocation = entry.allocation ? ALLOCATION_LABELS[entry.allocation] : null
                       const billingStatus = invoiceByEntryId.get(String(entry.id))?.status ?? 'Pending'
                       const frozen = isFrozen(entry)
+                      // Una fila es seleccionable si el usuario puede clasificar y
+                      // la hora no está congelada (ya facturada). Sólo esas responden
+                      // al click en la fila.
+                      const selectable = canAllocate && !frozen
                       return (
-                        <tr key={entry.id}>
+                        <tr
+                          key={entry.id}
+                          className={selectable ? 'row-selectable' : undefined}
+                          onClick={selectable ? () => toggleRow(entry.id) : undefined}
+                          aria-selected={selectable ? selectedIds.has(entry.id) : undefined}
+                        >
                           {canAllocate && (
                             <td>
                               <input
                                 type="checkbox"
                                 checked={selectedIds.has(entry.id)}
                                 onChange={() => toggleRow(entry.id)}
+                                // El click del checkbox no debe además disparar el
+                                // onClick de la fila (si no, togglea dos veces y se
+                                // cancela). onChange sigue funcionando igual.
+                                onClick={(e) => e.stopPropagation()}
                                 disabled={frozen}
                                 title={frozen ? 'Already invoiced — cannot be reclassified' : undefined}
                                 aria-label={`Select entry ${entry.id}`}
@@ -566,6 +585,22 @@ export function EntriesPage() {
                           <td>
                             <BillingBadge status={billingStatus} />
                           </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              // stopPropagation: abrir el detalle no debe además
+                              // togglear la selección de la fila.
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDetailEntry(entry)
+                              }}
+                              aria-label={`View details of entry ${entry.id}`}
+                              title="View details"
+                            >
+                              <Info size={16} />
+                            </button>
+                          </td>
                         </tr>
                       )
                     })}
@@ -586,6 +621,17 @@ export function EntriesPage() {
             </>
           )}
         </motion.div>
+      )}
+
+      {detailEntry && (
+        <EntryDetailDrawer
+          entry={detailEntry}
+          allocationLabel={
+            detailEntry.allocation ? ALLOCATION_LABELS[detailEntry.allocation] : null
+          }
+          billingStatus={invoiceByEntryId.get(String(detailEntry.id))?.status ?? 'Pending'}
+          onClose={() => setDetailEntry(null)}
+        />
       )}
     </>
   )

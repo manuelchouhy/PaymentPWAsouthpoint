@@ -1517,6 +1517,15 @@ th.col-pop { text-align: center; }
 .entries-table .col-task { max-width: 300px; }
 .entries-table .col-project { max-width: 170px; }
 
+/* Selección por fila: click en cualquier parte de una fila seleccionable la
+   togglea. Las congeladas (ya facturadas) no son clickeables → cursor normal.
+   La fila seleccionada queda resaltada (mismo tono que el hover + barra izq). */
+.entries-table tbody tr:not(.row-selectable) { cursor: default; }
+.entries-table tbody tr.row-selectable[aria-selected='true'] td { background: var(--accent-bg); }
+.entries-table tbody tr.row-selectable[aria-selected='true'] td:first-child {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
 .cell-pop-btn {
   display: inline-flex;
   align-items: center;
@@ -2343,6 +2352,18 @@ th.col-pop { text-align: center; }
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+/* Animación de entrada por CSS (no framer): el EntryDetailDrawer se abre sin
+   AnimatePresence, así que la entrada la hace el CSS. Fade del fondo + slide del
+   panel desde la derecha. */
+@keyframes drawer-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes drawer-slide-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.drawer-backdrop--enter { animation: drawer-fade-in .2s ease both; }
+.drawer--enter { animation: drawer-slide-in .28s cubic-bezier(.16, 1, .3, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .drawer-backdrop--enter,
+  .drawer--enter { animation: none; }
 }
 
 .drawer__head {
