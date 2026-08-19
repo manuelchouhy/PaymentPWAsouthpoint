@@ -1521,8 +1521,8 @@ th.col-pop { text-align: center; }
    togglea. Las congeladas (ya facturadas) no son clickeables → cursor normal.
    La fila seleccionada queda resaltada (mismo tono que el hover + barra izq). */
 .entries-table tbody tr:not(.row-selectable) { cursor: default; }
-.entries-table tbody tr.row-selectable[aria-selected='true'] td { background: var(--accent-bg); }
-.entries-table tbody tr.row-selectable[aria-selected='true'] td:first-child {
+.entries-table tbody tr.row-selectable[data-selected='true'] td { background: var(--accent-bg); }
+.entries-table tbody tr.row-selectable[data-selected='true'] td:first-child {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 

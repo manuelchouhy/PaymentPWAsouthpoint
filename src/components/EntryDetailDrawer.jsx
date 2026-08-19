@@ -58,7 +58,8 @@ export function EntryDetailDrawer({ entry, allocationLabel, billingStatus, onClo
           <Avatar name={entry.user} size="md" />
           <div className="drawer__provider-id">
             <span className="drawer__provider-name">{entry.user}</span>
-            <span className="drawer__provider-meta">Contractor</span>
+            {/* Sin subtítulo de rol: la hora no trae el rol del usuario y
+                "Contractor" fijo etiquetaría mal a staff/admin/SP-internal. */}
           </div>
           <StatusBadge status={entry.status} />
         </div>

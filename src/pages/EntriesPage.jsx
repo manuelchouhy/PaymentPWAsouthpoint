@@ -540,8 +540,20 @@ export function EntriesPage() {
                         <tr
                           key={entry.id}
                           className={selectable ? 'row-selectable' : undefined}
-                          onClick={selectable ? () => toggleRow(entry.id) : undefined}
-                          aria-selected={selectable ? selectedIds.has(entry.id) : undefined}
+                          // Si el usuario venía seleccionando texto (click-drag),
+                          // no se togglea: el mouseup no debe robar esa acción.
+                          onClick={
+                            selectable
+                              ? () => {
+                                  if (window.getSelection()?.toString()) return
+                                  toggleRow(entry.id)
+                                }
+                              : undefined
+                          }
+                          // data-selected en vez de aria-selected: en una <table>
+                          // estática aria-selected es inerte para lectores y lo
+                          // marcan los linters de a11y; acá sólo es hook de estilo.
+                          data-selected={selectable ? selectedIds.has(entry.id) : undefined}
                         >
                           {canAllocate && (
                             <td>
@@ -585,16 +597,14 @@ export function EntriesPage() {
                           <td>
                             <BillingBadge status={billingStatus} />
                           </td>
-                          <td>
+                          <td onClick={(e) => e.stopPropagation()}>
                             <button
                               type="button"
                               className="icon-btn"
-                              // stopPropagation: abrir el detalle no debe además
-                              // togglear la selección de la fila.
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setDetailEntry(entry)
-                              }}
+                              // stopPropagation también en el td (arriba): un click
+                              // en el padding de esta celda no debe seleccionar la
+                              // fila; sólo el botón abre el detalle.
+                              onClick={() => setDetailEntry(entry)}
                               aria-label={`View details of entry ${entry.id}`}
                               title="View details"
                             >
@@ -623,16 +633,22 @@ export function EntriesPage() {
         </motion.div>
       )}
 
-      {detailEntry && (
-        <EntryDetailDrawer
-          entry={detailEntry}
-          allocationLabel={
-            detailEntry.allocation ? ALLOCATION_LABELS[detailEntry.allocation] : null
-          }
-          billingStatus={invoiceByEntryId.get(String(detailEntry.id))?.status ?? 'Pending'}
-          onClose={() => setDetailEntry(null)}
-        />
-      )}
+      {(() => {
+        if (!detailEntry) return null
+        // Se re-busca la entry viva por id: si hubo un reload (Apply, refresh)
+        // mientras el drawer estaba abierto, detailEntry apunta al objeto viejo y
+        // su allocation quedaría stale mientras el billing se recalcula en vivo.
+        // Si la entry ya no existe tras el reload, se cae al objeto capturado.
+        const live = entries.find((e) => e.id === detailEntry.id) ?? detailEntry
+        return (
+          <EntryDetailDrawer
+            entry={live}
+            allocationLabel={live.allocation ? ALLOCATION_LABELS[live.allocation] : null}
+            billingStatus={invoiceByEntryId.get(String(live.id))?.status ?? 'Pending'}
+            onClose={() => setDetailEntry(null)}
+          />
+        )
+      })()}
     </>
   )
 }
