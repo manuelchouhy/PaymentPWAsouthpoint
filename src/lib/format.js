@@ -57,13 +57,6 @@ export function formatRelativeTime(iso) {
 }
 
 /**
- * Número de semana ISO-8601 (1..53) a partir de una fecha ISO YYYY-MM-DD.
- * Las semanas arrancan en lunes y la semana 1 es la que contiene el primer
- * jueves del año. Se parsea en UTC para evitar corrimientos por zona horaria.
- * @param {string} iso
- * @returns {?number}
- */
-/**
  * Jueves (UTC) de la semana ISO a la que pertenece una fecha, o null si la fecha
  * no es válida. isoWeek e isoWeekYear parten de acá para no duplicar el parseo y
  * el corrimiento al jueves (si se toca la aritmética, se toca en un solo lugar).
@@ -80,6 +73,13 @@ function isoThursday(iso = '') {
   return date
 }
 
+/**
+ * Número de semana ISO-8601 (1..53) a partir de una fecha ISO YYYY-MM-DD.
+ * Las semanas arrancan en lunes y la semana 1 es la que contiene el primer
+ * jueves del año. Se parsea en UTC para evitar corrimientos por zona horaria.
+ * @param {string} iso
+ * @returns {?number}
+ */
 export function isoWeek(iso = '') {
   const date = isoThursday(iso)
   if (!date) return null

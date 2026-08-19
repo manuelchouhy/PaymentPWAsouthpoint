@@ -302,23 +302,26 @@ export function BillingPage() {
   useEffect(() => {
     if (!seededWeeksRef.current) seededWeeksRef.current = new Set()
     const seeded = seededWeeksRef.current
-    setOpenWeeks((prev) => {
-      let changed = false
-      const next = new Set(prev)
-      for (const group of clientGroups) {
-        if (group.isUnassigned) continue
-        group.weeks.forEach((week, i) => {
-          const wid = weekId(group.client, week)
-          if (seeded.has(wid)) return
-          seeded.add(wid)
-          if (i === 0) {
-            next.add(wid)
-            changed = true
-          }
-        })
-      }
-      return changed ? next : prev
-    })
+    // La lectura/mutación del ref va en el CUERPO del efecto, no en el updater:
+    // bajo StrictMode el updater se invoca dos veces con el mismo `prev`, y si
+    // sembrara ahí, la 2da pasada vería el wid ya sembrado y no abriría la semana.
+    const toOpen = []
+    for (const group of clientGroups) {
+      if (group.isUnassigned) continue
+      group.weeks.forEach((week, i) => {
+        const wid = weekId(group.client, week)
+        if (seeded.has(wid)) return
+        seeded.add(wid)
+        if (i === 0) toOpen.push(wid)
+      })
+    }
+    if (toOpen.length) {
+      setOpenWeeks((prev) => {
+        const next = new Set(prev)
+        for (const wid of toOpen) next.add(wid)
+        return next
+      })
+    }
   }, [clientGroups])
 
   const selectedRows = [...selectedKeys].map((k) => billableRows.get(k)).filter(Boolean)
@@ -658,10 +661,11 @@ export function BillingPage() {
                           </thead>
                           <tbody>
                             {group.projects.map((project) => (
-                              // key por el nombre crudo (único en el bucket, que
-                              // agrupa por nombre); el vacío usa un centinela para
-                              // no chocar con un proyecto llamado literalmente '—'.
-                              <tr key={project.project || 'empty'}>
+                              // Prefijo constante: los nombres son únicos en el
+                              // bucket (agrupa por nombre), así que "proj:"+nombre
+                              // nunca colisiona —el vacío queda "proj:" y ningún
+                              // proyecto real puede tener ese nombre—.
+                              <tr key={`proj:${project.project}`}>
                                 <td className="cell-strong">{project.project || '—'}</td>
                                 <td className="cell-soft">{reasonLabel(project.reason)}</td>
                                 <td className="col-num cell-mono">{formatHours(project.hours)}</td>
