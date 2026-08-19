@@ -453,6 +453,37 @@ function normKey(v: any): string {
   return (v == null ? "" : String(v)).toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+// ---------- Lista de Clients de Zoho (empresas, aparte de los Project Groups) ----
+// Zoho Projects tiene un endpoint de Clients a nivel portal, distinto de los Project
+// Groups. Se trae para que TODOS los clientes cargados en Zoho aparezcan en la app,
+// no sólo los que están modelados como grupo. Best effort: si el endpoint no responde
+// (scope ZohoProjects.clients.READ ausente, u otra forma), se loguea y se sigue.
+// Se prueban las dos formas de URL (sin/con barra final) porque Zoho es inconsistente.
+async function fetchZohoClients(
+  portalId: string,
+  token: string,
+): Promise<string[]> {
+  for (const url of [
+    `${ZOHO_V1}/portal/${portalId}/clients`,
+    `${ZOHO_V1}/portal/${portalId}/clients/`,
+  ]) {
+    const data = await fetchAllPagesV1(url, ["clients", "clientusers"], token);
+    if (data && data.length) {
+      const names = [
+        ...new Set(
+          data
+            .map((c: any) => c.name || c.client_name || c.company_name || "")
+            .filter((n: string) => Boolean(n)),
+        ),
+      ];
+      console.log(`Zoho Clients encontrados: ${names.length} (${url})`);
+      return names as string[];
+    }
+  }
+  console.log("Zoho Clients: sin resultados (¿scope ZohoProjects.clients.READ o forma del endpoint?)");
+  return [];
+}
+
 // ---------- Auto-provisión de clientes desde los Project Groups de Zoho ----------
 // Cada grupo REAL de Zoho (con o sin proyectos; el pseudo-grupo interno ya se excluyó
 // en fetchGroupByProjectId) que todavía NO tenga cliente (por nombre o alias) se crea
@@ -574,9 +605,12 @@ Deno.serve(async (req) => {
     const projectsSynced = await upsertProjects(supabase, projects, groupByProjectId);
     console.log("Proyectos sincronizados:", projectsSynced);
 
-    // Auto-provisión: un cliente por cada grupo de Zoho (con o sin proyectos) que
-    // aún no tenga uno.
-    await ensureClientsForGroups(supabase, groupInfo?.groups ?? []);
+    // Auto-provisión: un cliente por cada grupo de Zoho (con o sin proyectos) Y por
+    // cada Client de la lista de Zoho (empresas, aparte de los grupos) que aún no
+    // tenga uno en la app.
+    const zohoClientNames = await fetchZohoClients(portalId, token);
+    const allClientNames = [...new Set([...(groupInfo?.groups ?? []), ...zohoClientNames])];
+    await ensureClientsForGroups(supabase, allClientNames);
 
     // Fechas mes a mes desde enero hasta el mes actual
     const now = new Date();
