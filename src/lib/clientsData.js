@@ -65,6 +65,9 @@ function rowToClient(row) {
   return {
     id: row.id,
     clientName: row.client_name,
+    // Alias del grupo de Zoho → este cliente (ej. grupo "HSS" → "HSSStaffing").
+    // Lo consume clientResolver (slice 3). El write path (UI) llega con el cableado.
+    zohoGroupName: row.zoho_group_name ?? null,
     email: row.email ?? null,
     domain: row.domain ?? null,
     primaryContactName: row.primary_contact_name,

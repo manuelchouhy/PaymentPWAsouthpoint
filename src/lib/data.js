@@ -306,6 +306,9 @@ function rowToEntry(row) {
     id: row.id,
     user: row.user_name,
     project: row.project ?? '',
+    // Id de Zoho del proyecto: llave hora→proyecto robusta a renames, la consume
+    // deriveEntriesClient (slice 3). Null en filas viejas hasta el próximo sync.
+    zohoProjectId: row.zoho_project_id ?? null,
     client: row.client ?? '',
     task: row.task ?? '',
     taskNumber: row.task_number ?? '',

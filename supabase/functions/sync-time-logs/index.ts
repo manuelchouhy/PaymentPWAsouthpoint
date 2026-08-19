@@ -104,6 +104,62 @@ async function fetchAllPagesV3(
   return results;
 }
 
+// Paginador de la API V1 (restapi): pagina por index (1-based) + range, NO por
+// page_info como V3. Se itera hasta que una página vuelve con menos ítems que el
+// range (esa es la última). dataKeys admite varias claves candidatas porque la
+// forma de la respuesta varía por endpoint/portal (p. ej. groups vs projectgroups).
+//
+// Devuelve null (no []) cuando la PRIMERA página no trae una respuesta usable
+// —4xx/vacío, o una forma inesperada donde ninguna clave candidata es un array—
+// para que el caller distinga "no se pudo traer" de "vino vacío" y no pise datos
+// ya guardados. Cap de páginas como backstop, y una guarda de no-progreso corta
+// si el endpoint ignora index/range y devuelve siempre la misma página.
+async function fetchAllPagesV1(
+  baseUrl: string,
+  dataKeys: string | string[],
+  token: string,
+): Promise<any[] | null> {
+  const RANGE = 200;
+  const keys = Array.isArray(dataKeys) ? dataKeys : [dataKeys];
+  const extract = (data: any): any[] | undefined =>
+    Array.isArray(data) ? data : keys.map((k) => data?.[k]).find((v) => Array.isArray(v));
+  const results: any[] = [];
+  let index = 1;
+  let prevFirstId: string | null = null;
+  for (let page = 0; page < 50; page++) {
+    const sep = baseUrl.indexOf("?") === -1 ? "?" : "&";
+    const data = await zohoGet(`${baseUrl}${sep}index=${index}&range=${RANGE}`, token);
+    if (!data) return page === 0 ? null : results;
+    const items = extract(data);
+    if (items === undefined) return page === 0 ? null : results; // forma inesperada
+    // Guarda de no-progreso: si el endpoint ignora index/range, la página vuelve
+    // idéntica → se corta en vez de refetchear hasta el cap. Se compara por id y,
+    // si el item no tiene id, por una huella del primer elemento (fallback robusto
+    // para respuestas sin id).
+    const first = items.length ? items[0] : null;
+    // || (no ??) en la cadena: un id_string "" presente igual debe caer al id o a
+    // la huella, o la guarda de no-progreso quedaría deshabilitada.
+    const firstId = first ? String(first.id_string || first.id || JSON.stringify(first)) : "";
+    if (firstId && firstId === prevFirstId) {
+      // El endpoint devolvió la misma página que la anterior → ignora index/range.
+      // Se corta para no refetchear hasta el cap, PERO puede haber >RANGE ítems que
+      // no se pueden paginar: se avisa para que el truncado no sea silencioso.
+      console.log(`  ⚠ ${baseUrl}: el endpoint no pagina (index/range ignorado); posible truncado a ${results.length} ítems`);
+      break;
+    }
+    prevFirstId = firstId;
+    results.push(...items);
+    if (items.length < RANGE) break; // última página
+    index += RANGE;
+    // Si salimos por el cap de páginas con la última llena, hay más datos sin
+    // traer: se avisa para que ese truncado tampoco sea silencioso.
+    if (page === 49) {
+      console.log(`  ⚠ ${baseUrl}: alcanzado el cap de 50 páginas (${results.length} ítems); puede haber más sin traer`);
+    }
+  }
+  return results;
+}
+
 function safe(obj: any, path: string, fallback: any): any {
   if (obj == null) return fallback;
   const parts = path.split(".");
@@ -113,6 +169,84 @@ function safe(obj: any, path: string, fallback: any): any {
     cur = cur[p];
   }
   return cur == null ? fallback : cur;
+}
+
+// Mapa projectId → nombre del Project Group de Zoho.
+//
+// En Zoho el cliente vive como Project Group, y el listado de proyectos NO trae
+// el grupo (confirmado en la doc v1). Hay que pedir los grupos aparte y, por
+// cada grupo, qué proyectos lo integran (filtrando el listado por json_string).
+//
+// IMPORTANTE (a verificar en la PRIMERA corrida real): la forma exacta de la
+// respuesta de /projects/groups y del filtro por grupo depende del portal. Por
+// eso esto es defensivo y MUY logueado: si algo no viene como se espera, un
+// proyecto simplemente queda sin grupo (→ "Sin cliente" en la app), nunca tira
+// la corrida. Los console.log de acá son los que nos dicen cómo ajustar.
+async function fetchGroupByProjectId(
+  portalId: string,
+  token: string,
+): Promise<Map<string, string> | null> {
+  const map = new Map<string, string>();
+  // Proyectos que aparecen en más de un grupo: ambiguos. Misma filosofía que las
+  // guardas byKey/byName del resolver — no se adivina el cliente, se deja sin
+  // grupo para que caiga a "sin cliente" y se resuelva a mano.
+  const ambiguous = new Set<string>();
+  try {
+    // Tanto la lista de grupos como los proyectos por grupo se paginan con el
+    // paginador V1 (index/range): así no se truncan silenciosamente ni los grupos
+    // (portal con muchos clientes) ni los proyectos de un grupo grande.
+    const groups = await fetchAllPagesV1(
+      `${ZOHO_V1}/portal/${portalId}/projects/groups/`,
+      ["groups", "projectgroups"],
+      token,
+    );
+    // null = no se pudo traer la lista de grupos (4xx / forma inesperada) → se
+    // aborta la resolución de grupos devolviendo null. Que no borre los grupos ya
+    // guardados NO depende de este null: la protección real es la guarda has(zid)
+    // de upsertProjects, que tampoco toca la columna ante un map vacío (ver ahí).
+    if (groups === null) {
+      console.log("Project Groups: sin respuesta usable del endpoint (4xx/forma inesperada) — no se tocan los grupos guardados");
+      return null;
+    }
+    console.log("Project groups encontrados:", groups.length);
+    for (const g of groups) {
+      const gid = String(g.id_string || g.id || "");
+      const gname = g.name || g.group_name || "";
+      if (!gid || !gname) continue;
+      const filter = encodeURIComponent(JSON.stringify({ group: [gid] }));
+      // Un fallo al traer los proyectos de UN grupo no es catastrófico: ese grupo
+      // queda sin proyectos mapeados (→ esos proyectos "sin cliente"), sin abortar.
+      const projs = (await fetchAllPagesV1(
+        `${ZOHO_V1}/portal/${portalId}/projects/?json_string=${filter}`,
+        "projects",
+        token,
+      )) ?? [];
+      console.log(`  grupo '${gname}' (${gid}): ${projs.length} proyectos`);
+      for (const p of projs) {
+        const pid = String(p.id_string || p.id || "");
+        if (!pid || ambiguous.has(pid)) continue;
+        const prev = map.get(pid);
+        if (prev !== undefined && prev !== gname) {
+          // El proyecto ya estaba en otro grupo: ambiguo. Se saca del map y se
+          // marca para que un tercer grupo tampoco lo re-agregue.
+          ambiguous.add(pid);
+          map.delete(pid);
+          console.log(`  ⚠ proyecto ${pid} en múltiples grupos ('${prev}' y '${gname}') → sin cliente por ambigüedad`);
+        } else {
+          map.set(pid, gname);
+        }
+      }
+    }
+  } catch (e) {
+    // El grupo es "nice to have": si falla, los proyectos quedan sin cliente
+    // resoluble, pero el sync de horas sigue. Se devuelve null (igual que un map
+    // vacío) para señalar que no hay mapeo. upsertProjects sólo escribe el grupo
+    // ante presencia positiva (has(zid)), así que ni null ni un map vacío borran
+    // los grupos ya guardados.
+    console.log("No se pudieron traer los Project Groups:", String((e as Error)?.message ?? e));
+    return null;
+  }
+  return map;
 }
 
 // Zoho log date "MM-DD-YYYY" -> ISO "YYYY-MM-DD"
@@ -217,9 +351,15 @@ async function recordStatus(
 }
 
 // ---------- Auto-crear/actualizar proyectos desde Zoho (FR-07) ----------
-// Solo toca los campos que vienen de Zoho (project_name, client). Los datos de
-// contrato (number, expiration, approver, etc.) son manuales y NO se pisan.
-async function upsertProjects(supabase: any, projects: any[]): Promise<number> {
+// Solo toca campos que vienen de Zoho (project_name, zoho_status, grupo). Los
+// datos manuales —contrato, y AHORA también `client`/`client_id`— NO se pisan.
+// `groupByProjectId`: Map projectId→grupo, o null si la consulta de grupos falló
+// (en ese caso no se toca zoho_project_group para no borrar lo ya guardado).
+async function upsertProjects(
+  supabase: any,
+  projects: any[],
+  groupByProjectId: Map<string, string> | null,
+): Promise<number> {
   let synced = 0;
   for (const p of projects) {
     const zid = String(p.id_string || p.id || "");
@@ -242,6 +382,15 @@ async function upsertProjects(supabase: any, projects: any[]): Promise<number> {
       (typeof p.status === "string" ? p.status : "") ||
       safe(p, "status_name", "");
     const endDate = zohoProjectEndDate(p);
+    // Sólo se escribe zoho_project_group cuando el proyecto aparece POSITIVAMENTE
+    // en el mapa (undefined = no tocar la columna). La AUSENCIA no significa "sin
+    // grupo" y nunca borra: el listado por grupo de Zoho trae sólo activos, así que
+    // un proyecto archivado —o uno ausente por un fallo parcial, o cuando la
+    // respuesta de grupos vino vacía— no estaría en el mapa y escribir null borraría
+    // el grupo que se guardó cuando el proyecto estaba activo (wipe en cada sync).
+    // Contra: si un proyecto se saca de su grupo en Zoho, el grupo viejo queda
+    // pegado hasta corregirlo a mano; es el mal menor frente al borrado masivo.
+    const group = groupByProjectId?.has(zid) ? groupByProjectId.get(zid) : undefined;
 
     try {
       const { data: existing } = await supabase
@@ -251,11 +400,14 @@ async function upsertProjects(supabase: any, projects: any[]): Promise<number> {
         .maybeSingle();
 
       if (existing) {
+        // `client` YA NO se escribe en el update: Zoho no lo expone (llega
+        // vacío) y escribirlo pisaba el cliente cargado a mano en cada corrida.
+        // El cliente ahora se deriva del Project Group (ver clientResolver).
         const patch: any = {
           project_name: projectName,
-          client: clientName,
           zoho_status: zohoStatus,
         };
+        if (group !== undefined) patch.zoho_project_group = group;
         // Solo seteamos la fecha desde Zoho si todavía NO hay una cargada a mano.
         if (!existing.contract_expiration_date && endDate) {
           patch.contract_expiration_date = endDate;
@@ -265,8 +417,11 @@ async function upsertProjects(supabase: any, projects: any[]): Promise<number> {
         await supabase.from("projects").insert({
           zoho_project_id: zid,
           project_name: projectName,
+          // Fila nueva: no hay cliente manual que pisar. Se deja `client` vacío
+          // (Zoho no lo trae) y el cliente se resuelve por grupo.
           client: clientName,
           zoho_status: zohoStatus,
+          zoho_project_group: group ?? null,
           contract_expiration_date: endDate, // fecha de fin de Zoho (inicial)
           // project_number arranca con el id de Zoho; editable a mano luego.
           project_number: String(p.key || zid),
@@ -306,16 +461,51 @@ Deno.serve(async (req) => {
     const portalId = portals[0].id;
     console.log("Portal ID:", portalId);
 
-    // Projects
-    const projects = await fetchAllPagesV3(
-      `${ZOHO_V3}/portal/${portalId}/projects`,
-      "projects",
-      token,
+    // Projects — activos + archivados. Un proyecto archivado en Zoho puede tener
+    // horas todavía sin facturar; si no lo trajéramos, esas horas perderían el
+    // grupo y el cliente. Los archivados son un complemento "nice to have": si su
+    // endpoint falla (4xx no soportado, o 5xx persistente que agotó los reintentos)
+    // se degrada a lista vacía y el sync sigue con los activos —nunca rompe—, en
+    // vez de que una caída del endpoint de archivados tumbe toda la corrida.
+    const [activeProjects, archivedProjects] = await Promise.all([
+      fetchAllPagesV3(`${ZOHO_V3}/portal/${portalId}/projects`, "projects", token),
+      fetchAllPagesV3(
+        `${ZOHO_V3}/portal/${portalId}/projects?status_type=archived`,
+        "projects",
+        token,
+      ).catch((e) => {
+        console.log("Projects archivados no disponibles, se sigue con activos:", String((e as Error)?.message ?? e));
+        return [] as any[];
+      }),
+    ]);
+    // Merge único por id (activos + archivados) SOLO para el maestro de proyectos:
+    // los archivados entran para CONSERVAR el grupo que ya tenían (fix del wipe) y
+    // para no perder sus datos del maestro. OJO: el listado por grupo de Zoho trae
+    // sólo activos, así que un proyecto que NUNCA se sincronizó estando activo no
+    // aparece en el mapa de grupos y quedará sin grupo hasta que la fuente de
+    // grupos cubra archivados (a verificar en el primer run). NO se barren sus logs
+    // mes a mes (ver el loop de abajo). Un proyecto no debería estar en ambas
+    // listas, pero si el filtro de archived se ignora y devuelve los mismos, no se
+    // duplica.
+    // Archivados PRIMERO: si un proyecto aparece en ambas listas (el filtro de
+    // archived se ignora o lo devuelve marcado archivado), la copia ACTIVA queda
+    // como valor final (last-write-wins), que es el estado autoritativo.
+    const projectsById = new Map<string, any>();
+    for (const p of [...archivedProjects, ...activeProjects]) {
+      const pid = String(p.id_string || p.id || "");
+      if (pid) projectsById.set(pid, p);
+    }
+    const projects = [...projectsById.values()];
+    console.log(
+      `Projects: ${projects.length} (activos ${activeProjects.length}, archivados ${archivedProjects.length})`,
     );
-    console.log("Projects:", projects.length);
+
+    // Cliente = Project Group de Zoho. Se trae el mapa projectId→grupo aparte
+    // (el listado de proyectos no lo incluye). Ver fetchGroupByProjectId.
+    const groupByProjectId = await fetchGroupByProjectId(portalId, token);
 
     // FR-07 · crear/actualizar el maestro de proyectos desde Zoho.
-    const projectsSynced = await upsertProjects(supabase, projects);
+    const projectsSynced = await upsertProjects(supabase, projects, groupByProjectId);
     console.log("Proyectos sincronizados:", projectsSynced);
 
     // Fechas mes a mes desde enero hasta el mes actual
@@ -330,8 +520,18 @@ Deno.serve(async (req) => {
 
     const rows: any[] = [];
 
-    for (const p of projects) {
-      const projectId = p.id;
+    // El barrido de logs es SOLO sobre activos: los archivados casi nunca tienen
+    // horas nuevas y barrerlos mes a mes multiplicaría las llamadas a Zoho (riesgo
+    // de rate-limit/timeout de la edge function). Sus horas viejas ya se
+    // sincronizaron cuando el proyecto estaba activo, y su grupo/cliente igual se
+    // resuelve porque entraron al maestro (merge de arriba).
+    for (const p of activeProjects) {
+      // Llave EXACTA del proyecto, igual que zid en upsertProjects: los ids de
+      // Zoho superan el rango seguro de JS, así que p.id (número) pierde
+      // precisión. id_string es la forma canónica en string. Se usa TANTO para
+      // guardar zoho_project_id como para pedir los logs: pedir con el p.id
+      // numérico redondeado devolvería 0 logs para proyectos de id grande.
+      const projectIdStr = String(p.id_string || p.id || "");
       const projectName = p.name;
       const projectStatus = safe(p, "status.name", "");
       const projectOwner = safe(p, "owner.full_name", "");
@@ -348,7 +548,7 @@ Deno.serve(async (req) => {
 
       for (const dateParam of monthDates) {
         const logsUrl =
-          `${ZOHO_V1}/portal/${portalId}/projects/${projectId}` +
+          `${ZOHO_V1}/portal/${portalId}/projects/${projectIdStr}` +
           `/logs/?users_list=all&view_type=month&date=${dateParam}` +
           `&bill_status=All&component_type=task`;
 
@@ -363,6 +563,9 @@ Deno.serve(async (req) => {
               zoho_log_id: String(tl.id_string || tl.id || ""),
               user_name: tl.owner_name || safe(tl, "added_by.name", ""),
               project: projectName,
+              // Llave hora→proyecto robusta a renames (ver clientResolver /
+              // entryClient). El nombre queda como fallback en la app.
+              zoho_project_id: projectIdStr,
               client: clientName,
               task: safe(tl, "task.name", ""),
               // FR-02 · ID numérico de la tarea en Zoho (string para no perder
