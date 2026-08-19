@@ -49,8 +49,11 @@ export function BillingPage() {
   const [status, setStatus] = useState('loading')
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedKeys, setSelectedKeys] = useState(() => new Set())
-  // Semanas colapsadas: por defecto todas menos la más reciente de cada cliente.
-  const [collapsedWeeks, setCollapsedWeeks] = useState(() => new Set())
+  // Semanas que el usuario abrió/cerró a mano (respecto del default: la más
+  // reciente de cada cliente abierta, el resto colapsadas). Se guarda el "flip"
+  // en vez del estado absoluto para que un reload (facturar, cambiar filtro) no
+  // pise lo que el usuario abrió: el default se aplica en el render por posición.
+  const [toggledWeeks, setToggledWeeks] = useState(() => new Set())
   const [modalOpen, setModalOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const { filters, toggleValue, clear, isActive } = useEntryFilters()
@@ -276,20 +279,6 @@ export function BillingPage() {
     return map
   }, [clientGroups])
 
-  // Colapsa por defecto todas las semanas menos la más reciente de cada cliente
-  // (weeks[0]). Se recalcula al cambiar el conjunto (otro filtro, una factura
-  // nueva); el usuario puede abrir/cerrar a mano después.
-  useEffect(() => {
-    const collapse = new Set()
-    for (const group of clientGroups) {
-      if (group.isUnassigned) continue
-      group.weeks.forEach((week, i) => {
-        if (i > 0) collapse.add(weekId(group.client, week))
-      })
-    }
-    setCollapsedWeeks(collapse)
-  }, [clientGroups])
-
   const selectedRows = [...selectedKeys].map((k) => billableRows.get(k)).filter(Boolean)
   const selectedEntries = selectedRows.flatMap((r) => r.entries)
   const selectedHours = selectedRows.reduce((sum, r) => sum + r.hours, 0)
@@ -306,11 +295,29 @@ export function BillingPage() {
     })
   }
 
-  function toggleWeek(id) {
-    setCollapsedWeeks((prev) => {
+  function toggleWeek(id, willBeOpen) {
+    setToggledWeeks((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
+      return next
+    })
+    // Al colapsar, se sacan de la selección las filas de esa semana: si quedaran
+    // seleccionadas pero ocultas, se podría facturar horas que ya no se ven.
+    if (!willBeOpen) {
+      setSelectedKeys((prev) => new Set([...prev].filter((k) => !k.startsWith(`${id}||`))))
+    }
+  }
+
+  // "Select all" acotado a UNA semana (las filas visibles de esa semana): un
+  // bulk-select que no toca semanas colapsadas ni oculta lo que se factura.
+  function toggleWeekSelection(weekRowIds, allSelected) {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev)
+      for (const id of weekRowIds) {
+        if (allSelected) next.delete(id)
+        else next.add(id)
+      }
       return next
     })
   }
@@ -322,18 +329,45 @@ export function BillingPage() {
       { header: 'Week', key: 'week' },
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
+      { header: 'Reason', key: 'reason' },
       { header: 'Hours', key: 'hours' },
       { header: 'Entries', key: 'entries' },
     ]
-    const rows = [...billableRows.values()].map((r) => ({
-      provider: r.user,
-      client: r.client,
-      week: r.week,
-      project: r.project,
-      task: r.task,
-      hours: r.hours,
-      entries: r.entries.length,
-    }))
+    // Se exporta lo mismo que muestra la grilla: las filas facturables por cliente
+    // y también el bucket "Sin cliente" (con el motivo), que son justo las horas
+    // que alguien exporta para ir a resolver el mapeo de grupo en Zoho.
+    const rows = []
+    for (const group of clientGroups) {
+      if (group.isUnassigned) {
+        for (const project of group.projects) {
+          rows.push({
+            provider: '',
+            client: 'Sin cliente',
+            week: '—',
+            project: project.project,
+            task: '',
+            reason: reasonLabel(project.reason),
+            hours: project.hours,
+            entries: project.entries.length,
+          })
+        }
+      } else {
+        for (const week of group.weeks) {
+          for (const row of week.rows) {
+            rows.push({
+              provider: row.user,
+              client: group.client,
+              week: week.week,
+              project: row.project,
+              task: row.task,
+              reason: '',
+              hours: row.hours,
+              entries: row.entries.length,
+            })
+          }
+        }
+      }
+    }
     exportGrid({
       rows,
       columns: cols,
@@ -384,6 +418,9 @@ export function BillingPage() {
     setNotice(
       `Invoice ${supplierInvoiceNumber} issued for ${provider} — ${formatHours(selectedHours)} h.`,
     )
+    // La factura saca esas filas de billableRows; sin limpiar la selección, la
+    // barra de selección quedaría con ids muertos ("0.0 h · 0 entries").
+    setSelectedKeys(new Set())
     // Se relee en vez de parchear: la factura nueva cambia las 4 tarjetas y saca
     // las filas de la grilla, y esos números no se pueden inventar localmente.
     setReloadKey((k) => k + 1)
@@ -520,7 +557,7 @@ export function BillingPage() {
               Ready to bill · {billableClientCount}{' '}
               {billableClientCount === 1 ? 'client' : 'clients'}
             </span>
-            {billableRows.size > 0 && <ExportDropdown onExport={handleExport} />}
+            {clientGroups.length > 0 && <ExportDropdown onExport={handleExport} />}
           </div>
 
           {clientGroups.length === 0 ? (
@@ -593,15 +630,21 @@ export function BillingPage() {
                         <h3 className="bill-client__name">{group.client}</h3>
                         <span className="bill-client__hours">{formatHours(group.hours)} h</span>
                       </header>
-                      {group.weeks.map((week) => {
-                        const id = weekId(group.client, week)
-                        const open = !collapsedWeeks.has(id)
+                      {group.weeks.map((week, i) => {
+                        const wid = weekId(group.client, week)
+                        // Default: la semana más reciente (i === 0) abierta, el
+                        // resto colapsadas. toggledWeeks guarda el flip del usuario.
+                        const isRecent = i === 0
+                        const open = isRecent ? !toggledWeeks.has(wid) : toggledWeeks.has(wid)
+                        const weekRowIds = week.rows.map((row) => rowId(group.client, week, row))
+                        const allWeekSelected =
+                          weekRowIds.length > 0 && weekRowIds.every((k) => selectedKeys.has(k))
                         return (
-                          <div className="bill-week" key={id}>
+                          <div className="bill-week" key={wid}>
                             <button
                               type="button"
                               className="bill-week__toggle"
-                              onClick={() => toggleWeek(id)}
+                              onClick={() => toggleWeek(wid, !open)}
                               aria-expanded={open}
                             >
                               <span className="bill-week__chev" aria-hidden="true">
@@ -620,7 +663,14 @@ export function BillingPage() {
                                     <tr>
                                       {canCreate && (
                                         <th scope="col" style={{ width: 34 }}>
-                                          <span className="sr-only">Select</span>
+                                          <input
+                                            type="checkbox"
+                                            checked={allWeekSelected}
+                                            onChange={() =>
+                                              toggleWeekSelection(weekRowIds, allWeekSelected)
+                                            }
+                                            aria-label={`Select all rows in ${week.week}`}
+                                          />
                                         </th>
                                       )}
                                       <th scope="col">Provider</th>
