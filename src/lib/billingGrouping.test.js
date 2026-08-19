@@ -23,6 +23,19 @@ test('agrupa bill_to_client por cliente → semana → filas', () => {
   assert.equal(hss.weeks[1].hours, 3)
 })
 
+test('no fusiona la misma semana ISO de años distintos', () => {
+  const entries = [
+    e({ id: 1, client: 'HSS', user: 'Ana', project: 'P', task: 'T', date: '2026-08-14', hours: 4 }), // W33 2026
+    e({ id: 2, client: 'HSS', user: 'Ana', project: 'P', task: 'T', date: '2025-08-15', hours: 3 }), // W33 2025
+  ]
+  const [hss] = groupBillToClient(entries, {})
+  assert.equal(hss.weeks.length, 2)
+  // Ids distintos por año, y la de 2026 arriba (fecha más nueva).
+  assert.notEqual(hss.weeks[0].weekId, hss.weeks[1].weekId)
+  assert.equal(hss.weeks[0].weekYear, 2026)
+  assert.equal(hss.weeks[1].weekYear, 2025)
+})
+
 test('ignora horas que no son bill_to_client, no aprobadas o ya facturadas', () => {
   const entries = [
     e({ id: 1, client: 'HSS', allocation: 'overage', date: '2026-08-14' }),
@@ -48,6 +61,16 @@ test('bucket "Sin cliente" agrupado por proyecto con su motivo', () => {
   const px = res[0].projects.find((p) => p.project === 'Px')
   assert.equal(px.reason, 'group-unclaimed')
   assert.equal(px.hours, 5)
+})
+
+test('"Sin cliente": proyectos homónimos con motivos distintos → sin motivo único', () => {
+  const entries = [
+    e({ id: 1, client: '', clientReason: 'no-group', project: 'Maintenance', date: '2026-08-14' }),
+    e({ id: 2, client: '', clientReason: 'group-unclaimed', project: 'Maintenance', date: '2026-08-14' }),
+  ]
+  const res = groupBillToClient(entries, {})
+  const maint = res[0].projects.find((p) => p.project === 'Maintenance')
+  assert.equal(maint.reason, null) // no muestra el motivo del primero
 })
 
 test('"Sin cliente" siempre arriba, aunque tenga menos horas', () => {

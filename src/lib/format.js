@@ -82,6 +82,23 @@ export function isoWeek(iso = '') {
 }
 
 /**
+ * Año ISO-8601 de la semana a la que pertenece una fecha (el año del jueves de
+ * esa semana). NO siempre coincide con el año calendario: el 2026-01-01 puede
+ * caer en la semana 53 de 2025. Se necesita junto a isoWeek para no fusionar la
+ * misma semana de años distintos (p. ej. W32 de 2025 y de 2026).
+ * @param {string} iso
+ * @returns {?number}
+ */
+export function isoWeekYear(iso = '') {
+  const [year, month, day] = iso.split('-').map(Number)
+  if (!year || !month || !day) return null
+  const date = new Date(Date.UTC(year, month - 1, day))
+  const dayNum = (date.getUTCDay() + 6) % 7
+  date.setUTCDate(date.getUTCDate() - dayNum + 3) // jueves de su semana
+  return date.getUTCFullYear()
+}
+
+/**
  * Semana ISO formateada para la grilla: "W23" (o "—" si no hay fecha válida).
  * @param {string} iso
  * @returns {string}

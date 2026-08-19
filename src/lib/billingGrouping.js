@@ -1,4 +1,4 @@
-import { isoWeek } from './format.js'
+import { isoWeek, isoWeekYear } from './format.js'
 
 // ---------------------------------------------------------------------------
 // Agrupación de la tab "Bill to client": las horas facturables ordenadas POR
@@ -53,21 +53,31 @@ function groupRows(entries) {
  * Semanas ISO de un cliente, la más reciente arriba (por la fecha más nueva de la
  * semana). Cada semana trae sus filas y su total de horas. Las horas sin fecha
  * caen en una semana "—" que queda al fondo.
+ *
+ * La clave incluye el AÑO ISO, no sólo el número de semana: un cliente que paga
+ * lento puede tener horas sin facturar en la W32 de 2025 y en la W32 de 2026, y
+ * clavear sólo por número las fusionaría en una sola fila (una factura mezclando
+ * entries con un año de diferencia). El id (`weekId`) es "año-semana"; la etiqueta
+ * muestra "W32 · 2025" para que dos semanas homónimas de años distintos se
+ * distingan a simple vista.
  */
 function groupWeeks(entries) {
   const byWeek = new Map()
   for (const entry of entries) {
     const weekNum = isoWeek(entry.date ?? '')
-    const key = weekNum ?? 'sin-fecha'
+    const weekYear = isoWeekYear(entry.date ?? '')
+    const weekId = weekNum ? `${weekYear}-${weekNum}` : 'sin-fecha'
     const date = entry.date ?? ''
-    const week = byWeek.get(key)
+    const week = byWeek.get(weekId)
     if (week) {
       week.entries.push(entry)
       if (date > week.latestDate) week.latestDate = date
     } else {
-      byWeek.set(key, {
+      byWeek.set(weekId, {
+        weekId,
         weekNum,
-        week: weekNum ? `W${weekNum}` : '—',
+        weekYear,
+        week: weekNum ? `W${weekNum} · ${weekYear}` : '—',
         latestDate: date,
         entries: [entry],
       })
@@ -75,8 +85,10 @@ function groupWeeks(entries) {
   }
   return [...byWeek.values()]
     .map((week) => ({
+      weekId: week.weekId,
       week: week.week,
       weekNum: week.weekNum,
+      weekYear: week.weekYear,
       latestDate: week.latestDate,
       hours: sumHours(week.entries),
       rows: groupRows(week.entries),
@@ -86,16 +98,24 @@ function groupWeeks(entries) {
 
 /**
  * Proyectos del bucket "Sin cliente", cada uno con su motivo de no-resolución y
- * ordenados por horas desc. El motivo se toma de la primera hora del proyecto
- * (todas las horas del mismo proyecto comparten motivo, es propiedad del proyecto).
+ * ordenados por horas desc. El motivo suele ser propiedad del proyecto (todas sus
+ * horas comparten motivo), pero dos proyectos de Zoho homónimos pueden caer en el
+ * mismo grupo por nombre con motivos distintos (uno 'no-group', otro
+ * 'group-unclaimed'): en ese caso se deja el motivo en null (→ "Unresolved") en
+ * vez de mostrar el del primero, que desviaría a quien intenta arreglar el grupo.
  */
 function groupProjectsWithReason(entries) {
   const byProject = new Map()
   for (const entry of entries) {
     const project = entry.project ?? ''
+    const reason = entry.clientReason ?? null
     const group = byProject.get(project)
-    if (group) group.entries.push(entry)
-    else byProject.set(project, { project, reason: entry.clientReason ?? null, entries: [entry] })
+    if (group) {
+      group.entries.push(entry)
+      if (group.reason !== reason) group.reason = null // motivos mixtos → sin motivo único
+    } else {
+      byProject.set(project, { project, reason, entries: [entry] })
+    }
   }
   return [...byProject.values()]
     .map((group) => ({

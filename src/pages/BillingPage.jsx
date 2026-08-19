@@ -18,8 +18,14 @@ const sortedUnique = (values) =>
 // Un proyecto se identifica por cliente + nombre, no por nombre solo.
 const sowKey = (client, projectName) => `${client ?? ''}||${projectName ?? ''}`
 
-// Clave de una semana dentro de un cliente (para colapsar/expandir).
-const weekId = (client, week) => `${client}||${week.weekNum ?? 'na'}`
+// Clave de una semana dentro de un cliente (para colapsar/expandir) y de una fila
+// dentro de esa semana (para seleccionar/facturar). Una sola definición: el id de
+// selección y la clave del índice tienen que salir de la MISMA función o divergen
+// en silencio y los checkboxes dejan de matchear. week.weekId ya incluye el año
+// ISO (ver billingGrouping), así que dos semanas homónimas de años distintos no
+// colapsan en una.
+const weekId = (client, week) => `${client}||${week.weekId}`
+const rowId = (client, week, row) => `${weekId(client, week)}||${row.key}`
 
 // Por qué una hora quedó "sin cliente" (motivo que expone clientResolver).
 const REASON_LABEL = {
@@ -262,8 +268,8 @@ export function BillingPage() {
       if (group.isUnassigned) continue
       for (const week of group.weeks) {
         for (const row of week.rows) {
-          const rowId = `${group.client}||${week.weekNum ?? 'na'}||${row.key}`
-          map.set(rowId, { ...row, rowId, client: group.client, week: week.week })
+          const id = rowId(group.client, week, row)
+          map.set(id, { ...row, rowId: id, client: group.client, week: week.week })
         }
       }
     }
@@ -288,8 +294,6 @@ export function BillingPage() {
   const selectedEntries = selectedRows.flatMap((r) => r.entries)
   const selectedHours = selectedRows.reduce((sum, r) => sum + r.hours, 0)
   const selectedProviders = sortedUnique(selectedRows.map((r) => r.user))
-  const allSelected =
-    billableRows.size > 0 && [...billableRows.keys()].every((k) => selectedKeys.has(k))
   const canCreate = can('billing.create')
   const canBill = canCreate && selectedEntries.length > 0 && selectedProviders.length === 1
 
@@ -300,10 +304,6 @@ export function BillingPage() {
       else next.add(key)
       return next
     })
-  }
-
-  function toggleAll() {
-    setSelectedKeys(allSelected ? new Set() : new Set(billableRows.keys()))
   }
 
   function toggleWeek(id) {
@@ -519,14 +519,6 @@ export function BillingPage() {
             <span className="toolbar__count">
               Ready to bill · {billableClientCount}{' '}
               {billableClientCount === 1 ? 'client' : 'clients'}
-              {canCreate && billableRows.size > 0 && (
-                <>
-                  {' · '}
-                  <button type="button" className="linklike" onClick={toggleAll}>
-                    {allSelected ? 'Clear selection' : 'Select all'}
-                  </button>
-                </>
-              )}
             </span>
             {billableRows.size > 0 && <ExportDropdown onExport={handleExport} />}
           </div>
@@ -639,19 +631,19 @@ export function BillingPage() {
                                   </thead>
                                   <tbody>
                                     {week.rows.map((row) => {
-                                      const rowId = `${group.client}||${week.weekNum ?? 'na'}||${row.key}`
+                                      const id = rowId(group.client, week, row)
                                       const sow =
                                         sowByProject.byClientAndName.get(
                                           sowKey(group.client, row.project),
                                         ) ?? sowByProject.byName.get(row.project)
                                       return (
-                                        <tr key={rowId}>
+                                        <tr key={id}>
                                           {canCreate && (
                                             <td>
                                               <input
                                                 type="checkbox"
-                                                checked={selectedKeys.has(rowId)}
-                                                onChange={() => toggleGroup(rowId)}
+                                                checked={selectedKeys.has(id)}
+                                                onChange={() => toggleGroup(id)}
                                                 aria-label={`Select ${row.user} · ${row.project}`}
                                               />
                                             </td>
