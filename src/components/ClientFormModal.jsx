@@ -92,11 +92,10 @@ export function ClientFormModal({ initial = null, onClose, onSubmit }) {
   }, [onClose])
 
   const missing = REQUIRED.filter((k) => !String(form[k] ?? '').trim())
-  // En alta el MSA es obligatorio; en edición es opcional (solo si se
-  // reemplaza), pero un archivo de reemplazo inválido (msaError) igual debe
-  // bloquear el submit — si no, "Save changes" guarda silenciosamente
-  // dejando el MSA viejo sin avisar que el reemplazo no se aplicó.
-  const valid = missing.length === 0 && !msaError && (isEdit || Boolean(msaFile))
+  // El MSA es opcional (hay clientes sin MSA: trabajo interno, o alta previa a la
+  // firma). Un archivo inválido (msaError) igual bloquea el submit — si no, guardar
+  // dejaría el MSA sin aplicar sin avisar que el archivo elegido no sirve.
+  const valid = missing.length === 0 && !msaError
 
   function set(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -195,10 +194,9 @@ export function ClientFormModal({ initial = null, onClose, onSubmit }) {
           <div className="field">
             <label className="field__label" htmlFor="client-msa">
               MSA
-              {!isEdit && <span className="field__req">required</span>}
-              <span className="field__hint">PDF · max 20 MB</span>
+              <span className="field__hint">PDF · max 20 MB · optional</span>
             </label>
-            {isEdit && !replacingMsa ? (
+            {isEdit && initial.msaUrl && !replacingMsa ? (
               <div className="field__input" style={{ justifyContent: 'space-between' }}>
                 <span className="field__filename">{fileNameFromPath(initial.msaUrl)}</span>
                 <button type="button" className="btn btn--ghost btn--sm" onClick={() => setReplacingMsa(true)}>
@@ -215,9 +213,6 @@ export function ClientFormModal({ initial = null, onClose, onSubmit }) {
               />
             )}
             {msaFile && <span className="field__filename">{msaFile.name}</span>}
-            {touched && !isEdit && !msaFile && !msaError && (
-              <span className="field__error">The MSA file is required.</span>
-            )}
             {msaError && <span className="field__error">{msaError}</span>}
             {isEdit && replacingMsa && (
               <span className="field__hint">

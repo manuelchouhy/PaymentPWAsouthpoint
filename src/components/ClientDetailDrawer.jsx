@@ -89,6 +89,11 @@ export function ClientDetailDrawer({ client, canEdit = false, onClose, onEdit })
           </button>
         </div>
 
+        {client.needsReview && (
+          <div role="status" className="review-notice">
+            ⚠ Auto-created from a Zoho project group. Complete the contact data and Save to clear this.
+          </div>
+        )}
         <div className="drawer__section">
           <span className="drawer__section-label">Client details</span>
           <dl className="drawer__facts">

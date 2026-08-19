@@ -117,8 +117,9 @@ function rowToClient(row) {
     id: row.id,
     clientName: row.client_name,
     // Alias del grupo de Zoho → este cliente (ej. grupo "HSS" → "HSSStaffing").
-    // Lo consume clientResolver (slice 3). El write path (UI) llega con el cableado.
     zohoGroupName: row.zoho_group_name ?? null,
+    // true = auto-creado por el sync desde un grupo de Zoho, datos a completar.
+    needsReview: row.needs_review ?? false,
     email: row.email ?? null,
     domain: row.domain ?? null,
     primaryContactName: row.primary_contact_name,
@@ -201,14 +202,18 @@ export async function updateClient(current, updates) {
   }
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 250))
-    const updated = { ...current, ...updates, updatedAt: new Date().toISOString() }
+    // needsReview: false igual que el backend real (guardar = revisado).
+    const updated = { ...current, ...updates, needsReview: false, updatedAt: new Date().toISOString() }
     demoClients = demoClients.map((c) => (c.id === current.id ? updated : c))
     return updated
   }
 
   const { data, error } = await supabase
     .from('clients')
-    .update({ ...clientToRow(updates), updated_at: new Date().toISOString() })
+    // Guardar una edición manual limpia needs_review: el usuario ya revisó/completó
+    // el cliente auto-creado (no está en FIELD_TO_COLUMN a propósito — sólo lo baja
+    // el sistema, nunca lo sube el form).
+    .update({ ...clientToRow(updates), needs_review: false, updated_at: new Date().toISOString() })
     .eq('id', current.id)
     .select()
     .single()

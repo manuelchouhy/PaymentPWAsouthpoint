@@ -440,6 +440,59 @@ async function upsertProjects(
   return synced;
 }
 
+// Normaliza igual que normalizeClientKey del front y que el índice único de la
+// 0030 (minúsculas + colapso de espacios + trim), para comparar grupos y clientes.
+function normKey(v: any): string {
+  return (v == null ? "" : String(v)).toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+// ---------- Auto-provisión de clientes desde los Project Groups de Zoho ----------
+// Cada grupo asignado a algún proyecto que todavía NO tenga cliente (por nombre o
+// alias) se crea como cliente: client_name = nombre del grupo, alias = mismo grupo
+// (así sobrevive a un rename del cliente), needs_review = true (datos a completar a
+// mano). Nunca pisa clientes existentes ni sus datos. Si algo falla, se loguea y el
+// sync sigue: la auto-provisión es "best effort".
+async function ensureClientsForGroups(
+  supabase: any,
+  groupByProjectId: Map<string, string> | null,
+): Promise<void> {
+  if (!groupByProjectId || groupByProjectId.size === 0) return;
+  const groupNames = [...new Set([...groupByProjectId.values()])];
+  const { data: clients, error } = await supabase
+    .from("clients")
+    .select("client_name, zoho_group_name");
+  if (error) {
+    console.log("Auto-clientes: no se pudo leer clients, se omite:", error.message);
+    return;
+  }
+  const covered = new Set<string>();
+  for (const c of clients ?? []) {
+    if (c.client_name) covered.add(normKey(c.client_name));
+    if (c.zoho_group_name) covered.add(normKey(c.zoho_group_name));
+  }
+  for (const g of groupNames) {
+    const key = normKey(g);
+    if (!key || covered.has(key)) continue;
+    const { error: insErr } = await supabase.from("clients").insert({
+      client_name: g,
+      // alias = grupo: si mañana renombran el cliente, el grupo sigue mapeando.
+      zoho_group_name: g,
+      // Contactos vacíos y sin MSA: datos a completar. needs_review lo avisa en la UI.
+      primary_contact_name: "",
+      primary_contact_email: "",
+      msa_url: null,
+      needs_review: true,
+      created_by: "zoho-sync",
+    });
+    if (insErr) {
+      console.log(`Auto-clientes: no se pudo crear '${g}':`, insErr.message);
+      continue;
+    }
+    covered.add(key); // evita duplicar si dos grupos normalizan igual en esta corrida
+    console.log(`Auto-cliente creado desde grupo '${g}' (needs_review)`);
+  }
+}
+
 // ---------- Main ----------
 Deno.serve(async (req) => {
   // Responder el preflight CORS de inmediato (sin correr el sync).
@@ -511,6 +564,9 @@ Deno.serve(async (req) => {
     // FR-07 · crear/actualizar el maestro de proyectos desde Zoho.
     const projectsSynced = await upsertProjects(supabase, projects, groupByProjectId);
     console.log("Proyectos sincronizados:", projectsSynced);
+
+    // Auto-provisión: un cliente por cada grupo de Zoho que aún no tenga uno.
+    await ensureClientsForGroups(supabase, groupByProjectId);
 
     // Fechas mes a mes desde enero hasta el mes actual
     const now = new Date();

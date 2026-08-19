@@ -923,6 +923,30 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .dark .selbar__warn strong { color: #FCD34D; }
 .selbar__warn svg { flex-shrink: 0; margin-top: 2px; color: var(--warn); }
 
+/* Aviso de clientes auto-creados desde Zoho a completar (needs_review). Usa los
+   tokens de warning del tema para verse bien en claro y oscuro. */
+.review-notice {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: var(--r);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  color: var(--warn);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.review-badge {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  color: var(--warn);
+  font-size: 11px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 /* --- NodeStepper: grafo de billing -----------------------------------------
    Approved → Invoiced → Collected → Paid como 4 nodos circulares conectados
    por aristas de 1px (leitmotif del grafo Southpoint). El nodo activo es la

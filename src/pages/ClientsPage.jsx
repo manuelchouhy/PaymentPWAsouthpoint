@@ -39,9 +39,13 @@ export function ClientsPage() {
   }, [])
 
   async function handleCreate(payload, msaFile) {
-    const msaUrl = await api.clients.uploadMsa(msaFile)
+    // MSA opcional: si no se subió archivo, el cliente se crea sin MSA (trabajo
+    // interno, o alta previa a la firma) y no se registra versión en el historial.
+    const msaUrl = msaFile ? await api.clients.uploadMsa(msaFile) : null
     const created = await api.clients.create({ ...payload, msaUrl }, user?.email ?? null)
-    await api.clients.recordMsaVersion({ clientId: created.id, fileUrl: msaUrl, uploadedBy: user?.email ?? null })
+    if (msaUrl) {
+      await api.clients.recordMsaVersion({ clientId: created.id, fileUrl: msaUrl, uploadedBy: user?.email ?? null })
+    }
     api.audit.log({
       actorEmail: user?.email,
       action: 'client.create',
@@ -75,6 +79,9 @@ export function ClientsPage() {
     setEditing(null)
     setToast({ id: Date.now(), message: `Client updated: ${updated.clientName}` })
   }
+
+  // Clientes auto-creados por el sync a completar (un solo scan para banner + count).
+  const pendingReview = clients.filter((c) => c.needsReview)
 
   return (
     <>
@@ -122,6 +129,12 @@ export function ClientsPage() {
             </span>
           </div>
 
+          {pendingReview.length > 0 && (
+            <div role="status" className="review-notice">
+              ⚠ {pendingReview.length} client(s) were auto-created from Zoho project groups and need their
+              data completed. Open each one and Save to clear the flag.
+            </div>
+          )}
           {clients.length === 0 ? (
             <div className="empty">No clients to display.</div>
           ) : (
@@ -147,11 +160,14 @@ export function ClientsPage() {
                       onClick={() => setDetail(c)}
                       title={`View ${c.clientName}`}
                     >
-                      <td className="cell-strong">{c.clientName}</td>
+                      <td className="cell-strong">
+                        {c.clientName}
+                        {c.needsReview && <span className="review-badge">needs review</span>}
+                      </td>
                       <td className="cell-soft">{c.email || '—'}</td>
                       <td className="cell-mono">{c.domain || '—'}</td>
-                      <td>{c.primaryContactName}</td>
-                      <td className="cell-soft">{c.primaryContactEmail}</td>
+                      <td>{c.primaryContactName || '—'}</td>
+                      <td className="cell-soft">{c.primaryContactEmail || '—'}</td>
                       <td className="cell-mono">{formatDateTime(c.createdAt)}</td>
                     </motion.tr>
                   ))}
