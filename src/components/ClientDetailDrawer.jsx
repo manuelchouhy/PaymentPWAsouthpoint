@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FileText, Pencil, Trash2, X } from 'lucide-react'
 import { api } from '../lib/api'
@@ -36,9 +36,14 @@ export function ClientDetailDrawer({ client, canEdit = false, canDelete = false,
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  // Guard síncrono contra doble-click: setDeleting(true) es async y un segundo
+  // click antes del re-render dispararía onDelete() dos veces (dos borrados/audits).
+  const deletingRef = useRef(false)
   const isDemoMsa = typeof client.msaUrl === 'string' && client.msaUrl.startsWith('demo/')
 
   async function handleConfirmDelete() {
+    if (deletingRef.current) return
+    deletingRef.current = true
     setDeleteError('')
     setDeleting(true)
     try {
@@ -48,6 +53,7 @@ export function ClientDetailDrawer({ client, canEdit = false, canDelete = false,
     } catch (err) {
       setDeleteError(err?.message ?? 'Could not delete the client.')
       setDeleting(false)
+      deletingRef.current = false // permitir reintentar tras un error
     }
   }
 

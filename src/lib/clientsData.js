@@ -222,10 +222,14 @@ export async function updateClient(current, updates) {
 }
 
 /**
- * Borra un cliente. La ÚNICA FK que referencia clients es projects.client_id, y es
- * ON DELETE SET NULL (verificado en el esquema): los proyectos de ese cliente NO se
- * borran, quedan con client_id NULL (sin cliente). Por eso el delete no falla por
- * FK. Devuelve el id borrado.
+ * Borra un cliente. La única FK que referencia clients es projects.client_id, ON
+ * DELETE SET NULL: los proyectos de ese cliente NO se borran, quedan con client_id
+ * NULL. Por eso el delete no falla por FK. Devuelve el id borrado.
+ *
+ * OJO (open item): el MSA se guarda en project_documents (subject_type='msa',
+ * subject_id=clientId) SIN FK a clients, y el archivo en el bucket 'client-msa'.
+ * Esas filas y blobs NO se borran acá (la app mantiene el historial de MSAs a
+ * propósito) → quedan huérfanos. Purgar o no es decisión de producto.
  * @param {{ id: string|number }} client
  * @returns {Promise<{ id: string|number }>}
  */
