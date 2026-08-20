@@ -102,10 +102,11 @@ export function Sidebar({ can, open, onNavigate, user, profile, onSignOut }) {
     <aside className={`sidebar${open ? ' is-open' : ''}`}>
       <div className="sidebar__brand">
         <img
-          src="/logo-southpoint.png"
+          src="/sp_techlabs_blanco.svg"
           alt="Southpoint Tech Labs"
           className="sidebar__logo"
         />
+        <span className="sidebar__wordmark">DESK</span>
       </div>
       <nav className="sidebar__nav" aria-label="Sections">
         {activeItems.map((item) => (
