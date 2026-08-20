@@ -15,9 +15,10 @@ import { useScrollLock } from '../lib/useScrollLock'
  * duplicar el mapa de allocations ni la lectura de facturas en este componente.
  *
  * entryCount > 1 marca que la "entry" es el representante de una fila agregada
- * (varias horas de la misma terna en una semana, como en Billing): en ese caso se
- * muestra el conteo en vez de la fecha de una sola sub-entry, y las horas ya vienen
- * sumadas desde el llamador. billingStatus null oculta el dato de Billing (para
+ * (varias horas de la misma terna, como en Billing): en ese caso se muestran el
+ * conteo y periodLabel (una semana ISO, o "N weeks" si la fila abarca varias) en
+ * vez de la fecha/semana de una sola sub-entry, y las horas ya vienen sumadas
+ * desde el llamador. billingStatus null oculta el dato de Billing (para
  * allocations que no se facturan al cliente: overage / SP internal / X).
  *
  * @param {{
@@ -25,10 +26,18 @@ import { useScrollLock } from '../lib/useScrollLock'
  *   allocationLabel: ?{ label: string, cls: string },
  *   billingStatus: ?string,
  *   entryCount: ?number,
+ *   periodLabel: ?string,
  *   onClose: () => void,
  * }} props
  */
-export function EntryDetailDrawer({ entry, allocationLabel, billingStatus, entryCount, onClose }) {
+export function EntryDetailDrawer({
+  entry,
+  allocationLabel,
+  billingStatus,
+  entryCount,
+  periodLabel,
+  onClose,
+}) {
   const aggregate = entryCount > 1
   useScrollLock()
 
@@ -90,23 +99,32 @@ export function EntryDetailDrawer({ entry, allocationLabel, billingStatus, entry
             <dd>{entry.taskNumber || '—'}</dd>
           </div>
           {aggregate ? (
-            // Fila agregada: la fecha de una sola sub-entry no representa la fila
-            // (abarca varios días de la semana). Se muestra el conteo; la semana,
-            // que sí es compartida, se conserva abajo.
-            <div className="drawer__fact">
-              <dt>Entries</dt>
-              <dd>{entryCount} in this week</dd>
-            </div>
+            // Fila agregada: ni la fecha ni "la semana" de una sola sub-entry
+            // representan la fila (puede abarcar varios días, y en la X varias
+            // semanas). Se muestran el conteo y el período ya calculado por el
+            // llamador desde las semanas reales de las sub-entries.
+            <>
+              <div className="drawer__fact">
+                <dt>Entries</dt>
+                <dd>{entryCount}</dd>
+              </div>
+              <div className="drawer__fact">
+                <dt>Period</dt>
+                <dd>{periodLabel || '—'}</dd>
+              </div>
+            </>
           ) : (
-            <div className="drawer__fact">
-              <dt>Date</dt>
-              <dd>{entry.date ? formatDate(entry.date) : '—'}</dd>
-            </div>
+            <>
+              <div className="drawer__fact">
+                <dt>Date</dt>
+                <dd>{entry.date ? formatDate(entry.date) : '—'}</dd>
+              </div>
+              <div className="drawer__fact">
+                <dt>Week</dt>
+                <dd>{entry.date ? formatWeek(entry.date) : '—'}</dd>
+              </div>
+            </>
           )}
-          <div className="drawer__fact">
-            <dt>Week</dt>
-            <dd>{entry.date ? formatWeek(entry.date) : '—'}</dd>
-          </div>
           <div className="drawer__fact">
             <dt>Hours</dt>
             <dd>{formatHours(entry.hours)} h</dd>

@@ -3,7 +3,7 @@ import { useOutletContext, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowRight, Info } from 'lucide-react'
 import { api } from '../lib/api'
-import { formatHours } from '../lib/format'
+import { formatHours, formatWeek } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
@@ -147,12 +147,15 @@ export function BillingPage() {
   const [notice, setNotice] = useState('')
   // Tab activa de Billing (bill_to_client | overage | sp_internal | unknown).
   const [tab, setTab] = useState('bill_to_client')
-  // Fila mostrada en el drawer de detalle (o null): { entry, hours, count }.
-  // Una fila de Billing agrupa N entries de la misma terna proveedor·proyecto·task
-  // en una semana ISO. Se guarda la primera como representante de los campos
-  // COMPARTIDOS (cliente/proyecto/task/semana/allocation) más las HORAS del total
-  // de la fila y el conteo, para que el drawer no muestre las horas de una sola
-  // sub-entry en una superficie de facturación. Ver el render del drawer.
+  // Fila mostrada en el drawer de detalle (o null): snapshot al momento del click,
+  // { entry, hours, count, periodLabel }. Una fila de Billing agrupa N entries de
+  // la misma terna proveedor·proyecto·task; en las tabs con semana (overage/SP
+  // internal/bill_to_client) es una semana ISO, pero la X (unknown, withWeeks:
+  // false) agrega a través de semanas. Por eso se guarda `entry` (primera, para
+  // los campos COMPARTIDOS: cliente/proyecto/task/allocation), las HORAS del total
+  // de la fila, el conteo y una etiqueta de período derivada de las entries reales
+  // (una semana, o "N weeks"). Es sólo-lectura y no edita nada, así que el snapshot
+  // no necesita re-resolverse contra la data viva. Ver el render del drawer.
   const [detailRow, setDetailRow] = useState(null)
   const { filters, toggleValue, clear, isActive } = useEntryFilters()
 
@@ -237,14 +240,6 @@ export function BillingPage() {
     () => deriveEntriesClient(entries, projects, clients),
     [entries, projects, clients],
   )
-
-  // Índice id→entry (con cliente resuelto) para la re-resolución O(1) del drawer
-  // de detalle, en vez de un find lineal sobre cientos de entries en cada render.
-  const entryById = useMemo(() => {
-    const map = new Map()
-    for (const entry of entriesConCliente) map.set(String(entry.id), entry)
-    return map
-  }, [entriesConCliente])
 
   // Listas entrelazadas: cada dropdown se arma sobre lo que pasa los OTROS
   // filtros (ver buildFilterOptions) — elegir un proyecto recorta la lista de
@@ -480,11 +475,17 @@ export function BillingPage() {
     })
   }
 
-  // Abre el drawer de detalle para una fila (ver detailRow): primera entry como
-  // representante + horas del total de la fila + conteo de sub-entries.
+  // Abre el drawer de detalle para una fila (ver detailRow). El período sale de
+  // las semanas ISO reales de las sub-entries: una sola → esa semana; varias (caso
+  // X, que agrega cross-week) → "N weeks". Así el drawer no afirma una semana única
+  // para una fila que abarca varias.
   function openRowDetail(row) {
-    const entry = row?.entries?.[0]
-    if (entry) setDetailRow({ entry, hours: row.hours, count: row.entries.length })
+    const entries = row?.entries ?? []
+    const entry = entries[0]
+    if (!entry) return
+    const weeks = [...new Set(entries.map((e) => (e.date ? formatWeek(e.date) : null)).filter(Boolean))]
+    const periodLabel = weeks.length === 1 ? weeks[0] : weeks.length === 0 ? '—' : `${weeks.length} weeks`
+    setDetailRow({ entry, hours: row.hours, count: entries.length, periodLabel })
   }
 
   function toggleWeek(id) {
@@ -981,15 +982,30 @@ export function BillingPage() {
                                       return (
                                         <tr
                                           key={id}
+                                          // Sin billing.create la fila no togglea (no hay onClick):
+                                          // row-static evita el cursor de "clickeable" que da
+                                          // .proj-table, igual que en las filas de sólo lectura.
                                           className={
-                                            canCreate && selectedKeys.has(id) ? 'is-selected' : undefined
+                                            !canCreate
+                                              ? 'row-static'
+                                              : selectedKeys.has(id)
+                                                ? 'is-selected'
+                                                : undefined
                                           }
                                           onClick={
                                             canCreate
-                                              ? () => {
+                                              ? (e) => {
                                                   // No robar el click cuando el usuario está
-                                                  // seleccionando texto de la fila.
-                                                  if (String(window.getSelection?.() ?? '')) return
+                                                  // seleccionando texto DENTRO de esta fila
+                                                  // (drag-select); una selección vieja en otra
+                                                  // parte de la página no debe anular el toggle.
+                                                  const sel = window.getSelection?.()
+                                                  if (
+                                                    sel &&
+                                                    !sel.isCollapsed &&
+                                                    e.currentTarget.contains(sel.anchorNode)
+                                                  )
+                                                    return
                                                   toggleGroup(id)
                                                 }
                                               : undefined
@@ -1124,23 +1140,19 @@ export function BillingPage() {
       )}
 
       {detailRow && (() => {
-        // Re-resuelve la entry representante por id (mapa O(1)) sobre el set con
-        // cliente ya derivado: si se relee la data (Retry / post-factura) con el
-        // drawer abierto, muestra el estado fresco en vez del snapshot capturado.
-        // Cae al capturado si la entry desapareció del recorte.
-        const base = entryById.get(String(detailRow.entry.id)) ?? detailRow.entry
         // Horas = total de la fila (no las de una sub-entry): es el número que
         // importa al facturar. En filas multi-entry la nota de una sola sub-entry
-        // no representa la fila (se omite); el drawer muestra el conteo en vez de
-        // la fecha de una sola (entryCount). Fila de una sola entry → pasa igual.
+        // no representa la fila (se omite); el drawer muestra conteo + período en
+        // vez de la fecha de una sola. Fila de una sola entry → pasa igual.
         const aggregate = detailRow.count > 1
         const entry = aggregate
-          ? { ...base, hours: detailRow.hours, description: '', notes: '' }
-          : base
+          ? { ...detailRow.entry, hours: detailRow.hours, description: '', notes: '' }
+          : detailRow.entry
         // Billing sólo aplica a lo facturable al cliente. Para overage / SP
         // internal / X (nunca se facturan al cliente) se pasa null y el drawer
         // oculta el dato, en vez de un "Pending" que promete una facturación que
-        // no va a pasar.
+        // no va a pasar. Las filas bill_to_client acá nunca están facturadas
+        // (groupBillToClient excluye las facturadas), así que el estado es Pending.
         const billingStatus =
           entry.allocation === 'bill_to_client'
             ? invoiceByEntryId.get(String(entry.id))?.status ?? 'Pending'
@@ -1151,6 +1163,7 @@ export function BillingPage() {
             allocationLabel={entry.allocation ? ALLOCATION_LABELS[entry.allocation] : null}
             billingStatus={billingStatus}
             entryCount={detailRow.count}
+            periodLabel={aggregate ? detailRow.periodLabel : null}
             onClose={() => setDetailRow(null)}
           />
         )
