@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { formatDate, formatHours, formatWeek } from '../lib/format'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, UNALLOCATED } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
+import { isEntryFrozen } from '../lib/entryFreeze'
 import { exportGrid } from '../lib/exportGrid'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
@@ -14,6 +15,10 @@ import { BillingBadge } from '../components/BillingBadge'
 import { EntryDetailDrawer } from '../components/EntryDetailDrawer'
 
 const PAGE_SIZE = 100
+
+// Set vacío estable para paidEntryIds hasta que 6b traiga los pagos de overage a
+// Entries (evita crear un Set nuevo por render).
+const EMPTY_ENTRY_IDS = new Set()
 
 // null = sin clasificar. El triage es 100% manual (ver PRD, "Entries"): ninguna
 // hora llega con allocation puesta.
@@ -174,10 +179,15 @@ export function EntriesPage() {
   const unallocatedCount = visible.filter((e) => e.allocation == null).length
   const canAllocate = can('entries.allocate')
 
-  // Una hora ya facturada no se reclasifica: la factura ya salió con esa
-  // justificación. Cualquier otra sí, tenga o no allocation puesta —
-  // corregir una clasificación mal hecha es parte del triage.
-  const isFrozen = (entry) => (invoiceByEntryId.get(String(entry.id))?.status ?? 'Pending') !== 'Pending'
+  // Congelada = no se reclasifica: la hora ya está comprometida (facturada o
+  // pagada). Antes de eso se corrige libremente — arreglar una clasificación mal
+  // hecha es parte del triage. Ver entryFreeze.js. invoicedEntryIds son las claves
+  // de invoiceByEntryId (toda hora en una factura). paidEntryIds queda vacío hasta
+  // 6b (cuando Entries cargue los pagos de overage): por ahora sólo congela la
+  // factura, igual que hoy.
+  const invoicedEntryIds = useMemo(() => new Set(invoiceByEntryId.keys()), [invoiceByEntryId])
+  const paidEntryIds = EMPTY_ENTRY_IDS
+  const isFrozen = (entry) => isEntryFrozen(entry, { invoicedEntryIds, paidEntryIds })
   const selectableOnPage = page.filter((e) => !isFrozen(e))
   const allPageSelected =
     selectableOnPage.length > 0 && selectableOnPage.every((e) => selectedIds.has(e.id))
