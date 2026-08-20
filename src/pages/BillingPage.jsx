@@ -85,7 +85,10 @@ function ReadonlyRows({ rows, showProvider = true, onDetail }) {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.key}>
+            // row-static: estas filas no togglean selección (sólo el botón de
+            // detalle actúa), así que no deben mostrar el cursor de "clickeable"
+            // que .proj-table da por defecto.
+            <tr key={row.key} className="row-static">
               {showProvider && (
                 <td className="cell-strong">
                   <span className="cell-user">
@@ -234,6 +237,14 @@ export function BillingPage() {
     () => deriveEntriesClient(entries, projects, clients),
     [entries, projects, clients],
   )
+
+  // Índice id→entry (con cliente resuelto) para la re-resolución O(1) del drawer
+  // de detalle, en vez de un find lineal sobre cientos de entries en cada render.
+  const entryById = useMemo(() => {
+    const map = new Map()
+    for (const entry of entriesConCliente) map.set(String(entry.id), entry)
+    return map
+  }, [entriesConCliente])
 
   // Listas entrelazadas: cada dropdown se arma sobre lo que pasa los OTROS
   // filtros (ver buildFilterOptions) — elegir un proyecto recorta la lista de
@@ -1113,27 +1124,33 @@ export function BillingPage() {
       )}
 
       {detailRow && (() => {
-        // Re-resuelve la entry representante por id sobre el set con cliente ya
-        // derivado: si se relee la data (Retry / post-factura) con el drawer
-        // abierto, muestra el estado fresco en vez del snapshot capturado. Cae al
-        // capturado si la entry desapareció del recorte.
-        const base =
-          entriesConCliente.find((e) => String(e.id) === String(detailRow.entry.id)) ??
-          detailRow.entry
+        // Re-resuelve la entry representante por id (mapa O(1)) sobre el set con
+        // cliente ya derivado: si se relee la data (Retry / post-factura) con el
+        // drawer abierto, muestra el estado fresco en vez del snapshot capturado.
+        // Cae al capturado si la entry desapareció del recorte.
+        const base = entryById.get(String(detailRow.entry.id)) ?? detailRow.entry
         // Horas = total de la fila (no las de una sub-entry): es el número que
-        // importa al facturar. En filas multi-entry la fecha/nota de una sola
-        // sub-entry no representa la fila; se omiten las notas y se muestra la
-        // semana (la fecha del representante sólo alimenta el cálculo de semana,
-        // que es compartida). Fila de una sola entry → pasa tal cual.
+        // importa al facturar. En filas multi-entry la nota de una sola sub-entry
+        // no representa la fila (se omite); el drawer muestra el conteo en vez de
+        // la fecha de una sola (entryCount). Fila de una sola entry → pasa igual.
         const aggregate = detailRow.count > 1
         const entry = aggregate
           ? { ...base, hours: detailRow.hours, description: '', notes: '' }
           : base
+        // Billing sólo aplica a lo facturable al cliente. Para overage / SP
+        // internal / X (nunca se facturan al cliente) se pasa null y el drawer
+        // oculta el dato, en vez de un "Pending" que promete una facturación que
+        // no va a pasar.
+        const billingStatus =
+          entry.allocation === 'bill_to_client'
+            ? invoiceByEntryId.get(String(entry.id))?.status ?? 'Pending'
+            : null
         return (
           <EntryDetailDrawer
             entry={entry}
             allocationLabel={entry.allocation ? ALLOCATION_LABELS[entry.allocation] : null}
-            billingStatus={invoiceByEntryId.get(String(entry.id))?.status ?? 'Pending'}
+            billingStatus={billingStatus}
+            entryCount={detailRow.count}
             onClose={() => setDetailRow(null)}
           />
         )

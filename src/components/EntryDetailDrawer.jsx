@@ -14,14 +14,22 @@ import { useScrollLock } from '../lib/useScrollLock'
  * allocationLabel y billingStatus se pasan ya resueltos desde la página para no
  * duplicar el mapa de allocations ni la lectura de facturas en este componente.
  *
+ * entryCount > 1 marca que la "entry" es el representante de una fila agregada
+ * (varias horas de la misma terna en una semana, como en Billing): en ese caso se
+ * muestra el conteo en vez de la fecha de una sola sub-entry, y las horas ya vienen
+ * sumadas desde el llamador. billingStatus null oculta el dato de Billing (para
+ * allocations que no se facturan al cliente: overage / SP internal / X).
+ *
  * @param {{
  *   entry: import('../lib/data').TimeEntry,
  *   allocationLabel: ?{ label: string, cls: string },
- *   billingStatus: string,
+ *   billingStatus: ?string,
+ *   entryCount: ?number,
  *   onClose: () => void,
  * }} props
  */
-export function EntryDetailDrawer({ entry, allocationLabel, billingStatus, onClose }) {
+export function EntryDetailDrawer({ entry, allocationLabel, billingStatus, entryCount, onClose }) {
+  const aggregate = entryCount > 1
   useScrollLock()
 
   // Cierre con Escape (mismo patrón que los otros drawers).
@@ -81,10 +89,20 @@ export function EntryDetailDrawer({ entry, allocationLabel, billingStatus, onClo
             <dt>Task number</dt>
             <dd>{entry.taskNumber || '—'}</dd>
           </div>
-          <div className="drawer__fact">
-            <dt>Date</dt>
-            <dd>{entry.date ? formatDate(entry.date) : '—'}</dd>
-          </div>
+          {aggregate ? (
+            // Fila agregada: la fecha de una sola sub-entry no representa la fila
+            // (abarca varios días de la semana). Se muestra el conteo; la semana,
+            // que sí es compartida, se conserva abajo.
+            <div className="drawer__fact">
+              <dt>Entries</dt>
+              <dd>{entryCount} in this week</dd>
+            </div>
+          ) : (
+            <div className="drawer__fact">
+              <dt>Date</dt>
+              <dd>{entry.date ? formatDate(entry.date) : '—'}</dd>
+            </div>
+          )}
           <div className="drawer__fact">
             <dt>Week</dt>
             <dd>{entry.date ? formatWeek(entry.date) : '—'}</dd>
@@ -103,12 +121,14 @@ export function EntryDetailDrawer({ entry, allocationLabel, billingStatus, onClo
               )}
             </dd>
           </div>
-          <div className="drawer__fact">
-            <dt>Billing</dt>
-            <dd>
-              <BillingBadge status={billingStatus} />
-            </dd>
-          </div>
+          {billingStatus != null && (
+            <div className="drawer__fact">
+              <dt>Billing</dt>
+              <dd>
+                <BillingBadge status={billingStatus} />
+              </dd>
+            </div>
+          )}
         </dl>
 
         {entry.description && (

@@ -3853,6 +3853,9 @@ th.col-pop { text-align: center; }
 .proj-table th,
 .proj-table td { white-space: nowrap; }
 .proj-table tbody tr { cursor: pointer; }
+/* Filas sin acción de fila (sólo el botón de detalle actúa): no deben insinuar
+   que toda la fila es clickeable. */
+.proj-table tbody tr.row-static { cursor: default; }
 .proj-days--overdue { color: var(--no); font-weight: 600; }
 
 /* Status del proyecto traído de Zoho (active / archived / ...). */
