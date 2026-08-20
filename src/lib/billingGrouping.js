@@ -168,3 +168,38 @@ export function groupBillToClient(entries = [], { isInvoiced = () => false } = {
     return b.hours - a.hours || a.client.localeCompare(b.client, 'es')
   })
 }
+
+/**
+ * Agrupa horas —ya filtradas por allocation por el llamador— para las tabs de
+ * SÓLO LECTURA de Billing (Overage, SP internal, X). Agrupa por una entidad
+ * (`entityKey`: el contractor 'user' o el 'client') → horas, con o sin sub-nivel
+ * de semana ISO:
+ *   - Overage:     entityKey 'user',   withWeeks true  (contractor · semana)
+ *   - SP internal: entityKey 'client', withWeeks true  (cliente · semana)
+ *   - X (unknown): entityKey 'user',   withWeeks false (contractor)
+ *
+ * Sólo cuenta horas Approved (las no aprobadas todavía no son accionables). No
+ * factura ni excluye nada: estas tabs son lectura + link a Entries. Ordena las
+ * entidades por horas desc.
+ *
+ * @param {Array<object>} entries
+ * @param {'user'|'client'} entityKey
+ * @param {{ withWeeks?: boolean }} opts
+ * @returns {Array<{ entity: string, hours: number, weeks?: Array, rows?: Array }>}
+ */
+export function groupReadonly(entries = [], entityKey, { withWeeks = true } = {}) {
+  const approved = (entries ?? []).filter((entry) => entry && entry.status === 'Approved')
+  const byEntity = new Map()
+  for (const entry of approved) {
+    const entity = entry[entityKey] || ''
+    if (!byEntity.has(entity)) byEntity.set(entity, [])
+    byEntity.get(entity).push(entry)
+  }
+  return [...byEntity.entries()]
+    .map(([entity, entityEntries]) => ({
+      entity,
+      hours: sumHours(entityEntries),
+      ...(withWeeks ? { weeks: groupWeeks(entityEntries) } : { rows: groupRows(entityEntries) }),
+    }))
+    .sort((a, b) => b.hours - a.hours || a.entity.localeCompare(b.entity, 'es'))
+}

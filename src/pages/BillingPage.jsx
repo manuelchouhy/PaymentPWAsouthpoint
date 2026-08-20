@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { useOutletContext, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, ArrowRight } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
-import { groupBillToClient } from '../lib/billingGrouping'
+import { groupBillToClient, groupReadonly } from '../lib/billingGrouping'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { BillModal } from '../components/BillModal'
@@ -33,6 +33,47 @@ const REASON_LABEL = {
   'no-group': 'Project has no Zoho group',
 }
 const reasonLabel = (reason) => REASON_LABEL[reason] ?? 'Unresolved'
+
+// Las 4 tabs de Billing (una fila, con contador de horas). "Bill to client" es la
+// facturable (con selección + factura); las otras 3 son de sólo lectura y linkean
+// a Entries filtrado por su allocation para reclasificar.
+const TABS = [
+  { key: 'bill_to_client', label: 'Bill to client' },
+  { key: 'overage', label: 'Overage' },
+  { key: 'sp_internal', label: 'SP internal' },
+  { key: 'unknown', label: 'X' },
+]
+const sumGroupHours = (groups) => groups.reduce((total, g) => total + g.hours, 0)
+
+// Filas proveedor·proyecto·task para las tabs de lectura (sin checkbox ni SOW: no
+// se factura acá). Se combinan por terna en groupReadonly.
+function ReadonlyRows({ rows }) {
+  return (
+    <div className="table-wrap table-wrap--scroll">
+      <table className="table proj-table">
+        <thead>
+          <tr>
+            <th scope="col">Provider</th>
+            <th scope="col">Project · task</th>
+            <th scope="col" className="col-num">Hours</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key}>
+              <td className="cell-strong">{row.user}</td>
+              <td>
+                {row.project || '—'}
+                {row.task && <div className="cell-soft">{row.task}</div>}
+              </td>
+              <td className="col-num cell-mono">{formatHours(row.hours)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
 export function BillingPage() {
   const { user, profile, can } = useOutletContext()
@@ -63,6 +104,8 @@ export function BillingPage() {
   const seededWeeksRef = useRef(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [notice, setNotice] = useState('')
+  // Tab activa de Billing (bill_to_client | overage | sp_internal | unknown).
+  const [tab, setTab] = useState('bill_to_client')
   const { filters, toggleValue, clear, isActive } = useEntryFilters()
 
   useEffect(() => {
@@ -198,6 +241,22 @@ export function BillingPage() {
   // sincronizadas.
   const filtered = useMemo(
     () => filteredAllAllocations.filter((e) => e.allocation === 'bill_to_client'),
+    [filteredAllAllocations],
+  )
+
+  // Tabs de sólo lectura (groupReadonly). Overage por contractor·semana, SP
+  // internal por cliente·semana, X (unknown) por contractor. Salen del mismo
+  // conjunto filtrado que la tab facturable, cada una acotada a su allocation.
+  const overageGroups = useMemo(
+    () => groupReadonly(filteredAllAllocations.filter((e) => e.allocation === 'overage'), 'user', { withWeeks: true }),
+    [filteredAllAllocations],
+  )
+  const spInternalGroups = useMemo(
+    () => groupReadonly(filteredAllAllocations.filter((e) => e.allocation === 'sp_internal'), 'client', { withWeeks: true }),
+    [filteredAllAllocations],
+  )
+  const unknownGroups = useMemo(
+    () => groupReadonly(filteredAllAllocations.filter((e) => e.allocation === 'unknown'), 'user', { withWeeks: false }),
     [filteredAllAllocations],
   )
 
@@ -473,6 +532,52 @@ export function BillingPage() {
     setReloadKey((k) => k + 1)
   }
 
+  // Render de una tab de sólo lectura (Overage / SP internal / X): toolbar con
+  // contador + link a Entries filtrado por la allocation, y las entidades con sus
+  // filas (con o sin sub-nivel de semana). Sin selección ni factura.
+  function renderReadonlyTab(groups, { entityLabel, allocation, withWeeks, emptyLabel }) {
+    return (
+      <>
+        <div className="toolbar">
+          <span className="toolbar__count">
+            {groups.length} {entityLabel}
+            {groups.length === 1 ? '' : 's'} · {formatHours(sumGroupHours(groups))} h
+          </span>
+          <Link className="btn btn--ghost btn--sm" to={`/entries?allocation=${allocation}`}>
+            View in Entries <ArrowRight size={14} aria-hidden="true" />
+          </Link>
+        </div>
+        {groups.length === 0 ? (
+          <div className="empty">No {emptyLabel} hours under the current filters.</div>
+        ) : (
+          <div className="bill-clients">
+            {groups.map((group) => (
+              <section key={group.entity || '__none__'} className="bill-client">
+                <header className="bill-client__head">
+                  <h3 className="bill-client__name">{group.entity || '—'}</h3>
+                  <span className="bill-client__hours">{formatHours(group.hours)} h</span>
+                </header>
+                {withWeeks ? (
+                  group.weeks.map((week) => (
+                    <div className="bill-week" key={week.weekId}>
+                      <div className="bill-week__static">
+                        <span className="bill-week__label">{week.week}</span>
+                        <span className="bill-week__hours">{formatHours(week.hours)} h</span>
+                      </div>
+                      <ReadonlyRows rows={week.rows} />
+                    </div>
+                  ))
+                ) : (
+                  <ReadonlyRows rows={group.rows} />
+                )}
+              </section>
+            ))}
+          </div>
+        )}
+      </>
+    )
+  }
+
   return (
     <>
       <motion.header
@@ -599,15 +704,43 @@ export function BillingPage() {
             </div>
           </div>
 
-          <div className="toolbar">
-            <span className="toolbar__count">
-              Ready to bill · {billableClientCount}{' '}
-              {billableClientCount === 1 ? 'client' : 'clients'}
-            </span>
-            {clientGroups.length > 0 && <ExportDropdown onExport={handleExport} />}
+          <div className="bill-tabs" role="tablist" aria-label="Billing views">
+            {TABS.map((t) => {
+              const hours =
+                t.key === 'bill_to_client'
+                  ? cards.pendingToBill
+                  : t.key === 'overage'
+                    ? sumGroupHours(overageGroups)
+                    : t.key === 'sp_internal'
+                      ? sumGroupHours(spInternalGroups)
+                      : sumGroupHours(unknownGroups)
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t.key}
+                  className={`bill-tab${tab === t.key ? ' bill-tab--active' : ''}`}
+                  onClick={() => setTab(t.key)}
+                >
+                  {t.label}
+                  <span className="bill-tab__count">{formatHours(hours)} h</span>
+                </button>
+              )
+            })}
           </div>
 
-          {clientGroups.length === 0 ? (
+          {tab === 'bill_to_client' && (
+            <>
+              <div className="toolbar">
+                <span className="toolbar__count">
+                  Ready to bill · {billableClientCount}{' '}
+                  {billableClientCount === 1 ? 'client' : 'clients'}
+                </span>
+                {clientGroups.length > 0 && <ExportDropdown onExport={handleExport} />}
+              </div>
+
+              {clientGroups.length === 0 ? (
             <div className="empty">
               {/* Se decide por `classifiable`, NO por si hay horas facturadas.
                   Que existan horas facturadas no dice nada sobre si queda algo
@@ -816,8 +949,32 @@ export function BillingPage() {
                   An invoice covers one provider only. Selected: {selectedProviders.join(', ')}.
                 </p>
               )}
+                </>
+              )}
             </>
           )}
+
+          {tab === 'overage' &&
+            renderReadonlyTab(overageGroups, {
+              entityLabel: 'contractor',
+              allocation: 'overage',
+              withWeeks: true,
+              emptyLabel: 'overage',
+            })}
+          {tab === 'sp_internal' &&
+            renderReadonlyTab(spInternalGroups, {
+              entityLabel: 'client',
+              allocation: 'sp_internal',
+              withWeeks: true,
+              emptyLabel: 'SP internal',
+            })}
+          {tab === 'unknown' &&
+            renderReadonlyTab(unknownGroups, {
+              entityLabel: 'contractor',
+              allocation: 'unknown',
+              withWeeks: false,
+              emptyLabel: 'unclassified (X)',
+            })}
         </motion.div>
       )}
 

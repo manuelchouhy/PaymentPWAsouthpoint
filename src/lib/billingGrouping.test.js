@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { groupBillToClient } from './billingGrouping.js'
+import { groupBillToClient, groupReadonly } from './billingGrouping.js'
 
 // Helper: una entry bill_to_client, aprobada, 1h — se sobreescribe lo que haga falta.
 const e = (o) => ({ status: 'Approved', allocation: 'bill_to_client', hours: 1, ...o })
@@ -95,4 +95,55 @@ test('clientes con cliente ordenados por horas pendientes desc', () => {
 test('sin entries → lista vacía', () => {
   assert.deepEqual(groupBillToClient([], {}), [])
   assert.deepEqual(groupBillToClient(undefined, {}), [])
+})
+
+// --- groupReadonly (tabs Overage / SP internal / X) -------------------------
+
+test('groupReadonly: por contractor·semana (overage), ordena por horas desc', () => {
+  const entries = [
+    e({ id: 1, allocation: 'overage', user: 'Ana', project: 'P', task: 'T', date: '2026-08-14', hours: 3 }),
+    e({ id: 2, allocation: 'overage', user: 'Ana', project: 'P', task: 'T', date: '2026-08-07', hours: 2 }),
+    e({ id: 3, allocation: 'overage', user: 'Bob', project: 'Q', task: 'U', date: '2026-08-14', hours: 10 }),
+  ]
+  const res = groupReadonly(entries, 'user', { withWeeks: true })
+  assert.deepEqual(res.map((r) => r.entity), ['Bob', 'Ana']) // Bob 10 > Ana 5
+  const ana = res.find((r) => r.entity === 'Ana')
+  assert.equal(ana.hours, 5)
+  assert.equal(ana.weeks.length, 2) // W33 y W32
+})
+
+test('groupReadonly: por cliente·semana (sp_internal)', () => {
+  const entries = [
+    e({ id: 1, allocation: 'sp_internal', client: 'SouthPoint Internal', user: 'Ana', date: '2026-08-14', hours: 4 }),
+  ]
+  const [g] = groupReadonly(entries, 'client', { withWeeks: true })
+  assert.equal(g.entity, 'SouthPoint Internal')
+  assert.equal(g.hours, 4)
+  assert.ok(Array.isArray(g.weeks))
+})
+
+test('groupReadonly: withWeeks false → filas planas (X por contractor)', () => {
+  const entries = [
+    e({ id: 1, allocation: 'unknown', user: 'Ana', project: 'P', task: 'T', date: '2026-08-14', hours: 2 }),
+    e({ id: 2, allocation: 'unknown', user: 'Ana', project: 'P', task: 'T', date: '2026-08-13', hours: 1 }),
+  ]
+  const [g] = groupReadonly(entries, 'user', { withWeeks: false })
+  assert.equal(g.entity, 'Ana')
+  assert.equal(g.hours, 3)
+  assert.equal(g.rows.length, 1) // misma terna combinada
+  assert.equal(g.weeks, undefined)
+})
+
+test('groupReadonly: sólo cuenta Approved', () => {
+  const entries = [
+    e({ id: 1, allocation: 'overage', user: 'Ana', status: 'Pending', date: '2026-08-14', hours: 5 }),
+    e({ id: 2, allocation: 'overage', user: 'Ana', status: 'Approved', date: '2026-08-14', hours: 2 }),
+  ]
+  const [g] = groupReadonly(entries, 'user')
+  assert.equal(g.hours, 2)
+})
+
+test('groupReadonly: sin entries → lista vacía', () => {
+  assert.deepEqual(groupReadonly([], 'user'), [])
+  assert.deepEqual(groupReadonly(undefined, 'user'), [])
 })

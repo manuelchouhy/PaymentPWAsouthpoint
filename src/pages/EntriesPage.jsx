@@ -76,8 +76,14 @@ export function EntriesPage() {
     // lista valores que existen en las entries.
     const clientParams = searchParams.getAll('client').filter(Boolean)
     const projectParams = searchParams.getAll('project').filter(Boolean)
-    if (!clientParams.length && !projectParams.length) return undefined
-    return { clients: clientParams, projects: projectParams }
+    // allocation: lo mandan las tabs de lectura de Billing (Overage/SP internal/X)
+    // para reclasificar acá. Se valida contra los valores del filtro (incluye el
+    // centinela de "sin clasificar") por si la URL viene editada a mano.
+    const allocParams = searchParams
+      .getAll('allocation')
+      .filter((a) => ['bill_to_client', 'overage', 'sp_internal', 'unknown', UNALLOCATED].includes(a))
+    if (!clientParams.length && !projectParams.length && !allocParams.length) return undefined
+    return { clients: clientParams, projects: projectParams, allocations: allocParams }
     // Sólo el valor inicial: si se recalculara, cambiar el filtro a mano y
     // volver atrás en el historial lo pisaría.
     // eslint-disable-next-line react-hooks/exhaustive-deps
