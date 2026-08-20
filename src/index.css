@@ -754,6 +754,9 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   overflow: hidden;
 }
 .dark .bill-client { border-color: rgba(255, 255, 255, .08); background: rgba(255, 255, 255, .02); }
+/* El bucket "Sin cliente" conserva su borde ámbar también en dark (si no,
+   .dark .bill-client le gana por especificidad y pierde el aviso). */
+.dark .bill-client--unassigned { border-color: var(--warn-line); }
 .bill-client--unassigned { border-color: var(--warn-line); }
 
 .bill-client__head {
@@ -917,22 +920,21 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   display: flex;
   align-items: center;
   gap: 22px;
-  /* Rediseño: barra de selección con degradado cian + borde + glow. */
-  background: linear-gradient(160deg, rgba(0, 191, 212, .1), rgba(0, 191, 212, .02));
-  border: 1px solid rgba(0, 191, 212, .35);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
   border-radius: 14px;
-  box-shadow: 0 10px 40px -12px rgba(0, 191, 212, .35);
   padding: 16px 16px 16px 20px;
   position: relative;
   overflow: hidden;
   transition: border-color .25s ease, box-shadow .3s ease, background-color .2s ease;
 }
 
-/* Surface sólido cyan cuando hay selección activa (sin gradiente ni glow). */
+/* Rediseño: barra de selección ACTIVA con degradado cian + borde + glow. (El
+   estado idle queda sobrio; sólo destaca cuando hay algo seleccionado.) */
 .selbar--active {
-  border-color: hsl(var(--primary) / .35);
-  background: hsl(var(--primary) / .05);
-  box-shadow: 0 0 0 1px hsl(var(--primary) / .35);
+  border-color: rgba(0, 191, 212, .35);
+  background: linear-gradient(160deg, rgba(0, 191, 212, .1), rgba(0, 191, 212, .02));
+  box-shadow: 0 10px 40px -12px rgba(0, 191, 212, .35);
 }
 
 .selbar__metric {

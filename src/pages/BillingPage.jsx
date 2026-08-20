@@ -965,7 +965,7 @@ export function BillingPage() {
               </div>
 
               {canCreate && selectedKeys.size > 0 && (
-                <div className="selbar">
+                <div className="selbar selbar--active">
                   <span className="selbar__count">
                     Selected to bill: <b>{formatHours(selectedHours)} h</b> ·{' '}
                     {selectedEntries.length} {selectedEntries.length === 1 ? 'entry' : 'entries'}
