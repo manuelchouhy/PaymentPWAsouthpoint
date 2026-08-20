@@ -299,11 +299,11 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
    (negro sobre transparente) ya se funde con --bg, así que no se invierte. */
 .dark .masthead__logo { filter: invert(1) hue-rotate(180deg) brightness(1.05); }
 
+/* Rediseño: se removió el "kicker" (punto cian + etiqueta mayúscula + regla)
+   por pedido del cliente. El header de página es sólo H1 + subtítulo. Se oculta
+   por CSS para no tocar el markup de cada página (es sólo diseño). */
 .masthead__top {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 16px;
+  display: none;
 }
 
 .masthead__kicker {
@@ -353,10 +353,10 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 
 .masthead__title {
   font-family: var(--heading);
-  font-weight: 500;
-  font-size: 28px;
+  font-weight: 600;
+  font-size: 30px;
   line-height: 1.2;
-  letter-spacing: normal;
+  letter-spacing: -.01em;
   color: var(--text);
 }
 
@@ -429,10 +429,15 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 /* --- Panel de filtros (FR-03) --------------------------------------------- */
 .filterbar {
   margin-bottom: 16px;
-  padding: 14px 16px;
+  padding: 16px 18px;
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: 14px;
+}
+/* Rediseño: panel de filtros con leve degradado sobre el oscuro. */
+.dark .filterbar {
+  background: linear-gradient(160deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .012));
+  border-color: rgba(255, 255, 255, .08);
 }
 
 .filterbar__head {
@@ -699,8 +704,26 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 }
 .bill-tab:hover { color: var(--text); }
 .bill-tab:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: -2px; }
-.bill-tab--active { color: var(--text); border-bottom-color: hsl(var(--primary)); }
-.bill-tab__count { font-family: var(--mono); font-size: 11px; color: var(--text-soft); font-weight: 500; }
+.bill-tab--active {
+  color: var(--accent-text);
+  border-bottom-color: hsl(var(--primary));
+  /* Rediseño: leve degradado bajo la tab activa. */
+  background: linear-gradient(180deg, rgba(0, 191, 212, .09), transparent);
+}
+/* Conteo tipo píldora: gris tenue en inactivas, cian relleno en la activa. */
+.bill-tab__count {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-soft);
+  background: var(--surface-3);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.bill-tab--active .bill-tab__count {
+  color: #04141A;
+  background: var(--accent);
+}
 
 /* --- Billing por cliente: secciones cliente → semana → filas --------------- */
 .bill-clients { display: flex; flex-direction: column; gap: 20px; }
@@ -718,10 +741,11 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 
 .bill-client {
   border: 1px solid var(--line-strong);
-  border-radius: var(--r);
+  border-radius: 14px;
   background: var(--surface);
   overflow: hidden;
 }
+.dark .bill-client { border-color: rgba(255, 255, 255, .08); background: rgba(255, 255, 255, .02); }
 .bill-client--unassigned { border-color: var(--warn-line); }
 
 .bill-client__head {
@@ -1329,8 +1353,9 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 
 .btn--pay,
 .btn--primary {
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
+  /* Rediseño: degradado cian con texto oscuro (identidad de la marca). */
+  background: linear-gradient(135deg, #00BFD4, #0879A0);
+  color: #04141A;
   border-color: transparent;
   font-weight: 600;
   box-shadow: var(--shadow-sm);
@@ -1338,7 +1363,8 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 
 .btn--pay:hover:not(:disabled),
 .btn--primary:hover:not(:disabled) {
-  background: hsl(var(--accent));
+  filter: brightness(1.06);
+  box-shadow: 0 8px 24px -8px rgba(0, 191, 212, .5);
 }
 
 .btn--pay:active:not(:disabled),
@@ -3484,6 +3510,11 @@ th.col-pop { text-align: center; }
 
 /* --- Sidebar fijo (Southpoint, Fase 3) ------------------------------------ */
 .app { display: flex; min-height: 100dvh; }
+/* Rediseño: glow radial cian arriba a la derecha, sobre el fondo oscuro. Sólo en
+   dark para no ensuciar el tema claro. */
+.dark .app {
+  background: radial-gradient(1100px 480px at 78% -10%, rgba(0, 191, 212, .07), transparent 60%);
+}
 
 .sidebar {
   width: 240px;
@@ -3559,9 +3590,11 @@ th.col-pop { text-align: center; }
   /* hsl(var(--primary)) como texto da 1.99:1 sobre --surface-2 en modo
      claro (falla AA) — --accent-text es la variante oscurecida. */
   color: var(--accent-text);
-  background: var(--surface-2);
+  /* Rediseño: gradiente cian de izquierda a derecha + barra cian a la izquierda. */
+  background: linear-gradient(90deg, rgba(0, 191, 212, .16), rgba(0, 191, 212, .03));
   border-color: transparent;
   box-shadow: inset 2px 0 0 var(--accent);
+  font-weight: 600;
 }
 .sidebar__link svg { flex-shrink: 0; transition: color .2s var(--ease-out); }
 
@@ -3615,9 +3648,12 @@ th.col-pop { text-align: center; }
   display: flex;
   align-items: center;
   gap: 14px;
-  height: 56px;
+  height: 58px;
   padding: 0 max(32px, env(safe-area-inset-right)) 0 max(32px, env(safe-area-inset-left));
-  background: var(--bg);
+  /* Rediseño: header translúcido + blur (glassmorphism). */
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line);
 }
 
@@ -4508,13 +4544,18 @@ select.field__input { cursor: pointer; }
 .dash-kpi {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 16px 18px;
+  gap: 6px;
+  padding: 18px 20px;
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: 14px;
   text-decoration: none;
   transition: border-color .18s ease, box-shadow .18s ease;
+}
+/* Rediseño: leve sheen (degradado blanco a baja opacidad) sobre el oscuro. */
+.dark .dash-kpi {
+  background: linear-gradient(160deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .015));
+  border-color: rgba(255, 255, 255, .08);
 }
 
 .dash-kpi:hover {
@@ -4551,8 +4592,8 @@ select.field__input { cursor: pointer; }
 
 .dash-kpi__value {
   font-family: var(--mono);
-  font-size: 28px;
-  font-weight: 700;
+  font-size: 30px;
+  font-weight: 600;
   color: var(--text);
   line-height: 1.1;
 }
