@@ -276,8 +276,12 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
      este nivel) — el sidebar, que vive afuera con z-index:100, terminaba
      encima del overlay oscuro en vez de quedar debajo. */
   width: 100%;
-  /* Rediseño: contenido centrado a 1280px (antes 1440) con el padding del mockup. */
-  max-width: 1280px;
+  /* Contenido centrado. El mockup usaba 1280, pero las grillas de datos (Entries,
+     Billing, Projects) tienen ~10 columnas y a 1280 se cortaban con scroll
+     horizontal mientras sobraba muchísimo margen lateral en monitores anchos. Se
+     sube a 1600 para que la tabla más ancha entre sin scroll; el texto de párrafo
+     ya está acotado aparte (p.ej. masthead__sub a 54ch), así que no se estira. */
+  max-width: 1600px;
   margin: 0 auto;
   padding:
     34px
