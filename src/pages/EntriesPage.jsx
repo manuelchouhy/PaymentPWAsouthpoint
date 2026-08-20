@@ -14,22 +14,16 @@ import { ExportDropdown } from '../components/ExportDropdown'
 import { StatusBadge } from '../components/StatusBadge'
 import { BillingBadge } from '../components/BillingBadge'
 import { EntryDetailDrawer } from '../components/EntryDetailDrawer'
+// Mapa allocation → etiqueta/clase, compartido con Billing (ver src/lib/allocations).
+// Clases propias (definidas en index.css): reusar las de billing/status haría que
+// "SP internal" se viera igual que "sin clasificar" y que "bill to client" se
+// confundiera con la columna Billing, que significa otra cosa.
+import { ALLOCATION_LABELS } from '../lib/allocations'
 
 const PAGE_SIZE = 100
 
 // null = sin clasificar. El triage es 100% manual (ver PRD, "Entries"): ninguna
 // hora llega con allocation puesta.
-// Clases propias (definidas en index.css): reusar las de billing/status haría
-// que "SP internal" se viera igual que "sin clasificar" y que "bill to client"
-// se confundiera con la columna Billing, que significa otra cosa.
-const ALLOCATION_LABELS = {
-  bill_to_client: { label: 'bill to client', cls: 'badge--alloc-bill' },
-  overage: { label: 'overage', cls: 'badge--alloc-overage' },
-  sp_internal: { label: 'SP internal', cls: 'badge--alloc-internal' },
-  // X = 4ta allocation real (valor 'unknown' en la base, CHECK 0034): una hora que
-  // no encaja en las otras tres. Distinta de NULL (= sin clasificar / sin triagear).
-  unknown: { label: 'X', cls: 'badge--alloc-unknown' },
-}
 
 // Opciones fijas del filtro de allocation (no se derivan de las entries). Incluye
 // UNALLOCATED (sin clasificar, null) y 'unknown' (la categoría X, allocation real

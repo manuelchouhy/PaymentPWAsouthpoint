@@ -14,15 +14,7 @@ import { ExportDropdown } from '../components/ExportDropdown'
 import { BillModal } from '../components/BillModal'
 import { EntryDetailDrawer } from '../components/EntryDetailDrawer'
 import { Avatar } from '../components/Avatar'
-
-// Etiquetas de allocation para el drawer de detalle (mismas que Entries). El
-// valor 'unknown' es la categoría X (CHECK 0034), distinta de null (sin clasificar).
-const ALLOCATION_LABELS = {
-  bill_to_client: { label: 'bill to client', cls: 'badge--alloc-bill' },
-  overage: { label: 'overage', cls: 'badge--alloc-overage' },
-  sp_internal: { label: 'SP internal', cls: 'badge--alloc-internal' },
-  unknown: { label: 'X', cls: 'badge--alloc-unknown' },
-}
+import { ALLOCATION_LABELS } from '../lib/allocations'
 
 const sortedUnique = (values) =>
   [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
@@ -970,9 +962,8 @@ export function BillingPage() {
                                         <tr
                                           key={id}
                                           className={
-                                            canCreate ? `row-selectable${selectedKeys.has(id) ? ' is-selected' : ''}` : undefined
+                                            canCreate && selectedKeys.has(id) ? 'is-selected' : undefined
                                           }
-                                          data-selected={canCreate ? selectedKeys.has(id) : undefined}
                                           onClick={
                                             canCreate
                                               ? () => {
@@ -1119,14 +1110,22 @@ export function BillingPage() {
         />
       )}
 
-      {detailEntry && (
-        <EntryDetailDrawer
-          entry={detailEntry}
-          allocationLabel={detailEntry.allocation ? ALLOCATION_LABELS[detailEntry.allocation] : null}
-          billingStatus={invoiceByEntryId.get(String(detailEntry.id))?.status ?? 'Pending'}
-          onClose={() => setDetailEntry(null)}
-        />
-      )}
+      {detailEntry && (() => {
+        // Re-resuelve la entry por id sobre el set con cliente ya derivado: si se
+        // relee la data (Retry / post-factura) con el drawer abierto, muestra el
+        // estado fresco en vez del snapshot capturado al abrir. Cae al capturado
+        // si la entry desapareció del recorte.
+        const live =
+          entriesConCliente.find((e) => String(e.id) === String(detailEntry.id)) ?? detailEntry
+        return (
+          <EntryDetailDrawer
+            entry={live}
+            allocationLabel={live.allocation ? ALLOCATION_LABELS[live.allocation] : null}
+            billingStatus={invoiceByEntryId.get(String(live.id))?.status ?? 'Pending'}
+            onClose={() => setDetailEntry(null)}
+          />
+        )
+      })()}
     </>
   )
 }
