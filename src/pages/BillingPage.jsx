@@ -715,7 +715,7 @@ export function BillingPage() {
           </section>
 
           <div className="dash-kpis">
-            <div className="dash-kpi dash-kpi--static">
+            <div className="dash-kpi dash-kpi--static dash-kpi--accent">
               <div className="dash-kpi__head">
                 <span className="dash-kpi__label">Pending to bill</span>
               </div>
