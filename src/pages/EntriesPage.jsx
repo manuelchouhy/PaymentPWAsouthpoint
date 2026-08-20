@@ -416,7 +416,8 @@ export function EntriesPage() {
                   categoría vacía bajo otro filtro (Cliente X sin overage → 0
                   filas) es información honesta y recuperable con Clear, el mismo
                   criterio ya aceptado para el filtro de semana. Se asume el
-                  "cero sin pista" a cambio de que las cuatro categorías fijas
+                  "cero sin pista" a cambio de que las categorías fijas
+                  (unallocated · bill to client · overage · SP internal · X)
                   estén siempre visibles como referencia. */}
               <MultiSelectDropdown
                 label="Allocation"

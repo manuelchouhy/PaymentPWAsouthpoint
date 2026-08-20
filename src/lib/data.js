@@ -425,9 +425,11 @@ async function getFrozenEntryIds(entryIds) {
  * dejar que el llamador adivine restando.
  *
  * @param {Array<string|number>} entryIds
- * @param {'bill_to_client'|'overage'|'sp_internal'|null} allocation  null =
- *   vuelve a "sin clasificar" (el "— sin clasificar" del dropdown de Apply). El
- *   CHECK de la base admite null sin migración.
+ * @param {'bill_to_client'|'overage'|'sp_internal'|'unknown'|null} allocation
+ *   'unknown' = la categoría X (allocation real desde el CHECK 0034). null =
+ *   "sin clasificar" (el CHECK admite null); hoy la UI ya no ofrece volver a null
+ *   —el dropdown de Apply reemplazó "— sin clasificar" por X—, pero el modelo lo
+ *   sigue soportando.
  * @param {?string} changedBy
  * Los tres motivos por los que una entry pedida puede no aparecer en
  * `updatedIds` piden mensajes distintos: `skippedFrozen` (ya facturada: nunca

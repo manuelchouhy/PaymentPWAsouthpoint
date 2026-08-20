@@ -557,8 +557,11 @@ export function BillingPage() {
   }
 
   // Link a Entries llevando los filtros activos de Billing (cliente/proyecto/
-  // contractor) además de la allocation, para que la grilla destino sea el MISMO
-  // set que muestra la tab (sin esto caería en todas las horas de esa allocation).
+  // contractor) además de la allocation, para reclasificar sobre el mismo recorte.
+  // Nota: Entries muestra esas horas SIN el recorte de la tab (que es sólo Approved
+  // y no facturadas), así que puede incluir también Pending/Rejected/facturadas de
+  // esa allocation — a propósito: para reclasificar conviene ver todas, no sólo las
+  // que la tab lista.
   function entriesLinkTo(allocation) {
     const params = new URLSearchParams()
     filters.clients.forEach((c) => params.append('client', c))
