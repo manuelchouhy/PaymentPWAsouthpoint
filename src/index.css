@@ -182,7 +182,7 @@
 /* Overrides de modo oscuro para los tokens de arriba — paleta Southpoint
    "grafo": negro cálido (no negro puro), bordes 1px crisp. */
 .dark {
-  --bg:               #0A0A0C;
+  --bg:               #09090B;
   --bg-elev:          #131316;
   --surface:          #131316;
   --surface-2:        #1B1B20;
@@ -267,13 +267,14 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
      este nivel) — el sidebar, que vive afuera con z-index:100, terminaba
      encima del overlay oscuro en vez de quedar debajo. */
   width: 100%;
-  max-width: 1440px;
+  /* Rediseño: contenido centrado a 1280px (antes 1440) con el padding del mockup. */
+  max-width: 1280px;
   margin: 0 auto;
   padding:
-    32px
-    max(32px, env(safe-area-inset-right))
-    96px
-    max(32px, env(safe-area-inset-left));
+    34px
+    max(36px, env(safe-area-inset-right))
+    90px
+    max(36px, env(safe-area-inset-left));
 }
 
 /* --- Masthead ------------------------------------------------------------- */
@@ -346,15 +347,16 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 
 .masthead__badge {
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 500;
-  letter-spacing: .04em;
+  letter-spacing: .06em;
   text-transform: uppercase;
   /* --text-faint da 3.81:1 contra --surface (falla AA) — --text-soft da 7.19:1. */
   color: var(--text-soft);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-sm);
-  padding: 4px 10px;
+  /* Rediseño: píldora (como el "Admin" del mockup). */
+  border-radius: 999px;
+  padding: 4px 11px;
   background: var(--surface);
   white-space: nowrap;
 }
@@ -732,6 +734,9 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   color: #04141A;
   background: var(--accent);
 }
+
+/* Nombre de proveedor con avatar (filas de Billing), como el mockup. */
+.cell-user { display: inline-flex; align-items: center; gap: 9px; white-space: nowrap; }
 
 /* --- Billing por cliente: secciones cliente → semana → filas --------------- */
 .bill-clients { display: flex; flex-direction: column; gap: 20px; }
@@ -3540,6 +3545,12 @@ th.col-pop { text-align: center; }
   background: var(--surface);
   border-right: 1px solid var(--line);
   z-index: 100;
+}
+/* Rediseño: en dark el sidebar es casi transparente sobre el fondo (no un panel
+   claro), con borde tenue — como el mockup. */
+.dark .sidebar {
+  background: rgba(255, 255, 255, .015);
+  border-right-color: rgba(255, 255, 255, .06);
 }
 
 .sidebar__brand {

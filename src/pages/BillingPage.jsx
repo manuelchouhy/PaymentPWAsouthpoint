@@ -12,6 +12,7 @@ import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { BillModal } from '../components/BillModal'
+import { Avatar } from '../components/Avatar'
 
 const sortedUnique = (values) =>
   [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
@@ -67,7 +68,14 @@ function ReadonlyRows({ rows, showProvider = true }) {
         <tbody>
           {rows.map((row) => (
             <tr key={row.key}>
-              {showProvider && <td className="cell-strong">{row.user}</td>}
+              {showProvider && (
+                <td className="cell-strong">
+                  <span className="cell-user">
+                    <Avatar name={row.user} size="sm" />
+                    {row.user}
+                  </span>
+                </td>
+              )}
               <td>
                 {row.project || '—'}
                 {row.task && <div className="cell-soft">{row.task}</div>}
@@ -932,7 +940,12 @@ export function BillingPage() {
                                               />
                                             </td>
                                           )}
-                                          <td className="cell-strong">{row.user}</td>
+                                          <td className="cell-strong">
+                                            <span className="cell-user">
+                                              <Avatar name={row.user} size="sm" />
+                                              {row.user}
+                                            </span>
+                                          </td>
                                           <td>
                                             {row.project || '—'}
                                             {(row.task || sow) && (
