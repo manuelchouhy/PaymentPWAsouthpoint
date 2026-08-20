@@ -56,6 +56,19 @@ const sumGroupHours = (groups) => groups.reduce((total, g) => total + g.hours, 0
 // se factura acá). Se combinan por terna en groupReadonly. showProvider=false
 // oculta la columna Provider cuando el grupo YA es por contractor (overage / X),
 // donde repetiría el nombre del header en cada fila.
+// Celda con el botón-ícono de detalle de una fila. stopPropagation en el <td>:
+// un clic en el padding de la celda no debe seleccionar la fila; sólo el botón
+// abre el drawer. Compartida por las filas facturables y las de sólo lectura.
+function DetailButtonCell({ label, onClick }) {
+  return (
+    <td onClick={(e) => e.stopPropagation()}>
+      <button type="button" className="icon-btn" onClick={onClick} aria-label={label} title="View details">
+        <Info size={16} aria-hidden="true" />
+      </button>
+    </td>
+  )
+}
+
 function ReadonlyRows({ rows, showProvider = true, onDetail }) {
   return (
     <div className="table-wrap table-wrap--scroll">
@@ -86,17 +99,10 @@ function ReadonlyRows({ rows, showProvider = true, onDetail }) {
                 {row.task && <div className="cell-soft">{row.task}</div>}
               </td>
               <td className="col-num cell-mono">{formatHours(row.hours)}</td>
-              <td onClick={(e) => e.stopPropagation()}>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  onClick={() => onDetail?.(row)}
-                  aria-label={`View detail for ${row.project || 'entry'}`}
-                  title="View details"
-                >
-                  <Info size={16} aria-hidden="true" />
-                </button>
-              </td>
+              <DetailButtonCell
+                label={`View detail for ${row.project || 'entry'}`}
+                onClick={() => onDetail?.(row)}
+              />
             </tr>
           ))}
         </tbody>
@@ -138,11 +144,13 @@ export function BillingPage() {
   const [notice, setNotice] = useState('')
   // Tab activa de Billing (bill_to_client | overage | sp_internal | unknown).
   const [tab, setTab] = useState('bill_to_client')
-  // Entry mostrada en el drawer de detalle (o null). Una fila de Billing agrupa
-  // varias entries de la misma terna proveedor·proyecto·task en una semana; el
-  // detalle abre la primera como representante (comparten cliente/proyecto/task/
-  // semana/allocation, que es lo que muestra el drawer).
-  const [detailEntry, setDetailEntry] = useState(null)
+  // Fila mostrada en el drawer de detalle (o null): { entry, hours, count }.
+  // Una fila de Billing agrupa N entries de la misma terna proveedor·proyecto·task
+  // en una semana ISO. Se guarda la primera como representante de los campos
+  // COMPARTIDOS (cliente/proyecto/task/semana/allocation) más las HORAS del total
+  // de la fila y el conteo, para que el drawer no muestre las horas de una sola
+  // sub-entry en una superficie de facturación. Ver el render del drawer.
+  const [detailRow, setDetailRow] = useState(null)
   const { filters, toggleValue, clear, isActive } = useEntryFilters()
 
   useEffect(() => {
@@ -461,10 +469,11 @@ export function BillingPage() {
     })
   }
 
-  // Abre el drawer de detalle con la primera entry de la fila (ver detailEntry).
+  // Abre el drawer de detalle para una fila (ver detailRow): primera entry como
+  // representante + horas del total de la fila + conteo de sub-entries.
   function openRowDetail(row) {
     const entry = row?.entries?.[0]
-    if (entry) setDetailEntry(entry)
+    if (entry) setDetailRow({ entry, hours: row.hours, count: row.entries.length })
   }
 
   function toggleWeek(id) {
@@ -1010,17 +1019,10 @@ export function BillingPage() {
                                           <td>
                                             <span className="badge badge--pending">to bill</span>
                                           </td>
-                                          <td onClick={(e) => e.stopPropagation()}>
-                                            <button
-                                              type="button"
-                                              className="icon-btn"
-                                              onClick={() => openRowDetail(row)}
-                                              aria-label={`View detail for ${row.user} · ${row.project}`}
-                                              title="View details"
-                                            >
-                                              <Info size={16} aria-hidden="true" />
-                                            </button>
-                                          </td>
+                                          <DetailButtonCell
+                                            label={`View detail for ${row.user} · ${row.project}`}
+                                            onClick={() => openRowDetail(row)}
+                                          />
                                         </tr>
                                       )
                                     })}
@@ -1110,19 +1112,29 @@ export function BillingPage() {
         />
       )}
 
-      {detailEntry && (() => {
-        // Re-resuelve la entry por id sobre el set con cliente ya derivado: si se
-        // relee la data (Retry / post-factura) con el drawer abierto, muestra el
-        // estado fresco en vez del snapshot capturado al abrir. Cae al capturado
-        // si la entry desapareció del recorte.
-        const live =
-          entriesConCliente.find((e) => String(e.id) === String(detailEntry.id)) ?? detailEntry
+      {detailRow && (() => {
+        // Re-resuelve la entry representante por id sobre el set con cliente ya
+        // derivado: si se relee la data (Retry / post-factura) con el drawer
+        // abierto, muestra el estado fresco en vez del snapshot capturado. Cae al
+        // capturado si la entry desapareció del recorte.
+        const base =
+          entriesConCliente.find((e) => String(e.id) === String(detailRow.entry.id)) ??
+          detailRow.entry
+        // Horas = total de la fila (no las de una sub-entry): es el número que
+        // importa al facturar. En filas multi-entry la fecha/nota de una sola
+        // sub-entry no representa la fila; se omiten las notas y se muestra la
+        // semana (la fecha del representante sólo alimenta el cálculo de semana,
+        // que es compartida). Fila de una sola entry → pasa tal cual.
+        const aggregate = detailRow.count > 1
+        const entry = aggregate
+          ? { ...base, hours: detailRow.hours, description: '', notes: '' }
+          : base
         return (
           <EntryDetailDrawer
-            entry={live}
-            allocationLabel={live.allocation ? ALLOCATION_LABELS[live.allocation] : null}
-            billingStatus={invoiceByEntryId.get(String(live.id))?.status ?? 'Pending'}
-            onClose={() => setDetailEntry(null)}
+            entry={entry}
+            allocationLabel={entry.allocation ? ALLOCATION_LABELS[entry.allocation] : null}
+            billingStatus={invoiceByEntryId.get(String(entry.id))?.status ?? 'Pending'}
+            onClose={() => setDetailRow(null)}
           />
         )
       })()}
