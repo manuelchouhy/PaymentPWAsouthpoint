@@ -20,19 +20,44 @@ function fmtAmount(value) {
 }
 
 /**
- * Modal "Register Payment" (FR-10). Pago al contractor de una invoice Collected.
+ * Modal "Register Payment" (FR-10). Pago al contractor. Sirve para dos casos:
+ *  - por factura: se pasa `invoice` (el resumen y el monto salen de la factura).
+ *  - overage (sin factura): se pasan `summaryName`/`summaryMeta`/`summaryFigure` y
+ *    `defaultAmount=''` (el monto lo tipea el usuario), + `footerNote` propio.
  *
  * @param {{
- *   invoice: object,
+ *   invoice?: object,
+ *   currency?: string,
+ *   title?: string,
+ *   summaryName?: string,
+ *   summaryMeta?: string,
+ *   summaryFigure?: string,
+ *   summaryFigureLabel?: string,
+ *   defaultAmount?: string,
+ *   footerNote?: import('react').ReactNode,
  *   onClose: () => void,
  *   onConfirm: (data) => Promise<void>,
  * }} props
  */
-export function RegisterPaymentModal({ invoice, currency = 'USD', onClose, onConfirm }) {
+export function RegisterPaymentModal({
+  invoice,
+  currency = 'USD',
+  title = 'Register Payment',
+  summaryName,
+  summaryMeta,
+  summaryFigure,
+  summaryFigureLabel,
+  defaultAmount,
+  footerNote,
+  onClose,
+  onConfirm,
+}) {
   const sym = getCurrencySymbol(currency)
   const needsExchangeRate = currency !== 'USD'
 
-  const [amount, setAmount] = useState(String(invoice.totalAmount))
+  const [amount, setAmount] = useState(
+    defaultAmount != null ? defaultAmount : invoice ? String(invoice.totalAmount) : '',
+  )
   const [paymentDate, setPaymentDate] = useState(todayISO)
   const [transferReference, setTransferReference] = useState('')
   const [bankMethod, setBankMethod] = useState(BANK_METHODS[0])
@@ -120,7 +145,7 @@ export function RegisterPaymentModal({ invoice, currency = 'USD', onClose, onCon
           <div>
             <span className="modal__kicker">Payments · Contractor Payment</span>
             <h2 className="modal__title" id="payment-modal-title">
-              Register Payment
+              {title}
             </h2>
           </div>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
@@ -130,14 +155,18 @@ export function RegisterPaymentModal({ invoice, currency = 'USD', onClose, onCon
 
         <div className="modal__summary">
           <div className="modal__summary-id">
-            <span className="modal__summary-user">{invoice.userName}</span>
+            <span className="modal__summary-user">{summaryName ?? invoice?.userName}</span>
             <span className="modal__summary-meta">
-              {invoice.supplierInvoiceNumber} · Collected
+              {summaryMeta ?? `${invoice?.supplierInvoiceNumber} · Collected`}
             </span>
           </div>
           <div className="modal__summary-hours">
-            <span className="modal__summary-hours-value">{sym}{fmtAmount(invoice.totalAmount)}</span>
-            <span className="modal__summary-hours-label">Amount {currency !== 'USD' ? `(${currency})` : ''}</span>
+            <span className="modal__summary-hours-value">
+              {summaryFigure ?? `${sym}${fmtAmount(invoice?.totalAmount)}`}
+            </span>
+            <span className="modal__summary-hours-label">
+              {summaryFigureLabel ?? `Amount ${currency !== 'USD' ? `(${currency})` : ''}`}
+            </span>
           </div>
         </div>
 
@@ -256,7 +285,9 @@ export function RegisterPaymentModal({ invoice, currency = 'USD', onClose, onCon
 
           <p className="modal__note">
             <Banknote size={14} aria-hidden="true" />
-            On confirmation, the invoice will move to <strong>Paid</strong>.
+            {footerNote ?? (
+              <>On confirmation, the invoice will move to <strong>Paid</strong>.</>
+            )}
             {isBackDated && ' This payment will be marked as back-dated.'}
           </p>
 

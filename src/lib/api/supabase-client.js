@@ -65,6 +65,7 @@ import {
 
 import {
   createPayment,
+  createOveragePayment,
   getPaymentAlertSettings,
   getPaymentByInvoice,
   getPayments,
@@ -264,6 +265,7 @@ export const supabaseApiClient = {
     list: getPayments,
     getByInvoice: getPaymentByInvoice,
     create: createPayment,
+    createOverage: createOveragePayment,
     getAlertSettings: getPaymentAlertSettings,
     updateAlertSettings: updatePaymentAlertSettings,
   },

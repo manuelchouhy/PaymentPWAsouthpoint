@@ -7,6 +7,7 @@ import { formatDate, formatHours, formatWeek } from '../lib/format'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, UNALLOCATED } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
 import { isEntryFrozen } from '../lib/entryFreeze'
+import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { exportGrid } from '../lib/exportGrid'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
@@ -15,10 +16,6 @@ import { BillingBadge } from '../components/BillingBadge'
 import { EntryDetailDrawer } from '../components/EntryDetailDrawer'
 
 const PAGE_SIZE = 100
-
-// Set vacío estable para paidEntryIds hasta que 6b traiga los pagos de overage a
-// Entries (evita crear un Set nuevo por render).
-const EMPTY_ENTRY_IDS = new Set()
 
 // null = sin clasificar. El triage es 100% manual (ver PRD, "Entries"): ninguna
 // hora llega con allocation puesta.
@@ -62,6 +59,8 @@ export function EntriesPage() {
   const [applyNotice, setApplyNotice] = useState(null)
   const [entries, setEntries] = useState([])
   const [invoices, setInvoices] = useState([])
+  // Pagos: para congelar las horas de overage ya pagadas (entryFreeze).
+  const [payments, setPayments] = useState([])
   const [status, setStatus] = useState('loading')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [reloadKey, setReloadKey] = useState(0)
@@ -108,11 +107,18 @@ export function EntriesPage() {
     // (deriveEntriesClient: hora→proyecto por id de Zoho→grupo→cliente por alias;
     // ver entryClient.js). Van en el mismo Promise.all: sin ellos la columna y el
     // filtro de Cliente quedan vacíos, que es justamente lo que se arregla.
-    Promise.all([api.timeEntries.list(), api.invoices.list(), api.projects.list(), api.clients.list()])
-      .then(([entryRows, invoiceRows, projectRows, clientRows]) => {
+    Promise.all([
+      api.timeEntries.list(),
+      api.invoices.list(),
+      api.projects.list(),
+      api.clients.list(),
+      api.payments.list(),
+    ])
+      .then(([entryRows, invoiceRows, projectRows, clientRows, paymentRows]) => {
         if (cancelled) return
         setEntries(deriveEntriesClient(entryRows, projectRows, clientRows))
         setInvoices(invoiceRows)
+        setPayments(paymentRows)
         // Los datos se releyeron: una selección armada sobre la tanda anterior
         // puede apuntar a filas que ya se facturaron.
         setSelectedIds(new Set())
@@ -181,12 +187,11 @@ export function EntriesPage() {
 
   // Congelada = no se reclasifica: la hora ya está comprometida (facturada o
   // pagada). Antes de eso se corrige libremente — arreglar una clasificación mal
-  // hecha es parte del triage. Ver entryFreeze.js. invoicedEntryIds son las claves
-  // de invoiceByEntryId (toda hora en una factura). paidEntryIds queda vacío hasta
-  // 6b (cuando Entries cargue los pagos de overage): por ahora sólo congela la
-  // factura, igual que hoy.
+  // hecha es parte del triage. Ver entryFreeze.js. invoicedEntryIds = claves de
+  // invoiceByEntryId (toda hora en una factura); paidEntryIds = horas cubiertas por
+  // un pago de overage (una hora de overage pagada ya no se reclasifica).
   const invoicedEntryIds = useMemo(() => new Set(invoiceByEntryId.keys()), [invoiceByEntryId])
-  const paidEntryIds = EMPTY_ENTRY_IDS
+  const paidEntryIds = useMemo(() => paidEntryIdsFrom(payments), [payments])
   const isFrozen = (entry) => isEntryFrozen(entry, { invoicedEntryIds, paidEntryIds })
   const selectableOnPage = page.filter((e) => !isFrozen(e))
   const allPageSelected =

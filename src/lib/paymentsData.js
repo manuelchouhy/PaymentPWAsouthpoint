@@ -122,6 +122,10 @@ function rowToPayment(row) {
   return {
     id: row.id,
     invoiceId: row.invoice_id,
+    // Pago de overage: horas que cubre (entry_ids) y a quién se le pagó (user_name).
+    // Para pagos por factura quedan vacíos (el contractor sale de la factura).
+    entryIds: (row.entry_ids ?? []).map(String),
+    userName: row.user_name ?? null,
     amountPaid: Number(row.amount_paid),
     currency: row.currency ?? 'USD',
     exchangeRate: row.exchange_rate != null ? Number(row.exchange_rate) : null,
@@ -135,6 +139,10 @@ function rowToPayment(row) {
   }
 }
 
+// Columnas de un pago (se agregan entry_ids/user_name de los pagos de overage).
+const PAYMENT_COLUMNS =
+  'id, invoice_id, entry_ids, user_name, amount_paid, currency, exchange_rate, payment_date, transfer_reference, bank_method, notes, back_dated, created_at, created_by'
+
 /** @returns {Promise<ContractorPayment[]>} */
 export async function getPayments() {
   if (!isSupabaseConfigured) {
@@ -143,7 +151,7 @@ export async function getPayments() {
   }
   const { data, error } = await supabase
     .from('payments')
-    .select('id, invoice_id, amount_paid, currency, exchange_rate, payment_date, transfer_reference, bank_method, notes, back_dated, created_at, created_by')
+    .select(PAYMENT_COLUMNS)
     .order('payment_date', { ascending: false })
   if (error) throw new Error(error.message)
   return data.map(rowToPayment)
@@ -156,7 +164,7 @@ export async function getPaymentByInvoice(invoiceId) {
   }
   const { data, error } = await supabase
     .from('payments')
-    .select('id, invoice_id, amount_paid, currency, exchange_rate, payment_date, transfer_reference, bank_method, notes, back_dated, created_at, created_by')
+    .select(PAYMENT_COLUMNS)
     .eq('invoice_id', invoiceId)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -240,4 +248,79 @@ export async function createPayment(invoice, payload, createdBy) {
 
   const row = Array.isArray(data) ? data[0] : data
   return { payment: rowToPayment(row) }
+}
+
+/**
+ * Registra un pago de OVERAGE (sin factura): cubre las horas `entryIds` de un
+ * contractor. invoice_id queda NULL y no avanza ninguna factura. Insert directo
+ * (hay policy de insert para authenticated). Las horas quedan congeladas
+ * (entryFreeze) por estar en entry_ids de un pago, y salen de la tab Overage.
+ *
+ * @param {{ userName:string, entryIds:Array<string|number>, amountPaid:number, paymentDate:string, transferReference?:string, bankMethod?:string, notes?:string, exchangeRate?:?number, currency?:string }} payload
+ * @param {?string} createdBy
+ * @returns {Promise<{ payment: ContractorPayment }>}
+ */
+export async function createOveragePayment(payload, createdBy) {
+  const entryIds = (payload.entryIds ?? []).map((id) => Number(id))
+  if (!payload.userName || entryIds.length === 0) {
+    throw new Error('An overage payment needs a contractor and at least one hour.')
+  }
+  const backDated = payload.paymentDate < todayISO()
+
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 300))
+    const payment = {
+      id: `pay-demo-${Date.now()}`,
+      invoiceId: null,
+      entryIds: entryIds.map(String),
+      userName: payload.userName,
+      amountPaid: Number(payload.amountPaid),
+      currency: payload.currency ?? 'USD',
+      exchangeRate: payload.exchangeRate ?? null,
+      paymentDate: payload.paymentDate,
+      transferReference: payload.transferReference || null,
+      bankMethod: payload.bankMethod || null,
+      notes: payload.notes || null,
+      backDated,
+      createdAt: new Date().toISOString(),
+      createdBy: createdBy || null,
+    }
+    demoPayments = [payment, ...demoPayments]
+    return { payment }
+  }
+
+  const { data, error } = await supabase
+    .from('payments')
+    .insert({
+      invoice_id: null,
+      entry_ids: entryIds,
+      user_name: payload.userName,
+      amount_paid: Number(payload.amountPaid),
+      currency: payload.currency ?? 'USD',
+      exchange_rate: payload.exchangeRate ?? null,
+      payment_date: payload.paymentDate,
+      transfer_reference: payload.transferReference || null,
+      bank_method: payload.bankMethod || null,
+      notes: payload.notes || null,
+      back_dated: backDated,
+      created_by: createdBy || null,
+    })
+    .select(PAYMENT_COLUMNS)
+    .single()
+  if (error) throw new Error(error.message)
+  return { payment: rowToPayment(data) }
+}
+
+/**
+ * Set de ids (string) de horas cubiertas por algún pago — para congelarlas
+ * (entryFreeze) y para excluirlas del overage pendiente en Billing.
+ * @param {ContractorPayment[]} payments
+ * @returns {Set<string>}
+ */
+export function paidEntryIdsFrom(payments) {
+  const set = new Set()
+  for (const payment of payments ?? []) {
+    for (const id of payment.entryIds ?? []) set.add(String(id))
+  }
+  return set
 }

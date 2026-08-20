@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, BellRing, Download } from 'lucide-react'
-import { paymentAlertLevel } from '../lib/paymentsData'
+import { paymentAlertLevel, paidEntryIdsFrom } from '../lib/paymentsData'
 import { api } from '../lib/api'
 import { downloadPaymentReceipt } from '../lib/paymentReceipt'
-import { formatDate } from '../lib/format'
+import { formatDate, formatHours } from '../lib/format'
 import { BillingBadge } from '../components/BillingBadge'
 import { RegisterPaymentModal } from '../components/RegisterPaymentModal'
 import { Toast } from '../components/Toast'
@@ -41,16 +41,26 @@ export function PaymentsPage() {
   const [showPaid, setShowPaid] = useState(false)
   const [alertFilter, setAlertFilter] = useState(null) // null|'overdue'|'dueThisWeek'
   const [modalInvoice, setModalInvoice] = useState(null)
+  // Contractor cuyo overage pendiente se está por pagar (null = modal cerrado).
+  const [overageTarget, setOverageTarget] = useState(null)
+  const [entries, setEntries] = useState([])
   const [toast, setToast] = useState(null)
 
   function load() {
     setStatus('loading')
-    Promise.all([api.invoices.list(), api.collections.list(), api.payments.list(), api.payments.getAlertSettings()])
-      .then(([inv, col, pay, settings]) => {
+    Promise.all([
+      api.invoices.list(),
+      api.collections.list(),
+      api.payments.list(),
+      api.payments.getAlertSettings(),
+      api.timeEntries.list(),
+    ])
+      .then(([inv, col, pay, settings, entryRows]) => {
         setInvoices(inv)
         setCollections(col)
         setPayments(pay)
         setAlertSettings(settings)
+        setEntries(entryRows)
         setStatus('ready')
       })
       .catch((error) => {
@@ -78,6 +88,25 @@ export function PaymentsPage() {
     for (const p of payments) if (!map.has(p.invoiceId)) map.set(p.invoiceId, p)
     return map
   }, [payments])
+
+  // Overage pendiente de pago, agrupado por contractor: horas allocation='overage',
+  // aprobadas y NO cubiertas todavía por ningún pago (paidEntryIdsFrom). El overage
+  // se le paga al contractor sin pasar por factura al cliente.
+  const overagePending = useMemo(() => {
+    const paid = paidEntryIdsFrom(payments)
+    const byUser = new Map()
+    for (const e of entries) {
+      if (e.allocation !== 'overage' || e.status !== 'Approved') continue
+      if (paid.has(String(e.id))) continue
+      const group = byUser.get(e.user) ?? { user: e.user, hours: 0, entryIds: [] }
+      group.hours += Number(e.hours) || 0
+      group.entryIds.push(e.id)
+      byUser.set(e.user, group)
+    }
+    return [...byUser.values()].sort(
+      (a, b) => b.hours - a.hours || (a.user || '').localeCompare(b.user || '', 'es'),
+    )
+  }, [entries, payments])
 
   const warningBefore = alertSettings?.warningDaysBeforeDue ?? 3
   const ALERT_RANK = { overdue: 0, warning: 1, on_time: 2 }
@@ -148,6 +177,34 @@ export function PaymentsPage() {
     })
   }
 
+  // Pago de overage: cubre todas las horas overage pendientes del contractor
+  // (overageTarget.entryIds). No hay factura; las horas quedan congeladas y salen
+  // del pendiente. Se recarga para reflejar el nuevo pago en todos los memos.
+  async function handleRegisterOverage(payload) {
+    const { user: contractor, entryIds, hours } = overageTarget
+    const { payment } = await api.payments.createOverage(
+      { userName: contractor, entryIds, ...payload },
+      user?.email ?? null,
+    )
+    api.audit.log({
+      actorEmail: user?.email,
+      actorRole: profile?.roles?.[0] ?? null,
+      action: 'payment.create',
+      resourceType: 'payment',
+      resourceId: payment.id,
+      after: {
+        overage: true,
+        userName: contractor,
+        entryCount: entryIds.length,
+        amountPaid: payload.amountPaid,
+        paymentDate: payload.paymentDate,
+      },
+    })
+    setPayments((prev) => [payment, ...prev])
+    setOverageTarget(null)
+    setToast({ id: Date.now(), message: `Overage paid to ${contractor} — ${formatHours(hours)} h (frozen)` })
+  }
+
   function handleDownload(row) {
     const payment = row.payment ?? paymentByInvoice.get(row.inv.id)
     if (!payment) {
@@ -203,8 +260,9 @@ export function PaymentsPage() {
         </div>
         <h1 className="masthead__title">Payments</h1>
         <p className="masthead__sub">
-          Contractor payment for already-collected invoices (Collected). Only
-          invoices in Collected status can be paid; once paid, they move to Paid.
+          Contractor payment for already-collected invoices (Collected): once paid,
+          they move to Paid. Overage hours are paid here too — per contractor,
+          without an invoice — and freeze once paid.
         </p>
       </motion.header>
 
@@ -352,6 +410,52 @@ export function PaymentsPage() {
               </table>
             </div>
           )}
+
+          {/* Overage a pagar: horas de overage aprobadas y sin pagar, por
+              contractor. Se pagan sin factura al cliente; al pagarlas quedan
+              congeladas y salen del pendiente. */}
+          <section className="pay-overage">
+            <div className="toolbar">
+              <span className="toolbar__count">
+                Overage to pay · {overagePending.length}{' '}
+                {overagePending.length === 1 ? 'contractor' : 'contractors'}
+              </span>
+            </div>
+            {overagePending.length === 0 ? (
+              <div className="empty">No pending overage hours to pay.</div>
+            ) : (
+              <div className="table-wrap table-wrap--scroll">
+                <table className="table proj-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Contractor</th>
+                      <th scope="col" className="col-num">Overage hours</th>
+                      <th scope="col" style={{ width: 160 }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {overagePending.map((group) => (
+                      <tr key={group.user || '—'}>
+                        <td className="cell-strong">{group.user || '—'}</td>
+                        <td className="col-num cell-mono">{formatHours(group.hours)} h</td>
+                        <td>
+                          {can('payments.create') && (
+                            <button
+                              type="button"
+                              className="btn btn--pay btn--row"
+                              onClick={() => setOverageTarget(group)}
+                            >
+                              Pay overage
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
         </motion.div>
       )}
 
@@ -363,6 +467,30 @@ export function PaymentsPage() {
             currency={modalInvoice.inv.currency ?? 'USD'}
             onClose={() => setModalInvoice(null)}
             onConfirm={handleRegister}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {overageTarget && (
+          <RegisterPaymentModal
+            key={`overage-${overageTarget.user}`}
+            title="Register overage payment"
+            summaryName={overageTarget.user}
+            summaryMeta={`Overage · ${overageTarget.entryIds.length} ${
+              overageTarget.entryIds.length === 1 ? 'entry' : 'entries'
+            }`}
+            summaryFigure={`${formatHours(overageTarget.hours)} h`}
+            summaryFigureLabel="Overage hours"
+            defaultAmount=""
+            footerNote={
+              <>
+                Registers a contractor payment for these overage hours (no invoice).
+                They’ll be frozen and drop off the pending list.
+              </>
+            }
+            onClose={() => setOverageTarget(null)}
+            onConfirm={handleRegisterOverage}
           />
         )}
       </AnimatePresence>

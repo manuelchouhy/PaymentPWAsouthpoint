@@ -668,6 +668,13 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   padding-bottom: 9px;
 }
 
+/* --- Payments: sección de overage a pagar ---------------------------------- */
+.pay-overage {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line-strong);
+}
+
 /* --- Billing: fila de tabs (Bill to client · Overage · SP internal · X) ----- */
 .bill-tabs {
   display: flex;

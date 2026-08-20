@@ -154,6 +154,8 @@ export const httpApiClient = {
     // POST /api/payments/register { invoiceId, amountPaid, paymentDate,
     //   bankMethod, transferReference, exchangeRate, notes } → { payment }
     create: () => notImplemented('payments.create'),
+    // POST /api/payments/overage { userName, entryIds, amountPaid, ... } → { payment }
+    createOverage: () => notImplemented('payments.createOverage'),
     // GET /api/payments/alert-settings
     getAlertSettings: () => notImplemented('payments.getAlertSettings'),
     // PATCH /api/payments/alert-settings

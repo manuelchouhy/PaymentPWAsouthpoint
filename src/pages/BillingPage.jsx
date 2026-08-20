@@ -8,6 +8,7 @@ import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
 import { groupBillToClient, groupReadonly } from '../lib/billingGrouping'
+import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { BillModal } from '../components/BillModal'
@@ -84,6 +85,8 @@ export function BillingPage() {
   const { user, profile, can } = useOutletContext()
   const [entries, setEntries] = useState([])
   const [invoices, setInvoices] = useState([])
+  // Pagos: para sacar de la tab Overage las horas ya pagadas (no son pendientes).
+  const [payments, setPayments] = useState([])
   const [sowByProject, setSowByProject] = useState(() => ({
     byClientAndName: new Map(),
     byName: new Map(),
@@ -158,12 +161,13 @@ export function BillingPage() {
       })
       .catch((error) => console.error('No se pudieron cargar los SOW de Billing:', error))
 
-    Promise.all([api.timeEntries.list(), api.invoices.list(), api.clients.list()])
-      .then(([entryRows, invoiceRows, clientRows]) => {
+    Promise.all([api.timeEntries.list(), api.invoices.list(), api.clients.list(), api.payments.list()])
+      .then(([entryRows, invoiceRows, clientRows, paymentRows]) => {
         if (cancelled) return
         setEntries(entryRows)
         setInvoices(invoiceRows)
         setClients(clientRows)
+        setPayments(paymentRows)
         setSelectedKeys(new Set())
         setStatus('ready')
       })
@@ -257,13 +261,18 @@ export function BillingPage() {
     () => (entry) => invoiceByEntryId.has(String(entry.id)),
     [invoiceByEntryId],
   )
+  // Horas de overage ya pagadas: salen de la tab Overage (no son pendientes).
+  const paidEntryIds = useMemo(() => paidEntryIdsFrom(payments), [payments])
   const overageGroups = useMemo(
     () =>
-      groupReadonly(filteredAllAllocations.filter((e) => e.allocation === 'overage'), 'user', {
-        withWeeks: true,
-        isInvoiced: isInvoicedFn,
-      }),
-    [filteredAllAllocations, isInvoicedFn],
+      groupReadonly(
+        filteredAllAllocations.filter(
+          (e) => e.allocation === 'overage' && !paidEntryIds.has(String(e.id)),
+        ),
+        'user',
+        { withWeeks: true, isInvoiced: isInvoicedFn },
+      ),
+    [filteredAllAllocations, isInvoicedFn, paidEntryIds],
   )
   const spInternalGroups = useMemo(
     () =>
