@@ -97,6 +97,8 @@ export const httpApiClient = {
     create: () => notImplemented('clients.create'),
     // PATCH /api/clients/:id { ...updates } → Client
     update: () => notImplemented('clients.update'),
+    // DELETE /api/clients/:id → { id }
+    delete: () => notImplemented('clients.delete'),
     // POST /api/clients/msa (multipart) → { path }
     uploadMsa: () => notImplemented('clients.uploadMsa'),
     // GET /api/clients/msa-url?path=X → string | null

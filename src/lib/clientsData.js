@@ -222,6 +222,25 @@ export async function updateClient(current, updates) {
 }
 
 /**
+ * Borra un cliente. La ÚNICA FK que referencia clients es projects.client_id, y es
+ * ON DELETE SET NULL (verificado en el esquema): los proyectos de ese cliente NO se
+ * borran, quedan con client_id NULL (sin cliente). Por eso el delete no falla por
+ * FK. Devuelve el id borrado.
+ * @param {{ id: string|number }} client
+ * @returns {Promise<{ id: string|number }>}
+ */
+export async function deleteClient(client) {
+  if (!isSupabaseConfigured) {
+    await new Promise((r) => setTimeout(r, 250))
+    demoClients = demoClients.filter((c) => String(c.id) !== String(client.id))
+    return { id: client.id }
+  }
+  const { error } = await supabase.from('clients').delete().eq('id', client.id)
+  if (error) throw friendlyClientError(error)
+  return { id: client.id }
+}
+
+/**
  * Registra una nueva versión del MSA en el historial versionado
  * (project_documents, subject_type='msa') — el archivo anterior nunca se
  * borra, solo deja de ser el `msa_url` vigente del cliente.

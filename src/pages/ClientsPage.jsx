@@ -80,6 +80,22 @@ export function ClientsPage() {
     setToast({ id: Date.now(), message: `Client updated: ${updated.clientName}` })
   }
 
+  async function handleDelete(client) {
+    // El borrado sólo toca clients: la única FK (projects.client_id) es SET NULL,
+    // así que los proyectos quedan sin cliente, no se borran (ver deleteClient).
+    await api.clients.delete({ id: client.id })
+    api.audit.log({
+      actorEmail: user?.email,
+      action: 'client.delete',
+      resourceType: 'client',
+      resourceId: client.id,
+      before: { clientName: client.clientName },
+    })
+    setClients((prev) => prev.filter((c) => c.id !== client.id))
+    setDetail(null)
+    setToast({ id: Date.now(), message: `Client deleted: ${client.clientName}` })
+  }
+
   // Clientes auto-creados por el sync a completar (un solo scan para banner + count).
   const pendingReview = clients.filter((c) => c.needsReview)
 
@@ -205,11 +221,13 @@ export function ClientsPage() {
             key={`client-detail-${detail.id}`}
             client={detail}
             canEdit={can('clients.edit')}
+            canDelete={can('clients.edit')}
             onClose={() => setDetail(null)}
             onEdit={() => {
               setDetail(null)
               setEditing(detail)
             }}
+            onDelete={() => handleDelete(detail)}
           />
         )}
       </AnimatePresence>

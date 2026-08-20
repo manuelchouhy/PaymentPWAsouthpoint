@@ -2581,6 +2581,19 @@ th.col-pop { text-align: center; }
   border-top: 1px solid var(--line);
 }
 .drawer__advance { width: 100%; }
+
+/* Confirmación de borrado inline (ClientDetailDrawer): aparece en lugar de las
+   acciones normales cuando se pide eliminar. */
+.confirm-delete {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.confirm-delete__msg { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text); }
+.confirm-delete__actions { display: flex; gap: 8px; justify-content: flex-end; }
 .drawer__done {
   text-align: center;
   font-size: 13px;

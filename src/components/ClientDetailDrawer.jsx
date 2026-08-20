@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { FileText, Pencil, X } from 'lucide-react'
+import { FileText, Pencil, Trash2, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { fileNameFromPath, formatDateTime } from '../lib/format'
 import { useScrollLock } from '../lib/useScrollLock'
@@ -17,12 +17,36 @@ const FIELDS = [
  * Drawer de detalle de Client (step 1 del flujo de dos pasos, igual que
  * Projects): campos en modo lectura + botón Edit (si `canEdit`).
  *
- * @param {{ client: object, canEdit?: boolean, onClose: () => void, onEdit: () => void }} props
+ * @param {{
+ *   client: object,
+ *   canEdit?: boolean,
+ *   canDelete?: boolean,
+ *   onClose: () => void,
+ *   onEdit: () => void,
+ *   onDelete?: () => Promise<void>,
+ * }} props
  */
-export function ClientDetailDrawer({ client, canEdit = false, onClose, onEdit }) {
+export function ClientDetailDrawer({ client, canEdit = false, canDelete = false, onClose, onEdit, onDelete }) {
   const [opening, setOpening] = useState(false)
   const [msaMsg, setMsaMsg] = useState('')
+  // Confirmación de borrado inline (dos pasos), sin confirm() nativo.
+  const [confirming, setConfirming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const isDemoMsa = typeof client.msaUrl === 'string' && client.msaUrl.startsWith('demo/')
+
+  async function handleConfirmDelete() {
+    setDeleteError('')
+    setDeleting(true)
+    try {
+      await onDelete()
+      // onDelete cierra el drawer y recarga; no se setea estado después por si el
+      // componente ya se desmontó.
+    } catch (err) {
+      setDeleteError(err?.message ?? 'Could not delete the client.')
+      setDeleting(false)
+    }
+  }
 
   useScrollLock()
 
@@ -130,12 +154,61 @@ export function ClientDetailDrawer({ client, canEdit = false, onClose, onEdit })
           </dl>
         </div>
 
-        {canEdit && (
+        {(canEdit || canDelete) && !confirming && (
           <div className="drawer__actions">
-            <button type="button" className="btn btn--pay drawer__advance" onClick={onEdit}>
-              <Pencil size={16} strokeWidth={2.2} aria-hidden="true" />
-              Edit
-            </button>
+            <div className="drawer__actions-row">
+              {canEdit && (
+                <button type="button" className="btn btn--pay" onClick={onEdit}>
+                  <Pencil size={16} strokeWidth={2.2} aria-hidden="true" />
+                  Edit
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  type="button"
+                  className="btn btn--destructive"
+                  onClick={() => {
+                    setDeleteError('')
+                    setConfirming(true)
+                  }}
+                >
+                  <Trash2 size={16} strokeWidth={2.2} aria-hidden="true" />
+                  Delete
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {canDelete && confirming && (
+          <div className="confirm-delete" role="group" aria-label="Confirm delete">
+            <p className="confirm-delete__msg">
+              Delete <strong>{client.clientName}</strong>? This can’t be undone. Any projects
+              linked to this client will be unassigned (they are not deleted).
+            </p>
+            {deleteError && (
+              <p className="field__error" role="alert">
+                {deleteError}
+              </p>
+            )}
+            <div className="confirm-delete__actions">
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={() => setConfirming(false)}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn--destructive btn--sm"
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting…' : 'Delete client'}
+              </button>
+            </div>
           </div>
         )}
       </motion.div>
