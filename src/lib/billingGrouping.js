@@ -178,17 +178,20 @@ export function groupBillToClient(entries = [], { isInvoiced = () => false } = {
  *   - SP internal: entityKey 'client', withWeeks true  (cliente · semana)
  *   - X (unknown): entityKey 'user',   withWeeks false (contractor)
  *
- * Sólo cuenta horas Approved (las no aprobadas todavía no son accionables). No
- * factura ni excluye nada: estas tabs son lectura + link a Entries. Ordena las
- * entidades por horas desc.
+ * Sólo cuenta horas Approved y NO facturadas (isInvoiced): las no aprobadas
+ * todavía no son accionables, y las ya facturadas no son "pendientes" — igual base
+ * que la tab bill_to_client, para que los contadores de las tabs sean comparables.
+ * Ordena las entidades por horas desc.
  *
  * @param {Array<object>} entries
  * @param {'user'|'client'} entityKey
- * @param {{ withWeeks?: boolean }} opts
+ * @param {{ withWeeks?: boolean, isInvoiced?: (entry: object) => boolean }} opts
  * @returns {Array<{ entity: string, hours: number, weeks?: Array, rows?: Array }>}
  */
-export function groupReadonly(entries = [], entityKey, { withWeeks = true } = {}) {
-  const approved = (entries ?? []).filter((entry) => entry && entry.status === 'Approved')
+export function groupReadonly(entries = [], entityKey, { withWeeks = true, isInvoiced = () => false } = {}) {
+  const approved = (entries ?? []).filter(
+    (entry) => entry && entry.status === 'Approved' && !isInvoiced(entry),
+  )
   const byEntity = new Map()
   for (const entry of approved) {
     const entity = entry[entityKey] || ''

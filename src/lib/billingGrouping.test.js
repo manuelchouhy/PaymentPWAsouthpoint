@@ -143,6 +143,15 @@ test('groupReadonly: sólo cuenta Approved', () => {
   assert.equal(g.hours, 2)
 })
 
+test('groupReadonly: excluye horas ya facturadas (isInvoiced)', () => {
+  const entries = [
+    e({ id: 1, allocation: 'overage', user: 'Ana', date: '2026-08-14', hours: 5 }),
+    e({ id: 2, allocation: 'overage', user: 'Ana', date: '2026-08-14', hours: 2 }),
+  ]
+  const [g] = groupReadonly(entries, 'user', { isInvoiced: (x) => x.id === 1 })
+  assert.equal(g.hours, 2) // sólo la no facturada
+})
+
 test('groupReadonly: sin entries → lista vacía', () => {
   assert.deepEqual(groupReadonly([], 'user'), [])
   assert.deepEqual(groupReadonly(undefined, 'user'), [])

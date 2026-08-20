@@ -37,11 +37,15 @@ const reasonLabel = (reason) => REASON_LABEL[reason] ?? 'Unresolved'
 // Las 4 tabs de Billing (una fila, con contador de horas). "Bill to client" es la
 // facturable (con selección + factura); las otras 3 son de sólo lectura y linkean
 // a Entries filtrado por su allocation para reclasificar.
+// La tab X (allocation 'unknown') queda FUERA a propósito: el CHECK de
+// time_entries.allocation (migración 0018) sólo admite bill_to_client/overage/
+// sp_internal y "sin clasificar" es NULL — 'unknown' no es un valor posible hoy
+// (el PRD lo prevé pero requiere una migración del CHECK que no se hizo). Con X
+// la tab quedaría siempre vacía y su link dejaría Entries trabado en 0 filas.
 const TABS = [
   { key: 'bill_to_client', label: 'Bill to client' },
   { key: 'overage', label: 'Overage' },
   { key: 'sp_internal', label: 'SP internal' },
-  { key: 'unknown', label: 'X' },
 ]
 const sumGroupHours = (groups) => groups.reduce((total, g) => total + g.hours, 0)
 
@@ -245,19 +249,28 @@ export function BillingPage() {
   )
 
   // Tabs de sólo lectura (groupReadonly). Overage por contractor·semana, SP
-  // internal por cliente·semana, X (unknown) por contractor. Salen del mismo
-  // conjunto filtrado que la tab facturable, cada una acotada a su allocation.
+  // internal por cliente·semana. Salen del mismo conjunto filtrado que la tab
+  // facturable, cada una acotada a su allocation y excluyendo las ya facturadas
+  // (misma base que bill_to_client). (No hay tab X — ver TABS.)
+  const isInvoicedFn = useMemo(
+    () => (entry) => invoiceByEntryId.has(String(entry.id)),
+    [invoiceByEntryId],
+  )
   const overageGroups = useMemo(
-    () => groupReadonly(filteredAllAllocations.filter((e) => e.allocation === 'overage'), 'user', { withWeeks: true }),
-    [filteredAllAllocations],
+    () =>
+      groupReadonly(filteredAllAllocations.filter((e) => e.allocation === 'overage'), 'user', {
+        withWeeks: true,
+        isInvoiced: isInvoicedFn,
+      }),
+    [filteredAllAllocations, isInvoicedFn],
   )
   const spInternalGroups = useMemo(
-    () => groupReadonly(filteredAllAllocations.filter((e) => e.allocation === 'sp_internal'), 'client', { withWeeks: true }),
-    [filteredAllAllocations],
-  )
-  const unknownGroups = useMemo(
-    () => groupReadonly(filteredAllAllocations.filter((e) => e.allocation === 'unknown'), 'user', { withWeeks: false }),
-    [filteredAllAllocations],
+    () =>
+      groupReadonly(filteredAllAllocations.filter((e) => e.allocation === 'sp_internal'), 'client', {
+        withWeeks: true,
+        isInvoiced: isInvoicedFn,
+      }),
+    [filteredAllAllocations, isInvoicedFn],
   )
 
   useEffect(() => {
@@ -706,14 +719,12 @@ export function BillingPage() {
 
           <div className="bill-tabs" role="tablist" aria-label="Billing views">
             {TABS.map((t) => {
-              const hours =
-                t.key === 'bill_to_client'
-                  ? cards.pendingToBill
-                  : t.key === 'overage'
-                    ? sumGroupHours(overageGroups)
-                    : t.key === 'sp_internal'
-                      ? sumGroupHours(spInternalGroups)
-                      : sumGroupHours(unknownGroups)
+              const hoursByTab = {
+                bill_to_client: cards.pendingToBill,
+                overage: sumGroupHours(overageGroups),
+                sp_internal: sumGroupHours(spInternalGroups),
+              }
+              const hours = hoursByTab[t.key] ?? 0
               return (
                 <button
                   key={t.key}
@@ -967,13 +978,6 @@ export function BillingPage() {
               allocation: 'sp_internal',
               withWeeks: true,
               emptyLabel: 'SP internal',
-            })}
-          {tab === 'unknown' &&
-            renderReadonlyTab(unknownGroups, {
-              entityLabel: 'contractor',
-              allocation: 'unknown',
-              withWeeks: false,
-              emptyLabel: 'unclassified (X)',
             })}
         </motion.div>
       )}

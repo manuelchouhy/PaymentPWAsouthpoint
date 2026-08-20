@@ -76,12 +76,14 @@ export function EntriesPage() {
     // lista valores que existen en las entries.
     const clientParams = searchParams.getAll('client').filter(Boolean)
     const projectParams = searchParams.getAll('project').filter(Boolean)
-    // allocation: lo mandan las tabs de lectura de Billing (Overage/SP internal/X)
-    // para reclasificar acá. Se valida contra los valores del filtro (incluye el
-    // centinela de "sin clasificar") por si la URL viene editada a mano.
+    // allocation: lo mandan las tabs de lectura de Billing (Overage/SP internal)
+    // para reclasificar acá. Se valida contra los valores REALES del filtro
+    // (incluye el centinela UNALLOCATED de "sin clasificar") por si la URL viene
+    // editada a mano. 'unknown' NO se admite: no es un valor posible en la base
+    // (ver ALLOCATION_LABELS) y dejaría la grilla trabada en 0 filas.
     const allocParams = searchParams
       .getAll('allocation')
-      .filter((a) => ['bill_to_client', 'overage', 'sp_internal', 'unknown', UNALLOCATED].includes(a))
+      .filter((a) => ['bill_to_client', 'overage', 'sp_internal', UNALLOCATED].includes(a))
     if (!clientParams.length && !projectParams.length && !allocParams.length) return undefined
     return { clients: clientParams, projects: projectParams, allocations: allocParams }
     // Sólo el valor inicial: si se recalculara, cambiar el filtro a mano y
