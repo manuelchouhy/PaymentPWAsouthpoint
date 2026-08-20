@@ -34,9 +34,12 @@ export function SyncStatus({ status, onOpenLog }) {
       >
         {relative ? (
           <>
-            Last updated:{' '}
+            <span
+              className={`sync-status__dot${hadError ? ' sync-status__dot--error' : ''}`}
+              aria-hidden="true"
+            />
+            {hadError ? 'Sync error' : 'Synced'}{' '}
             <strong className="sync-status__value">{relative}</strong>
-            {hadError && ' · with error'}
           </>
         ) : (
           'No syncs yet'
