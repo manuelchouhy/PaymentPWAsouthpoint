@@ -4046,6 +4046,9 @@ th.col-pop { text-align: center; }
 .dark .badge--alloc-overage { color: #FDBA74; }
 .badge--alloc-internal { background: rgba(139, 92, 246, .14); color: #6D28D9; border-color: rgba(139, 92, 246, .32); }
 .dark .badge--alloc-internal { color: #C4B5FD; }
+/* X (allocation 'unknown'): slate, distinto de las otras tres categorías. */
+.badge--alloc-unknown { background: rgba(100, 116, 139, .16); color: #475569; border-color: rgba(100, 116, 139, .34); }
+.dark .badge--alloc-unknown { color: #94A3B8; }
 
 /* --- Carrusel de detalle de proyecto (issue 04) --------------------------- */
 /* Los 640px que hereda de .modal--form no alcanzan: los slides 2, 3 y 4 traen

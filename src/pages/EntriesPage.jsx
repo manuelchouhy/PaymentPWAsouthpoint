@@ -24,24 +24,21 @@ const ALLOCATION_LABELS = {
   bill_to_client: { label: 'bill to client', cls: 'badge--alloc-bill' },
   overage: { label: 'overage', cls: 'badge--alloc-overage' },
   sp_internal: { label: 'SP internal', cls: 'badge--alloc-internal' },
+  // X = 4ta allocation real (valor 'unknown' en la base, CHECK 0034): una hora que
+  // no encaja en las otras tres. Distinta de NULL (= sin clasificar / sin triagear).
+  unknown: { label: 'X', cls: 'badge--alloc-unknown' },
 }
 
-// Valor centinela del dropdown de Apply para "volver a sin clasificar": manda
-// allocation = null. Se distingue del resto porque devuelve la hora a la cola de
-// pendientes en vez de asignarle una categoría.
-const UNSET_ALLOCATION = '__unset__'
-
 // Opciones fijas del filtro de allocation (no se derivan de las entries). Incluye
-// 'unallocated' (el caso más buscado). 'unknown' (la "X") NO está acá a propósito:
-// requiere migrar el CHECK de la base (ver .scratch/.../pending-migrations) y su
-// UI completa —label, dropdown de Apply, export, badge—, así que va en su propio
-// slice. Hasta entonces 'unknown' no es un valor posible en la base.
-const ALLOCATION_FILTER_OPTIONS = [UNALLOCATED, 'bill_to_client', 'overage', 'sp_internal']
+// UNALLOCATED (sin clasificar, null) y 'unknown' (la categoría X, allocation real
+// desde el CHECK 0034). Son cosas distintas: UNALLOCATED = sin triagear; X =
+// clasificada explícitamente como "no encaja en las otras".
+const ALLOCATION_FILTER_OPTIONS = [UNALLOCATED, 'bill_to_client', 'overage', 'sp_internal', 'unknown']
 
-// Etiqueta visible de una allocation, usada por el filtro y por el export para no
-// duplicar la regla. null o el centinela 'unallocated' → "unallocated". Tolera
-// claves fuera de las conocidas (p.ej. la futura 'unknown') cayendo al valor
-// crudo en vez de romper — el export hacía `[value].label` sin guardas y crasheaba.
+// Etiqueta visible de una allocation, usada por el filtro y el export. null o el
+// centinela UNALLOCATED → "unallocated" (sin clasificar); 'unknown' → "X" (vía
+// ALLOCATION_LABELS). Tolera claves desconocidas cayendo al valor crudo en vez de
+// romper — el export hacía `[value].label` sin guardas y crasheaba.
 const allocationLabel = (value) =>
   value == null || value === UNALLOCATED
     ? 'unallocated'
@@ -76,14 +73,13 @@ export function EntriesPage() {
     // lista valores que existen en las entries.
     const clientParams = searchParams.getAll('client').filter(Boolean)
     const projectParams = searchParams.getAll('project').filter(Boolean)
-    // allocation: lo mandan las tabs de lectura de Billing (Overage/SP internal)
+    // allocation: lo mandan las tabs de lectura de Billing (Overage/SP internal/X)
     // para reclasificar acá. Se valida contra los valores REALES del filtro
-    // (incluye el centinela UNALLOCATED de "sin clasificar") por si la URL viene
-    // editada a mano. 'unknown' NO se admite: no es un valor posible en la base
-    // (ver ALLOCATION_LABELS) y dejaría la grilla trabada en 0 filas.
+    // (incluye UNALLOCATED = sin clasificar y 'unknown' = X) por si la URL viene
+    // editada a mano.
     const allocParams = searchParams
       .getAll('allocation')
-      .filter((a) => ['bill_to_client', 'overage', 'sp_internal', UNALLOCATED].includes(a))
+      .filter((a) => ['bill_to_client', 'overage', 'sp_internal', 'unknown', UNALLOCATED].includes(a))
     if (!clientParams.length && !projectParams.length && !allocParams.length) return undefined
     return { clients: clientParams, projects: projectParams, allocations: allocParams }
     // Sólo el valor inicial: si se recalculara, cambiar el filtro a mano y
@@ -244,8 +240,9 @@ export function EntriesPage() {
     // lo que el usuario ve sumado en la barra.
     const ids = selectedEntries.filter((e) => !isFrozen(e)).map((e) => e.id)
     if (!ids.length || applying) return
-    // El centinela del dropdown devuelve la hora a "sin clasificar": manda null.
-    const allocationValue = allocationChoice === UNSET_ALLOCATION ? null : allocationChoice
+    // Siempre una allocation real (bill_to_client / overage / sp_internal /
+    // unknown=X): ya no hay opción de "sin clasificar" en el dropdown.
+    const allocationValue = allocationChoice
     // Horas por id, leídas de la selección ANTES de limpiarla, para poder sumar
     // en el aviso sólo las filas que la base confirme.
     const hoursById = new Map(selectedEntries.map((e) => [String(e.id), Number(e.hours) || 0]))
@@ -272,12 +269,7 @@ export function EntriesPage() {
       // abajo): confirma que la hora entró al circuito y, para bill to client,
       // linkea a Billing. Las horas se suman de la confirmación de la base.
       if (applied.size > 0) {
-        // El aviso de "sin clasificar" (null) muestra sólo el conteo, no las
-        // horas: no se suman en ese camino.
-        const appliedHours =
-          allocationValue === null
-            ? 0
-            : updatedIds.reduce((sum, id) => sum + (hoursById.get(String(id)) || 0), 0)
+        const appliedHours = updatedIds.reduce((sum, id) => sum + (hoursById.get(String(id)) || 0), 0)
         setApplyNotice({ allocation: allocationValue, count: applied.size, hours: appliedHours })
       }
 
@@ -361,17 +353,12 @@ export function EntriesPage() {
               {applyNotice.count === 1 ? 'entry' : 'entries'}) classified as bill to client — already
               in <Link to="/billing">Billing ↗</Link>.
             </>
-          ) : applyNotice.allocation === null ? (
-            <>
-              ✓ {applyNotice.count} {applyNotice.count === 1 ? 'entry' : 'entries'} moved back to
-              unclassified — back in the pending queue.
-            </>
           ) : (
             <>
               ✓ {formatHours(applyNotice.hours)} h ({applyNotice.count}{' '}
               {applyNotice.count === 1 ? 'entry' : 'entries'}) classified as{' '}
-              {ALLOCATION_LABELS[applyNotice.allocation]?.label ?? applyNotice.allocation} — these
-              don’t go to Billing (not charged to the client).
+              {ALLOCATION_LABELS[applyNotice.allocation]?.label ?? applyNotice.allocation} — shown in{' '}
+              <Link to="/billing">Billing ↗</Link> under its tab (not billed to the client).
             </>
           )}
         </p>
@@ -466,13 +453,12 @@ export function EntriesPage() {
                   onChange={(e) => setAllocationChoice(e.target.value)}
                   aria-label="Allocation to apply"
                 >
+                  {/* Incluye X (allocation 'unknown') vía ALLOCATION_LABELS. Ya no
+                      hay opción "— sin clasificar": el usuario pidió reemplazarla
+                      por X. Clasificar es siempre poner una allocation real. */}
                   {Object.entries(ALLOCATION_LABELS).map(([value, { label }]) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
-                  {/* Deshacer: devuelve la hora a la cola de pendientes. Va
-                      último y con guion para separarlo visualmente de las
-                      categorías reales. */}
-                  <option value={UNSET_ALLOCATION}>— sin clasificar</option>
                 </select>
                 <button type="button" className="btn btn--pay btn--sm" onClick={handleApply} disabled={applying}>
                   {applying ? 'Applying…' : 'Apply'}

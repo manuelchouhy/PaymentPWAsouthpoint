@@ -37,27 +37,28 @@ const reasonLabel = (reason) => REASON_LABEL[reason] ?? 'Unresolved'
 // Las 4 tabs de Billing (una fila, con contador de horas). "Bill to client" es la
 // facturable (con selección + factura); las otras 3 son de sólo lectura y linkean
 // a Entries filtrado por su allocation para reclasificar.
-// La tab X (allocation 'unknown') queda FUERA a propósito: el CHECK de
-// time_entries.allocation (migración 0018) sólo admite bill_to_client/overage/
-// sp_internal y "sin clasificar" es NULL — 'unknown' no es un valor posible hoy
-// (el PRD lo prevé pero requiere una migración del CHECK que no se hizo). Con X
-// la tab quedaría siempre vacía y su link dejaría Entries trabado en 0 filas.
+// Las 4 tabs de Billing. La "X" es la allocation real 'unknown' (habilitada en el
+// CHECK por la migración 0034), una 4ta categoría que se aplica a mano — NO las
+// horas null sin clasificar. Sólo las horas allocation='unknown' van a la tab X.
 const TABS = [
   { key: 'bill_to_client', label: 'Bill to client' },
   { key: 'overage', label: 'Overage' },
   { key: 'sp_internal', label: 'SP internal' },
+  { key: 'unknown', label: 'X' },
 ]
 const sumGroupHours = (groups) => groups.reduce((total, g) => total + g.hours, 0)
 
 // Filas proveedor·proyecto·task para las tabs de lectura (sin checkbox ni SOW: no
-// se factura acá). Se combinan por terna en groupReadonly.
-function ReadonlyRows({ rows }) {
+// se factura acá). Se combinan por terna en groupReadonly. showProvider=false
+// oculta la columna Provider cuando el grupo YA es por contractor (overage / X),
+// donde repetiría el nombre del header en cada fila.
+function ReadonlyRows({ rows, showProvider = true }) {
   return (
     <div className="table-wrap table-wrap--scroll">
       <table className="table proj-table">
         <thead>
           <tr>
-            <th scope="col">Provider</th>
+            {showProvider && <th scope="col">Provider</th>}
             <th scope="col">Project · task</th>
             <th scope="col" className="col-num">Hours</th>
           </tr>
@@ -65,7 +66,7 @@ function ReadonlyRows({ rows }) {
         <tbody>
           {rows.map((row) => (
             <tr key={row.key}>
-              <td className="cell-strong">{row.user}</td>
+              {showProvider && <td className="cell-strong">{row.user}</td>}
               <td>
                 {row.project || '—'}
                 {row.task && <div className="cell-soft">{row.task}</div>}
@@ -268,6 +269,16 @@ export function BillingPage() {
     () =>
       groupReadonly(filteredAllAllocations.filter((e) => e.allocation === 'sp_internal'), 'client', {
         withWeeks: true,
+        isInvoiced: isInvoicedFn,
+      }),
+    [filteredAllAllocations, isInvoicedFn],
+  )
+  // X = allocation 'unknown' (categoría real, NO las null sin clasificar), por
+  // contractor. Sólo las horas clasificadas explícitamente como X.
+  const unknownGroups = useMemo(
+    () =>
+      groupReadonly(filteredAllAllocations.filter((e) => e.allocation === 'unknown'), 'user', {
+        withWeeks: false,
         isInvoiced: isInvoicedFn,
       }),
     [filteredAllAllocations, isInvoicedFn],
@@ -545,10 +556,25 @@ export function BillingPage() {
     setReloadKey((k) => k + 1)
   }
 
+  // Link a Entries llevando los filtros activos de Billing (cliente/proyecto/
+  // contractor) además de la allocation, para que la grilla destino sea el MISMO
+  // set que muestra la tab (sin esto caería en todas las horas de esa allocation).
+  function entriesLinkTo(allocation) {
+    const params = new URLSearchParams()
+    filters.clients.forEach((c) => params.append('client', c))
+    filters.projects.forEach((p) => params.append('project', p))
+    filters.contractors.forEach((c) => params.append('contractor', c))
+    params.append('allocation', allocation)
+    return `/entries?${params.toString()}`
+  }
+
   // Render de una tab de sólo lectura (Overage / SP internal / X): toolbar con
-  // contador + link a Entries filtrado por la allocation, y las entidades con sus
-  // filas (con o sin sub-nivel de semana). Sin selección ni factura.
-  function renderReadonlyTab(groups, { entityLabel, allocation, withWeeks, emptyLabel }) {
+  // contador + link a Entries filtrado, y las entidades con sus filas. La forma
+  // (con o sin semana) se INFIERE de cada grupo (group.weeks vs group.rows), no se
+  // pasa aparte: así no puede desincronizarse con cómo se construyó el grupo.
+  // showProvider oculta la columna Provider cuando el grupo YA es por contractor
+  // (overage / X), donde repetiría el nombre del header en cada fila.
+  function renderReadonlyTab(groups, { entityLabel, allocation, emptyLabel, showProvider = true }) {
     return (
       <>
         <div className="toolbar">
@@ -556,7 +582,7 @@ export function BillingPage() {
             {groups.length} {entityLabel}
             {groups.length === 1 ? '' : 's'} · {formatHours(sumGroupHours(groups))} h
           </span>
-          <Link className="btn btn--ghost btn--sm" to={`/entries?allocation=${allocation}`}>
+          <Link className="btn btn--ghost btn--sm" to={entriesLinkTo(allocation)}>
             View in Entries <ArrowRight size={14} aria-hidden="true" />
           </Link>
         </div>
@@ -570,18 +596,18 @@ export function BillingPage() {
                   <h3 className="bill-client__name">{group.entity || '—'}</h3>
                   <span className="bill-client__hours">{formatHours(group.hours)} h</span>
                 </header>
-                {withWeeks ? (
+                {group.weeks ? (
                   group.weeks.map((week) => (
                     <div className="bill-week" key={week.weekId}>
                       <div className="bill-week__static">
                         <span className="bill-week__label">{week.week}</span>
                         <span className="bill-week__hours">{formatHours(week.hours)} h</span>
                       </div>
-                      <ReadonlyRows rows={week.rows} />
+                      <ReadonlyRows rows={week.rows} showProvider={showProvider} />
                     </div>
                   ))
                 ) : (
-                  <ReadonlyRows rows={group.rows} />
+                  <ReadonlyRows rows={group.rows} showProvider={showProvider} />
                 )}
               </section>
             ))}
@@ -589,6 +615,14 @@ export function BillingPage() {
         )}
       </>
     )
+  }
+
+  // Horas por tab para el contador de la fila de tabs (una vez por render).
+  const hoursByTab = {
+    bill_to_client: cards.pendingToBill,
+    overage: sumGroupHours(overageGroups),
+    sp_internal: sumGroupHours(spInternalGroups),
+    unknown: sumGroupHours(unknownGroups),
   }
 
   return (
@@ -717,28 +751,22 @@ export function BillingPage() {
             </div>
           </div>
 
-          <div className="bill-tabs" role="tablist" aria-label="Billing views">
-            {TABS.map((t) => {
-              const hoursByTab = {
-                bill_to_client: cards.pendingToBill,
-                overage: sumGroupHours(overageGroups),
-                sp_internal: sumGroupHours(spInternalGroups),
-              }
-              const hours = hoursByTab[t.key] ?? 0
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === t.key}
-                  className={`bill-tab${tab === t.key ? ' bill-tab--active' : ''}`}
-                  onClick={() => setTab(t.key)}
-                >
-                  {t.label}
-                  <span className="bill-tab__count">{formatHours(hours)} h</span>
-                </button>
-              )
-            })}
+          {/* Botones planos con aria-pressed en vez del patrón ARIA tablist/tab:
+              un tablist "a medias" (sin tabpanel/aria-controls ni navegación por
+              flechas) confunde más a los lectores que botones toggle claros. */}
+          <div className="bill-tabs">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                aria-pressed={tab === t.key}
+                className={`bill-tab${tab === t.key ? ' bill-tab--active' : ''}`}
+                onClick={() => setTab(t.key)}
+              >
+                {t.label}
+                <span className="bill-tab__count">{formatHours(hoursByTab[t.key] ?? 0)} h</span>
+              </button>
+            ))}
           </div>
 
           {tab === 'bill_to_client' && (
@@ -969,15 +997,21 @@ export function BillingPage() {
             renderReadonlyTab(overageGroups, {
               entityLabel: 'contractor',
               allocation: 'overage',
-              withWeeks: true,
               emptyLabel: 'overage',
+              showProvider: false,
             })}
           {tab === 'sp_internal' &&
             renderReadonlyTab(spInternalGroups, {
               entityLabel: 'client',
               allocation: 'sp_internal',
-              withWeeks: true,
               emptyLabel: 'SP internal',
+            })}
+          {tab === 'unknown' &&
+            renderReadonlyTab(unknownGroups, {
+              entityLabel: 'contractor',
+              allocation: 'unknown',
+              emptyLabel: 'X',
+              showProvider: false,
             })}
         </motion.div>
       )}
