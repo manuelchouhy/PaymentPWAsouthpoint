@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useOutletContext, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { AlertTriangle, ArrowRight } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Info } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
@@ -12,7 +12,17 @@ import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { BillModal } from '../components/BillModal'
+import { EntryDetailDrawer } from '../components/EntryDetailDrawer'
 import { Avatar } from '../components/Avatar'
+
+// Etiquetas de allocation para el drawer de detalle (mismas que Entries). El
+// valor 'unknown' es la categoría X (CHECK 0034), distinta de null (sin clasificar).
+const ALLOCATION_LABELS = {
+  bill_to_client: { label: 'bill to client', cls: 'badge--alloc-bill' },
+  overage: { label: 'overage', cls: 'badge--alloc-overage' },
+  sp_internal: { label: 'SP internal', cls: 'badge--alloc-internal' },
+  unknown: { label: 'X', cls: 'badge--alloc-unknown' },
+}
 
 const sortedUnique = (values) =>
   [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
@@ -54,7 +64,7 @@ const sumGroupHours = (groups) => groups.reduce((total, g) => total + g.hours, 0
 // se factura acá). Se combinan por terna en groupReadonly. showProvider=false
 // oculta la columna Provider cuando el grupo YA es por contractor (overage / X),
 // donde repetiría el nombre del header en cada fila.
-function ReadonlyRows({ rows, showProvider = true }) {
+function ReadonlyRows({ rows, showProvider = true, onDetail }) {
   return (
     <div className="table-wrap table-wrap--scroll">
       <table className="table proj-table">
@@ -63,6 +73,9 @@ function ReadonlyRows({ rows, showProvider = true }) {
             {showProvider && <th scope="col">Provider</th>}
             <th scope="col">Project · task</th>
             <th scope="col" className="col-num">Hours</th>
+            <th scope="col" style={{ width: 40 }}>
+              <span className="sr-only">Detail</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -81,6 +94,17 @@ function ReadonlyRows({ rows, showProvider = true }) {
                 {row.task && <div className="cell-soft">{row.task}</div>}
               </td>
               <td className="col-num cell-mono">{formatHours(row.hours)}</td>
+              <td onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={() => onDetail?.(row)}
+                  aria-label={`View detail for ${row.project || 'entry'}`}
+                  title="View details"
+                >
+                  <Info size={16} aria-hidden="true" />
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -122,6 +146,11 @@ export function BillingPage() {
   const [notice, setNotice] = useState('')
   // Tab activa de Billing (bill_to_client | overage | sp_internal | unknown).
   const [tab, setTab] = useState('bill_to_client')
+  // Entry mostrada en el drawer de detalle (o null). Una fila de Billing agrupa
+  // varias entries de la misma terna proveedor·proyecto·task en una semana; el
+  // detalle abre la primera como representante (comparten cliente/proyecto/task/
+  // semana/allocation, que es lo que muestra el drawer).
+  const [detailEntry, setDetailEntry] = useState(null)
   const { filters, toggleValue, clear, isActive } = useEntryFilters()
 
   useEffect(() => {
@@ -440,6 +469,12 @@ export function BillingPage() {
     })
   }
 
+  // Abre el drawer de detalle con la primera entry de la fila (ver detailEntry).
+  function openRowDetail(row) {
+    const entry = row?.entries?.[0]
+    if (entry) setDetailEntry(entry)
+  }
+
   function toggleWeek(id) {
     const isOpen = openWeeks.has(id)
     setOpenWeeks((prev) => {
@@ -623,11 +658,11 @@ export function BillingPage() {
                         <span className="bill-week__label">{week.week}</span>
                         <span className="bill-week__hours">{formatHours(week.hours)} h</span>
                       </div>
-                      <ReadonlyRows rows={week.rows} showProvider={showProvider} />
+                      <ReadonlyRows rows={week.rows} showProvider={showProvider} onDetail={openRowDetail} />
                     </div>
                   ))
                 ) : (
-                  <ReadonlyRows rows={group.rows} showProvider={showProvider} />
+                  <ReadonlyRows rows={group.rows} showProvider={showProvider} onDetail={openRowDetail} />
                 )}
               </section>
             ))}
@@ -919,6 +954,9 @@ export function BillingPage() {
                                       <th scope="col">Project · task</th>
                                       <th scope="col" className="col-num">Hours</th>
                                       <th scope="col">Status</th>
+                                      <th scope="col" style={{ width: 40 }}>
+                                        <span className="sr-only">Detail</span>
+                                      </th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -929,9 +967,28 @@ export function BillingPage() {
                                           sowKey(group.client, row.project),
                                         ) ?? sowByProject.byName.get(row.project)
                                       return (
-                                        <tr key={id}>
+                                        <tr
+                                          key={id}
+                                          className={
+                                            canCreate ? `row-selectable${selectedKeys.has(id) ? ' is-selected' : ''}` : undefined
+                                          }
+                                          data-selected={canCreate ? selectedKeys.has(id) : undefined}
+                                          onClick={
+                                            canCreate
+                                              ? () => {
+                                                  // No robar el click cuando el usuario está
+                                                  // seleccionando texto de la fila.
+                                                  if (String(window.getSelection?.() ?? '')) return
+                                                  toggleGroup(id)
+                                                }
+                                              : undefined
+                                          }
+                                        >
                                           {canCreate && (
-                                            <td>
+                                            // stopPropagation: el checkbox ya togglea por su
+                                            // onChange; sin esto el click también burbujea al
+                                            // <tr> y togglea de nuevo (doble = no-op).
+                                            <td onClick={(e) => e.stopPropagation()}>
                                               <input
                                                 type="checkbox"
                                                 checked={selectedKeys.has(id)}
@@ -961,6 +1018,17 @@ export function BillingPage() {
                                           </td>
                                           <td>
                                             <span className="badge badge--pending">to bill</span>
+                                          </td>
+                                          <td onClick={(e) => e.stopPropagation()}>
+                                            <button
+                                              type="button"
+                                              className="icon-btn"
+                                              onClick={() => openRowDetail(row)}
+                                              aria-label={`View detail for ${row.user} · ${row.project}`}
+                                              title="View details"
+                                            >
+                                              <Info size={16} aria-hidden="true" />
+                                            </button>
                                           </td>
                                         </tr>
                                       )
@@ -1048,6 +1116,15 @@ export function BillingPage() {
           hours={selectedHours}
           onClose={() => setModalOpen(false)}
           onConfirm={handleConfirmBill}
+        />
+      )}
+
+      {detailEntry && (
+        <EntryDetailDrawer
+          entry={detailEntry}
+          allocationLabel={detailEntry.allocation ? ALLOCATION_LABELS[detailEntry.allocation] : null}
+          billingStatus={invoiceByEntryId.get(String(detailEntry.id))?.status ?? 'Pending'}
+          onClose={() => setDetailEntry(null)}
         />
       )}
     </>
