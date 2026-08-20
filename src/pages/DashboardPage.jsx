@@ -9,7 +9,7 @@ import {
   Receipt,
   TrendingUp,
 } from 'lucide-react'
-import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { api } from '../lib/api'
 import { ContractsExpiringWidget } from '../components/dashboard/ContractsExpiringWidget'
 import { SupplierContractsWidget } from '../components/dashboard/SupplierContractsWidget'
@@ -161,6 +161,8 @@ export function DashboardPage() {
       .map(([name, value]) => ({ name, value: Number(value.toFixed(1)) }))
   }, [data, invoiceByEntryId])
 
+  const billingTotal = billingDist.reduce((sum, e) => sum + e.value, 0)
+
   const now = new Date()
   const monthLabel = now.toLocaleString('en', { month: 'long', year: 'numeric' })
 
@@ -261,44 +263,60 @@ export function DashboardPage() {
               {billingDist.length === 0 ? (
                 <p className="dash-widget__empty">No hour data available.</p>
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie
-                      data={billingDist}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={88}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {billingDist.map((entry) => (
-                        <Cell
-                          key={entry.name}
-                          fill={STATUS_COLORS[entry.name] ?? '#6b7280'}
-                          stroke="transparent"
+                <div className="billing-dist">
+                  {/* Donut con el total en el centro (como el mockup). */}
+                  <div className="billing-dist__chart">
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie
+                          data={billingDist}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={64}
+                          outerRadius={90}
+                          paddingAngle={2}
+                          dataKey="value"
+                          isAnimationActive={false}
+                        >
+                          {billingDist.map((entry) => (
+                            <Cell
+                              key={entry.name}
+                              fill={STATUS_COLORS[entry.name] ?? '#6b7280'}
+                              stroke="transparent"
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value, name) => [`${value} h`, name]}
+                          contentStyle={{
+                            background: '#1a1a1f',
+                            border: '1px solid rgba(255,255,255,.12)',
+                            borderRadius: 8,
+                            fontSize: 12,
+                            color: '#e4e4e7',
+                          }}
                         />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value, name) => [`${value} h`, name]}
-                      contentStyle={{
-                        background: '#1a1a1f',
-                        border: '1px solid rgba(255,255,255,.12)',
-                        borderRadius: 8,
-                        fontSize: 12,
-                        color: '#e4e4e7',
-                      }}
-                    />
-                    <Legend
-                      iconType="circle"
-                      iconSize={9}
-                      formatter={(value) => (
-                        <span style={{ fontSize: 12, color: '#a0a0ab' }}>{value}</span>
-                      )}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="billing-dist__center" aria-hidden="true">
+                      <span className="billing-dist__total">{billingTotal.toFixed(1)}</span>
+                      <span className="billing-dist__unit">Hours</span>
+                    </div>
+                  </div>
+                  {/* Leyenda a la derecha con las horas de cada estado. */}
+                  <ul className="billing-dist__legend">
+                    {billingDist.map((entry) => (
+                      <li key={entry.name} className="billing-dist__row">
+                        <span
+                          className="billing-dist__dot"
+                          style={{ background: STATUS_COLORS[entry.name] ?? '#6b7280' }}
+                        />
+                        <span className="billing-dist__name">{entry.name}</span>
+                        <span className="billing-dist__val">{entry.value.toFixed(1)} h</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
 
