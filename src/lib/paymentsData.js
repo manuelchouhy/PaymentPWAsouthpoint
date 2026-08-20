@@ -261,7 +261,9 @@ export async function createPayment(invoice, payload, createdBy) {
  * @returns {Promise<{ payment: ContractorPayment }>}
  */
 export async function createOveragePayment(payload, createdBy) {
-  const entryIds = (payload.entryIds ?? []).map((id) => Number(id))
+  // entry_ids es bigint[]: se descartan ids no numéricos (igual que createInvoice)
+  // para no meter NaN en el array y romper el insert.
+  const entryIds = (payload.entryIds ?? []).map(Number).filter(Number.isFinite)
   if (!payload.userName || entryIds.length === 0) {
     throw new Error('An overage payment needs a contractor and at least one hour.')
   }

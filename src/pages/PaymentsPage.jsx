@@ -94,10 +94,13 @@ export function PaymentsPage() {
   // se le paga al contractor sin pasar por factura al cliente.
   const overagePending = useMemo(() => {
     const paid = paidEntryIdsFrom(payments)
+    // Horas ya en una factura de proveedor: se pagan por esa factura, NO por
+    // overage — excluirlas evita pagar dos veces la misma hora.
+    const invoiced = new Set(invoices.flatMap((inv) => (inv.entryIds ?? []).map(String)))
     const byUser = new Map()
     for (const e of entries) {
       if (e.allocation !== 'overage' || e.status !== 'Approved') continue
-      if (paid.has(String(e.id))) continue
+      if (paid.has(String(e.id)) || invoiced.has(String(e.id))) continue
       const group = byUser.get(e.user) ?? { user: e.user, hours: 0, entryIds: [] }
       group.hours += Number(e.hours) || 0
       group.entryIds.push(e.id)
@@ -106,7 +109,7 @@ export function PaymentsPage() {
     return [...byUser.values()].sort(
       (a, b) => b.hours - a.hours || (a.user || '').localeCompare(b.user || '', 'es'),
     )
-  }, [entries, payments])
+  }, [entries, payments, invoices])
 
   const warningBefore = alertSettings?.warningDaysBeforeDue ?? 3
   const ALERT_RANK = { overdue: 0, warning: 1, on_time: 2 }
@@ -476,6 +479,7 @@ export function PaymentsPage() {
           <RegisterPaymentModal
             key={`overage-${overageTarget.user}`}
             title="Register overage payment"
+            submitLabel="Register overage payment"
             summaryName={overageTarget.user}
             summaryMeta={`Overage · ${overageTarget.entryIds.length} ${
               overageTarget.entryIds.length === 1 ? 'entry' : 'entries'

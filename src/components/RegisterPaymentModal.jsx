@@ -43,6 +43,7 @@ export function RegisterPaymentModal({
   invoice,
   currency = 'USD',
   title = 'Register Payment',
+  submitLabel = 'Register Payment',
   summaryName,
   summaryMeta,
   summaryFigure,
@@ -312,7 +313,7 @@ export function RegisterPaymentModal({
               ) : (
                 <Banknote size={16} strokeWidth={2.2} aria-hidden="true" />
               )}
-              {submitting ? 'Registering…' : 'Register Payment'}
+              {submitting ? 'Registering…' : submitLabel}
             </motion.button>
           </div>
         </form>
