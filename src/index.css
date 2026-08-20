@@ -2614,6 +2614,9 @@ th.col-pop { text-align: center; }
    lateral. Dentro de un modal no hay flex que lo empuje, así que se le da una
    separación explícita. */
 .modal--client-detail .drawer__actions { margin-top: 20px; }
+/* Igual que .drawer__actions: el margin-top:auto de .confirm-delete no hace nada
+   sin flex-parent (el modal no es flex), así que se fija el espaciado acá. */
+.modal--client-detail .confirm-delete { margin-top: 20px; }
 
 /* Número de SOW en el título del detalle de proyecto: acompaña al nombre sin
    competirle. */

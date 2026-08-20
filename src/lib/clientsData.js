@@ -235,8 +235,14 @@ export async function deleteClient(client) {
     demoClients = demoClients.filter((c) => String(c.id) !== String(client.id))
     return { id: client.id }
   }
-  const { error } = await supabase.from('clients').delete().eq('id', client.id)
+  // .select(): un delete que matchea 0 filas (RLS que lo bloquea, id inexistente o
+  // ya borrado) devuelve { error: null } → sin verificar, la UI reportaría un
+  // "borrado" que nunca pasó. Se exige que vuelva la fila borrada.
+  const { data, error } = await supabase.from('clients').delete().eq('id', client.id).select('id')
   if (error) throw friendlyClientError(error)
+  if (!data || data.length === 0) {
+    throw new Error('The client was not deleted — it may no longer exist or you may not have permission.')
+  }
   return { id: client.id }
 }
 

@@ -33,6 +33,9 @@ const MATRIX = {
   'clients.view': ALL,
   'clients.create': [ROLES.OPERATIONS, ROLES.ADMIN],
   'clients.edit': [ROLES.OPERATIONS, ROLES.ADMIN],
+  // Borrar es más destructivo que editar (irreversible + desvincula proyectos):
+  // permiso propio y más acotado (sólo ADMIN), en vez de colgarse de clients.edit.
+  'clients.delete': [ROLES.ADMIN],
   // Projects & Contracts
   'projects.view': ALL,
   'projects.create': [ROLES.OPERATIONS, ROLES.ADMIN],

@@ -27,6 +27,9 @@ const FIELDS = [
  * }} props
  */
 export function ClientDetailDrawer({ client, canEdit = false, canDelete = false, onClose, onEdit, onDelete }) {
+  // Sólo se ofrece borrar si además hay handler: canDelete sin onDelete rompería
+  // en el confirm (onDelete es opcional en el contrato).
+  const deletable = canDelete && typeof onDelete === 'function'
   const [opening, setOpening] = useState(false)
   const [msaMsg, setMsaMsg] = useState('')
   // Confirmación de borrado inline (dos pasos), sin confirm() nativo.
@@ -154,7 +157,7 @@ export function ClientDetailDrawer({ client, canEdit = false, canDelete = false,
           </dl>
         </div>
 
-        {(canEdit || canDelete) && !confirming && (
+        {(canEdit || deletable) && !confirming && (
           <div className="drawer__actions">
             <div className="drawer__actions-row">
               {canEdit && (
@@ -163,7 +166,7 @@ export function ClientDetailDrawer({ client, canEdit = false, canDelete = false,
                   Edit
                 </button>
               )}
-              {canDelete && (
+              {deletable && (
                 <button
                   type="button"
                   className="btn btn--destructive"
@@ -180,7 +183,7 @@ export function ClientDetailDrawer({ client, canEdit = false, canDelete = false,
           </div>
         )}
 
-        {canDelete && confirming && (
+        {deletable && confirming && (
           <div className="confirm-delete" role="group" aria-label="Confirm delete">
             <p className="confirm-delete__msg">
               Delete <strong>{client.clientName}</strong>? This can’t be undone. Any projects

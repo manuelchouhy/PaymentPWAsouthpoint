@@ -84,13 +84,18 @@ export function ClientsPage() {
     // El borrado sólo toca clients: la única FK (projects.client_id) es SET NULL,
     // así que los proyectos quedan sin cliente, no se borran (ver deleteClient).
     await api.clients.delete({ id: client.id })
-    api.audit.log({
-      actorEmail: user?.email,
-      action: 'client.delete',
-      resourceType: 'client',
-      resourceId: client.id,
-      before: { clientName: client.clientName },
-    })
+    // El audit no debe tumbar el flujo ni quedar como rejection sin manejar: es
+    // fire-and-forget pero con catch (a diferencia de create/update, que no lo
+    // tienen; acá importa más por ser una acción irreversible).
+    Promise.resolve(
+      api.audit.log({
+        actorEmail: user?.email,
+        action: 'client.delete',
+        resourceType: 'client',
+        resourceId: client.id,
+        before: { clientName: client.clientName },
+      }),
+    ).catch((e) => console.error('No se pudo registrar el audit de client.delete:', e))
     setClients((prev) => prev.filter((c) => c.id !== client.id))
     setDetail(null)
     setToast({ id: Date.now(), message: `Client deleted: ${client.clientName}` })
@@ -221,7 +226,7 @@ export function ClientsPage() {
             key={`client-detail-${detail.id}`}
             client={detail}
             canEdit={can('clients.edit')}
-            canDelete={can('clients.edit')}
+            canDelete={can('clients.delete')}
             onClose={() => setDetail(null)}
             onEdit={() => {
               setDetail(null)
