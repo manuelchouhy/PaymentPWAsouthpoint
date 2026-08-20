@@ -3,7 +3,7 @@ import { useOutletContext, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowRight, Info } from 'lucide-react'
 import { api } from '../lib/api'
-import { formatHours, formatWeek } from '../lib/format'
+import { formatHours, formatWeek, isoWeekYear } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
@@ -476,15 +476,26 @@ export function BillingPage() {
   }
 
   // Abre el drawer de detalle para una fila (ver detailRow). El período sale de
-  // las semanas ISO reales de las sub-entries: una sola → esa semana; varias (caso
-  // X, que agrega cross-week) → "N weeks". Así el drawer no afirma una semana única
-  // para una fila que abarca varias.
+  // las semanas ISO reales de las sub-entries: una sola → esa semana ("W32 · 2025",
+  // igual que el header de la grilla); varias (caso X, que agrega cross-week) →
+  // "N weeks". La dedup lleva el AÑO en la clave: dos años con el mismo número de
+  // semana ISO son semanas distintas (mismo criterio que weekId en billingGrouping),
+  // si no una fila W10-2025 + W10-2026 se etiquetaría como una sola semana.
   function openRowDetail(row) {
     const entries = row?.entries ?? []
     const entry = entries[0]
     if (!entry) return
-    const weeks = [...new Set(entries.map((e) => (e.date ? formatWeek(e.date) : null)).filter(Boolean))]
-    const periodLabel = weeks.length === 1 ? weeks[0] : weeks.length === 0 ? '—' : `${weeks.length} weeks`
+    const seen = new Set()
+    const labels = []
+    for (const e of entries) {
+      if (!e.date) continue
+      const key = `${isoWeekYear(e.date)}-${formatWeek(e.date)}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      labels.push(`${formatWeek(e.date)} · ${isoWeekYear(e.date)}`)
+    }
+    const periodLabel =
+      labels.length === 1 ? labels[0] : labels.length === 0 ? '—' : `${labels.length} weeks`
     setDetailRow({ entry, hours: row.hours, count: entries.length, periodLabel })
   }
 
@@ -1148,15 +1159,13 @@ export function BillingPage() {
         const entry = aggregate
           ? { ...detailRow.entry, hours: detailRow.hours, description: '', notes: '' }
           : detailRow.entry
-        // Billing sólo aplica a lo facturable al cliente. Para overage / SP
-        // internal / X (nunca se facturan al cliente) se pasa null y el drawer
-        // oculta el dato, en vez de un "Pending" que promete una facturación que
-        // no va a pasar. Las filas bill_to_client acá nunca están facturadas
-        // (groupBillToClient excluye las facturadas), así que el estado es Pending.
-        const billingStatus =
-          entry.allocation === 'bill_to_client'
-            ? invoiceByEntryId.get(String(entry.id))?.status ?? 'Pending'
-            : null
+        // Billing sólo aplica a lo facturable al cliente. Las filas bill_to_client
+        // acá SIEMPRE están pendientes: groupBillToClient excluye las facturadas,
+        // así que el estado es 'Pending' por construcción (sin lookup de factura,
+        // que siempre fallaría). Para overage / SP internal / X (nunca se facturan
+        // al cliente) se pasa null y el drawer oculta el dato, en vez de un
+        // "Pending" que promete una facturación que no va a pasar.
+        const billingStatus = entry.allocation === 'bill_to_client' ? 'Pending' : null
         return (
           <EntryDetailDrawer
             entry={entry}
