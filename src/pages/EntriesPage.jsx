@@ -73,15 +73,23 @@ export function EntriesPage() {
     // lista valores que existen en las entries.
     const clientParams = searchParams.getAll('client').filter(Boolean)
     const projectParams = searchParams.getAll('project').filter(Boolean)
+    // contractor: lo mandan las tabs de Billing junto con la allocation, para caer
+    // en el MISMO set que muestra la tab (Billing filtra por contractor).
+    const contractorParams = searchParams.getAll('contractor').filter(Boolean)
     // allocation: lo mandan las tabs de lectura de Billing (Overage/SP internal/X)
-    // para reclasificar acá. Se valida contra los valores REALES del filtro
-    // (incluye UNALLOCATED = sin clasificar y 'unknown' = X) por si la URL viene
-    // editada a mano.
-    const allocParams = searchParams
-      .getAll('allocation')
-      .filter((a) => ['bill_to_client', 'overage', 'sp_internal', 'unknown', UNALLOCATED].includes(a))
-    if (!clientParams.length && !projectParams.length && !allocParams.length) return undefined
-    return { clients: clientParams, projects: projectParams, allocations: allocParams }
+    // para reclasificar acá. Se valida contra la MISMA lista del filtro
+    // (ALLOCATION_FILTER_OPTIONS, incluye UNALLOCATED y 'unknown'=X) para que no se
+    // desincronice, por si la URL viene editada a mano.
+    const allocParams = searchParams.getAll('allocation').filter((a) => ALLOCATION_FILTER_OPTIONS.includes(a))
+    if (!clientParams.length && !projectParams.length && !contractorParams.length && !allocParams.length) {
+      return undefined
+    }
+    return {
+      clients: clientParams,
+      projects: projectParams,
+      contractors: contractorParams,
+      allocations: allocParams,
+    }
     // Sólo el valor inicial: si se recalculara, cambiar el filtro a mano y
     // volver atrás en el historial lo pisaría.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -240,9 +248,8 @@ export function EntriesPage() {
     // lo que el usuario ve sumado en la barra.
     const ids = selectedEntries.filter((e) => !isFrozen(e)).map((e) => e.id)
     if (!ids.length || applying) return
-    // Siempre una allocation real (bill_to_client / overage / sp_internal /
-    // unknown=X): ya no hay opción de "sin clasificar" en el dropdown.
-    const allocationValue = allocationChoice
+    // allocationChoice es siempre una allocation real (bill_to_client / overage /
+    // sp_internal / unknown=X): ya no hay opción de "sin clasificar" en el dropdown.
     // Horas por id, leídas de la selección ANTES de limpiarla, para poder sumar
     // en el aviso sólo las filas que la base confirme.
     const hoursById = new Map(selectedEntries.map((e) => [String(e.id), Number(e.hours) || 0]))
@@ -252,7 +259,7 @@ export function EntriesPage() {
     try {
       const result = await api.timeEntries.setAllocation(
         ids,
-        allocationValue,
+        allocationChoice,
         user?.email ?? null,
       )
       const updatedIds = result?.updatedIds ?? []
@@ -261,7 +268,7 @@ export function EntriesPage() {
       // Se pintan sólo las filas que la base confirmó, no las pedidas.
       const applied = new Set(updatedIds.map(String))
       setEntries((prev) =>
-        prev.map((e) => (applied.has(String(e.id)) ? { ...e, allocation: allocationValue } : e)),
+        prev.map((e) => (applied.has(String(e.id)) ? { ...e, allocation: allocationChoice } : e)),
       )
       setSelectedIds(new Set())
 
@@ -270,7 +277,7 @@ export function EntriesPage() {
       // linkea a Billing. Las horas se suman de la confirmación de la base.
       if (applied.size > 0) {
         const appliedHours = updatedIds.reduce((sum, id) => sum + (hoursById.get(String(id)) || 0), 0)
-        setApplyNotice({ allocation: allocationValue, count: applied.size, hours: appliedHours })
+        setApplyNotice({ allocation: allocationChoice, count: applied.size, hours: appliedHours })
       }
 
       // Los motivos NO se suman en un único "N no se aplicaron": cada uno pide
@@ -341,10 +348,11 @@ export function EntriesPage() {
           guardaron, negándolo. */}
       {applyError && <p className="field__error">{applyError}</p>}
 
-      {/* Aviso de un Apply exitoso: confirma que la hora entró al circuito.
-          Para bill to client linkea a Billing; para overage/SP internal aclara
-          que NO van ahí; para "sin clasificar" que volvieron a la cola. Convive
-          con applyError: uno reporta lo que entró, el otro lo que no. */}
+      {/* Aviso de un Apply exitoso: confirma que la hora entró al circuito. Para
+          bill to client linkea a Billing (ya facturable); para el resto
+          (overage/SP internal/X) aclara que no se le cobran al cliente y que se ven
+          en su tab de Billing una vez aprobadas. Convive con applyError: uno
+          reporta lo que entró, el otro lo que no. */}
       {applyNotice && (
         <p className="state__hint">
           {applyNotice.allocation === 'bill_to_client' ? (
@@ -357,8 +365,8 @@ export function EntriesPage() {
             <>
               ✓ {formatHours(applyNotice.hours)} h ({applyNotice.count}{' '}
               {applyNotice.count === 1 ? 'entry' : 'entries'}) classified as{' '}
-              {ALLOCATION_LABELS[applyNotice.allocation]?.label ?? applyNotice.allocation} — shown in{' '}
-              <Link to="/billing">Billing ↗</Link> under its tab (not billed to the client).
+              {ALLOCATION_LABELS[applyNotice.allocation]?.label ?? applyNotice.allocation} — not billed to
+              the client; shown in its <Link to="/billing">Billing ↗</Link> tab once approved.
             </>
           )}
         </p>
