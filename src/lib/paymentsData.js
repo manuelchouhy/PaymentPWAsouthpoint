@@ -174,7 +174,9 @@ export async function getPaymentByInvoice(invoiceId) {
 
 /**
  * Registra un pago al contractor. VALIDACIÓN DURA: la invoice debe estar en
- * 'Collected'. Al confirmar, avanza la invoice a 'Paid' (+ historial).
+ * 'Invoiced' o 'Collected' (flujo Billing → Payments: una factura emitida en
+ * Billing se paga directo, Collections no es parte del flujo por ahora). Al
+ * confirmar, avanza la invoice a 'Paid' (+ historial) desde su estado actual.
  *
  * @param {{ id, status, totalAmount }} invoice
  * @param {{ amountPaid:number, paymentDate:string, transferReference?:string, bankMethod?:string, notes?:string }} payload
@@ -182,8 +184,8 @@ export async function getPaymentByInvoice(invoiceId) {
  * @returns {Promise<{ payment: ContractorPayment }>}
  */
 export async function createPayment(invoice, payload, createdBy) {
-  if (invoice.status !== 'Collected') {
-    const err = new Error('Invoice must be Collected before payment')
+  if (invoice.status !== 'Invoiced' && invoice.status !== 'Collected') {
+    const err = new Error('Invoice must be Invoiced or Collected before payment')
     err.code = 'not_collected'
     throw err
   }
@@ -209,7 +211,7 @@ export async function createPayment(invoice, payload, createdBy) {
     demoPayments = [payment, ...demoPayments]
     await updateInvoiceStatus({
       invoiceId: invoice.id,
-      fromStatus: 'Collected',
+      fromStatus: invoice.status,
       toStatus: 'Paid',
       changedBy: createdBy ?? null,
       note: 'Contractor payment registered',
@@ -239,7 +241,7 @@ export async function createPayment(invoice, payload, createdBy) {
       throw err
     }
     if (error.message?.includes('not_collected')) {
-      const err = new Error('Invoice must be Collected before payment')
+      const err = new Error('Invoice must be Invoiced or Collected before payment')
       err.code = 'not_collected'
       throw err
     }

@@ -117,7 +117,16 @@ export function PaymentsPage() {
   const allRows = useMemo(
     () =>
       invoices
-        .filter((inv) => inv.status === 'Collected' || (showPaid && inv.status === 'Paid'))
+        // Flujo Billing → Payments (Collections no se usa por ahora): una factura
+        // emitida en Billing (Invoiced) es pagable directo, sin paso de cobro. Se
+        // listan Invoiced y Collected (esta última por datos viejos), y Paid con el
+        // toggle. Ver createPayment / migración 0036.
+        .filter(
+          (inv) =>
+            inv.status === 'Invoiced' ||
+            inv.status === 'Collected' ||
+            (showPaid && inv.status === 'Paid'),
+        )
         .map((inv) => {
           const collectionDate = collectionDateByInvoice.get(inv.id) ?? inv.invoiceDate
           const dueDate = addDaysISO(collectionDate, inv.paymentTermsDays ?? 30)
@@ -138,13 +147,14 @@ export function PaymentsPage() {
     [invoices, showPaid, collectionDateByInvoice, paymentByInvoice, warningBefore],
   )
 
-  // KPIs sobre las facturas pendientes de pago (Collected).
+  // KPIs sobre las facturas pendientes de pago (Invoiced o Collected — ambas son
+  // pagables en el flujo Billing → Payments; ver allRows).
   const kpis = useMemo(() => {
     let overdue = 0
     let dueThisWeek = 0
     let totalDue = 0
     for (const r of allRows) {
-      if (r.inv.status !== 'Collected') continue
+      if (r.inv.status !== 'Invoiced' && r.inv.status !== 'Collected') continue
       totalDue += r.inv.totalAmount
       if (r.alertLevel === 'overdue') overdue += 1
       if (r.daysUntilDue >= 0 && r.daysUntilDue <= 7) dueThisWeek += 1
