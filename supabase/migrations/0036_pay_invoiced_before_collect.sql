@@ -12,6 +12,17 @@
 --     Invoiced no matcheaba y no pasaba a Paid).
 --   - invoice_status_history.from_status = v_status (antes 'Collected' fijo).
 -- El overload legacy de 8 params queda como está (no se llama desde el cliente).
+--
+-- DROP + CREATE (no CREATE OR REPLACE): un entorno fresco construido desde
+-- schema_completo.sql tiene la función con `returns setof payments`, y Postgres no
+-- deja cambiar el tipo de retorno con REPLACE. El DROP hace la migración
+-- reproducible sobre cualquier base. A prod se le aplicó como CREATE OR REPLACE
+-- (ya había derivado a `returns payments`); es equivalente. NOTA: la función
+-- deployada en prod es SECURITY INVOKER sin `search_path` (drift preexistente);
+-- alinear ese hardening es una decisión de seguridad aparte.
+DROP FUNCTION IF EXISTS public.register_contractor_payment(
+  bigint, numeric, date, text, text, text, boolean, text, numeric);
+
 CREATE OR REPLACE FUNCTION public.register_contractor_payment(
   p_invoice_id bigint,
   p_amount_paid numeric,
@@ -53,3 +64,9 @@ BEGIN
   RETURN v_payment;
 END;
 $function$;
+
+-- El DROP borra los grants; se re-otorgan (igual que la función original).
+REVOKE ALL ON FUNCTION public.register_contractor_payment(
+  bigint, numeric, date, text, text, text, boolean, text, numeric) FROM public;
+GRANT EXECUTE ON FUNCTION public.register_contractor_payment(
+  bigint, numeric, date, text, text, text, boolean, text, numeric) TO authenticated;

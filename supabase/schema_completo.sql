@@ -471,8 +471,10 @@ begin
     raise exception 'Invoice % not found', p_invoice_id;
   end if;
 
-  if v_status <> 'Collected' then
-    raise exception 'not_collected: invoice % is in status %, must be Collected',
+  -- Pagable si Invoiced o Collected (flujo Billing → Payments; Collections no se
+  -- usa por ahora, una factura emitida se paga directo). Ver migración 0036.
+  if v_status not in ('Invoiced', 'Collected') then
+    raise exception 'not_collected: invoice % is in status %, must be Invoiced or Collected',
       p_invoice_id, v_status;
   end if;
 
@@ -495,7 +497,7 @@ begin
   insert into public.invoice_status_history
     (invoice_id, from_status, to_status, changed_by, note)
   values
-    (p_invoice_id, 'Collected', 'Paid', p_created_by, 'Contractor payment registered');
+    (p_invoice_id, v_status, 'Paid', p_created_by, 'Contractor payment registered');
 
   return query select * from public.payments where id = v_payment_id;
 end;
