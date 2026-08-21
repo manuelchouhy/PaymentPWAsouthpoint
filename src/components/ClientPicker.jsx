@@ -15,7 +15,7 @@ import { api } from '../lib/api'
  *   error?: string,
  * }} props
  */
-export function ClientPicker({ value, onChange, disabled, error }) {
+export function ClientPicker({ value, onChange, disabled, error, label = 'Client', required = true }) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -37,8 +37,8 @@ export function ClientPicker({ value, onChange, disabled, error }) {
   return (
     <div className="field">
       <label className="field__label" htmlFor="client-picker">
-        Client
-        <span className="field__req">required</span>
+        {label}
+        {required && <span className="field__req">required</span>}
       </label>
       <select
         id="client-picker"

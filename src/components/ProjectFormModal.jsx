@@ -78,11 +78,11 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
   const dialogRef = useRef(null)
   const firstRef = useRef(null)
   const required = useMemo(() => requiredKeys(initial), [initial])
-  // El autofocus al abrir debe caer en el primer campo que sea un <input> real —
-  // "client" nunca lo es: o es read-only (linkeado) o es el ClientPicker (select).
+  // El autofocus al abrir debe caer en el primer campo que sea un <input>
+  // real — "client" no lo es si está linkeado (ver render más abajo).
   const firstFocusableIndex = useMemo(
-    () => FIELDS.findIndex((f) => f.key !== 'client'),
-    [],
+    () => FIELDS.findIndex((f) => !(f.key === 'client' && isClientLinked(initial))),
+    [initial],
   )
 
   useScrollLock()
@@ -185,22 +185,6 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
               // dejarlo editable acá lo desincroniza del cliente vinculado
               // (autopopulado de MSA, futuras vistas por cliente, etc.).
               const clientLinked = field.key === 'client' && isClientLinked(initial)
-              // Cliente NO vinculado (proyecto que Zoho no resolvió, o alta): en vez
-              // del texto libre, un ClientPicker que setea client_id (override real,
-              // E5) + el nombre. Trae su propio .field + label, así que se devuelve
-              // directo, sin el wrapper de abajo.
-              if (field.key === 'client' && !clientLinked) {
-                return (
-                  <ClientPicker
-                    key="client"
-                    value={form.clientId}
-                    onChange={(id, client) =>
-                      setForm((prev) => ({ ...prev, clientId: id, client: client?.clientName ?? '' }))
-                    }
-                    error={isMissing ? 'Pick a client to continue.' : ''}
-                  />
-                )
-              }
               return (
                 <div className="field" key={field.key}>
                   <label className="field__label" htmlFor={clientLinked ? undefined : `pf-${field.key}`}>
@@ -230,6 +214,32 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
               )
             })}
           </div>
+
+          {/* Linker opcional (E5): además del nombre libre de arriba, vincular el
+              proyecto a un cliente REAL setea client_id, el override que el resolver
+              prioriza (más robusto que el match por nombre). Al elegir uno, se
+              actualiza también el nombre de arriba al canónico. Sólo para proyectos
+              no vinculados; uno ya vinculado se maneja desde Clients. */}
+          {!isClientLinked(initial) && (
+            <div className="project-form__link">
+              <ClientPicker
+                label="Link to a client record"
+                required={false}
+                value={form.clientId}
+                onChange={(id, client) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    clientId: id,
+                    client: client?.clientName ?? prev.client,
+                  }))
+                }
+              />
+              <p className="field__hint">
+                Optional. Links this project to a client for billing and fills the
+                Client name above. Leave empty to keep the free-text name.
+              </p>
+            </div>
+          )}
 
           {submitError && (
             <p className="modal__submit-error" role="alert">
