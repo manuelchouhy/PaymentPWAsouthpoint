@@ -13,6 +13,7 @@ import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { BillModal } from '../components/BillModal'
 import { EntryDetailDrawer } from '../components/EntryDetailDrawer'
+import { BillingBadge } from '../components/BillingBadge'
 import { Avatar } from '../components/Avatar'
 import { ALLOCATION_LABELS } from '../lib/allocations'
 
@@ -147,6 +148,10 @@ export function BillingPage() {
   const [notice, setNotice] = useState('')
   // Tab activa de Billing (bill_to_client | overage | sp_internal | unknown).
   const [tab, setTab] = useState('bill_to_client')
+  // C9: filtro de estado de la grilla Bill to client. 'pending' (default) = sólo
+  // sin facturar (la grilla facturable de siempre); 'invoiced' = sólo facturadas
+  // (read-only); 'all' = ambas. Las facturadas no son seleccionables.
+  const [billStatusFilter, setBillStatusFilter] = useState('pending')
   // Fila mostrada en el drawer de detalle (o null): snapshot al momento del click,
   // { entry, hours, count, periodLabel }. Una fila de Billing agrupa N entries de
   // la misma terna proveedor·proyecto·task; en las tabs con semana (overage/SP
@@ -397,8 +402,9 @@ export function BillingPage() {
     () =>
       groupBillToClient(filtered, {
         isInvoiced: (entry) => invoiceByEntryId.has(String(entry.id)),
+        statusFilter: billStatusFilter,
       }),
-    [filtered, invoiceByEntryId],
+    [filtered, invoiceByEntryId, billStatusFilter],
   )
 
   // Derivados de la grilla bill_to_client, memoizados juntos:
@@ -445,6 +451,9 @@ export function BillingPage() {
       if (group.isUnassigned) continue
       for (const week of group.weeks) {
         for (const row of week.rows) {
+          // Las filas facturadas (C9, filtro invoiced/all) son read-only: no entran
+          // al índice de selección ni pueden re-facturarse.
+          if (row.invoiced) continue
           const id = rowId(group.client, week, row)
           map.set(id, { ...row, rowId: id, client: group.client, week: week.week })
         }
@@ -938,10 +947,23 @@ export function BillingPage() {
             <>
               <div className="toolbar">
                 <span className="toolbar__count">
-                  Ready to bill · {billableClientCount}{' '}
-                  {billableClientCount === 1 ? 'client' : 'clients'}
+                  {billStatusFilter === 'invoiced' ? 'Invoiced' : 'Ready to bill'} ·{' '}
+                  {billableClientCount} {billableClientCount === 1 ? 'client' : 'clients'}
                 </span>
-                {clientGroups.length > 0 && <ExportDropdown onExport={handleExport} />}
+                <div className="toolbar__actions">
+                  <select
+                    className="field__input"
+                    style={{ width: 'auto', height: 38 }}
+                    value={billStatusFilter}
+                    onChange={(e) => setBillStatusFilter(e.target.value)}
+                    aria-label="Filter by billing status"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="invoiced">Invoiced</option>
+                    <option value="all">All</option>
+                  </select>
+                  {clientGroups.length > 0 && <ExportDropdown onExport={handleExport} />}
+                </div>
               </div>
 
               {clientGroups.length === 0 ? (
@@ -1023,7 +1045,11 @@ export function BillingPage() {
                         // Estado absoluto: abierta sólo si está en openWeeks (el
                         // seed abrió la más reciente de cada cliente).
                         const open = openWeeks.has(wid)
-                        const weekRowIds = week.rows.map((row) => rowId(group.client, week, row))
+                        // Sólo las filas pendientes son seleccionables (las
+                        // facturadas van read-only con el filtro invoiced/all).
+                        const weekRowIds = week.rows
+                          .filter((row) => !row.invoiced)
+                          .map((row) => rowId(group.client, week, row))
                         const allWeekSelected =
                           weekRowIds.length > 0 && weekRowIds.every((k) => selectedKeys.has(k))
                         return (
@@ -1048,7 +1074,7 @@ export function BillingPage() {
                                 <table className="table proj-table">
                                   <thead>
                                     <tr>
-                                      {canCreate && (
+                                      {canCreate && weekRowIds.length > 0 && (
                                         <th scope="col" style={{ width: 34 }}>
                                           <input
                                             type="checkbox"
@@ -1076,21 +1102,28 @@ export function BillingPage() {
                                         sowByProject.byClientAndName.get(
                                           sowKey(group.client, row.project),
                                         ) ?? sowByProject.byName.get(row.project)
+                                      // Fila seleccionable sólo si es pendiente; las facturadas
+                                      // (filtro invoiced/all) van read-only con su estado de
+                                      // billing (leído de la factura de su primera entry).
+                                      const selectable = canCreate && !row.invoiced
+                                      const billStatus = row.invoiced
+                                        ? invoiceByEntryId.get(String(row.entries[0]?.id))?.status ?? 'Invoiced'
+                                        : null
                                       return (
                                         <tr
                                           key={id}
-                                          // Sin billing.create la fila no togglea (no hay onClick):
-                                          // row-static evita el cursor de "clickeable" que da
-                                          // .proj-table, igual que en las filas de sólo lectura.
+                                          // Sin billing.create (o fila facturada) no togglea (no
+                                          // hay onClick): row-static evita el cursor de
+                                          // "clickeable" que da .proj-table.
                                           className={
-                                            !canCreate
+                                            !selectable
                                               ? 'row-static'
                                               : selectedKeys.has(id)
                                                 ? 'is-selected'
                                                 : undefined
                                           }
                                           onClick={
-                                            canCreate
+                                            selectable
                                               ? (e) => {
                                                   // No robar el click cuando el usuario está
                                                   // seleccionando texto DENTRO de esta fila
@@ -1108,17 +1141,21 @@ export function BillingPage() {
                                               : undefined
                                           }
                                         >
-                                          {canCreate && (
+                                          {canCreate && weekRowIds.length > 0 && (
+                                            // La columna del checkbox existe si la semana tiene
+                                            // filas seleccionables; una fila facturada deja la
+                                            // celda vacía para no desalinear las columnas.
                                             // stopPropagation: el checkbox ya togglea por su
-                                            // onChange; sin esto el click también burbujea al
-                                            // <tr> y togglea de nuevo (doble = no-op).
+                                            // onChange; sin esto el click burbujea al <tr>.
                                             <td onClick={(e) => e.stopPropagation()}>
-                                              <input
-                                                type="checkbox"
-                                                checked={selectedKeys.has(id)}
-                                                onChange={() => toggleGroup(id)}
-                                                aria-label={`Select ${row.user} · ${row.project}`}
-                                              />
+                                              {selectable && (
+                                                <input
+                                                  type="checkbox"
+                                                  checked={selectedKeys.has(id)}
+                                                  onChange={() => toggleGroup(id)}
+                                                  aria-label={`Select ${row.user} · ${row.project}`}
+                                                />
+                                              )}
                                             </td>
                                           )}
                                           <td className="cell-strong">
@@ -1141,7 +1178,11 @@ export function BillingPage() {
                                             {formatHours(row.hours)}
                                           </td>
                                           <td>
-                                            <span className="badge badge--pending">to bill</span>
+                                            {row.invoiced ? (
+                                              <BillingBadge status={billStatus} />
+                                            ) : (
+                                              <span className="badge badge--pending">to bill</span>
+                                            )}
                                           </td>
                                           <DetailButtonCell
                                             label={`View detail for ${row.user} · ${row.project}`}

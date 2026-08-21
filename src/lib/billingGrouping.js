@@ -19,7 +19,11 @@ import { isoWeek, isoWeekYear } from './format.js'
 
 const hoursOf = (entry) => Number(entry?.hours) || 0
 const sumHours = (entries) => entries.reduce((total, entry) => total + hoursOf(entry), 0)
-const rowKey = (entry) => `${entry.user ?? ''}||${entry.project ?? ''}||${entry.task ?? ''}`
+// El sufijo `||inv` separa las filas facturadas de las pendientes de la misma
+// terna (para el filtro de estado C9). Sólo se agrega cuando la hora está
+// facturada, así las keys de las filas pendientes (el caso por defecto) no cambian.
+const rowKey = (entry) =>
+  `${entry.user ?? ''}||${entry.project ?? ''}||${entry.task ?? ''}${entry._invoiced ? '||inv' : ''}`
 
 /**
  * Filas proveedor·proyecto·task de una semana, combinando las horas de la misma
@@ -39,6 +43,9 @@ function groupRows(entries) {
         user: entry.user ?? '',
         project: entry.project ?? '',
         task: entry.task ?? '',
+        // invoiced: la fila es de horas ya facturadas (read-only en la grilla). La
+        // key separa facturadas de pendientes, así una fila es puramente una u otra.
+        invoiced: Boolean(entry._invoiced),
         hours: hoursOf(entry),
         entries: [entry],
       })
@@ -137,14 +144,23 @@ function groupProjectsWithReason(entries) {
  *   resto por horas desc. Los asignados traen `weeks`; el bucket sin cliente trae
  *   `projects` (con motivo).
  */
-export function groupBillToClient(entries = [], { isInvoiced = () => false } = {}) {
-  const billable = (entries ?? []).filter(
-    (entry) =>
-      entry &&
-      entry.allocation === 'bill_to_client' &&
-      entry.status === 'Approved' &&
-      !isInvoiced(entry),
-  )
+export function groupBillToClient(
+  entries = [],
+  { isInvoiced = () => false, statusFilter = 'pending' } = {},
+) {
+  // statusFilter (C9): 'pending' (default, sólo sin facturar — la grilla facturable
+  // de siempre), 'invoiced' (sólo facturadas, read-only) o 'all' (ambas). Cada hora
+  // se taggea con _invoiced para separar filas y marcarlas en la UI.
+  const billable = (entries ?? [])
+    .filter(
+      (entry) =>
+        entry &&
+        entry.allocation === 'bill_to_client' &&
+        entry.status === 'Approved' &&
+        (statusFilter === 'all' ||
+          (statusFilter === 'invoiced' ? isInvoiced(entry) : !isInvoiced(entry))),
+    )
+    .map((entry) => ({ ...entry, _invoiced: isInvoiced(entry) }))
 
   const byClient = new Map()
   for (const entry of billable) {
