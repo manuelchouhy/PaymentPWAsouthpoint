@@ -151,16 +151,16 @@ export function groupBillToClient(
   // statusFilter (C9): 'pending' (default, sólo sin facturar — la grilla facturable
   // de siempre), 'invoiced' (sólo facturadas, read-only) o 'all' (ambas). Cada hora
   // se taggea con _invoiced para separar filas y marcarlas en la UI.
-  const billable = (entries ?? [])
-    .filter(
-      (entry) =>
-        entry &&
-        entry.allocation === 'bill_to_client' &&
-        entry.status === 'Approved' &&
-        (statusFilter === 'all' ||
-          (statusFilter === 'invoiced' ? isInvoiced(entry) : !isInvoiced(entry))),
-    )
-    .map((entry) => ({ ...entry, _invoiced: isInvoiced(entry) }))
+  // Una sola pasada: isInvoiced se evalúa una vez por hora (hace un lookup) y sólo
+  // se copian las que sobreviven al filtro, con su _invoiced ya calculado.
+  const billable = []
+  for (const entry of entries ?? []) {
+    if (!entry || entry.allocation !== 'bill_to_client' || entry.status !== 'Approved') continue
+    const invoiced = isInvoiced(entry)
+    if (statusFilter === 'pending' && invoiced) continue
+    if (statusFilter === 'invoiced' && !invoiced) continue
+    billable.push({ ...entry, _invoiced: invoiced })
+  }
 
   const byClient = new Map()
   for (const entry of billable) {

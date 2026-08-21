@@ -346,7 +346,9 @@ export function BillingPage() {
     // El aviso habla de la selección anterior: dejarlo bajo otra grilla filtrada
     // haría dudar de una factura que sí se emitió.
     setNotice('')
-  }, [filters])
+    // También al cambiar el filtro de estado (C9): al pasar a 'invoiced' las filas
+    // dejan de ser seleccionables y quedaría una barra de selección fantasma.
+  }, [filters, billStatusFilter])
 
   const cards = useMemo(() => {
     let pendingToBill = 0
@@ -947,8 +949,12 @@ export function BillingPage() {
             <>
               <div className="toolbar">
                 <span className="toolbar__count">
-                  {billStatusFilter === 'invoiced' ? 'Invoiced' : 'Ready to bill'} ·{' '}
-                  {billableClientCount} {billableClientCount === 1 ? 'client' : 'clients'}
+                  {billStatusFilter === 'invoiced'
+                    ? 'Invoiced'
+                    : billStatusFilter === 'all'
+                      ? 'All'
+                      : 'Ready to bill'}{' '}
+                  · {billableClientCount} {billableClientCount === 1 ? 'client' : 'clients'}
                 </span>
                 <div className="toolbar__actions">
                   <select
@@ -978,7 +984,11 @@ export function BillingPage() {
                   quede nada editable: esas filas tienen el checkbox
                   deshabilitado en Entries y setEntriesAllocation las rechaza, así
                   que mandar a clasificarlas termina en un control muerto. */}
-              {cards.classifiable > 0
+              {billStatusFilter === 'invoiced'
+                ? 'No invoiced hours under the current filters.'
+                : billStatusFilter === 'all'
+                  ? 'No hours (pending or invoiced) under the current filters.'
+                : cards.classifiable > 0
                 ? can('entries.allocate')
                   ? 'No hours ready to bill. Classify approved hours as “bill to client” in Entries first.'
                   : // Billing lo ve todo el mundo, pero entries.allocate excluye
@@ -1106,8 +1116,21 @@ export function BillingPage() {
                                       // (filtro invoiced/all) van read-only con su estado de
                                       // billing (leído de la factura de su primera entry).
                                       const selectable = canCreate && !row.invoiced
+                                      // Estado de billing de una fila facturada: si todas sus
+                                      // entries comparten estado, ese; si están en facturas de
+                                      // estados distintos (mixta), se muestra 'Invoiced' (el menos
+                                      // avanzado, conservador).
                                       const billStatus = row.invoiced
-                                        ? invoiceByEntryId.get(String(row.entries[0]?.id))?.status ?? 'Invoiced'
+                                        ? (() => {
+                                            const st = [
+                                              ...new Set(
+                                                row.entries
+                                                  .map((en) => invoiceByEntryId.get(String(en.id))?.status)
+                                                  .filter(Boolean),
+                                              ),
+                                            ]
+                                            return st.length === 1 ? st[0] : 'Invoiced'
+                                          })()
                                         : null
                                       return (
                                         <tr
