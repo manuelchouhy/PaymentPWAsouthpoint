@@ -152,16 +152,21 @@ export function FilterBar({
 
           <div className="filterfield filterfield--week">
             <span className="filterfield__label">Week</span>
-            <input
-              type="number"
-              inputMode="numeric"
-              min="1"
-              max="53"
-              placeholder="e.g. 23"
-              className="filterfield__input"
-              value={weekDraft}
-              onChange={(event) => setWeekDraft(event.target.value)}
-            />
+            <div className="filterfield__affixwrap">
+              {weekDraft !== '' && (
+                <span className="filterfield__affix" aria-hidden="true">W</span>
+              )}
+              <input
+                type="number"
+                inputMode="numeric"
+                min="1"
+                max="53"
+                placeholder="All"
+                className={`filterfield__input${weekDraft !== '' ? ' filterfield__input--affixed' : ''}`}
+                value={weekDraft}
+                onChange={(event) => setWeekDraft(event.target.value)}
+              />
+            </div>
           </div>
 
           <button

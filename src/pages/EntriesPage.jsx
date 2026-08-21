@@ -438,13 +438,15 @@ export function EntriesPage() {
               <div className="filterfield filterfield--week">
                 <span className="filterfield__label">Week</span>
                 <div className="filterfield__affixwrap">
-                  <span className="filterfield__affix" aria-hidden="true">W</span>
+                  {filters.week !== '' && (
+                    <span className="filterfield__affix" aria-hidden="true">W</span>
+                  )}
                   <input
                     type="number"
                     min="1"
                     max="53"
-                    className="filterfield__input filterfield__input--affixed"
-                    placeholder="all"
+                    className={`filterfield__input${filters.week !== '' ? ' filterfield__input--affixed' : ''}`}
+                    placeholder="All"
                     value={filters.week}
                     onChange={(e) => setField('week', e.target.value)}
                   />
