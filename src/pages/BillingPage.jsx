@@ -407,29 +407,33 @@ export function BillingPage() {
   //   avisar en el modal cuántas horas del contractor quedan fuera de la factura,
   //   ACOTADO al cliente que se factura (facturar un cliente no debe contar horas
   //   de otro cliente).
-  const { billableClientCount, sinClienteHours, pendingByClientProvider } = useMemo(() => {
+  const { billableClientCount, sinClienteHours } = useMemo(() => {
     let clientCount = 0
     let unassignedHours = 0
-    const pending = new Map()
     for (const group of clientGroups) {
-      if (group.isUnassigned) {
-        unassignedHours += group.hours
-        continue
-      }
-      clientCount += 1
-      for (const week of group.weeks) {
-        for (const row of week.rows) {
-          const key = `${group.client}||${row.user}`
-          pending.set(key, (pending.get(key) ?? 0) + row.hours)
-        }
-      }
+      if (group.isUnassigned) unassignedHours += group.hours
+      else clientCount += 1
     }
-    return {
-      billableClientCount: clientCount,
-      sinClienteHours: unassignedHours,
-      pendingByClientProvider: pending,
-    }
+    return { billableClientCount: clientCount, sinClienteHours: unassignedHours }
   }, [clientGroups])
+
+  // Horas pendientes de facturar por cliente+contractor, sobre TODAS las entries
+  // (NO las filtradas). El aviso del modal tiene que reflejar lo que realmente le
+  // queda al contractor en ese cliente, no lo que el filtro de Proyecto/fecha deja
+  // ver: si no, filtrar por un proyecto haría creer que no queda nada pendiente
+  // cuando el contractor sí tiene horas sin facturar en otro proyecto del cliente.
+  const pendingByClientProvider = useMemo(() => {
+    const m = new Map()
+    for (const e of entriesConCliente) {
+      if (e.status !== 'Approved') continue
+      if (e.allocation !== 'bill_to_client') continue
+      if (!e.client) continue
+      if (invoiceByEntryId.has(String(e.id))) continue
+      const key = `${e.client}||${e.user}`
+      m.set(key, (m.get(key) ?? 0) + (Number(e.hours) || 0))
+    }
+    return m
+  }, [entriesConCliente, invoiceByEntryId])
 
   // Índice de filas facturables por clave única (cliente·semana·terna). La
   // selección y la factura trabajan a nivel de fila, no de cliente: una factura
@@ -880,13 +884,13 @@ export function BillingPage() {
             </div>
             <div className="dash-kpi dash-kpi--static">
               <div className="dash-kpi__head">
-                <span className="dash-kpi__label">Sin cliente</span>
+                <span className="dash-kpi__label">No client</span>
               </div>
               <span className="dash-kpi__value">
                 {formatHours(sinClienteHours)}
                 <span className="dash-kpi__unit"> h</span>
               </span>
-              <span className="dash-kpi__hint">bill_to_client sin cliente resuelto</span>
+              <span className="dash-kpi__hint">bill-to-client with no resolved client</span>
             </div>
             <div className="dash-kpi dash-kpi--static">
               <div className="dash-kpi__head">
@@ -903,7 +907,7 @@ export function BillingPage() {
             </div>
             <div className="dash-kpi dash-kpi--static">
               <div className="dash-kpi__head">
-                <span className="dash-kpi__label">Clientes por facturar</span>
+                <span className="dash-kpi__label">Clients to bill</span>
               </div>
               <span className="dash-kpi__value">{billableClientCount}</span>
               <span className="dash-kpi__hint">
