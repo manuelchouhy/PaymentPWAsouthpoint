@@ -77,7 +77,15 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
   const [dupError, setDupError] = useState(false)
   const dialogRef = useRef(null)
   const firstRef = useRef(null)
-  const required = useMemo(() => requiredKeys(initial), [initial])
+  // `client` deja de ser requerido si el proyecto está VINCULADO a un cliente real
+  // (form.clientId, vivo): sea porque ya venía linkeado o porque se acaba de
+  // vincular con el linker (E5). Una sola fuente para required/missing/isMissing y
+  // el badge del label — así no se contradicen (badge "required" con Save activo).
+  const required = useMemo(() => {
+    const req = requiredKeys(initial)
+    if (form.clientId) req.delete('client')
+    return req
+  }, [initial, form.clientId])
   // El autofocus al abrir debe caer en el primer campo que sea un <input>
   // real — "client" no lo es si está linkeado (ver render más abajo).
   const firstFocusableIndex = useMemo(
@@ -99,12 +107,7 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
-  // El nombre libre `client` deja de ser requerido si el proyecto quedó VINCULADO
-  // a un cliente real (form.clientId): el link ya provee el cliente (E5), el texto
-  // libre pasa a opcional.
-  const missing = [...required].filter(
-    (k) => !String(form[k] ?? '').trim() && !(k === 'client' && form.clientId),
-  )
+  const missing = [...required].filter((k) => !String(form[k] ?? '').trim())
   const valid = missing.length === 0
 
   function setField(key, value) {
@@ -222,15 +225,17 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
 
           {/* Linker opcional (E5): además del nombre libre de arriba, vincular el
               proyecto a un cliente REAL setea client_id, el override que el resolver
-              prioriza (más robusto que el match por nombre). Al elegir uno, se
-              actualiza también el nombre de arriba al canónico. Sólo para proyectos
-              no vinculados; uno ya vinculado se maneja desde Clients. */}
+              prioriza (más robusto que el match por nombre). Al vincular, el nombre
+              libre deja de ser requerido (el link ya provee el cliente); el texto de
+              arriba no se toca. Sólo para proyectos no vinculados; uno ya vinculado
+              se maneja desde Clients. */}
           {!isClientLinked(initial) && (
             <div className="project-form__link">
               <ClientPicker
                 id="pf-client-link"
                 label="Link to a client record"
                 required={false}
+                showMsaHint={false}
                 disabled={submitting}
                 value={form.clientId}
                 onChange={(id) => setForm((prev) => ({ ...prev, clientId: id }))}

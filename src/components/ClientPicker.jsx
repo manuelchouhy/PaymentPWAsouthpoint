@@ -23,6 +23,7 @@ export function ClientPicker({
   label = 'Client',
   required = true,
   id = 'client-picker',
+  showMsaHint = true,
 }) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
@@ -68,7 +69,7 @@ export function ClientPicker({
       {error && <span className="field__error">{error}</span>}
       {loadError && <span className="field__error">{loadError}</span>}
 
-      {selected && (
+      {selected && showMsaHint && (
         <div className="field__hint" style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
           <FileText size={13} strokeWidth={2} aria-hidden="true" />
           MSA on file · autopopulated from {selected.clientName}, not editable here
