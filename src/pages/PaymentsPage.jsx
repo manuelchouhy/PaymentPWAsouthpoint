@@ -134,10 +134,15 @@ export function PaymentsPage() {
           // pagable ya, pero sin deadline → sin fecha de vencimiento ni alerta. Así
           // no se rotula la fecha de factura como cobro, no se marca overdue una
           // Invoiced vieja, y no se calcula sobre una fecha nula si falta invoiceDate.
+          // Registro de cobro (si existe) — para mostrar la fecha real de cobro.
           const collectionDate = collectionDateByInvoice.get(inv.id) ?? null
-          const dueDate = collectionDate
-            ? addDaysISO(collectionDate, inv.paymentTermsDays ?? 30)
-            : null
+          // El vencimiento de pago aplica a las COBRADAS (por status): base = fecha
+          // de cobro, o la de factura como fallback si falta el registro (dato
+          // incompleto — una Collected debería tener cobro). Una Invoiced es pagable
+          // pero sin deadline → sin dueDate. El guard evita addDaysISO sobre null.
+          const dueBase =
+            inv.status === 'Collected' ? collectionDate ?? inv.invoiceDate ?? null : null
+          const dueDate = dueBase ? addDaysISO(dueBase, inv.paymentTermsDays ?? 30) : null
           const daysUntilDue = dueDate ? daysUntil(dueDate) : null
           const alertLevel =
             inv.status === 'Paid' || !dueDate
@@ -184,10 +189,12 @@ export function PaymentsPage() {
       return true
     })
     // Orden: vencidos arriba, después warning, después por fecha de vencimiento.
+    // dueDate puede ser null (Invoiced/Paid sin deadline): se ordenan al final
+    // (coalesce a una fecha alta) para no romper el localeCompare.
     return filtered.sort(
       (a, b) =>
-        (ALERT_RANK[a.alertLevel] - ALERT_RANK[b.alertLevel]) ||
-        a.dueDate.localeCompare(b.dueDate),
+        ALERT_RANK[a.alertLevel] - ALERT_RANK[b.alertLevel] ||
+        (a.dueDate ?? '9999-12-31').localeCompare(b.dueDate ?? '9999-12-31'),
     )
   }, [allRows, alertFilter])
 
@@ -261,9 +268,11 @@ export function PaymentsPage() {
       invoiceNumber: r.inv.supplierInvoiceNumber,
       currency: r.inv.currency ?? 'USD',
       totalAmount: r.inv.totalAmount,
-      collectionDate: r.collectionDate,
-      dueDate: r.dueDate,
-      daysUntilDue: r.daysUntilDue,
+      // Coalesce a '' (no null): una Invoiced no tiene cobro ni vencimiento, y una
+      // celda vacía en el export es más limpia que un null literal.
+      collectionDate: r.collectionDate ?? '',
+      dueDate: r.dueDate ?? '',
+      daysUntilDue: r.daysUntilDue ?? '',
       alertLevel: r.alertLevel,
       status: r.inv.status,
       paymentDate: r.payment?.paymentDate ?? '',
