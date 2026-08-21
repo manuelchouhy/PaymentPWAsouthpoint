@@ -166,7 +166,11 @@ export function PaymentsPage() {
     const filtered = allRows.filter((r) => {
       if (alertFilter === 'overdue') return r.alertLevel === 'overdue'
       if (alertFilter === 'dueThisWeek')
-        return r.inv.status === 'Collected' && r.daysUntilDue >= 0 && r.daysUntilDue <= 7
+        return (
+          (r.inv.status === 'Invoiced' || r.inv.status === 'Collected') &&
+          r.daysUntilDue >= 0 &&
+          r.daysUntilDue <= 7
+        )
       return true
     })
     // Orden: vencidos arriba, después warning, después por fecha de vencimiento.
@@ -273,9 +277,9 @@ export function PaymentsPage() {
         </div>
         <h1 className="masthead__title">Payments</h1>
         <p className="masthead__sub">
-          Contractor payment for already-collected invoices (Collected): once paid,
-          they move to Paid. Overage hours are paid here too — per contractor,
-          without an invoice — and freeze once paid.
+          Contractor payment for invoices ready to pay — issued in Billing
+          (Invoiced) or Collected: once paid, they move to Paid. Overage hours are
+          paid here too — per contractor, without an invoice — and freeze once paid.
         </p>
       </motion.header>
 
@@ -363,8 +367,12 @@ export function PaymentsPage() {
                 </thead>
                 <tbody>
                   {rows.map((r, index) => {
-                    const overdue = r.inv.status === 'Collected' && r.alertLevel === 'overdue'
-                    const warning = r.inv.status === 'Collected' && r.alertLevel === 'warning'
+                    // Pagable = emitida o cobrada (flujo Billing → Payments). El
+                    // resaltado de vencimiento, el badge de alerta y el botón de
+                    // pago aplican a ambas; sólo Paid queda fuera.
+                    const payable = r.inv.status === 'Invoiced' || r.inv.status === 'Collected'
+                    const overdue = payable && r.alertLevel === 'overdue'
+                    const warning = payable && r.alertLevel === 'warning'
                     const rowClass = overdue
                       ? 'row--overdue-high'
                       : warning
@@ -397,7 +405,7 @@ export function PaymentsPage() {
                         </td>
                         <td><BillingBadge status={r.inv.status} /></td>
                         <td>
-                          {r.inv.status === 'Collected' && can('payments.create') ? (
+                          {payable && can('payments.create') ? (
                             <button
                               type="button"
                               className="btn btn--pay btn--row"
@@ -405,7 +413,7 @@ export function PaymentsPage() {
                             >
                               Register Payment
                             </button>
-                          ) : r.inv.status !== 'Collected' ? (
+                          ) : r.inv.status === 'Paid' ? (
                             <button
                               type="button"
                               className="btn btn--ghost btn--row"

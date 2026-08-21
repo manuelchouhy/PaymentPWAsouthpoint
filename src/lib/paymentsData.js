@@ -1,6 +1,7 @@
 /**
  * Capa de datos del módulo Payments al contractor (FR-10).
- * Un payment se vincula a una invoice que YA está en estado 'Collected'.
+ * Un payment se vincula a una invoice pagable: 'Invoiced' o 'Collected' (flujo
+ * Billing → Payments; Collections no es parte del flujo por ahora).
  *
  * @typedef {Object} ContractorPayment
  * @property {string|number} id
@@ -220,9 +221,10 @@ export async function createPayment(invoice, payload, createdBy) {
   }
 
   // Registro ATÓMICO en el servidor (función register_contractor_payment):
-  // valida que la factura esté en 'Collected', inserta el pago, avanza la factura
-  // a 'Paid' y registra el historial, todo en una sola transacción. El índice
-  // único payments_invoice_id_unique impide un segundo pago para la misma factura.
+  // valida que la factura esté en 'Invoiced' o 'Collected' (migración 0036),
+  // inserta el pago, avanza la factura a 'Paid' y registra el historial, todo en
+  // una sola transacción. El índice único payments_invoice_id_unique impide un
+  // segundo pago para la misma factura.
   const { data, error } = await supabase.rpc('register_contractor_payment', {
     p_invoice_id: invoice.id,
     p_amount_paid: Number(payload.amountPaid),
