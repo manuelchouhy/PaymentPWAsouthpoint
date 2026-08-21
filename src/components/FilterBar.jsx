@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ListFilter, X } from 'lucide-react'
 import { MultiSelectDropdown } from './MultiSelectDropdown'
+import { WeekField } from './WeekField'
 
 const BILLING_STATUS_OPTIONS = ['Pending', 'Invoiced', 'Collected', 'Paid']
 
@@ -150,24 +151,7 @@ export function FilterBar({
             />
           </div>
 
-          <div className="filterfield filterfield--week">
-            <span className="filterfield__label">Week</span>
-            <div className="filterfield__affixwrap">
-              {weekDraft !== '' && (
-                <span className="filterfield__affix" aria-hidden="true">W</span>
-              )}
-              <input
-                type="number"
-                inputMode="numeric"
-                min="1"
-                max="53"
-                placeholder="All"
-                className={`filterfield__input${weekDraft !== '' ? ' filterfield__input--affixed' : ''}`}
-                value={weekDraft}
-                onChange={(event) => setWeekDraft(event.target.value)}
-              />
-            </div>
-          </div>
+          <WeekField value={weekDraft} onChange={setWeekDraft} />
 
           <button
             type="button"
