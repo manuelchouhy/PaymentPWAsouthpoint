@@ -522,7 +522,7 @@ export function EntriesPage() {
                               !allPageSelected &&
                               selectableOnPage.some((e) => selectedIds.has(e.id))
                             }
-                            onChange={toggleAllOnPage}
+                            onChange={() => toggleAllOnPage()}
                             disabled={selectableOnPage.length === 0}
                             ariaLabel="Select all selectable rows on this page"
                           />

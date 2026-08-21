@@ -3,11 +3,13 @@ import { Link, useOutletContext } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   AlertTriangle,
+  Clock,
   CreditCard,
   FileText,
   Plus,
   Receipt,
   TrendingUp,
+  Wallet,
 } from 'lucide-react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { api } from '../lib/api'
@@ -208,9 +210,12 @@ export function DashboardPage() {
                     sin facturar se miran en Entries y se facturan en Billing. */}
                 <Link to="/entries" className="dash-kpi">
                   <div className="dash-kpi__head">
-                    <span className="dash-kpi__label">Pending Hours</span>
+                    <span className="dash-kpi__icon">
+                      <Clock size={17} aria-hidden="true" />
+                    </span>
                     <Sparkline values={sparklines.pendingHours} />
                   </div>
+                  <span className="dash-kpi__label">Pending Hours</span>
                   <span className="dash-kpi__value">
                     {kpis.pendingHours.toFixed(1)}
                     <span className="dash-kpi__unit"> h</span>
@@ -219,9 +224,12 @@ export function DashboardPage() {
                 </Link>
                 <Link to="/billing" className="dash-kpi">
                   <div className="dash-kpi__head">
-                    <span className="dash-kpi__label">Invoices This Month</span>
+                    <span className="dash-kpi__icon">
+                      <FileText size={17} aria-hidden="true" />
+                    </span>
                     <Sparkline values={sparklines.invoicesThisMonth} />
                   </div>
+                  <span className="dash-kpi__label">Invoices This Month</span>
                   <span className="dash-kpi__value">{kpis.invoicesThisMonth}</span>
                   <span className="dash-kpi__hint">{monthLabel}</span>
                 </Link>
@@ -232,9 +240,12 @@ export function DashboardPage() {
               className={`dash-kpi${kpis.collectionsPending > 0 ? ' dash-kpi--warn' : ''}`}
             >
               <div className="dash-kpi__head">
-                <span className="dash-kpi__label">Collections Pending</span>
+                <span className="dash-kpi__icon">
+                  <Wallet size={17} aria-hidden="true" />
+                </span>
                 <Sparkline values={sparklines.collectionsPending} />
               </div>
+              <span className="dash-kpi__label">Collections Pending</span>
               <span className="dash-kpi__value">{kpis.collectionsPending}</span>
               <span className="dash-kpi__hint">invoiced, not yet collected</span>
             </Link>
@@ -243,9 +254,12 @@ export function DashboardPage() {
               className={`dash-kpi${kpis.paymentsDueThisWeek > 0 ? ' dash-kpi--urgent' : ''}`}
             >
               <div className="dash-kpi__head">
-                <span className="dash-kpi__label">Payments Due This Week</span>
+                <span className="dash-kpi__icon">
+                  <CreditCard size={17} aria-hidden="true" />
+                </span>
                 <Sparkline values={sparklines.paymentsDueThisWeek} />
               </div>
+              <span className="dash-kpi__label">Payments Due This Week</span>
               <span className="dash-kpi__value">{kpis.paymentsDueThisWeek}</span>
               <span className="dash-kpi__hint">next 7 days</span>
             </Link>
