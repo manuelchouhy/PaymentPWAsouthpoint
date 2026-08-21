@@ -6,7 +6,7 @@
  * debounce de FilterBar vs. el set directo de Entries).
  */
 export function WeekField({ label = 'Week', value, onChange }) {
-  const hasValue = value !== ''
+  const hasValue = String(value ?? '') !== ''
   return (
     <div className="filterfield filterfield--week">
       <span className="filterfield__label">{label}</span>
@@ -21,7 +21,7 @@ export function WeekField({ label = 'Week', value, onChange }) {
           max="53"
           placeholder="All"
           className={`filterfield__input${hasValue ? ' filterfield__input--affixed' : ''}`}
-          value={value}
+          value={value ?? ''}
           onChange={(event) => onChange(event.target.value)}
         />
       </div>
