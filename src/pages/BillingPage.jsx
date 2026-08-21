@@ -489,19 +489,19 @@ export function BillingPage() {
   const canCreate = can('billing.create')
   const canBill = canCreate && selectedEntries.length > 0 && selectedProviders.length === 1
 
-  // Horas del contractor que quedan pendientes en el/los MISMO(S) cliente(s) de la
-  // selección y NO entran en esta factura (C11). Acotado por cliente: facturar un
-  // cliente no debe avisar por horas que van en la factura de otro cliente.
-  const remainingHoursForInvoice = canBill
-    ? Math.max(
-        0,
-        [...new Set(selectedRows.map((r) => r.client))].reduce(
-          (sum, client) =>
-            sum + (pendingByClientProvider.get(`${client}||${selectedProviders[0]}`) ?? 0),
-          0,
-        ) - selectedHours,
-      )
-    : 0
+  // Horas del contractor que quedan pendientes en el cliente de la selección y NO
+  // entran en esta factura (C11). Sólo se calcula con el modal abierto (no en cada
+  // render) y sólo cuando la selección es de UN cliente: con varios, la resta
+  // cruzaría clientes y el número sería ambiguo (no se sabría de cuál son las
+  // horas restantes), así que en ese caso no se muestra aviso.
+  const remainingHoursForInvoice = (() => {
+    if (!modalOpen || !canBill) return 0
+    const selClients = new Set(selectedRows.map((r) => r.client))
+    if (selClients.size !== 1) return 0
+    const [client] = selClients
+    const pending = pendingByClientProvider.get(`${client}||${selectedProviders[0]}`) ?? 0
+    return Math.max(0, pending - selectedHours)
+  })()
 
   function toggleGroup(key) {
     setSelectedKeys((prev) => {
@@ -639,7 +639,7 @@ export function BillingPage() {
     const push = (group, week, row) =>
       rows.push({
         entity: group.entity || '—',
-        provider: row.user || '',
+        ...(showProvider ? { provider: row.user || '' } : {}),
         week: week ? week.week : '—',
         project: row.project || '',
         task: row.task || '',
