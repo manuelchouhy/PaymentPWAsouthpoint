@@ -1924,7 +1924,10 @@ th.col-pop { text-align: center; }
 .checkbox__input:not(:disabled):hover ~ .checkbox__box { border-color: var(--accent); background: var(--surface-3); }
 .checkbox--on .checkbox__input:not(:disabled):hover ~ .checkbox__box { background: #4DD9E8; }
 .checkbox__input:not(:disabled):active ~ .checkbox__box { transform: scale(.88); }
-.checkbox__input:disabled { cursor: not-allowed; }
+/* El cursor va en el wrapper (no en el <input>:disabled, donde varios browsers
+   no aplican cursor custom); el input disabled deja pasar el pointer al wrapper. */
+.checkbox--disabled { cursor: not-allowed; }
+.checkbox__input:disabled { pointer-events: none; }
 .checkbox__input:focus-visible { outline: none; }
 .checkbox__input:focus-visible ~ .checkbox__box {
   outline: 2px solid var(--accent);
@@ -4808,7 +4811,6 @@ select.field__input { cursor: pointer; }
   box-shadow: var(--shadow-e2);
   transform: translateY(-2px);
 }
-.dash-action-btn svg { color: var(--accent); }
 
 /* --- Export dropdown (Prompt 21) ------------------------------------------ */
 .export-wrap { position: relative; }
