@@ -31,6 +31,12 @@ function daysUntil(iso) {
   return Math.round((target - today) / 86400000)
 }
 
+// Estados de factura PAGABLES al contractor (flujo Billing → Payments, sin
+// Collections): emitida (Invoiced) o cobrada (Collected). Una sola fuente para el
+// listado, KPIs, filtros, resaltado y el botón de pago — así no se desincronizan.
+const PAYABLE_STATUSES = ['Invoiced', 'Collected']
+const isPayable = (status) => PAYABLE_STATUSES.includes(status)
+
 export function PaymentsPage() {
   const { user, profile, can } = useOutletContext()
   const [invoices, setInvoices] = useState([])
@@ -121,13 +127,12 @@ export function PaymentsPage() {
         // emitida en Billing (Invoiced) es pagable directo, sin paso de cobro. Se
         // listan Invoiced y Collected (esta última por datos viejos), y Paid con el
         // toggle. Ver createPayment / migración 0036.
-        .filter(
-          (inv) =>
-            inv.status === 'Invoiced' ||
-            inv.status === 'Collected' ||
-            (showPaid && inv.status === 'Paid'),
-        )
+        .filter((inv) => isPayable(inv.status) || (showPaid && inv.status === 'Paid'))
         .map((inv) => {
+          // Invoiced no tiene cobro: la fecha de vencimiento se calcula desde la
+          // fecha de factura. `collected` distingue una fecha de cobro real de ese
+          // fallback (para no rotular la fecha de factura como "Collection Date").
+          const collected = collectionDateByInvoice.has(inv.id)
           const collectionDate = collectionDateByInvoice.get(inv.id) ?? inv.invoiceDate
           const dueDate = addDaysISO(collectionDate, inv.paymentTermsDays ?? 30)
           const daysUntilDue = daysUntil(dueDate)
@@ -137,6 +142,7 @@ export function PaymentsPage() {
               : paymentAlertLevel(daysUntilDue, warningBefore)
           return {
             inv,
+            collected,
             collectionDate,
             dueDate,
             daysUntilDue,
@@ -154,7 +160,7 @@ export function PaymentsPage() {
     let dueThisWeek = 0
     let totalDue = 0
     for (const r of allRows) {
-      if (r.inv.status !== 'Invoiced' && r.inv.status !== 'Collected') continue
+      if (!isPayable(r.inv.status)) continue
       totalDue += r.inv.totalAmount
       if (r.alertLevel === 'overdue') overdue += 1
       if (r.daysUntilDue >= 0 && r.daysUntilDue <= 7) dueThisWeek += 1
@@ -166,11 +172,7 @@ export function PaymentsPage() {
     const filtered = allRows.filter((r) => {
       if (alertFilter === 'overdue') return r.alertLevel === 'overdue'
       if (alertFilter === 'dueThisWeek')
-        return (
-          (r.inv.status === 'Invoiced' || r.inv.status === 'Collected') &&
-          r.daysUntilDue >= 0 &&
-          r.daysUntilDue <= 7
-        )
+        return isPayable(r.inv.status) && r.daysUntilDue >= 0 && r.daysUntilDue <= 7
       return true
     })
     // Orden: vencidos arriba, después warning, después por fecha de vencimiento.
@@ -370,7 +372,7 @@ export function PaymentsPage() {
                     // Pagable = emitida o cobrada (flujo Billing → Payments). El
                     // resaltado de vencimiento, el badge de alerta y el botón de
                     // pago aplican a ambas; sólo Paid queda fuera.
-                    const payable = r.inv.status === 'Invoiced' || r.inv.status === 'Collected'
+                    const payable = isPayable(r.inv.status)
                     const overdue = payable && r.alertLevel === 'overdue'
                     const warning = payable && r.alertLevel === 'warning'
                     const rowClass = overdue
@@ -389,7 +391,9 @@ export function PaymentsPage() {
                         <td>{r.inv.userName}</td>
                         <td className="cell-mono">{r.inv.supplierInvoiceNumber}</td>
                         <td className="col-num cell-mono">{getCurrencySymbol(r.inv.currency)}{fmtAmount(r.inv.totalAmount)}</td>
-                        <td className="cell-mono">{formatDate(r.collectionDate)}</td>
+                        <td className="cell-mono">
+                          {r.collected ? formatDate(r.collectionDate) : '—'}
+                        </td>
                         <td className="cell-mono">{formatDate(r.dueDate)}</td>
                         <td className={`col-num cell-mono${overdue ? ' proj-days--overdue' : ''}`}>
                           {r.inv.status === 'Paid' ? '—' : r.daysUntilDue}

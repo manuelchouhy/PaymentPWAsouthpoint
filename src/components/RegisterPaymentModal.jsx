@@ -115,7 +115,7 @@ export function RegisterPaymentModal({
       setSubmitting(false)
       setSubmitError(
         error?.code === 'not_collected'
-          ? 'The invoice must be in Collected status before registering a payment.'
+          ? 'The invoice must be Invoiced or Collected before registering a payment.'
           : error?.message ?? 'Could not register the payment.',
       )
     }
@@ -158,7 +158,7 @@ export function RegisterPaymentModal({
           <div className="modal__summary-id">
             <span className="modal__summary-user">{summaryName ?? invoice?.userName}</span>
             <span className="modal__summary-meta">
-              {summaryMeta ?? `${invoice?.supplierInvoiceNumber} · Collected`}
+              {summaryMeta ?? `${invoice?.supplierInvoiceNumber} · ${invoice?.status ?? ''}`}
             </span>
           </div>
           <div className="modal__summary-hours">
