@@ -129,20 +129,23 @@ export function PaymentsPage() {
         // toggle. Ver createPayment / migración 0036.
         .filter((inv) => isPayable(inv.status) || (showPaid && inv.status === 'Paid'))
         .map((inv) => {
-          // Invoiced no tiene cobro: la fecha de vencimiento se calcula desde la
-          // fecha de factura. `collected` distingue una fecha de cobro real de ese
-          // fallback (para no rotular la fecha de factura como "Collection Date").
-          const collected = collectionDateByInvoice.has(inv.id)
-          const collectionDate = collectionDateByInvoice.get(inv.id) ?? inv.invoiceDate
-          const dueDate = addDaysISO(collectionDate, inv.paymentTermsDays ?? 30)
-          const daysUntilDue = daysUntil(dueDate)
+          // El vencimiento de pago al contractor SÓLO aplica a facturas COBRADAS:
+          // el plazo (paymentTermsDays) corre desde el cobro. Una Invoiced es
+          // pagable ya, pero sin deadline → sin fecha de vencimiento ni alerta. Así
+          // no se rotula la fecha de factura como cobro, no se marca overdue una
+          // Invoiced vieja, y no se calcula sobre una fecha nula si falta invoiceDate.
+          const collectionDate = collectionDateByInvoice.get(inv.id) ?? null
+          const dueDate = collectionDate
+            ? addDaysISO(collectionDate, inv.paymentTermsDays ?? 30)
+            : null
+          const daysUntilDue = dueDate ? daysUntil(dueDate) : null
           const alertLevel =
-            inv.status === 'Paid'
+            inv.status === 'Paid' || !dueDate
               ? 'on_time'
               : paymentAlertLevel(daysUntilDue, warningBefore)
           return {
             inv,
-            collected,
+            collected: Boolean(collectionDate),
             collectionDate,
             dueDate,
             daysUntilDue,
@@ -162,8 +165,12 @@ export function PaymentsPage() {
     for (const r of allRows) {
       if (!isPayable(r.inv.status)) continue
       totalDue += r.inv.totalAmount
-      if (r.alertLevel === 'overdue') overdue += 1
-      if (r.daysUntilDue >= 0 && r.daysUntilDue <= 7) dueThisWeek += 1
+      // Vencido / esta-semana sólo cuentan las que tienen deadline (cobradas);
+      // una Invoiced es pagable pero no "vence".
+      if (r.dueDate) {
+        if (r.alertLevel === 'overdue') overdue += 1
+        if (r.daysUntilDue >= 0 && r.daysUntilDue <= 7) dueThisWeek += 1
+      }
     }
     return { overdue, dueThisWeek, totalDue }
   }, [allRows])
@@ -172,7 +179,8 @@ export function PaymentsPage() {
     const filtered = allRows.filter((r) => {
       if (alertFilter === 'overdue') return r.alertLevel === 'overdue'
       if (alertFilter === 'dueThisWeek')
-        return isPayable(r.inv.status) && r.daysUntilDue >= 0 && r.daysUntilDue <= 7
+        // r.dueDate guard: sin él, daysUntilDue null pasaría (null>=0 es true en JS).
+        return Boolean(r.dueDate) && r.daysUntilDue >= 0 && r.daysUntilDue <= 7
       return true
     })
     // Orden: vencidos arriba, después warning, después por fecha de vencimiento.
@@ -394,9 +402,9 @@ export function PaymentsPage() {
                         <td className="cell-mono">
                           {r.collected ? formatDate(r.collectionDate) : '—'}
                         </td>
-                        <td className="cell-mono">{formatDate(r.dueDate)}</td>
+                        <td className="cell-mono">{r.dueDate ? formatDate(r.dueDate) : '—'}</td>
                         <td className={`col-num cell-mono${overdue ? ' proj-days--overdue' : ''}`}>
-                          {r.inv.status === 'Paid' ? '—' : r.daysUntilDue}
+                          {r.daysUntilDue == null ? '—' : r.daysUntilDue}
                         </td>
                         <td>
                           {overdue ? (
