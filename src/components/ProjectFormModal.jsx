@@ -99,7 +99,12 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
-  const missing = [...required].filter((k) => !String(form[k] ?? '').trim())
+  // El nombre libre `client` deja de ser requerido si el proyecto quedó VINCULADO
+  // a un cliente real (form.clientId): el link ya provee el cliente (E5), el texto
+  // libre pasa a opcional.
+  const missing = [...required].filter(
+    (k) => !String(form[k] ?? '').trim() && !(k === 'client' && form.clientId),
+  )
   const valid = missing.length === 0
 
   function setField(key, value) {
@@ -226,22 +231,14 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
                 id="pf-client-link"
                 label="Link to a client record"
                 required={false}
+                disabled={submitting}
                 value={form.clientId}
-                onChange={(id, client) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    clientId: id,
-                    // Rellenar el nombre libre SÓLO si está vacío: así un proyecto
-                    // sin nombre queda con el canónico (satisface el required), pero
-                    // no se pisa un nombre legacy ya cargado.
-                    client: prev.client.trim() ? prev.client : (client?.clientName ?? ''),
-                  }))
-                }
+                onChange={(id) => setForm((prev) => ({ ...prev, clientId: id }))}
               />
               <p className="field__hint">
                 Optional. Links this project to a client record for billing
-                (client_id, which the resolver prefers). Your free-text name above
-                is kept.
+                (client_id, which the resolver prefers over the free-text name). When
+                linked, the Client name above is no longer required.
               </p>
             </div>
           )}

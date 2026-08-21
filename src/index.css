@@ -3906,6 +3906,13 @@ th.col-pop { text-align: center; }
   .project-form__grid { grid-template-columns: 1fr; }
 }
 
+/* Linker de cliente opcional (E5): separado del grid de campos por una hairline. */
+.project-form__link {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
 /* Fase 4d: wizard más ancho para las pestañas de Mantenimiento y Tasks
    (tabla de severidad / tasks necesitan más aire que un form de 2 columnas). */
 /* Ancho generoso: la altura del wizard la manda la cantidad de stages, y a más
