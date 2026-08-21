@@ -2509,32 +2509,16 @@ th.col-pop { text-align: center; }
   .drawer--enter { animation: none; }
 }
 
-/* Variante POP-UP (modal centrado) del detalle: mismo contenido que el drawer,
-   pero como caja centrada en vez de panel lateral. Clases propias para no tocar
-   el .drawer base que usan los otros drawers. Sin framer-motion, igual que el
-   drawer (evita que el exit no cierre en pestaña oculta). */
-.drawer-backdrop--center {
-  justify-content: center;
-  align-items: center;
-  padding: 24px;
-  overflow-y: auto;
-}
-.drawer--modal {
-  width: 460px;
-  height: auto;
-  max-height: calc(100vh - 48px);
-  border: 1px solid var(--accent-line);
-  border-radius: 16px;
-  box-shadow: var(--shadow-pop);
-  margin: auto;
-}
-@keyframes modal-pop-in {
-  from { opacity: 0; transform: translateY(8px) scale(.98); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-.drawer--modal-enter { animation: modal-pop-in .22s cubic-bezier(.16, 1, .3, 1) both; }
-@media (prefers-reduced-motion: reduce) {
-  .drawer--modal-enter { animation: none; }
+/* Detalle de una hora: pop-up centrado. Reutiliza el sistema de modal existente
+   (.modal-backdrop / .modal, igual que .modal--client-detail) en vez de un panel
+   lateral. Sólo agrega el espaciado interno, porque .modal no es flex y el
+   contenido usa las secciones .drawer__* (que en el drawer se separaban con el
+   gap del flex). El componente no usa framer-motion a propósito (en pestaña
+   oculta el exit de AnimatePresence no cerraba). */
+.modal--entry-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .drawer__head {
