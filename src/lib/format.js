@@ -73,15 +73,17 @@ function weekStartSunday(iso = '') {
 }
 
 /**
- * Número de semana (1..54) con semanas de DOMINGO a SÁBADO. Convención tipo Excel
- * WEEKNUM(fecha, 1): la semana 1 es la que contiene el 1 de enero. Se numera por
- * el DOMINGO que inicia la semana, así una semana física que cruza el fin de año
- * no se parte en dos números (queda del lado del año de su domingo). Se parsea en
- * UTC para evitar corrimientos por zona horaria.
+ * Número de semana (1..54) con semanas de DOMINGO a SÁBADO. Se numera por el
+ * DOMINGO que inicia la semana (fórmula tipo Excel WEEKNUM(,1) aplicada a ese
+ * domingo), así una semana física que cruza el fin de año NO se parte en dos
+ * números: queda del lado del año de su domingo. Se parsea en UTC para evitar
+ * corrimientos por zona horaria.
  *
- * Borde de fin de año: si el 1-ene no cae en domingo, la semana que lo contiene
- * tiene su domingo en diciembre, así que queda como última semana del año
- * anterior (no como W1 del año nuevo). El resto del año es inequívoco.
+ * Para semanas enteras dentro del año coincide con Excel WEEKNUM(fecha, 1). NO
+ * coincide en el borde de año: si el 1-ene no cae en domingo, la semana que lo
+ * contiene tiene su domingo en diciembre y queda como última semana del año
+ * anterior (Excel la llamaría W1 del año nuevo). Se prioriza mantener la semana
+ * física entera para facturar. El resto del año es inequívoco.
  * @param {string} iso
  * @returns {?number}
  */
