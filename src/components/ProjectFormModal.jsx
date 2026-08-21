@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FolderPlus, Save, X } from 'lucide-react'
+import { ClientPicker } from './ClientPicker'
 import { useScrollLock } from '../lib/useScrollLock'
 
 // Definición de campos (orden, label, tipo). "required" queda resuelto por
@@ -62,8 +63,13 @@ function emptyForm() {
 export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
   const isEdit = Boolean(initial)
   const [form, setForm] = useState(() => {
-    if (!initial) return emptyForm()
-    return Object.fromEntries(FIELDS.map((f) => [f.key, initial[f.key] ?? '']))
+    const base = initial
+      ? Object.fromEntries(FIELDS.map((f) => [f.key, initial[f.key] ?? '']))
+      : emptyForm()
+    // clientId acompaña al texto `client`: para un proyecto SIN cliente vinculado
+    // se elige con el ClientPicker y se persiste como override real (E5), que el
+    // resolver prioriza sobre el nombre libre.
+    return { ...base, clientId: initial?.clientId ?? null }
   })
   const [touched, setTouched] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -72,11 +78,11 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
   const dialogRef = useRef(null)
   const firstRef = useRef(null)
   const required = useMemo(() => requiredKeys(initial), [initial])
-  // El autofocus al abrir debe caer en el primer campo que sea un <input>
-  // real — "client" no lo es si está linkeado (ver render más abajo).
+  // El autofocus al abrir debe caer en el primer campo que sea un <input> real —
+  // "client" nunca lo es: o es read-only (linkeado) o es el ClientPicker (select).
   const firstFocusableIndex = useMemo(
-    () => FIELDS.findIndex((f) => !(f.key === 'client' && isClientLinked(initial))),
-    [initial],
+    () => FIELDS.findIndex((f) => f.key !== 'client'),
+    [],
   )
 
   useScrollLock()
@@ -115,6 +121,12 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
         // relajada) — a diferencia del resto, no puede mandarse null aunque
         // ya no sea required acá (proyecto linkeado con texto legacy vacío).
         payload[f.key] = f.key === 'client' ? trimmed : trimmed || null
+      }
+      // Cliente no vinculado: además del nombre, persistir client_id como override
+      // real (E5). Sólo cuando el campo es editable acá (no linkeado) — para un
+      // proyecto ya vinculado el cliente se maneja desde Clients, no se toca acá.
+      if (!isClientLinked(initial) && form.clientId) {
+        payload.clientId = form.clientId
       }
       await onSubmit(payload)
     } catch (error) {
@@ -173,6 +185,22 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
               // dejarlo editable acá lo desincroniza del cliente vinculado
               // (autopopulado de MSA, futuras vistas por cliente, etc.).
               const clientLinked = field.key === 'client' && isClientLinked(initial)
+              // Cliente NO vinculado (proyecto que Zoho no resolvió, o alta): en vez
+              // del texto libre, un ClientPicker que setea client_id (override real,
+              // E5) + el nombre. Trae su propio .field + label, así que se devuelve
+              // directo, sin el wrapper de abajo.
+              if (field.key === 'client' && !clientLinked) {
+                return (
+                  <ClientPicker
+                    key="client"
+                    value={form.clientId}
+                    onChange={(id, client) =>
+                      setForm((prev) => ({ ...prev, clientId: id, client: client?.clientName ?? '' }))
+                    }
+                    error={isMissing ? 'Pick a client to continue.' : ''}
+                  />
+                )
+              }
               return (
                 <div className="field" key={field.key}>
                   <label className="field__label" htmlFor={clientLinked ? undefined : `pf-${field.key}`}>
