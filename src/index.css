@@ -2497,18 +2497,6 @@ th.col-pop { text-align: center; }
   gap: 20px;
 }
 
-/* Animación de entrada por CSS (no framer): el EntryDetailDrawer se abre sin
-   AnimatePresence, así que la entrada la hace el CSS. Fade del fondo + slide del
-   panel desde la derecha. */
-@keyframes drawer-fade-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes drawer-slide-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
-.drawer-backdrop--enter { animation: drawer-fade-in .2s ease both; }
-.drawer--enter { animation: drawer-slide-in .28s cubic-bezier(.16, 1, .3, 1) both; }
-@media (prefers-reduced-motion: reduce) {
-  .drawer-backdrop--enter,
-  .drawer--enter { animation: none; }
-}
-
 /* Detalle de una hora: pop-up centrado. Reutiliza el sistema de modal existente
    (.modal-backdrop / .modal, igual que .modal--client-detail) en vez de un panel
    lateral. Sólo agrega el espaciado interno, porque .modal no es flex y el
