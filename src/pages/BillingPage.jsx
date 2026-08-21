@@ -347,7 +347,6 @@ export function BillingPage() {
     let pendingToBill = 0
     let pendingCount = 0
     let invoiced = 0
-    let collected = 0
 
     // "Pending to bill" mira SÓLO bill_to_client: es lo que está por entrar al
     // pipeline, y overage o SP internal no se le cobran a nadie acá.
@@ -360,21 +359,15 @@ export function BillingPage() {
       pendingCount += 1
     }
 
-    // Las tres tarjetas de lo ya facturado NO filtran por allocation, a
-    // diferencia de la grilla. Las facturas viejas son anteriores al triage de
-    // horas y sus entries tienen allocation en null: exigirles 'bill_to_client'
-    // deja estas tarjetas en cero para siempre, que es literalmente lo que
-    // pasaba (808 h facturadas en la base, "Invoiced 0.0 h" en pantalla).
+    // La tarjeta Invoiced NO filtra por allocation, a diferencia de la grilla.
+    // Las facturas viejas son anteriores al triage de horas y sus entries tienen
+    // allocation en null: exigirles 'bill_to_client' dejaría la tarjeta en cero
+    // para siempre (808 h facturadas en la base, "Invoiced 0.0 h" en pantalla).
     // Una hora que ya se facturó está facturada, sin importar cómo se la haya
     // clasificado después.
     for (const entry of filteredAllAllocations) {
-      const invoice = invoiceByEntryId.get(String(entry.id))
-      if (!invoice) continue
-      const hours = Number(entry.hours) || 0
-      invoiced += hours
-      // Collected y Paid ya se cobraron: Paid es el paso siguiente (se le pagó
-      // al proveedor), no una vuelta atrás.
-      if (invoice.status === 'Collected' || invoice.status === 'Paid') collected += hours
+      if (!invoiceByEntryId.has(String(entry.id))) continue
+      invoiced += Number(entry.hours) || 0
     }
 
     // Filas que el usuario TODAVÍA PUEDE clasificar bajo el filtro actual:
@@ -393,8 +386,6 @@ export function BillingPage() {
       pendingToBill,
       pendingCount,
       invoiced,
-      collected,
-      pendingCollection: invoiced - collected,
       classifiable,
     }
   }, [filtered, filteredAllAllocations, invoiceByEntryId])
@@ -411,6 +402,10 @@ export function BillingPage() {
   )
 
   const billableClientCount = clientGroups.filter((g) => !g.isUnassigned).length
+  // Horas del bucket "Sin cliente" (no facturable) para la tarjeta homónima.
+  const sinClienteHours = clientGroups
+    .filter((g) => g.isUnassigned)
+    .reduce((sum, g) => sum + g.hours, 0)
 
   // Total de horas pendientes (sin facturar) por contractor, sobre toda la grilla
   // bill_to_client filtrada. Con esto el modal avisa cuántas horas del contractor
@@ -863,37 +858,35 @@ export function BillingPage() {
             </div>
             <div className="dash-kpi dash-kpi--static">
               <div className="dash-kpi__head">
+                <span className="dash-kpi__label">Sin cliente</span>
+              </div>
+              <span className="dash-kpi__value">
+                {formatHours(sinClienteHours)}
+                <span className="dash-kpi__unit"> h</span>
+              </span>
+              <span className="dash-kpi__hint">bill_to_client sin cliente resuelto</span>
+            </div>
+            <div className="dash-kpi dash-kpi--static">
+              <div className="dash-kpi__head">
                 <span className="dash-kpi__label">Invoiced</span>
               </div>
               <span className="dash-kpi__value">
                 {formatHours(cards.invoiced)}
                 <span className="dash-kpi__unit"> h</span>
               </span>
-              {/* Las tres tarjetas de facturado tienen otro alcance que la
-                  grilla y que "Pending to bill". Sin decirlo, un filtro que
-                  sólo matchea horas facturadas sin clasificar deja la grilla
-                  vacía y esta tarjeta en un número, sin explicación a la vista. */}
+              {/* La tarjeta de facturado tiene otro alcance que la grilla y que
+                  "Pending to bill": cuenta cualquier allocation, incluidas las
+                  horas pre-triage (facturas viejas con allocation en null). */}
               <span className="dash-kpi__hint">any allocation, incl. pre-triage hours</span>
             </div>
             <div className="dash-kpi dash-kpi--static">
               <div className="dash-kpi__head">
-                <span className="dash-kpi__label">Collected</span>
+                <span className="dash-kpi__label">Clientes por facturar</span>
               </div>
-              <span className="dash-kpi__value">
-                {formatHours(cards.collected)}
-                <span className="dash-kpi__unit"> h</span>
+              <span className="dash-kpi__value">{billableClientCount}</span>
+              <span className="dash-kpi__hint">
+                {billableClientCount === 1 ? 'client with' : 'clients with'} pending hours
               </span>
-              <span className="dash-kpi__hint">any allocation</span>
-            </div>
-            <div className="dash-kpi dash-kpi--static">
-              <div className="dash-kpi__head">
-                <span className="dash-kpi__label">Pending collection</span>
-              </div>
-              <span className="dash-kpi__value">
-                {formatHours(cards.pendingCollection)}
-                <span className="dash-kpi__unit"> h</span>
-              </span>
-              <span className="dash-kpi__hint">any allocation</span>
             </div>
           </div>
 
