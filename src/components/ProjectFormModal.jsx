@@ -223,6 +223,7 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
           {!isClientLinked(initial) && (
             <div className="project-form__link">
               <ClientPicker
+                id="pf-client-link"
                 label="Link to a client record"
                 required={false}
                 value={form.clientId}
@@ -230,13 +231,17 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
                   setForm((prev) => ({
                     ...prev,
                     clientId: id,
-                    client: client?.clientName ?? prev.client,
+                    // Rellenar el nombre libre SÓLO si está vacío: así un proyecto
+                    // sin nombre queda con el canónico (satisface el required), pero
+                    // no se pisa un nombre legacy ya cargado.
+                    client: prev.client.trim() ? prev.client : (client?.clientName ?? ''),
                   }))
                 }
               />
               <p className="field__hint">
-                Optional. Links this project to a client for billing and fills the
-                Client name above. Leave empty to keep the free-text name.
+                Optional. Links this project to a client record for billing
+                (client_id, which the resolver prefers). Your free-text name above
+                is kept.
               </p>
             </div>
           )}
