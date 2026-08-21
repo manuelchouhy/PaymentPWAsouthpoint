@@ -191,12 +191,13 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
           </div>
         </div>
 
-        {remainingHours > 0 && (
+        {/* Umbral 0.05: por debajo, formatHours redondea a "0.0" — sin epsilon,
+            un residuo float al seleccionar todo mostraría "0.0 more...". */}
+        {remainingHours >= 0.05 && (
           <p className="modal__note" role="status">
             <AlertTriangle size={14} aria-hidden="true" />
-            {formatHours(remainingHours)} more pending hour
-            {remainingHours === 1 ? '' : 's'} of {user} are not included in this
-            invoice.
+            {formatHours(remainingHours)} more pending hours of {user} are not
+            included in this invoice.
           </p>
         )}
 

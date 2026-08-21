@@ -401,26 +401,34 @@ export function BillingPage() {
     [filtered, invoiceByEntryId],
   )
 
-  const billableClientCount = clientGroups.filter((g) => !g.isUnassigned).length
-  // Horas del bucket "Sin cliente" (no facturable) para la tarjeta homónima.
-  const sinClienteHours = clientGroups
-    .filter((g) => g.isUnassigned)
-    .reduce((sum, g) => sum + g.hours, 0)
-
-  // Total de horas pendientes (sin facturar) por contractor, sobre toda la grilla
-  // bill_to_client filtrada. Con esto el modal avisa cuántas horas del contractor
-  // quedan FUERA de la factura que se está por emitir (para no dejarlas colgadas).
-  const pendingHoursByProvider = useMemo(() => {
-    const m = new Map()
+  // Derivados de la grilla bill_to_client, memoizados juntos:
+  // - billableClientCount / sinClienteHours: para las tarjetas.
+  // - pendingByClientProvider: horas pendientes por cliente+contractor, para
+  //   avisar en el modal cuántas horas del contractor quedan fuera de la factura,
+  //   ACOTADO al cliente que se factura (facturar un cliente no debe contar horas
+  //   de otro cliente).
+  const { billableClientCount, sinClienteHours, pendingByClientProvider } = useMemo(() => {
+    let clientCount = 0
+    let unassignedHours = 0
+    const pending = new Map()
     for (const group of clientGroups) {
-      if (group.isUnassigned) continue
+      if (group.isUnassigned) {
+        unassignedHours += group.hours
+        continue
+      }
+      clientCount += 1
       for (const week of group.weeks) {
         for (const row of week.rows) {
-          m.set(row.user, (m.get(row.user) ?? 0) + row.hours)
+          const key = `${group.client}||${row.user}`
+          pending.set(key, (pending.get(key) ?? 0) + row.hours)
         }
       }
     }
-    return m
+    return {
+      billableClientCount: clientCount,
+      sinClienteHours: unassignedHours,
+      pendingByClientProvider: pending,
+    }
   }, [clientGroups])
 
   // Índice de filas facturables por clave única (cliente·semana·terna). La
@@ -476,6 +484,20 @@ export function BillingPage() {
   const selectedProviders = sortedUnique(selectedRows.map((r) => r.user))
   const canCreate = can('billing.create')
   const canBill = canCreate && selectedEntries.length > 0 && selectedProviders.length === 1
+
+  // Horas del contractor que quedan pendientes en el/los MISMO(S) cliente(s) de la
+  // selección y NO entran en esta factura (C11). Acotado por cliente: facturar un
+  // cliente no debe avisar por horas que van en la factura de otro cliente.
+  const remainingHoursForInvoice = canBill
+    ? Math.max(
+        0,
+        [...new Set(selectedRows.map((r) => r.client))].reduce(
+          (sum, client) =>
+            sum + (pendingByClientProvider.get(`${client}||${selectedProviders[0]}`) ?? 0),
+          0,
+        ) - selectedHours,
+      )
+    : 0
 
   function toggleGroup(key) {
     setSelectedKeys((prev) => {
@@ -1205,10 +1227,7 @@ export function BillingPage() {
           user={selectedProviders[0]}
           entries={selectedEntries}
           hours={selectedHours}
-          remainingHours={Math.max(
-            0,
-            (pendingHoursByProvider.get(selectedProviders[0]) ?? 0) - selectedHours,
-          )}
+          remainingHours={remainingHoursForInvoice}
           onClose={() => setModalOpen(false)}
           onConfirm={handleConfirmBill}
         />
