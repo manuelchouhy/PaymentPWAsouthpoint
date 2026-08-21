@@ -572,19 +572,23 @@ export function EntriesPage() {
                           data-selected={selectable ? selectedIds.has(entry.id) : undefined}
                         >
                           {canAllocate && (
-                            // El click en la celda del checkbox no debe además
-                            // disparar el onClick de la fila (si no, togglea dos
-                            // veces y se cancela). onChange sigue funcionando igual.
-                            <td
-                              onClick={(e) => e.stopPropagation()}
-                              title={frozen ? 'Already invoiced — cannot be reclassified' : undefined}
-                            >
-                              <Checkbox
-                                checked={selectedIds.has(entry.id)}
-                                onChange={() => toggleRow(entry.id)}
-                                disabled={frozen}
-                                ariaLabel={`Select entry ${entry.id}`}
-                              />
+                            <td title={frozen ? 'Already invoiced — cannot be reclassified' : undefined}>
+                              {/* stopPropagation SÓLO alrededor del control: el
+                                  checkbox ya togglea por su onChange, y sin esto el
+                                  click burbujea al <tr> y togglea de nuevo (doble =
+                                  no-op). El padding de la celda sigue burbujeando,
+                                  así que clickearlo togglea la fila como antes. */}
+                              <span
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ display: 'inline-flex' }}
+                              >
+                                <Checkbox
+                                  checked={selectedIds.has(entry.id)}
+                                  onChange={() => toggleRow(entry.id)}
+                                  disabled={frozen}
+                                  ariaLabel={`Select entry ${entry.id}`}
+                                />
+                              </span>
                             </td>
                           )}
                           <td>{entry.user}</td>

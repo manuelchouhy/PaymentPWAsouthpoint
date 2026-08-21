@@ -1938,6 +1938,14 @@ th.col-pop { text-align: center; }
   opacity: .55;
   cursor: not-allowed;
 }
+/* checked + disabled: conservar el fill accent (atenuado por el opacity de
+   arriba) para que el tilde blanco siga siendo visible. Sin esto, la regla
+   .checkbox--disabled pone el fondo transparente y el check desaparece. */
+.checkbox--on.checkbox--disabled .checkbox__box {
+  background: var(--accent);
+  border-color: var(--accent-deep);
+  border-style: solid;
+}
 
 /* --- Tarjetas (móvil) ----------------------------------------------------- */
 .cards {
@@ -4699,7 +4707,6 @@ select.field__input { cursor: pointer; }
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 2px;
 }
 
 /* Chip de ícono por KPI: cuadrado redondeado tintado con el acento. */
