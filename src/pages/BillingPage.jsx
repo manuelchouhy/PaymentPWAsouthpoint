@@ -412,6 +412,22 @@ export function BillingPage() {
 
   const billableClientCount = clientGroups.filter((g) => !g.isUnassigned).length
 
+  // Total de horas pendientes (sin facturar) por contractor, sobre toda la grilla
+  // bill_to_client filtrada. Con esto el modal avisa cuántas horas del contractor
+  // quedan FUERA de la factura que se está por emitir (para no dejarlas colgadas).
+  const pendingHoursByProvider = useMemo(() => {
+    const m = new Map()
+    for (const group of clientGroups) {
+      if (group.isUnassigned) continue
+      for (const week of group.weeks) {
+        for (const row of week.rows) {
+          m.set(row.user, (m.get(row.user) ?? 0) + row.hours)
+        }
+      }
+    }
+    return m
+  }, [clientGroups])
+
   // Índice de filas facturables por clave única (cliente·semana·terna). La
   // selección y la factura trabajan a nivel de fila, no de cliente: una factura
   // cubre UN proveedor, y la misma terna proveedor·proyecto·task puede caer en dos
@@ -584,6 +600,48 @@ export function BillingPage() {
     })
   }
 
+  // Export de una tab de sólo lectura (Overage / SP internal / X). Aplana los
+  // grupos igual que los muestra la grilla (entidad → semana → filas, o entidad →
+  // filas cuando no hay semana, como en la X). La columna Provider sólo va cuando
+  // la entidad NO es ya el contractor (sp_internal), para no repetirla.
+  function handleExportReadonly(format, groups, { entityLabel, allocation, showProvider }) {
+    const cols = [
+      { header: entityLabel === 'client' ? 'Client' : 'Contractor', key: 'entity' },
+      ...(showProvider ? [{ header: 'Provider', key: 'provider' }] : []),
+      { header: 'Week', key: 'week' },
+      { header: 'Project', key: 'project' },
+      { header: 'Task', key: 'task' },
+      { header: 'Hours', key: 'hours' },
+      { header: 'Entries', key: 'entries' },
+    ]
+    const rows = []
+    const push = (group, week, row) =>
+      rows.push({
+        entity: group.entity || '—',
+        provider: row.user || '',
+        week: week ? week.week : '—',
+        project: row.project || '',
+        task: row.task || '',
+        hours: row.hours,
+        entries: row.entries.length,
+      })
+    for (const group of groups) {
+      if (group.weeks) {
+        for (const week of group.weeks) for (const row of week.rows) push(group, week, row)
+      } else {
+        for (const row of group.rows) push(group, null, row)
+      }
+    }
+    exportGrid({
+      rows,
+      columns: cols,
+      title: `Billing · ${allocation}`,
+      gridName: `billing-${allocation}`,
+      format,
+      generatedBy: user?.email ?? '',
+    })
+  }
+
   async function handleConfirmBill({
     supplierInvoiceNumber,
     invoiceDate,
@@ -661,9 +719,18 @@ export function BillingPage() {
             {groups.length} {entityLabel}
             {groups.length === 1 ? '' : 's'} · {formatHours(sumGroupHours(groups))} h
           </span>
-          <Link className="btn btn--ghost btn--sm" to={entriesLinkTo(allocation)}>
-            View in Entries <ArrowRight size={14} aria-hidden="true" />
-          </Link>
+          <div className="toolbar__actions">
+            {groups.length > 0 && (
+              <ExportDropdown
+                onExport={(format) =>
+                  handleExportReadonly(format, groups, { entityLabel, allocation, showProvider })
+                }
+              />
+            )}
+            <Link className="btn btn--ghost btn--sm" to={entriesLinkTo(allocation)}>
+              View in Entries <ArrowRight size={14} aria-hidden="true" />
+            </Link>
+          </div>
         </div>
         {groups.length === 0 ? (
           <div className="empty">No {emptyLabel} hours under the current filters.</div>
@@ -1145,6 +1212,10 @@ export function BillingPage() {
           user={selectedProviders[0]}
           entries={selectedEntries}
           hours={selectedHours}
+          remainingHours={Math.max(
+            0,
+            (pendingHoursByProvider.get(selectedProviders[0]) ?? 0) - selectedHours,
+          )}
           onClose={() => setModalOpen(false)}
           onConfirm={handleConfirmBill}
         />

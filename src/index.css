@@ -687,6 +687,13 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   flex-wrap: wrap;
 }
 
+.toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .toolbar__count {
   font-family: var(--mono);
   font-size: 12px;
