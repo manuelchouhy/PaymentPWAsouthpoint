@@ -31,6 +31,7 @@ const rowKey = (entry) =>
  */
 function groupRows(entries) {
   const byKey = new Map()
+  // (el billStatus por fila se calcula después de acumular las entries — abajo)
   for (const entry of entries) {
     const key = rowKey(entry)
     const row = byKey.get(key)
@@ -51,9 +52,20 @@ function groupRows(entries) {
       })
     }
   }
-  return [...byKey.values()].sort(
-    (a, b) => b.hours - a.hours || a.user.localeCompare(b.user, 'es'),
-  )
+  // billStatus de cada fila: pendiente → 'Pending'; facturada → el estado de sus
+  // facturas si es uniforme, o 'Invoiced' si la fila agrega entries de facturas en
+  // estados distintos. Lo consumen el badge, el drawer y el export (una sola vez,
+  // acá, en vez de recomputarlo en la vista).
+  const rows = [...byKey.values()]
+  for (const row of rows) {
+    if (!row.invoiced) {
+      row.billStatus = 'Pending'
+    } else {
+      const sts = [...new Set(row.entries.map((e) => e._billStatus).filter(Boolean))]
+      row.billStatus = sts.length === 1 ? sts[0] : 'Invoiced'
+    }
+  }
+  return rows.sort((a, b) => b.hours - a.hours || a.user.localeCompare(b.user, 'es'))
 }
 
 /**
@@ -146,7 +158,7 @@ function groupProjectsWithReason(entries) {
  */
 export function groupBillToClient(
   entries = [],
-  { isInvoiced = () => false, statusFilter = 'pending' } = {},
+  { isInvoiced = () => false, statusFilter = 'pending', billingStatusOf = () => null } = {},
 ) {
   // statusFilter (C9): 'pending' (default, sólo sin facturar — la grilla facturable
   // de siempre), 'invoiced' (sólo facturadas, read-only) o 'all' (ambas). Cada hora
@@ -159,7 +171,7 @@ export function groupBillToClient(
     const invoiced = isInvoiced(entry)
     if (statusFilter === 'pending' && invoiced) continue
     if (statusFilter === 'invoiced' && !invoiced) continue
-    billable.push({ ...entry, _invoiced: invoiced })
+    billable.push({ ...entry, _invoiced: invoiced, _billStatus: invoiced ? billingStatusOf(entry) : null })
   }
 
   const byClient = new Map()
