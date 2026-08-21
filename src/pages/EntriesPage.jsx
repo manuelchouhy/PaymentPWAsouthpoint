@@ -10,6 +10,7 @@ import { isEntryFrozen } from '../lib/entryFreeze'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { exportGrid } from '../lib/exportGrid'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
+import { Checkbox } from '../components/Checkbox'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { StatusBadge } from '../components/StatusBadge'
 import { BillingBadge } from '../components/BillingBadge'
@@ -515,12 +516,15 @@ export function EntriesPage() {
                     <tr>
                       {canAllocate && (
                         <th scope="col" style={{ width: 34 }}>
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={allPageSelected}
+                            indeterminate={
+                              !allPageSelected &&
+                              selectableOnPage.some((e) => selectedIds.has(e.id))
+                            }
                             onChange={toggleAllOnPage}
                             disabled={selectableOnPage.length === 0}
-                            aria-label="Select all selectable rows on this page"
+                            ariaLabel="Select all selectable rows on this page"
                           />
                         </th>
                       )}
@@ -568,18 +572,18 @@ export function EntriesPage() {
                           data-selected={selectable ? selectedIds.has(entry.id) : undefined}
                         >
                           {canAllocate && (
-                            <td>
-                              <input
-                                type="checkbox"
+                            // El click en la celda del checkbox no debe además
+                            // disparar el onClick de la fila (si no, togglea dos
+                            // veces y se cancela). onChange sigue funcionando igual.
+                            <td
+                              onClick={(e) => e.stopPropagation()}
+                              title={frozen ? 'Already invoiced — cannot be reclassified' : undefined}
+                            >
+                              <Checkbox
                                 checked={selectedIds.has(entry.id)}
                                 onChange={() => toggleRow(entry.id)}
-                                // El click del checkbox no debe además disparar el
-                                // onClick de la fila (si no, togglea dos veces y se
-                                // cancela). onChange sigue funcionando igual.
-                                onClick={(e) => e.stopPropagation()}
                                 disabled={frozen}
-                                title={frozen ? 'Already invoiced — cannot be reclassified' : undefined}
-                                aria-label={`Select entry ${entry.id}`}
+                                ariaLabel={`Select entry ${entry.id}`}
                               />
                             </td>
                           )}
