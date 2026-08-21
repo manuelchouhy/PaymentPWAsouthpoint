@@ -1055,7 +1055,7 @@ export function BillingPage() {
                                             {formatHours(row.hours)}
                                           </td>
                                           <td>
-                                            <span className="badge badge--pending">to bill</span>
+                                            <span className="badge badge--tobill">to bill</span>
                                           </td>
                                           <DetailButtonCell
                                             label={`View detail for ${row.user} · ${row.project}`}

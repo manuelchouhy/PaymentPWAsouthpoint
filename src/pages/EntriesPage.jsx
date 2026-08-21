@@ -435,16 +435,20 @@ export function EntriesPage() {
                 onToggle={(v) => toggleValue('allocations', v)}
                 getLabel={allocationLabel}
               />
-              <div className="filterfield">
+              <div className="filterfield filterfield--week">
                 <span className="filterfield__label">Week</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="53"
-                  className="filterfield__input"
-                  value={filters.week}
-                  onChange={(e) => setField('week', e.target.value)}
-                />
+                <div className="filterfield__affixwrap">
+                  <span className="filterfield__affix" aria-hidden="true">W</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="53"
+                    className="filterfield__input filterfield__input--affixed"
+                    placeholder="all"
+                    value={filters.week}
+                    onChange={(e) => setField('week', e.target.value)}
+                  />
+                </div>
               </div>
               {isActive && (
                 <button type="button" className="btn btn--ghost filterbar__clear" onClick={clear}>

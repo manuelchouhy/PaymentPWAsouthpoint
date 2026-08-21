@@ -533,6 +533,18 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 }
 .filterfield--week .filterfield__input { width: 92px; }
 
+/* Prefijo "W" dentro del input de semana → lee como el token "W30" del mockup. */
+.filterfield__affixwrap { position: relative; display: flex; align-items: center; }
+.filterfield__affix {
+  position: absolute;
+  left: 11px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.filterfield__input--affixed { padding-left: 26px; }
+
 .filterbar__clear { height: 38px; }
 .filterbar__clear:disabled { opacity: .45; cursor: default; }
 
@@ -1871,6 +1883,11 @@ th.col-pop { text-align: center; }
   color: hsl(var(--success-foreground));
   border-color: transparent;
 }
+/* "Ready to bill" (grilla de Billing) · ámbar como el mockup. Clase propia
+   para no pisar el gris de badge--pending, que es compartido (billing status
+   Pending, unallocated, no-contract, CR pending, etc.). */
+.badge--tobill { background: rgba(251, 146, 60, .14); color: #C2410C; border-color: rgba(251, 146, 60, .3); }
+.dark .badge--tobill { color: #FDBA74; }
 .badge svg { flex-shrink: 0; }
 
 /* --- Checkbox ------------------------------------------------------------- */
