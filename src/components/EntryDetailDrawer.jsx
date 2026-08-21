@@ -7,9 +7,12 @@ import { formatDate, formatWeek, formatHours } from '../lib/format'
 import { useScrollLock } from '../lib/useScrollLock'
 
 /**
- * Drawer lateral con TODOS los detalles de una hora cargada. Se abre desde el
- * botón de detalle de cada fila en Entries. Es sólo lectura: la clasificación se
- * hace desde la grilla (selección + Apply), no acá.
+ * Pop-up (modal centrado) con TODOS los detalles de una hora cargada. Se abre
+ * desde el botón de detalle de cada fila en Entries y Billing. Es sólo lectura:
+ * la clasificación se hace desde la grilla (selección + Apply), no acá.
+ *
+ * Reutiliza el markup del drawer (clases .drawer__*) pero con el contenedor en
+ * variante modal (.drawer--modal, centrado) en vez de panel lateral.
  *
  * allocationLabel y billingStatus se pasan ya resueltos desde la página para no
  * duplicar el mapa de allocations ni la lectura de facturas en este componente.
@@ -51,9 +54,12 @@ export function EntryDetailDrawer({
   }, [onClose])
 
   return (
-    <div className="drawer-backdrop drawer-backdrop--enter" onClick={onClose}>
+    <div
+      className="drawer-backdrop drawer-backdrop--center drawer-backdrop--enter"
+      onClick={onClose}
+    >
       <aside
-        className="drawer drawer--enter"
+        className="drawer drawer--modal drawer--modal-enter"
         role="dialog"
         aria-modal="true"
         aria-labelledby="entry-drawer-title"
