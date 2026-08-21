@@ -150,11 +150,20 @@ function groupProjectsWithReason(entries) {
  * Agrupa las horas facturables por cliente para la tab "Bill to client".
  *
  * @param {Array<object>} entries — entries ya con `client` y `clientReason` derivados.
- * @param {{ isInvoiced?: (entry: object) => boolean }} opts — isInvoiced marca las
- *   horas ya facturadas (se excluyen del pendiente).
+ * @param {{
+ *   isInvoiced?: (entry: object) => boolean,
+ *   statusFilter?: 'pending' | 'invoiced' | 'all',
+ *   billingStatusOf?: (entry: object) => (string | null),
+ * }} opts
+ *   - isInvoiced: marca las horas ya facturadas.
+ *   - statusFilter (C9): 'pending' (default, sólo sin facturar), 'invoiced' (sólo
+ *     facturadas) o 'all' (ambas). Las facturadas van como filas read-only.
+ *   - billingStatusOf: estado de la factura de una hora (Invoiced/Collected/Paid),
+ *     para taggear `row.billStatus` (lo usan badge/drawer/export).
  * @returns {Array<object>} clientes; "Sin cliente" (isUnassigned) primero, el
- *   resto por horas desc. Los asignados traen `weeks`; el bucket sin cliente trae
- *   `projects` (con motivo).
+ *   resto por horas desc. Los asignados traen `weeks` (cada fila con `invoiced` y
+ *   `billStatus`); el bucket sin cliente trae `projects` (con motivo) y es siempre
+ *   de horas PENDIENTES (una facturada sin cliente no va ahí: ya está facturada).
  */
 export function groupBillToClient(
   entries = [],
@@ -171,6 +180,10 @@ export function groupBillToClient(
     const invoiced = isInvoiced(entry)
     if (statusFilter === 'pending' && invoiced) continue
     if (statusFilter === 'invoiced' && !invoiced) continue
+    // Una hora facturada SIN cliente no va a la grilla: el bucket "Sin cliente" es
+    // para pendientes por resolver, y ya facturada no hay nada que resolver (evita
+    // mostrarla con el aviso "asigná el grupo" y exportarla como Pending).
+    if (invoiced && !(entry.client || '')) continue
     billable.push({ ...entry, _invoiced: invoiced, _billStatus: invoiced ? billingStatusOf(entry) : null })
   }
 

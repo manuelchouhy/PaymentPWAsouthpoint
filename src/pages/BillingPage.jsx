@@ -410,18 +410,24 @@ export function BillingPage() {
     [filtered, invoiceByEntryId, billStatusFilter],
   )
   // Clientes MOSTRADOS en la grilla (según el filtro de estado) — para el toolbar.
-  const shownClientCount = clientGroups.filter((g) => !g.isUnassigned).length
+  const shownClientCount = useMemo(
+    () => clientGroups.filter((g) => !g.isUnassigned).length,
+    [clientGroups],
+  )
 
   // Agrupación SÓLO pendiente, independiente del filtro de estado: alimenta las
   // tarjetas (No client / Clients to bill), que resumen lo que queda por facturar
-  // y no deben cambiar cuando la grilla se pone en 'invoiced'/'all'.
+  // y no deben cambiar cuando la grilla se pone en 'invoiced'/'all'. Cuando el
+  // filtro ya es 'pending', reusa clientGroups (mismo resultado, sin re-agrupar).
   const pendingGroups = useMemo(
     () =>
-      groupBillToClient(filtered, {
-        isInvoiced: (entry) => invoiceByEntryId.has(String(entry.id)),
-        statusFilter: 'pending',
-      }),
-    [filtered, invoiceByEntryId],
+      billStatusFilter === 'pending'
+        ? clientGroups
+        : groupBillToClient(filtered, {
+            isInvoiced: (entry) => invoiceByEntryId.has(String(entry.id)),
+            statusFilter: 'pending',
+          }),
+    [billStatusFilter, clientGroups, filtered, invoiceByEntryId],
   )
 
   // Tarjetas (No client / Clients to bill): se calculan sobre pendingGroups (sólo
@@ -1141,11 +1147,9 @@ export function BillingPage() {
                                           sowKey(group.client, row.project),
                                         ) ?? sowByProject.byName.get(row.project)
                                       // Fila seleccionable sólo si es pendiente; las facturadas
-                                      // (filtro invoiced/all) van read-only con su estado de
-                                      // billing (leído de la factura de su primera entry).
-                                      // Fila seleccionable sólo si es pendiente; las facturadas
-                                      // van read-only. row.billStatus (resuelto en la capa de
-                                      // grouping) lo usan el badge, el drawer y el export.
+                                      // (filtro invoiced/all) van read-only. row.billStatus
+                                      // (resuelto en la capa de grouping) lo usan el badge, el
+                                      // drawer y el export.
                                       const selectable = canCreate && !row.invoiced
                                       return (
                                         <tr
