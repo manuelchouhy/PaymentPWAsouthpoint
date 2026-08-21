@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { isoWeek } from './format'
+import { sundayWeek } from './format'
 
 /**
  * Estado y lógica de filtrado de la grilla (FR-03), centralizado en un solo
@@ -166,7 +166,7 @@ export function applyEntryFilters(entries, filters, invoiceByEntryId) {
       return false
     }
     if (week !== null && !Number.isNaN(week)) {
-      if (isoWeek(entry.date) !== week) return false
+      if (sundayWeek(entry.date) !== week) return false
     }
     return true
   })

@@ -3,7 +3,7 @@ import { useOutletContext, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowRight, Info } from 'lucide-react'
 import { api } from '../lib/api'
-import { formatHours, formatWeek, isoWeekYear } from '../lib/format'
+import { formatHours, formatWeek, sundayWeekYear } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
@@ -489,10 +489,10 @@ export function BillingPage() {
     const labels = []
     for (const e of entries) {
       if (!e.date) continue
-      const key = `${isoWeekYear(e.date)}-${formatWeek(e.date)}`
+      const key = `${sundayWeekYear(e.date)}-${formatWeek(e.date)}`
       if (seen.has(key)) continue
       seen.add(key)
-      labels.push(`${formatWeek(e.date)} · ${isoWeekYear(e.date)}`)
+      labels.push(`${formatWeek(e.date)} · ${sundayWeekYear(e.date)}`)
     }
     const periodLabel =
       labels.length === 1 ? labels[0] : labels.length === 0 ? '—' : `${labels.length} weeks`

@@ -57,62 +57,62 @@ export function formatRelativeTime(iso) {
 }
 
 /**
- * Jueves (UTC) de la semana ISO a la que pertenece una fecha, o null si la fecha
- * no es válida. isoWeek e isoWeekYear parten de acá para no duplicar el parseo y
- * el corrimiento al jueves (si se toca la aritmética, se toca en un solo lugar).
+ * Domingo (UTC) que inicia la semana (domingo–sábado) de una fecha, o null si la
+ * fecha no es válida. sundayWeek y sundayWeekYear parten de acá para no duplicar
+ * el parseo ni el corrimiento al domingo (si se toca la aritmética, en un lugar).
  * @param {string} iso
  * @returns {?Date}
  */
-function isoThursday(iso = '') {
+function weekStartSunday(iso = '') {
   const [year, month, day] = iso.split('-').map(Number)
   if (!year || !month || !day) return null
   const date = new Date(Date.UTC(year, month - 1, day))
-  // Llevar la fecha al jueves de su semana (lun=0 … dom=6).
-  const dayNum = (date.getUTCDay() + 6) % 7
-  date.setUTCDate(date.getUTCDate() - dayNum + 3)
+  // Retroceder al domingo de su semana (getUTCDay: dom=0 … sáb=6).
+  date.setUTCDate(date.getUTCDate() - date.getUTCDay())
   return date
 }
 
 /**
- * Número de semana ISO-8601 (1..53) a partir de una fecha ISO YYYY-MM-DD.
- * Las semanas arrancan en lunes y la semana 1 es la que contiene el primer
- * jueves del año. Se parsea en UTC para evitar corrimientos por zona horaria.
+ * Número de semana (1..54) con semanas de DOMINGO a SÁBADO. Convención tipo Excel
+ * WEEKNUM(fecha, 1): la semana 1 es la que contiene el 1 de enero. Se numera por
+ * el DOMINGO que inicia la semana, así una semana física que cruza el fin de año
+ * no se parte en dos números (queda del lado del año de su domingo). Se parsea en
+ * UTC para evitar corrimientos por zona horaria.
+ *
+ * Borde de fin de año: si el 1-ene no cae en domingo, la semana que lo contiene
+ * tiene su domingo en diciembre, así que queda como última semana del año
+ * anterior (no como W1 del año nuevo). El resto del año es inequívoco.
  * @param {string} iso
  * @returns {?number}
  */
-export function isoWeek(iso = '') {
-  const date = isoThursday(iso)
-  if (!date) return null
-
-  // Jueves de la semana 1 = jueves más cercano al 4 de enero.
-  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4))
-  const firstDayNum = (firstThursday.getUTCDay() + 6) % 7
-  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNum + 3)
-
-  const msPerWeek = 7 * 24 * 60 * 60 * 1000
-  return 1 + Math.round((date.getTime() - firstThursday.getTime()) / msPerWeek)
+export function sundayWeek(iso = '') {
+  const sunday = weekStartSunday(iso)
+  if (!sunday) return null
+  const jan1 = new Date(Date.UTC(sunday.getUTCFullYear(), 0, 1))
+  const dayOfYear = Math.round((sunday.getTime() - jan1.getTime()) / 86400000) + 1
+  return Math.floor((dayOfYear - 1 + jan1.getUTCDay()) / 7) + 1
 }
 
 /**
- * Año ISO-8601 de la semana a la que pertenece una fecha (el año del jueves de
- * esa semana). NO siempre coincide con el año calendario: el 2026-01-01 puede
- * caer en la semana 53 de 2025. Se necesita junto a isoWeek para no fusionar la
- * misma semana de años distintos (p. ej. W32 de 2025 y de 2026).
+ * Año de la semana domingo–sábado (el año del domingo que la inicia). Va junto a
+ * sundayWeek para no fusionar la misma semana de años distintos (p. ej. W32 de
+ * 2025 y de 2026).
  * @param {string} iso
  * @returns {?number}
  */
-export function isoWeekYear(iso = '') {
-  const date = isoThursday(iso)
-  return date ? date.getUTCFullYear() : null
+export function sundayWeekYear(iso = '') {
+  const sunday = weekStartSunday(iso)
+  return sunday ? sunday.getUTCFullYear() : null
 }
 
 /**
- * Semana ISO formateada para la grilla: "W23" (o "—" si no hay fecha válida).
+ * Semana formateada para la grilla: "W23" (o "—" si no hay fecha válida). Semanas
+ * de domingo a sábado (ver sundayWeek).
  * @param {string} iso
  * @returns {string}
  */
 export function formatWeek(iso = '') {
-  const week = isoWeek(iso)
+  const week = sundayWeek(iso)
   return week ? `W${week}` : '—'
 }
 
