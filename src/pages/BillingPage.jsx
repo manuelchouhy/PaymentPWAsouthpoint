@@ -350,6 +350,13 @@ export function BillingPage() {
     // dejan de ser seleccionables y quedaría una barra de selección fantasma.
   }, [filters, billStatusFilter])
 
+  // El filtro de estado (C9) sólo se ve en la tab "Bill to client"; se resetea a
+  // 'pending' al cambiar de tab para no dejar la grilla filtrada en silencio al
+  // volver (se vería como "no hay horas para facturar").
+  useEffect(() => {
+    setBillStatusFilter('pending')
+  }, [tab])
+
   const cards = useMemo(() => {
     let pendingToBill = 0
     let pendingCount = 0
