@@ -19,11 +19,14 @@ import { isoWeek, isoWeekYear } from './format.js'
 
 const hoursOf = (entry) => Number(entry?.hours) || 0
 const sumHours = (entries) => entries.reduce((total, entry) => total + hoursOf(entry), 0)
-// El sufijo `||inv` separa las filas facturadas de las pendientes de la misma
-// terna (para el filtro de estado C9). Sólo se agrega cuando la hora está
-// facturada, así las keys de las filas pendientes (el caso por defecto) no cambian.
+// El sufijo separa las filas facturadas de las pendientes de la misma terna (C9),
+// e incluye el ESTADO de la factura ('Collected'/'Paid'/…): así una terna con
+// horas en facturas de estados distintos no colapsa en una fila de estado mixto —
+// cada fila queda con un estado único y su badge es exacto. Sólo se agrega cuando
+// la hora está facturada, así las keys de las filas pendientes (default) no cambian.
 const rowKey = (entry) =>
-  `${entry.user ?? ''}||${entry.project ?? ''}||${entry.task ?? ''}${entry._invoiced ? '||inv' : ''}`
+  `${entry.user ?? ''}||${entry.project ?? ''}||${entry.task ?? ''}` +
+  (entry._invoiced ? `||inv-${entry._billStatus ?? 'x'}` : '')
 
 /**
  * Filas proveedor·proyecto·task de una semana, combinando las horas de la misma
@@ -52,18 +55,13 @@ function groupRows(entries) {
       })
     }
   }
-  // billStatus de cada fila: pendiente → 'Pending'; facturada → el estado de sus
-  // facturas si es uniforme, o 'Invoiced' si la fila agrega entries de facturas en
-  // estados distintos. Lo consumen el badge, el drawer y el export (una sola vez,
-  // acá, en vez de recomputarlo en la vista).
+  // billStatus de cada fila: pendiente → 'Pending'; facturada → el estado de su
+  // factura (las filas ya están keyadas por estado, así que todas las entries de
+  // una fila comparten _billStatus). Si falta el estado (dato incompleto) → floor
+  // 'Invoiced' (es al menos eso). Lo consumen el badge, el drawer y el export.
   const rows = [...byKey.values()]
   for (const row of rows) {
-    if (!row.invoiced) {
-      row.billStatus = 'Pending'
-    } else {
-      const sts = [...new Set(row.entries.map((e) => e._billStatus).filter(Boolean))]
-      row.billStatus = sts.length === 1 ? sts[0] : 'Invoiced'
-    }
+    row.billStatus = row.invoiced ? row.entries[0]?._billStatus ?? 'Invoiced' : 'Pending'
   }
   return rows.sort((a, b) => b.hours - a.hours || a.user.localeCompare(b.user, 'es'))
 }

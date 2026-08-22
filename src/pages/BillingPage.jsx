@@ -415,33 +415,22 @@ export function BillingPage() {
     [clientGroups],
   )
 
-  // Agrupación SÓLO pendiente, independiente del filtro de estado: alimenta las
-  // tarjetas (No client / Clients to bill), que resumen lo que queda por facturar
-  // y no deben cambiar cuando la grilla se pone en 'invoiced'/'all'. Cuando el
-  // filtro ya es 'pending', reusa clientGroups (mismo resultado, sin re-agrupar).
-  const pendingGroups = useMemo(
-    () =>
-      billStatusFilter === 'pending'
-        ? clientGroups
-        : groupBillToClient(filtered, {
-            isInvoiced: (entry) => invoiceByEntryId.has(String(entry.id)),
-            statusFilter: 'pending',
-          }),
-    [billStatusFilter, clientGroups, filtered, invoiceByEntryId],
-  )
-
-  // Tarjetas (No client / Clients to bill): se calculan sobre pendingGroups (sólo
-  // lo pendiente), no sobre clientGroups (que con el filtro puede mostrar
-  // facturadas). Así el resumen no cambia de significado al filtrar la grilla.
+  // Tarjetas (No client / Clients to bill): resumen de lo PENDIENTE (aprobado,
+  // bill_to_client, sin facturar), calculado directo de `filtered` en una sola
+  // pasada. No dependen del filtro de estado de la grilla (que puede mostrar
+  // facturadas) ni requieren un segundo grouping.
   const { billableClientCount, sinClienteHours } = useMemo(() => {
-    let clientCount = 0
+    const clients = new Set()
     let unassignedHours = 0
-    for (const group of pendingGroups) {
-      if (group.isUnassigned) unassignedHours += group.hours
-      else clientCount += 1
+    for (const e of filtered) {
+      if (e.status !== 'Approved') continue
+      if (invoiceByEntryId.has(String(e.id))) continue
+      const client = e.client || ''
+      if (client === '') unassignedHours += Number(e.hours) || 0
+      else clients.add(client)
     }
-    return { billableClientCount: clientCount, sinClienteHours: unassignedHours }
-  }, [pendingGroups])
+    return { billableClientCount: clients.size, sinClienteHours: unassignedHours }
+  }, [filtered, invoiceByEntryId])
 
   // Horas pendientes de facturar por cliente+contractor, sobre TODAS las entries
   // (NO las filtradas). El aviso del modal tiene que reflejar lo que realmente le
@@ -1019,9 +1008,9 @@ export function BillingPage() {
                   deshabilitado en Entries y setEntriesAllocation las rechaza, así
                   que mandar a clasificarlas termina en un control muerto. */}
               {billStatusFilter === 'invoiced'
-                ? 'No invoiced hours under the current filters.'
+                ? 'No invoiced bill-to-client hours under the current filters. (The Invoiced card above counts every allocation, including pre-triage hours.)'
                 : billStatusFilter === 'all'
-                  ? 'No hours (pending or invoiced) under the current filters.'
+                  ? 'No bill-to-client hours (pending or invoiced) under the current filters.'
                 : cards.classifiable > 0
                 ? can('entries.allocate')
                   ? 'No hours ready to bill. Classify approved hours as “bill to client” in Entries first.'
