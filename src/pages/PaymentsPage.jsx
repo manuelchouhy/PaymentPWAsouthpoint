@@ -49,6 +49,9 @@ export function PaymentsPage() {
   const [modalInvoice, setModalInvoice] = useState(null)
   // Contractor cuyo overage pendiente se está por pagar (null = modal cerrado).
   const [overageTarget, setOverageTarget] = useState(null)
+  // Horas de overage seleccionadas para pagar (D6): por defecto todas las del
+  // contractor; el usuario puede destildar para pagar sólo algunas.
+  const [overageSelectedIds, setOverageSelectedIds] = useState(() => new Set())
   const [entries, setEntries] = useState([])
   const [toast, setToast] = useState(null)
 
@@ -107,9 +110,17 @@ export function PaymentsPage() {
     for (const e of entries) {
       if (e.allocation !== 'overage' || e.status !== 'Approved') continue
       if (paid.has(String(e.id)) || invoiced.has(String(e.id))) continue
-      const group = byUser.get(e.user) ?? { user: e.user, hours: 0, entryIds: [] }
+      const group = byUser.get(e.user) ?? { user: e.user, hours: 0, entryIds: [], entries: [] }
       group.hours += Number(e.hours) || 0
       group.entryIds.push(e.id)
+      // Desglose por hora, para poder pagar sólo algunas (D6).
+      group.entries.push({
+        id: e.id,
+        hours: Number(e.hours) || 0,
+        project: e.project,
+        task: e.task,
+        date: e.date,
+      })
       byUser.set(e.user, group)
     }
     return [...byUser.values()].sort(
@@ -211,11 +222,14 @@ export function PaymentsPage() {
     })
   }
 
-  // Pago de overage: cubre todas las horas overage pendientes del contractor
-  // (overageTarget.entryIds). No hay factura; las horas quedan congeladas y salen
-  // del pendiente. Se recarga para reflejar el nuevo pago en todos los memos.
+  // Pago de overage: cubre las horas SELECCIONADAS del contractor (D6 — por defecto
+  // todas, pero se pueden pagar sólo algunas). No hay factura; las horas cubiertas
+  // quedan congeladas y salen del pendiente. payload trae también la moneda (D7).
   async function handleRegisterOverage(payload) {
-    const { user: contractor, entryIds, hours } = overageTarget
+    const contractor = overageTarget.user
+    const selected = overageTarget.entries.filter((e) => overageSelectedIds.has(String(e.id)))
+    const entryIds = selected.map((e) => e.id)
+    const hours = selected.reduce((sum, e) => sum + e.hours, 0)
     const { payment } = await api.payments.createOverage(
       { userName: contractor, entryIds, ...payload },
       user?.email ?? null,
@@ -231,6 +245,7 @@ export function PaymentsPage() {
         userName: contractor,
         entryCount: entryIds.length,
         amountPaid: payload.amountPaid,
+        currency: payload.currency,
         paymentDate: payload.paymentDate,
       },
     })
@@ -485,7 +500,11 @@ export function PaymentsPage() {
                             <button
                               type="button"
                               className="btn btn--pay btn--row"
-                              onClick={() => setOverageTarget(group)}
+                              onClick={() => {
+                                setOverageTarget(group)
+                                // Arranca con todas las horas seleccionadas (D6).
+                                setOverageSelectedIds(new Set(group.entryIds.map(String)))
+                              }}
                             >
                               Pay overage
                             </button>
@@ -514,28 +533,72 @@ export function PaymentsPage() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {overageTarget && (
-          <RegisterPaymentModal
-            key={`overage-${overageTarget.user}`}
-            title="Register overage payment"
-            submitLabel="Register overage payment"
-            summaryName={overageTarget.user}
-            summaryMeta={`Overage · ${overageTarget.entryIds.length} ${
-              overageTarget.entryIds.length === 1 ? 'entry' : 'entries'
-            }`}
-            summaryFigure={`${formatHours(overageTarget.hours)} h`}
-            summaryFigureLabel="Overage hours"
-            defaultAmount=""
-            footerNote={
-              <>
-                Registers a contractor payment for these overage hours (no invoice).
-                They’ll be frozen and drop off the pending list.
-              </>
-            }
-            onClose={() => setOverageTarget(null)}
-            onConfirm={handleRegisterOverage}
-          />
-        )}
+        {overageTarget &&
+          (() => {
+            const selected = overageTarget.entries.filter((e) =>
+              overageSelectedIds.has(String(e.id)),
+            )
+            const selHours = selected.reduce((sum, e) => sum + e.hours, 0)
+            const toggle = (id) =>
+              setOverageSelectedIds((prev) => {
+                const next = new Set(prev)
+                const k = String(id)
+                if (next.has(k)) next.delete(k)
+                else next.add(k)
+                return next
+              })
+            return (
+              <RegisterPaymentModal
+                key={`overage-${overageTarget.user}`}
+                title="Register overage payment"
+                submitLabel="Register overage payment"
+                currencyEditable
+                extraValid={selected.length > 0}
+                summaryName={overageTarget.user}
+                summaryMeta={`Overage · ${selected.length} of ${overageTarget.entries.length} ${
+                  overageTarget.entries.length === 1 ? 'entry' : 'entries'
+                }`}
+                summaryFigure={`${formatHours(selHours)} h`}
+                summaryFigureLabel="Overage hours (selected)"
+                defaultAmount=""
+                extraContent={
+                  <div className="overage-picker">
+                    <span className="overage-picker__title">Hours to pay</span>
+                    <ul className="overage-picker__list">
+                      {overageTarget.entries.map((e) => (
+                        <li key={e.id}>
+                          <label className="overage-picker__row">
+                            <input
+                              type="checkbox"
+                              checked={overageSelectedIds.has(String(e.id))}
+                              onChange={() => toggle(e.id)}
+                            />
+                            <span className="overage-picker__desc">
+                              {e.project || '—'}
+                              {e.task ? ` · ${e.task}` : ''}
+                              {e.date ? ` · ${formatDate(e.date)}` : ''}
+                            </span>
+                            <span className="overage-picker__hours">{formatHours(e.hours)} h</span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                    {selected.length === 0 && (
+                      <span className="field__error">Select at least one hour to pay.</span>
+                    )}
+                  </div>
+                }
+                footerNote={
+                  <>
+                    Registers a contractor payment for the selected overage hours (no
+                    invoice). They’ll be frozen and drop off the pending list.
+                  </>
+                }
+                onClose={() => setOverageTarget(null)}
+                onConfirm={handleRegisterOverage}
+              />
+            )
+          })()}
       </AnimatePresence>
 
       <AnimatePresence>
