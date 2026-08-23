@@ -190,7 +190,13 @@ export function RegisterPaymentModal({
                 id="pay-currency"
                 className="field__input"
                 value={cur}
-                onChange={(e) => setCur(e.target.value)}
+                onChange={(e) => {
+                  // Al cambiar de moneda, el tipo de cambio tipeado ya no aplica:
+                  // se limpia para forzar reingresarlo (evita guardar una tasa de
+                  // otra moneda). El monto también queda en otra magnitud, se avisa.
+                  setCur(e.target.value)
+                  setExchangeRate('')
+                }}
               >
                 {CURRENCIES.map((c) => (
                   <option key={c.code} value={c.code}>
