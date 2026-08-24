@@ -833,6 +833,9 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   background: var(--surface-2);
 }
 .bill-client--unassigned .bill-client__head { background: var(--warn-bg); }
+/* Grupo izquierdo checkbox + nombre: así el space-between del header sólo separa
+   este grupo de las horas (con 3 hijos sueltos el nombre quedaba centrado). */
+.bill-client__id { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .bill-client__name { margin: 0; font-size: 15px; font-weight: 650; color: var(--text); }
 .bill-client__hours { font-family: var(--mono); font-size: 13px; color: var(--text-soft); }
 

@@ -586,17 +586,22 @@ export function BillingPage() {
     }
   }
 
-  // "Select all" acotado a UNA semana (las filas visibles de esa semana): un
-  // bulk-select que no toca semanas colapsadas ni oculta lo que se factura.
-  function toggleWeekSelection(weekRowIds, allSelected) {
+  // Agrega o quita un conjunto de ids de la selección (base de los select-all).
+  function applySelection(ids, remove) {
     setSelectedKeys((prev) => {
       const next = new Set(prev)
-      for (const id of weekRowIds) {
-        if (allSelected) next.delete(id)
+      for (const id of ids) {
+        if (remove) next.delete(id)
         else next.add(id)
       }
       return next
     })
+  }
+
+  // "Select all" acotado a UNA semana (las filas visibles de esa semana): un
+  // bulk-select que no toca semanas colapsadas ni oculta lo que se factura.
+  function toggleWeekSelection(weekRowIds, allSelected) {
+    applySelection(weekRowIds, allSelected)
   }
 
   // "Select all" de TODO un cliente (todas sus semanas). Para no romper el
@@ -609,14 +614,7 @@ export function BillingPage() {
     if (!allSelected) {
       setOpenWeeks((prev) => new Set([...prev, ...clientWeekIds]))
     }
-    setSelectedKeys((prev) => {
-      const next = new Set(prev)
-      for (const id of clientRowIds) {
-        if (allSelected) next.delete(id)
-        else next.add(id)
-      }
-      return next
-    })
+    applySelection(clientRowIds, allSelected)
   }
 
   function handleExport(format) {
@@ -1101,6 +1099,7 @@ export function BillingPage() {
                   ) : (
                     <section key={group.client} className="bill-client">
                       <header className="bill-client__head">
+                        <div className="bill-client__id">
                         {canCreate &&
                           (() => {
                             // Todas las filas seleccionables del cliente (todas sus
@@ -1128,6 +1127,7 @@ export function BillingPage() {
                             )
                           })()}
                         <h3 className="bill-client__name">{group.client}</h3>
+                        </div>
                         <span className="bill-client__hours">{formatHours(group.hours)} h</span>
                       </header>
                       {group.weeks.map((week) => {
