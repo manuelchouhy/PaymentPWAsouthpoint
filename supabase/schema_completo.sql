@@ -436,10 +436,14 @@ create trigger supplier_contracts_set_updated_at
   before update on public.supplier_contracts
   for each row execute function public.set_updated_at();
 
--- Anti doble-pago del overage (migración 0037): ninguna hora (entry_id) puede
--- quedar cubierta por dos pagos. Índice GIN para el chequeo de solape `&&`.
+-- Anti doble-pago del overage (migración 0037): al insertar un pago de overage,
+-- ninguna de sus horas puede estar ya cubierta por otro pago de overage ni por
+-- una factura. Enforcement del lado del pago; el reverso (facturar una hora de
+-- overage) lo evita la app (allocations disjuntas). Ver 0037 para el detalle.
 create index if not exists payments_entry_ids_gin
   on public.payments using gin (entry_ids);
+create index if not exists invoices_entry_ids_gin
+  on public.invoices using gin (entry_ids);
 
 create or replace function public.payments_entry_ids_no_overlap()
 returns trigger
@@ -449,25 +453,26 @@ begin
   if new.entry_ids is null or array_length(new.entry_ids, 1) is null then
     return new;
   end if;
-  -- Serializa overage concurrente (EXISTS no es atómico en READ COMMITTED).
-  perform pg_advisory_xact_lock(hashtext('payments_entry_ids_no_overlap')::bigint);
+  -- Un advisory lock por hora (orden asc, sin deadlock): serializa sólo pagos que
+  -- comparten horas; el EXISTS de un BEFORE-trigger no es atómico en READ COMMITTED.
+  perform pg_advisory_xact_lock(eid)
+  from (select distinct unnest(new.entry_ids) as eid) s
+  order by s.eid;
   if exists (
     select 1 from public.payments p
     where p.id <> coalesce(new.id, -1)
       and p.entry_ids && new.entry_ids
   ) then
-    raise exception
-      'One or more of these hours are already covered by another payment (entry_ids overlap)'
-      using errcode = '23505';
+    raise exception 'hours already covered by another payment (entry_ids overlap)'
+      using errcode = 'OV001';
   end if;
   -- Horas ya cubiertas por una factura (invoices.entry_ids; payments.entry_ids NULL).
   if exists (
     select 1 from public.invoices i
     where i.entry_ids && new.entry_ids
   ) then
-    raise exception
-      'One or more of these hours are already covered by an invoice (entry_ids overlap)'
-      using errcode = '23505';
+    raise exception 'hours already covered by an invoice (entry_ids overlap)'
+      using errcode = 'OV001';
   end if;
   return new;
 end;

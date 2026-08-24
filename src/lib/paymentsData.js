@@ -280,8 +280,9 @@ export async function createOveragePayment(payload, createdBy) {
 
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 300))
-    // Anti doble-pago (mismo invariante que el trigger 0037 en Supabase):
-    // ninguna hora puede quedar cubierta por dos pagos.
+    // Anti doble-pago best-effort en demo: sólo chequea contra otros pagos (no
+    // tiene a mano las facturas). En Supabase el trigger 0037 cubre además el
+    // solape con invoices.entry_ids.
     const alreadyPaid = paidEntryIdsFrom(demoPayments)
     if (entryIds.some((id) => alreadyPaid.has(String(id)))) {
       const err = new Error(
@@ -329,11 +330,11 @@ export async function createOveragePayment(payload, createdBy) {
     .select(PAYMENT_COLUMNS)
     .single()
   if (error) {
-    // El trigger payments_entry_ids_no_overlap rechaza con 23505 y un mensaje que
-    // contiene 'entry_ids overlap' cuando alguna hora ya está cubierta por otro
-    // pago o una factura. Se exige ESE mensaje (no sólo el 23505 genérico) para no
-    // confundir un futuro unique-violation distinto con un doble-pago.
-    if (error.code === '23505' && /entry_ids overlap/.test(error.message ?? '')) {
+    // El trigger payments_entry_ids_no_overlap rechaza con el SQLSTATE propio
+    // 'OV001' cuando alguna hora ya está cubierta por otro pago o una factura. Se
+    // matchea por ESE código (no por el texto del mensaje ni un 23505 genérico),
+    // así el mapeo no se acopla a la redacción de la excepción.
+    if (error.code === 'OV001') {
       const err = new Error(
         'One or more of these hours are already covered by another payment or invoice. Refresh and try again.',
       )
