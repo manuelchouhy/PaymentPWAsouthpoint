@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { formatDate, formatDateTime } from './format'
+import { getCurrencySymbol } from './currenciesData'
 
 function fmtAmount(value) {
   return Number(value || 0).toLocaleString('es-AR', {
@@ -18,6 +19,12 @@ export function downloadPaymentReceipt({ invoice, payment, generatedBy }) {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
   const accent = [124, 58, 237] // violeta
+
+  // Moneda del pago (no siempre USD): símbolo para los montos y, si no es USD, el
+  // tipo de cambio con el que se convierte a USD.
+  const currency = payment.currency || 'USD'
+  const sym = getCurrencySymbol(currency)
+  const hasRate = currency !== 'USD' && payment.exchangeRate != null
 
   // --- Header ---
   doc.setFillColor(10, 10, 10)
@@ -54,7 +61,13 @@ export function downloadPaymentReceipt({ invoice, payment, generatedBy }) {
       ['Contractor', invoice.userName],
       ['Supplier invoice', invoice.supplierInvoiceNumber],
       ['Invoice date', formatDate(invoice.invoiceDate)],
-      ['Amount paid', `$ ${fmtAmount(payment.amountPaid)}`],
+      ['Amount paid', `${sym} ${fmtAmount(payment.amountPaid)} ${currency}`],
+      ...(hasRate
+        ? [
+            ['Exchange rate', `${payment.exchangeRate} (${currency} → USD)`],
+            ['Amount paid (USD)', `$ ${fmtAmount(Number(payment.amountPaid) * Number(payment.exchangeRate))}`],
+          ]
+        : []),
       ['Payment date', formatDate(payment.paymentDate) + (payment.backDated ? '  (back-dated)' : '')],
       ['Bank / method', payment.bankMethod || '—'],
       ['Transfer reference', payment.transferReference || '—'],
@@ -69,7 +82,7 @@ export function downloadPaymentReceipt({ invoice, payment, generatedBy }) {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(13)
   doc.setTextColor(accent[0], accent[1], accent[2])
-  doc.text(`TOTAL PAID:  $ ${fmtAmount(payment.amountPaid)}`, 40, afterTable + 28)
+  doc.text(`TOTAL PAID:  ${sym} ${fmtAmount(payment.amountPaid)} ${currency}`, 40, afterTable + 28)
 
   // --- Footer ---
   doc.setFont('helvetica', 'normal')

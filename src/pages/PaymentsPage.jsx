@@ -128,6 +128,26 @@ export function PaymentsPage() {
     )
   }, [entries, payments, invoices])
 
+  // Overage YA pagado (read-only): un pago de overage es el que no tiene factura
+  // (invoiceId null) y cubre horas (entryIds). Se muestra para poder auditar lo
+  // pagado, ya que esas horas salen del pendiente. Las horas se suman mapeando
+  // entryIds → horas de la entry. Más reciente arriba.
+  const overagePaid = useMemo(() => {
+    const hoursById = new Map(entries.map((e) => [String(e.id), Number(e.hours) || 0]))
+    return payments
+      .filter((p) => !p.invoiceId && (p.entryIds?.length ?? 0) > 0)
+      .map((p) => ({
+        id: p.id,
+        user: p.userName,
+        hours: (p.entryIds ?? []).reduce((sum, id) => sum + (hoursById.get(String(id)) || 0), 0),
+        entryCount: p.entryIds?.length ?? 0,
+        amountPaid: p.amountPaid,
+        currency: p.currency || 'USD',
+        paymentDate: p.paymentDate,
+      }))
+      .sort((a, b) => (b.paymentDate || '').localeCompare(a.paymentDate || ''))
+  }, [payments, entries])
+
   const warningBefore = alertSettings?.warningDaysBeforeDue ?? 3
   const ALERT_RANK = { overdue: 0, warning: 1, on_time: 2 }
 
@@ -517,6 +537,47 @@ export function PaymentsPage() {
               </div>
             )}
           </section>
+
+          {/* Overage ya pagado (read-only): deja rastro auditable de lo pagado,
+              que si no desaparecería de la pantalla al salir del pendiente. */}
+          {overagePaid.length > 0 && (
+            <section className="pay-overage">
+              <div className="toolbar">
+                <span className="toolbar__count">
+                  Overage paid · {overagePaid.length}{' '}
+                  {overagePaid.length === 1 ? 'payment' : 'payments'}
+                </span>
+              </div>
+              <div className="table-wrap table-wrap--scroll">
+                <table className="table proj-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Contractor</th>
+                      <th scope="col" className="col-num">Hours</th>
+                      <th scope="col" className="col-num">Amount</th>
+                      <th scope="col">Paid on</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {overagePaid.map((row) => (
+                      <tr key={row.id} className="row-static">
+                        <td className="cell-strong">{row.user || '—'}</td>
+                        <td className="col-num cell-mono">
+                          {formatHours(row.hours)} h
+                          <span className="cell-soft"> · {row.entryCount}</span>
+                        </td>
+                        <td className="col-num cell-mono">
+                          {getCurrencySymbol(row.currency)}
+                          {fmtAmount(row.amountPaid)} {row.currency}
+                        </td>
+                        <td className="cell-mono">{formatDate(row.paymentDate)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
         </motion.div>
       )}
 
