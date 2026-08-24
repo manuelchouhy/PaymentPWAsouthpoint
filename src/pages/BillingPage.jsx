@@ -28,8 +28,8 @@ const sowKey = (client, projectName) => `${client ?? ''}||${projectName ?? ''}`
 // dentro de esa semana (para seleccionar/facturar). Una sola definición: el id de
 // selección y la clave del índice tienen que salir de la MISMA función o divergen
 // en silencio y los checkboxes dejan de matchear. week.weekId ya incluye el año
-// ISO (ver billingGrouping), así que dos semanas homónimas de años distintos no
-// colapsan en una.
+// (semana domingo→sábado, ver billingGrouping), así que dos semanas homónimas de
+// años distintos no colapsan en una.
 const weekId = (client, week) => `${client}||${week.weekId}`
 const rowId = (client, week, row) => `${weekId(client, week)}||${row.key}`
 
@@ -156,7 +156,7 @@ export function BillingPage() {
   // Fila mostrada en el drawer de detalle (o null): snapshot al momento del click,
   // { entry, hours, count, periodLabel }. Una fila de Billing agrupa N entries de
   // la misma terna proveedor·proyecto·task; en las tabs con semana (overage/SP
-  // internal/bill_to_client) es una semana ISO, pero la X (unknown, withWeeks:
+  // internal/bill_to_client) es una semana domingo→sábado, pero la X (unknown, withWeeks:
   // false) agrega a través de semanas. Por eso se guarda `entry` (primera, para
   // los campos COMPARTIDOS: cliente/proyecto/task/allocation), las HORAS del total
   // de la fila, el conteo y una etiqueta de período derivada de las entries reales
@@ -405,7 +405,7 @@ export function BillingPage() {
     }
   }, [filtered, filteredAllAllocations, invoiceByEntryId])
 
-  // Las horas facturables ordenadas por cliente → semana ISO → filas
+  // Las horas facturables ordenadas por cliente → semana domingo→sábado → filas
   // proveedor·proyecto·task (billingGrouping). "Sin cliente" queda arriba, no es
   // facturable y muestra el motivo de no-resolución por proyecto.
   const clientGroups = useMemo(
@@ -539,10 +539,10 @@ export function BillingPage() {
   }
 
   // Abre el drawer de detalle para una fila (ver detailRow). El período sale de
-  // las semanas ISO reales de las sub-entries: una sola → esa semana ("W32 · 2025",
+  // las semanas domingo→sábado reales de las sub-entries: una sola → esa semana ("W32 · 2025",
   // igual que el header de la grilla); varias (caso X, que agrega cross-week) →
   // "N weeks". La dedup lleva el AÑO en la clave: dos años con el mismo número de
-  // semana ISO son semanas distintas (mismo criterio que weekId en billingGrouping),
+  // semana domingo→sábado son semanas distintas (mismo criterio que weekId en billingGrouping),
   // si no una fila W10-2025 + W10-2026 se etiquetaría como una sola semana.
   function openRowDetail(row) {
     const entries = row?.entries ?? []
@@ -592,6 +592,26 @@ export function BillingPage() {
     setSelectedKeys((prev) => {
       const next = new Set(prev)
       for (const id of weekRowIds) {
+        if (allSelected) next.delete(id)
+        else next.add(id)
+      }
+      return next
+    })
+  }
+
+  // "Select all" de TODO un cliente (todas sus semanas). Para no romper el
+  // invariante "seleccionado ⊆ visible" (una fila seleccionada pero en una semana
+  // colapsada se podría facturar sin verse), al seleccionar se ABREN todas las
+  // semanas del cliente. Al deseleccionar sólo se quitan sus filas (las semanas
+  // pueden quedar abiertas). Cruzar proveedores no rompe nada: el paso de emisión
+  // exige un solo proveedor y guía la selección.
+  function toggleClientSelection(clientRowIds, clientWeekIds, allSelected) {
+    if (!allSelected) {
+      setOpenWeeks((prev) => new Set([...prev, ...clientWeekIds]))
+    }
+    setSelectedKeys((prev) => {
+      const next = new Set(prev)
+      for (const id of clientRowIds) {
         if (allSelected) next.delete(id)
         else next.add(id)
       }
@@ -1000,6 +1020,9 @@ export function BillingPage() {
                     <option value="all">All</option>
                   </select>
                   {clientGroups.length > 0 && <ExportDropdown onExport={handleExport} />}
+                  <Link className="btn btn--ghost btn--sm" to={entriesLinkTo('bill_to_client')}>
+                    View in Entries <ArrowRight size={14} aria-hidden="true" />
+                  </Link>
                 </div>
               </div>
 
@@ -1078,6 +1101,32 @@ export function BillingPage() {
                   ) : (
                     <section key={group.client} className="bill-client">
                       <header className="bill-client__head">
+                        {canCreate &&
+                          (() => {
+                            // Todas las filas seleccionables del cliente (todas sus
+                            // semanas) + los ids de esas semanas, para el select-all
+                            // por cliente que las abre y selecciona de una.
+                            const clientWeekIds = group.weeks.map((w) => weekId(group.client, w))
+                            const clientRowIds = group.weeks.flatMap((w) =>
+                              w.rows
+                                .filter((r) => !r.invoiced)
+                                .map((r) => rowId(group.client, w, r)),
+                            )
+                            if (clientRowIds.length === 0) return null
+                            const allSel = clientRowIds.every((k) => selectedKeys.has(k))
+                            return (
+                              <Checkbox
+                                checked={allSel}
+                                indeterminate={
+                                  !allSel && clientRowIds.some((k) => selectedKeys.has(k))
+                                }
+                                onChange={() =>
+                                  toggleClientSelection(clientRowIds, clientWeekIds, allSel)
+                                }
+                                ariaLabel={`Select all billable rows for ${group.client}`}
+                              />
+                            )
+                          })()}
                         <h3 className="bill-client__name">{group.client}</h3>
                         <span className="bill-client__hours">{formatHours(group.hours)} h</span>
                       </header>

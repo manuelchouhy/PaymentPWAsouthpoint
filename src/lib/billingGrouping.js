@@ -212,7 +212,7 @@ export function groupBillToClient(
  * Agrupa horas —ya filtradas por allocation por el llamador— para las tabs de
  * SÓLO LECTURA de Billing (Overage, SP internal, X). Agrupa por una entidad
  * (`entityKey`: el contractor 'user' o el 'client') → horas, con o sin sub-nivel
- * de semana ISO:
+ * de semana (domingo→sábado):
  *   - Overage:     entityKey 'user',   withWeeks true  (contractor · semana)
  *   - SP internal: entityKey 'client', withWeeks true  (cliente · semana)
  *   - X (unknown): entityKey 'user',   withWeeks false (contractor)
