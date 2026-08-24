@@ -145,6 +145,12 @@ export interface Client {
   primaryContactName: string
   primaryContactEmail: string
   msaUrl: string
+  /** Alias del Project Group de Zoho que mapea a este cliente. */
+  zohoGroupName?: string | null
+  /** Auto-creado por el sync desde un grupo de Zoho, datos a completar. */
+  needsReview?: boolean
+  /** false = cliente desactivado (borrado lógico); getClients sólo trae activos. */
+  active?: boolean
   createdAt: string
   updatedAt: string
   createdBy: string | null
@@ -368,7 +374,9 @@ export interface ApiClient {
     list(): Promise<Client[]>
     create(payload: Partial<Client>, createdBy?: string | null): Promise<Client>
     update(current: Client, updates: Partial<Client>): Promise<Client>
-    delete(client: Pick<Client, 'id'>): Promise<{ id: string | number }>
+    /** Borrado lógico: pone active=false y libera el alias de Zoho. Lanza con
+     *  code 'has_projects' si el cliente tiene proyectos activos vinculados. */
+    deactivate(client: Pick<Client, 'id'>): Promise<{ id: string | number }>
     uploadMsa(file: File): Promise<string>
     getMsaUrl(msaUrl: string): Promise<string | null>
     recordMsaVersion(params: {

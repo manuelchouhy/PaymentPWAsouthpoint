@@ -496,9 +496,14 @@ async function ensureClientsForGroups(
   groupNames: string[],
 ): Promise<void> {
   if (!groupNames || groupNames.length === 0) return;
+  // Sólo clientes ACTIVOS cuentan como "cubiertos": si un cliente fue desactivado
+  // (borrado lógico), su grupo debe volver a auto-crearse en el próximo sync. Un
+  // cliente desactivado además ya liberó su zoho_group_name (ver deactivateClient),
+  // así que el índice único de alias no bloquea la re-creación.
   const { data: clients, error } = await supabase
     .from("clients")
-    .select("client_name, zoho_group_name");
+    .select("client_name, zoho_group_name")
+    .eq("active", true);
   if (error) {
     console.log("Auto-clientes: no se pudo leer clients, se omite:", error.message);
     return;
