@@ -2615,6 +2615,10 @@ th.col-pop { text-align: center; }
   display: flex;
   flex-direction: column;
   gap: 20px;
+  /* Más ancho que el .modal base (480px): el detalle de una hora tiene proyecto,
+     tarea y notas largas — con más ancho el texto entra sin scrollear ni cortarse.
+     En mobile lo acota igual el max-width de la media query de abajo. */
+  max-width: 720px;
 }
 
 .drawer__head {
