@@ -31,8 +31,10 @@ function daysUntil(iso) {
   return Math.round((target - today) / 86400000)
 }
 
-// Estados de factura PAGABLES al contractor (flujo Billing → Payments, sin
-// Collections): emitida (Invoiced) o cobrada (Collected). Una sola fuente para el
+// Estados de factura PAGABLES al contractor. El flujo es Billing → Payments (sin
+// paso de Collections): una factura emitida (Invoiced) se paga directo. 'Collected'
+// se mantiene por compatibilidad —una factura legacy en ese estado sigue siendo
+// pagable, no se estranda— pero ya no es un paso del flujo. Una sola fuente para el
 // listado, KPIs, filtros, resaltado y el botón de pago — así no se desincronizan.
 const PAYABLE_STATUSES = ['Invoiced', 'Collected']
 const isPayable = (status) => PAYABLE_STATUSES.includes(status)
@@ -40,7 +42,6 @@ const isPayable = (status) => PAYABLE_STATUSES.includes(status)
 export function PaymentsPage() {
   const { user, profile, can } = useOutletContext()
   const [invoices, setInvoices] = useState([])
-  const [collections, setCollections] = useState([])
   const [payments, setPayments] = useState([])
   const [alertSettings, setAlertSettings] = useState(null)
   const [status, setStatus] = useState('loading')
@@ -59,14 +60,12 @@ export function PaymentsPage() {
     setStatus('loading')
     Promise.all([
       api.invoices.list(),
-      api.collections.list(),
       api.payments.list(),
       api.payments.getAlertSettings(),
       api.timeEntries.list(),
     ])
-      .then(([inv, col, pay, settings, entryRows]) => {
+      .then(([inv, pay, settings, entryRows]) => {
         setInvoices(inv)
-        setCollections(col)
         setPayments(pay)
         setAlertSettings(settings)
         setEntries(entryRows)
@@ -82,15 +81,6 @@ export function PaymentsPage() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  const collectionDateByInvoice = useMemo(() => {
-    const map = new Map()
-    for (const c of collections) {
-      const prev = map.get(c.invoiceId)
-      if (!prev || c.collectionDate > prev) map.set(c.invoiceId, c.collectionDate)
-    }
-    return map
-  }, [collections])
 
   const paymentByInvoice = useMemo(() => {
     const map = new Map()
@@ -154,25 +144,16 @@ export function PaymentsPage() {
   const allRows = useMemo(
     () =>
       invoices
-        // Flujo Billing → Payments (Collections no se usa por ahora): una factura
-        // emitida en Billing (Invoiced) es pagable directo, sin paso de cobro. Se
-        // listan Invoiced y Collected (esta última por datos viejos), y Paid con el
+        // Flujo Billing → Payments (sin Collections): una factura emitida en Billing
+        // (Invoiced) es pagable directo. Se listan las pagables y las Paid con el
         // toggle. Ver createPayment / migración 0036.
         .filter((inv) => isPayable(inv.status) || (showPaid && inv.status === 'Paid'))
         .map((inv) => {
-          // El vencimiento de pago al contractor SÓLO aplica a facturas COBRADAS:
-          // el plazo (paymentTermsDays) corre desde el cobro. Una Invoiced es
-          // pagable ya, pero sin deadline → sin fecha de vencimiento ni alerta. Así
-          // no se rotula la fecha de factura como cobro, no se marca overdue una
-          // Invoiced vieja, y no se calcula sobre una fecha nula si falta invoiceDate.
-          // Registro de cobro (si existe) — para mostrar la fecha real de cobro.
-          const collectionDate = collectionDateByInvoice.get(inv.id) ?? null
-          // El vencimiento de pago aplica a las COBRADAS (por status): base = fecha
-          // de cobro, o la de factura como fallback si falta el registro (dato
-          // incompleto — una Collected debería tener cobro). Una Invoiced es pagable
-          // pero sin deadline → sin dueDate. El guard evita addDaysISO sobre null.
-          const dueBase =
-            inv.status === 'Collected' ? collectionDate ?? inv.invoiceDate ?? null : null
+          // Vencimiento del pago al contractor: el plazo (paymentTermsDays) corre
+          // desde la FECHA DE FACTURA (ya no hay paso de cobro). Aplica a las
+          // pagables (no Paid) que tengan fecha de factura; el guard evita
+          // addDaysISO sobre null si faltara.
+          const dueBase = inv.status !== 'Paid' ? inv.invoiceDate ?? null : null
           const dueDate = dueBase ? addDaysISO(dueBase, inv.paymentTermsDays ?? 30) : null
           const daysUntilDue = dueDate ? daysUntil(dueDate) : null
           const alertLevel =
@@ -181,19 +162,16 @@ export function PaymentsPage() {
               : paymentAlertLevel(daysUntilDue, warningBefore)
           return {
             inv,
-            collected: Boolean(collectionDate),
-            collectionDate,
             dueDate,
             daysUntilDue,
             alertLevel,
             payment: paymentByInvoice.get(inv.id) ?? null,
           }
         }),
-    [invoices, showPaid, collectionDateByInvoice, paymentByInvoice, warningBefore],
+    [invoices, showPaid, paymentByInvoice, warningBefore],
   )
 
-  // KPIs sobre las facturas pendientes de pago (Invoiced o Collected — ambas son
-  // pagables en el flujo Billing → Payments; ver allRows).
+  // KPIs sobre las facturas pendientes de pago (pagables; ver allRows / isPayable).
   const kpis = useMemo(() => {
     let overdue = 0
     let dueThisWeek = 0
@@ -201,8 +179,8 @@ export function PaymentsPage() {
     for (const r of allRows) {
       if (!isPayable(r.inv.status)) continue
       totalDue += r.inv.totalAmount
-      // Vencido / esta-semana sólo cuentan las que tienen deadline (cobradas);
-      // una Invoiced es pagable pero no "vence".
+      // Vencido / esta-semana sólo cuentan las que tienen deadline (fecha de
+      // factura + plazo); una sin fecha de factura no "vence".
       if (r.dueDate) {
         if (r.alertLevel === 'overdue') overdue += 1
         if (r.daysUntilDue >= 0 && r.daysUntilDue <= 7) dueThisWeek += 1
@@ -289,7 +267,6 @@ export function PaymentsPage() {
       { header: 'Invoice #', key: 'invoiceNumber' },
       { header: 'Currency', key: 'currency' },
       { header: 'Amount Due', key: 'totalAmount' },
-      { header: 'Collection Date', key: 'collectionDate' },
       { header: 'Payment Due', key: 'dueDate' },
       { header: 'Days Until Due', key: 'daysUntilDue' },
       { header: 'Alert', key: 'alertLevel' },
@@ -303,9 +280,8 @@ export function PaymentsPage() {
       invoiceNumber: r.inv.supplierInvoiceNumber,
       currency: r.inv.currency ?? 'USD',
       totalAmount: r.inv.totalAmount,
-      // Coalesce a '' (no null): una Invoiced no tiene cobro ni vencimiento, y una
-      // celda vacía en el export es más limpia que un null literal.
-      collectionDate: r.collectionDate ?? '',
+      // Coalesce a '' (no null): una celda vacía en el export es más limpia que un
+      // null literal cuando la factura no tiene fecha de vencimiento.
       dueDate: r.dueDate ?? '',
       daysUntilDue: r.daysUntilDue ?? '',
       alertLevel: r.alertLevel,
@@ -332,8 +308,8 @@ export function PaymentsPage() {
         <h1 className="masthead__title">Payments</h1>
         <p className="masthead__sub">
           Contractor payment for invoices ready to pay — issued in Billing
-          (Invoiced) or Collected: once paid, they move to Paid. Overage hours are
-          paid here too — per contractor, without an invoice — and freeze once paid.
+          (Invoiced); once paid, they move to Paid. Overage hours are paid here too
+          — per contractor, without an invoice — and freeze once paid.
         </p>
       </motion.header>
 
@@ -411,7 +387,6 @@ export function PaymentsPage() {
                     <th scope="col">Contractor</th>
                     <th scope="col">Invoice #</th>
                     <th scope="col" className="col-num">Amount Due</th>
-                    <th scope="col">Collection Date</th>
                     <th scope="col">Payment Due</th>
                     <th scope="col" className="col-num">Days Until Due</th>
                     <th scope="col">Alert</th>
@@ -443,9 +418,6 @@ export function PaymentsPage() {
                         <td>{r.inv.userName}</td>
                         <td className="cell-mono">{r.inv.supplierInvoiceNumber}</td>
                         <td className="col-num cell-mono">{getCurrencySymbol(r.inv.currency)}{fmtAmount(r.inv.totalAmount)}</td>
-                        <td className="cell-mono">
-                          {r.collected ? formatDate(r.collectionDate) : '—'}
-                        </td>
                         <td className="cell-mono">{r.dueDate ? formatDate(r.dueDate) : '—'}</td>
                         <td className={`col-num cell-mono${overdue ? ' proj-days--overdue' : ''}`}>
                           {r.daysUntilDue == null ? '—' : r.daysUntilDue}
