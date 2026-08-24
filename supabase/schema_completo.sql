@@ -431,6 +431,37 @@ create trigger supplier_contracts_set_updated_at
   before update on public.supplier_contracts
   for each row execute function public.set_updated_at();
 
+-- Anti doble-pago del overage (migración 0037): ninguna hora (entry_id) puede
+-- quedar cubierta por dos pagos. Índice GIN para el chequeo de solape `&&`.
+create index if not exists payments_entry_ids_gin
+  on public.payments using gin (entry_ids);
+
+create or replace function public.payments_entry_ids_no_overlap()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.entry_ids is null or array_length(new.entry_ids, 1) is null then
+    return new;
+  end if;
+  if exists (
+    select 1 from public.payments p
+    where p.id <> coalesce(new.id, -1)
+      and p.entry_ids && new.entry_ids
+  ) then
+    raise exception
+      'One or more of these hours are already covered by another payment (entry_ids overlap)'
+      using errcode = '23505';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists payments_entry_ids_no_overlap on public.payments;
+create trigger payments_entry_ids_no_overlap
+  before insert or update of entry_ids on public.payments
+  for each row execute function public.payments_entry_ids_no_overlap();
+
 
 -- ===========================================================================
 -- 17. RPC: register_contractor_payment  (FR-10 · pago atómico al contractor)

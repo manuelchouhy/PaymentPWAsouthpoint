@@ -260,6 +260,11 @@ export async function createPayment(invoice, payload, createdBy) {
  * (hay policy de insert para authenticated). Las horas quedan congeladas
  * (entryFreeze) por estar en entry_ids de un pago, y salen de la tab Overage.
  *
+ * Anti doble-pago: ninguna hora puede quedar cubierta por dos pagos. En Supabase
+ * lo garantiza el trigger payments_entry_ids_no_overlap (migración 0037), que
+ * rechaza el insert con código 23505 si algún entry_id ya está cubierto; acá se
+ * traduce a un error 'overlap' legible. En demo se replica el chequeo en memoria.
+ *
  * @param {{ userName:string, entryIds:Array<string|number>, amountPaid:number, paymentDate:string, transferReference?:string, bankMethod?:string, notes?:string, exchangeRate?:?number, currency?:string }} payload
  * @param {?string} createdBy
  * @returns {Promise<{ payment: ContractorPayment }>}
@@ -275,6 +280,16 @@ export async function createOveragePayment(payload, createdBy) {
 
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 300))
+    // Anti doble-pago (mismo invariante que el trigger 0037 en Supabase):
+    // ninguna hora puede quedar cubierta por dos pagos.
+    const alreadyPaid = paidEntryIdsFrom(demoPayments)
+    if (entryIds.some((id) => alreadyPaid.has(String(id)))) {
+      const err = new Error(
+        'One or more of these hours are already covered by another payment. Refresh and try again.',
+      )
+      err.code = 'overlap'
+      throw err
+    }
     const payment = {
       id: `pay-demo-${Date.now()}`,
       invoiceId: null,
@@ -313,7 +328,18 @@ export async function createOveragePayment(payload, createdBy) {
     })
     .select(PAYMENT_COLUMNS)
     .single()
-  if (error) throw new Error(error.message)
+  if (error) {
+    // El trigger payments_entry_ids_no_overlap rechaza con 23505 si alguna hora
+    // ya está cubierta por otro pago (doble-pago). Mensaje legible para el modal.
+    if (error.code === '23505' || error.message?.includes('entry_ids overlap')) {
+      const err = new Error(
+        'One or more of these hours are already covered by another payment. Refresh and try again.',
+      )
+      err.code = 'overlap'
+      throw err
+    }
+    throw new Error(error.message)
+  }
   return { payment: rowToPayment(data) }
 }
 
