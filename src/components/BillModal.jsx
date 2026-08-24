@@ -24,11 +24,12 @@ function todayISO() {
  *   user: string,
  *   entries: import('../lib/data').TimeEntry[],
  *   hours: number,
+ *   remainingHours?: number,
  *   onClose: () => void,
  *   onConfirm: (data: { supplierInvoiceNumber: string, invoiceDate: string, totalAmount: number, notes: string }) => Promise<void>,
  * }} props
  */
-export function BillModal({ user, entries, hours, onClose, onConfirm }) {
+export function BillModal({ user, entries, hours, remainingHours = 0, onClose, onConfirm }) {
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('')
   const [invoiceDate, setInvoiceDate] = useState(todayISO)
   const [currency, setCurrency] = useState('USD')
@@ -189,6 +190,16 @@ export function BillModal({ user, entries, hours, onClose, onConfirm }) {
             <span className="modal__summary-hours-label">Hours</span>
           </div>
         </div>
+
+        {/* Umbral 0.05: por debajo, formatHours redondea a "0.0" — sin epsilon,
+            un residuo float al seleccionar todo mostraría "0.0 more...". */}
+        {remainingHours >= 0.05 && (
+          <p className="modal__note" role="status">
+            <AlertTriangle size={14} aria-hidden="true" />
+            {formatHours(remainingHours)} more pending hours of {user} are not
+            included in this invoice.
+          </p>
+        )}
 
         {contractWarnings.length > 0 && (
           <div className="modal__contract-warnings">

@@ -19,7 +19,14 @@ import { sundayWeek, sundayWeekYear } from './format.js'
 
 const hoursOf = (entry) => Number(entry?.hours) || 0
 const sumHours = (entries) => entries.reduce((total, entry) => total + hoursOf(entry), 0)
-const rowKey = (entry) => `${entry.user ?? ''}||${entry.project ?? ''}||${entry.task ?? ''}`
+// El sufijo separa las filas facturadas de las pendientes de la misma terna (C9),
+// e incluye el ESTADO de la factura ('Collected'/'Paid'/…): así una terna con
+// horas en facturas de estados distintos no colapsa en una fila de estado mixto —
+// cada fila queda con un estado único y su badge es exacto. Sólo se agrega cuando
+// la hora está facturada, así las keys de las filas pendientes (default) no cambian.
+const rowKey = (entry) =>
+  `${entry.user ?? ''}||${entry.project ?? ''}||${entry.task ?? ''}` +
+  (entry._invoiced ? `||inv-${entry._billStatus ?? 'x'}` : '')
 
 /**
  * Filas proveedor·proyecto·task de una semana, combinando las horas de la misma
@@ -27,6 +34,7 @@ const rowKey = (entry) => `${entry.user ?? ''}||${entry.project ?? ''}||${entry.
  */
 function groupRows(entries) {
   const byKey = new Map()
+  // (el billStatus por fila se calcula después de acumular las entries — abajo)
   for (const entry of entries) {
     const key = rowKey(entry)
     const row = byKey.get(key)
@@ -39,14 +47,23 @@ function groupRows(entries) {
         user: entry.user ?? '',
         project: entry.project ?? '',
         task: entry.task ?? '',
+        // invoiced: la fila es de horas ya facturadas (read-only en la grilla). La
+        // key separa facturadas de pendientes, así una fila es puramente una u otra.
+        invoiced: Boolean(entry._invoiced),
         hours: hoursOf(entry),
         entries: [entry],
       })
     }
   }
-  return [...byKey.values()].sort(
-    (a, b) => b.hours - a.hours || a.user.localeCompare(b.user, 'es'),
-  )
+  // billStatus de cada fila: pendiente → 'Pending'; facturada → el estado de su
+  // factura (las filas ya están keyadas por estado, así que todas las entries de
+  // una fila comparten _billStatus). Si falta el estado (dato incompleto) → floor
+  // 'Invoiced' (es al menos eso). Lo consumen el badge, el drawer y el export.
+  const rows = [...byKey.values()]
+  for (const row of rows) {
+    row.billStatus = row.invoiced ? row.entries[0]?._billStatus ?? 'Invoiced' : 'Pending'
+  }
+  return rows.sort((a, b) => b.hours - a.hours || a.user.localeCompare(b.user, 'es'))
 }
 
 /**
@@ -131,20 +148,42 @@ function groupProjectsWithReason(entries) {
  * Agrupa las horas facturables por cliente para la tab "Bill to client".
  *
  * @param {Array<object>} entries — entries ya con `client` y `clientReason` derivados.
- * @param {{ isInvoiced?: (entry: object) => boolean }} opts — isInvoiced marca las
- *   horas ya facturadas (se excluyen del pendiente).
+ * @param {{
+ *   isInvoiced?: (entry: object) => boolean,
+ *   statusFilter?: 'pending' | 'invoiced' | 'all',
+ *   billingStatusOf?: (entry: object) => (string | null),
+ * }} opts
+ *   - isInvoiced: marca las horas ya facturadas.
+ *   - statusFilter (C9): 'pending' (default, sólo sin facturar), 'invoiced' (sólo
+ *     facturadas) o 'all' (ambas). Las facturadas van como filas read-only.
+ *   - billingStatusOf: estado de la factura de una hora (Invoiced/Collected/Paid),
+ *     para taggear `row.billStatus` (lo usan badge/drawer/export).
  * @returns {Array<object>} clientes; "Sin cliente" (isUnassigned) primero, el
- *   resto por horas desc. Los asignados traen `weeks`; el bucket sin cliente trae
- *   `projects` (con motivo).
+ *   resto por horas desc. Los asignados traen `weeks` (cada fila con `invoiced` y
+ *   `billStatus`); el bucket sin cliente trae `projects` (con motivo) y es siempre
+ *   de horas PENDIENTES (una facturada sin cliente no va ahí: ya está facturada).
  */
-export function groupBillToClient(entries = [], { isInvoiced = () => false } = {}) {
-  const billable = (entries ?? []).filter(
-    (entry) =>
-      entry &&
-      entry.allocation === 'bill_to_client' &&
-      entry.status === 'Approved' &&
-      !isInvoiced(entry),
-  )
+export function groupBillToClient(
+  entries = [],
+  { isInvoiced = () => false, statusFilter = 'pending', billingStatusOf = () => null } = {},
+) {
+  // statusFilter (C9): 'pending' (default, sólo sin facturar — la grilla facturable
+  // de siempre), 'invoiced' (sólo facturadas, read-only) o 'all' (ambas). Cada hora
+  // se taggea con _invoiced para separar filas y marcarlas en la UI.
+  // Una sola pasada: isInvoiced se evalúa una vez por hora (hace un lookup) y sólo
+  // se copian las que sobreviven al filtro, con su _invoiced ya calculado.
+  const billable = []
+  for (const entry of entries ?? []) {
+    if (!entry || entry.allocation !== 'bill_to_client' || entry.status !== 'Approved') continue
+    const invoiced = isInvoiced(entry)
+    if (statusFilter === 'pending' && invoiced) continue
+    if (statusFilter === 'invoiced' && !invoiced) continue
+    // Una hora facturada SIN cliente no va a la grilla: el bucket "Sin cliente" es
+    // para pendientes por resolver, y ya facturada no hay nada que resolver (evita
+    // mostrarla con el aviso "asigná el grupo" y exportarla como Pending).
+    if (invoiced && !(entry.client || '')) continue
+    billable.push({ ...entry, _invoiced: invoiced, _billStatus: invoiced ? billingStatusOf(entry) : null })
+  }
 
   const byClient = new Map()
   for (const entry of billable) {

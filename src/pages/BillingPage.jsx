@@ -13,6 +13,7 @@ import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { BillModal } from '../components/BillModal'
 import { EntryDetailDrawer } from '../components/EntryDetailDrawer'
+import { BillingBadge } from '../components/BillingBadge'
 import { Avatar } from '../components/Avatar'
 import { ALLOCATION_LABELS } from '../lib/allocations'
 
@@ -147,6 +148,10 @@ export function BillingPage() {
   const [notice, setNotice] = useState('')
   // Tab activa de Billing (bill_to_client | overage | sp_internal | unknown).
   const [tab, setTab] = useState('bill_to_client')
+  // C9: filtro de estado de la grilla Bill to client. 'pending' (default) = sólo
+  // sin facturar (la grilla facturable de siempre); 'invoiced' = sólo facturadas
+  // (read-only); 'all' = ambas. Las facturadas no son seleccionables.
+  const [billStatusFilter, setBillStatusFilter] = useState('pending')
   // Fila mostrada en el drawer de detalle (o null): snapshot al momento del click,
   // { entry, hours, count, periodLabel }. Una fila de Billing agrupa N entries de
   // la misma terna proveedor·proyecto·task; en las tabs con semana (overage/SP
@@ -341,13 +346,21 @@ export function BillingPage() {
     // El aviso habla de la selección anterior: dejarlo bajo otra grilla filtrada
     // haría dudar de una factura que sí se emitió.
     setNotice('')
-  }, [filters])
+    // También al cambiar el filtro de estado (C9): al pasar a 'invoiced' las filas
+    // dejan de ser seleccionables y quedaría una barra de selección fantasma.
+  }, [filters, billStatusFilter])
+
+  // El filtro de estado (C9) sólo se ve en la tab "Bill to client"; se resetea a
+  // 'pending' al cambiar de tab para no dejar la grilla filtrada en silencio al
+  // volver (se vería como "no hay horas para facturar").
+  useEffect(() => {
+    setBillStatusFilter('pending')
+  }, [tab])
 
   const cards = useMemo(() => {
     let pendingToBill = 0
     let pendingCount = 0
     let invoiced = 0
-    let collected = 0
 
     // "Pending to bill" mira SÓLO bill_to_client: es lo que está por entrar al
     // pipeline, y overage o SP internal no se le cobran a nadie acá.
@@ -360,21 +373,15 @@ export function BillingPage() {
       pendingCount += 1
     }
 
-    // Las tres tarjetas de lo ya facturado NO filtran por allocation, a
-    // diferencia de la grilla. Las facturas viejas son anteriores al triage de
-    // horas y sus entries tienen allocation en null: exigirles 'bill_to_client'
-    // deja estas tarjetas en cero para siempre, que es literalmente lo que
-    // pasaba (808 h facturadas en la base, "Invoiced 0.0 h" en pantalla).
+    // La tarjeta Invoiced NO filtra por allocation, a diferencia de la grilla.
+    // Las facturas viejas son anteriores al triage de horas y sus entries tienen
+    // allocation en null: exigirles 'bill_to_client' dejaría la tarjeta en cero
+    // para siempre (808 h facturadas en la base, "Invoiced 0.0 h" en pantalla).
     // Una hora que ya se facturó está facturada, sin importar cómo se la haya
     // clasificado después.
     for (const entry of filteredAllAllocations) {
-      const invoice = invoiceByEntryId.get(String(entry.id))
-      if (!invoice) continue
-      const hours = Number(entry.hours) || 0
-      invoiced += hours
-      // Collected y Paid ya se cobraron: Paid es el paso siguiente (se le pagó
-      // al proveedor), no una vuelta atrás.
-      if (invoice.status === 'Collected' || invoice.status === 'Paid') collected += hours
+      if (!invoiceByEntryId.has(String(entry.id))) continue
+      invoiced += Number(entry.hours) || 0
     }
 
     // Filas que el usuario TODAVÍA PUEDE clasificar bajo el filtro actual:
@@ -393,8 +400,6 @@ export function BillingPage() {
       pendingToBill,
       pendingCount,
       invoiced,
-      collected,
-      pendingCollection: invoiced - collected,
       classifiable,
     }
   }, [filtered, filteredAllAllocations, invoiceByEntryId])
@@ -406,11 +411,51 @@ export function BillingPage() {
     () =>
       groupBillToClient(filtered, {
         isInvoiced: (entry) => invoiceByEntryId.has(String(entry.id)),
+        billingStatusOf: (entry) => invoiceByEntryId.get(String(entry.id))?.status ?? null,
+        statusFilter: billStatusFilter,
       }),
-    [filtered, invoiceByEntryId],
+    [filtered, invoiceByEntryId, billStatusFilter],
+  )
+  // Clientes MOSTRADOS en la grilla (según el filtro de estado) — para el toolbar.
+  const shownClientCount = useMemo(
+    () => clientGroups.filter((g) => !g.isUnassigned).length,
+    [clientGroups],
   )
 
-  const billableClientCount = clientGroups.filter((g) => !g.isUnassigned).length
+  // Tarjetas (No client / Clients to bill): resumen de lo PENDIENTE (aprobado,
+  // bill_to_client, sin facturar), calculado directo de `filtered` en una sola
+  // pasada. No dependen del filtro de estado de la grilla (que puede mostrar
+  // facturadas) ni requieren un segundo grouping.
+  const { billableClientCount, sinClienteHours } = useMemo(() => {
+    const clients = new Set()
+    let unassignedHours = 0
+    for (const e of filtered) {
+      if (e.status !== 'Approved') continue
+      if (invoiceByEntryId.has(String(e.id))) continue
+      const client = e.client || ''
+      if (client === '') unassignedHours += Number(e.hours) || 0
+      else clients.add(client)
+    }
+    return { billableClientCount: clients.size, sinClienteHours: unassignedHours }
+  }, [filtered, invoiceByEntryId])
+
+  // Horas pendientes de facturar por cliente+contractor, sobre TODAS las entries
+  // (NO las filtradas). El aviso del modal tiene que reflejar lo que realmente le
+  // queda al contractor en ese cliente, no lo que el filtro de Proyecto/fecha deja
+  // ver: si no, filtrar por un proyecto haría creer que no queda nada pendiente
+  // cuando el contractor sí tiene horas sin facturar en otro proyecto del cliente.
+  const pendingByClientProvider = useMemo(() => {
+    const m = new Map()
+    for (const e of entriesConCliente) {
+      if (e.status !== 'Approved') continue
+      if (e.allocation !== 'bill_to_client') continue
+      if (!e.client) continue
+      if (invoiceByEntryId.has(String(e.id))) continue
+      const key = `${e.client}||${e.user}`
+      m.set(key, (m.get(key) ?? 0) + (Number(e.hours) || 0))
+    }
+    return m
+  }, [entriesConCliente, invoiceByEntryId])
 
   // Índice de filas facturables por clave única (cliente·semana·terna). La
   // selección y la factura trabajan a nivel de fila, no de cliente: una factura
@@ -422,6 +467,9 @@ export function BillingPage() {
       if (group.isUnassigned) continue
       for (const week of group.weeks) {
         for (const row of week.rows) {
+          // Las filas facturadas (C9, filtro invoiced/all) son read-only: no entran
+          // al índice de selección ni pueden re-facturarse.
+          if (row.invoiced) continue
           const id = rowId(group.client, week, row)
           map.set(id, { ...row, rowId: id, client: group.client, week: week.week })
         }
@@ -466,6 +514,20 @@ export function BillingPage() {
   const canCreate = can('billing.create')
   const canBill = canCreate && selectedEntries.length > 0 && selectedProviders.length === 1
 
+  // Horas del contractor que quedan pendientes en el cliente de la selección y NO
+  // entran en esta factura (C11). Sólo se calcula con el modal abierto (no en cada
+  // render) y sólo cuando la selección es de UN cliente: con varios, la resta
+  // cruzaría clientes y el número sería ambiguo (no se sabría de cuál son las
+  // horas restantes), así que en ese caso no se muestra aviso.
+  const remainingHoursForInvoice = (() => {
+    if (!modalOpen || !canBill) return 0
+    const selClients = new Set(selectedRows.map((r) => r.client))
+    if (selClients.size !== 1) return 0
+    const [client] = selClients
+    const pending = pendingByClientProvider.get(`${client}||${selectedProviders[0]}`) ?? 0
+    return Math.max(0, pending - selectedHours)
+  })()
+
   function toggleGroup(key) {
     setSelectedKeys((prev) => {
       const next = new Set(prev)
@@ -496,7 +558,15 @@ export function BillingPage() {
     }
     const periodLabel =
       labels.length === 1 ? labels[0] : labels.length === 0 ? '—' : `${labels.length} weeks`
-    setDetailRow({ entry, hours: row.hours, count: entries.length, periodLabel })
+    // billStatus: estado de billing de la fila (bill_to_client). Para las filas de
+    // las tabs de lectura (overage/SP/X) no aplica y queda null.
+    setDetailRow({
+      entry,
+      hours: row.hours,
+      count: entries.length,
+      periodLabel,
+      billStatus: row.billStatus ?? null,
+    })
   }
 
   function toggleWeek(id) {
@@ -538,6 +608,10 @@ export function BillingPage() {
       { header: 'Reason', key: 'reason' },
       { header: 'Hours', key: 'hours' },
       { header: 'Entries', key: 'entries' },
+      // Status distingue pendientes de facturadas (C9): sin esta columna, exportar
+      // con el filtro 'invoiced'/'all' presentaría horas ya facturadas como
+      // "ready to bill" (riesgo de doble facturación).
+      { header: 'Status', key: 'status' },
     ]
     // Se exporta lo mismo que muestra la grilla: las filas facturables por cliente
     // y también el bucket "Sin cliente" (con el motivo), que son justo las horas
@@ -555,6 +629,7 @@ export function BillingPage() {
             reason: reasonLabel(project.reason),
             hours: project.hours,
             entries: project.entries.length,
+            status: 'Pending',
           })
         }
       } else {
@@ -569,16 +644,61 @@ export function BillingPage() {
               reason: '',
               hours: row.hours,
               entries: row.entries.length,
+              status: row.billStatus,
             })
           }
         }
       }
     }
+    const scope =
+      billStatusFilter === 'invoiced' ? 'invoiced' : billStatusFilter === 'all' ? 'all' : 'ready to bill'
     exportGrid({
       rows,
       columns: cols,
-      title: 'Billing · ready to bill',
-      gridName: 'billing-ready-to-bill',
+      title: `Billing · ${scope}`,
+      gridName: `billing-${scope.replace(/\s+/g, '-')}`,
+      format,
+      generatedBy: user?.email ?? '',
+    })
+  }
+
+  // Export de una tab de sólo lectura (Overage / SP internal / X). Aplana los
+  // grupos igual que los muestra la grilla (entidad → semana → filas, o entidad →
+  // filas cuando no hay semana, como en la X). La columna Provider sólo va cuando
+  // la entidad NO es ya el contractor (sp_internal), para no repetirla.
+  function handleExportReadonly(format, groups, { entityLabel, allocation, showProvider }) {
+    const cols = [
+      { header: entityLabel === 'client' ? 'Client' : 'Contractor', key: 'entity' },
+      ...(showProvider ? [{ header: 'Provider', key: 'provider' }] : []),
+      { header: 'Week', key: 'week' },
+      { header: 'Project', key: 'project' },
+      { header: 'Task', key: 'task' },
+      { header: 'Hours', key: 'hours' },
+      { header: 'Entries', key: 'entries' },
+    ]
+    const rows = []
+    const push = (group, week, row) =>
+      rows.push({
+        entity: group.entity || '—',
+        ...(showProvider ? { provider: row.user || '' } : {}),
+        week: week ? week.week : '—',
+        project: row.project || '',
+        task: row.task || '',
+        hours: row.hours,
+        entries: row.entries.length,
+      })
+    for (const group of groups) {
+      if (group.weeks) {
+        for (const week of group.weeks) for (const row of week.rows) push(group, week, row)
+      } else {
+        for (const row of group.rows) push(group, null, row)
+      }
+    }
+    exportGrid({
+      rows,
+      columns: cols,
+      title: `Billing · ${allocation}`,
+      gridName: `billing-${allocation}`,
       format,
       generatedBy: user?.email ?? '',
     })
@@ -661,9 +781,18 @@ export function BillingPage() {
             {groups.length} {entityLabel}
             {groups.length === 1 ? '' : 's'} · {formatHours(sumGroupHours(groups))} h
           </span>
-          <Link className="btn btn--ghost btn--sm" to={entriesLinkTo(allocation)}>
-            View in Entries <ArrowRight size={14} aria-hidden="true" />
-          </Link>
+          <div className="toolbar__actions">
+            {groups.length > 0 && (
+              <ExportDropdown
+                onExport={(format) =>
+                  handleExportReadonly(format, groups, { entityLabel, allocation, showProvider })
+                }
+              />
+            )}
+            <Link className="btn btn--ghost btn--sm" to={entriesLinkTo(allocation)}>
+              View in Entries <ArrowRight size={14} aria-hidden="true" />
+            </Link>
+          </div>
         </div>
         {groups.length === 0 ? (
           <div className="empty">No {emptyLabel} hours under the current filters.</div>
@@ -796,37 +925,35 @@ export function BillingPage() {
             </div>
             <div className="dash-kpi dash-kpi--static">
               <div className="dash-kpi__head">
+                <span className="dash-kpi__label">No client</span>
+              </div>
+              <span className="dash-kpi__value">
+                {formatHours(sinClienteHours)}
+                <span className="dash-kpi__unit"> h</span>
+              </span>
+              <span className="dash-kpi__hint">bill-to-client with no resolved client</span>
+            </div>
+            <div className="dash-kpi dash-kpi--static">
+              <div className="dash-kpi__head">
                 <span className="dash-kpi__label">Invoiced</span>
               </div>
               <span className="dash-kpi__value">
                 {formatHours(cards.invoiced)}
                 <span className="dash-kpi__unit"> h</span>
               </span>
-              {/* Las tres tarjetas de facturado tienen otro alcance que la
-                  grilla y que "Pending to bill". Sin decirlo, un filtro que
-                  sólo matchea horas facturadas sin clasificar deja la grilla
-                  vacía y esta tarjeta en un número, sin explicación a la vista. */}
+              {/* La tarjeta de facturado tiene otro alcance que la grilla y que
+                  "Pending to bill": cuenta cualquier allocation, incluidas las
+                  horas pre-triage (facturas viejas con allocation en null). */}
               <span className="dash-kpi__hint">any allocation, incl. pre-triage hours</span>
             </div>
             <div className="dash-kpi dash-kpi--static">
               <div className="dash-kpi__head">
-                <span className="dash-kpi__label">Collected</span>
+                <span className="dash-kpi__label">Clients to bill</span>
               </div>
-              <span className="dash-kpi__value">
-                {formatHours(cards.collected)}
-                <span className="dash-kpi__unit"> h</span>
+              <span className="dash-kpi__value">{billableClientCount}</span>
+              <span className="dash-kpi__hint">
+                {billableClientCount === 1 ? 'client with' : 'clients with'} pending hours
               </span>
-              <span className="dash-kpi__hint">any allocation</span>
-            </div>
-            <div className="dash-kpi dash-kpi--static">
-              <div className="dash-kpi__head">
-                <span className="dash-kpi__label">Pending collection</span>
-              </div>
-              <span className="dash-kpi__value">
-                {formatHours(cards.pendingCollection)}
-                <span className="dash-kpi__unit"> h</span>
-              </span>
-              <span className="dash-kpi__hint">any allocation</span>
             </div>
           </div>
 
@@ -852,10 +979,27 @@ export function BillingPage() {
             <>
               <div className="toolbar">
                 <span className="toolbar__count">
-                  Ready to bill · {billableClientCount}{' '}
-                  {billableClientCount === 1 ? 'client' : 'clients'}
+                  {billStatusFilter === 'invoiced'
+                    ? 'Invoiced'
+                    : billStatusFilter === 'all'
+                      ? 'All'
+                      : 'Ready to bill'}{' '}
+                  · {shownClientCount} {shownClientCount === 1 ? 'client' : 'clients'}
                 </span>
-                {clientGroups.length > 0 && <ExportDropdown onExport={handleExport} />}
+                <div className="toolbar__actions">
+                  <select
+                    className="field__input"
+                    style={{ width: 'auto', height: 38 }}
+                    value={billStatusFilter}
+                    onChange={(e) => setBillStatusFilter(e.target.value)}
+                    aria-label="Filter by billing status"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="invoiced">Invoiced</option>
+                    <option value="all">All</option>
+                  </select>
+                  {clientGroups.length > 0 && <ExportDropdown onExport={handleExport} />}
+                </div>
               </div>
 
               {clientGroups.length === 0 ? (
@@ -870,7 +1014,11 @@ export function BillingPage() {
                   quede nada editable: esas filas tienen el checkbox
                   deshabilitado en Entries y setEntriesAllocation las rechaza, así
                   que mandar a clasificarlas termina en un control muerto. */}
-              {cards.classifiable > 0
+              {billStatusFilter === 'invoiced'
+                ? 'No invoiced bill-to-client hours under the current filters. (The Invoiced card above counts every allocation, including pre-triage hours.)'
+                : billStatusFilter === 'all'
+                  ? 'No bill-to-client hours (pending or invoiced) under the current filters.'
+                : cards.classifiable > 0
                 ? can('entries.allocate')
                   ? 'No hours ready to bill. Classify approved hours as “bill to client” in Entries first.'
                   : // Billing lo ve todo el mundo, pero entries.allocate excluye
@@ -937,7 +1085,11 @@ export function BillingPage() {
                         // Estado absoluto: abierta sólo si está en openWeeks (el
                         // seed abrió la más reciente de cada cliente).
                         const open = openWeeks.has(wid)
-                        const weekRowIds = week.rows.map((row) => rowId(group.client, week, row))
+                        // Sólo las filas pendientes son seleccionables (las
+                        // facturadas van read-only con el filtro invoiced/all).
+                        const weekRowIds = week.rows
+                          .filter((row) => !row.invoiced)
+                          .map((row) => rowId(group.client, week, row))
                         const allWeekSelected =
                           weekRowIds.length > 0 && weekRowIds.every((k) => selectedKeys.has(k))
                         return (
@@ -962,7 +1114,7 @@ export function BillingPage() {
                                 <table className="table proj-table">
                                   <thead>
                                     <tr>
-                                      {canCreate && (
+                                      {canCreate && weekRowIds.length > 0 && (
                                         <th scope="col" style={{ width: 34 }}>
                                           <input
                                             type="checkbox"
@@ -990,21 +1142,26 @@ export function BillingPage() {
                                         sowByProject.byClientAndName.get(
                                           sowKey(group.client, row.project),
                                         ) ?? sowByProject.byName.get(row.project)
+                                      // Fila seleccionable sólo si es pendiente; las facturadas
+                                      // (filtro invoiced/all) van read-only. row.billStatus
+                                      // (resuelto en la capa de grouping) lo usan el badge, el
+                                      // drawer y el export.
+                                      const selectable = canCreate && !row.invoiced
                                       return (
                                         <tr
                                           key={id}
-                                          // Sin billing.create la fila no togglea (no hay onClick):
-                                          // row-static evita el cursor de "clickeable" que da
-                                          // .proj-table, igual que en las filas de sólo lectura.
+                                          // Sin billing.create (o fila facturada) no togglea (no
+                                          // hay onClick): row-static evita el cursor de
+                                          // "clickeable" que da .proj-table.
                                           className={
-                                            !canCreate
+                                            !selectable
                                               ? 'row-static'
                                               : selectedKeys.has(id)
                                                 ? 'is-selected'
                                                 : undefined
                                           }
                                           onClick={
-                                            canCreate
+                                            selectable
                                               ? (e) => {
                                                   // No robar el click cuando el usuario está
                                                   // seleccionando texto DENTRO de esta fila
@@ -1022,17 +1179,21 @@ export function BillingPage() {
                                               : undefined
                                           }
                                         >
-                                          {canCreate && (
+                                          {canCreate && weekRowIds.length > 0 && (
+                                            // La columna del checkbox existe si la semana tiene
+                                            // filas seleccionables; una fila facturada deja la
+                                            // celda vacía para no desalinear las columnas.
                                             // stopPropagation: el checkbox ya togglea por su
-                                            // onChange; sin esto el click también burbujea al
-                                            // <tr> y togglea de nuevo (doble = no-op).
+                                            // onChange; sin esto el click burbujea al <tr>.
                                             <td onClick={(e) => e.stopPropagation()}>
-                                              <input
-                                                type="checkbox"
-                                                checked={selectedKeys.has(id)}
-                                                onChange={() => toggleGroup(id)}
-                                                aria-label={`Select ${row.user} · ${row.project}`}
-                                              />
+                                              {selectable && (
+                                                <input
+                                                  type="checkbox"
+                                                  checked={selectedKeys.has(id)}
+                                                  onChange={() => toggleGroup(id)}
+                                                  aria-label={`Select ${row.user} · ${row.project}`}
+                                                />
+                                              )}
                                             </td>
                                           )}
                                           <td className="cell-strong">
@@ -1055,7 +1216,11 @@ export function BillingPage() {
                                             {formatHours(row.hours)}
                                           </td>
                                           <td>
-                                            <span className="badge badge--pending">to bill</span>
+                                            {row.invoiced ? (
+                                              <BillingBadge status={row.billStatus} />
+                                            ) : (
+                                              <span className="badge badge--pending">to bill</span>
+                                            )}
                                           </td>
                                           <DetailButtonCell
                                             label={`View detail for ${row.user} · ${row.project}`}
@@ -1145,6 +1310,7 @@ export function BillingPage() {
           user={selectedProviders[0]}
           entries={selectedEntries}
           hours={selectedHours}
+          remainingHours={remainingHoursForInvoice}
           onClose={() => setModalOpen(false)}
           onConfirm={handleConfirmBill}
         />
@@ -1159,13 +1325,13 @@ export function BillingPage() {
         const entry = aggregate
           ? { ...detailRow.entry, hours: detailRow.hours, description: '', notes: '' }
           : detailRow.entry
-        // Billing sólo aplica a lo facturable al cliente. Las filas bill_to_client
-        // acá SIEMPRE están pendientes: groupBillToClient excluye las facturadas,
-        // así que el estado es 'Pending' por construcción (sin lookup de factura,
-        // que siempre fallaría). Para overage / SP internal / X (nunca se facturan
-        // al cliente) se pasa null y el drawer oculta el dato, en vez de un
-        // "Pending" que promete una facturación que no va a pasar.
-        const billingStatus = entry.allocation === 'bill_to_client' ? 'Pending' : null
+        // Billing sólo aplica a lo facturable al cliente. Con el filtro de estado
+        // (C9) la grilla puede mostrar filas facturadas, así que se usa el
+        // billStatus real de la fila (Pending para pendientes; Invoiced/Collected/
+        // Paid para facturadas). Para overage / SP internal / X (nunca se facturan
+        // al cliente) queda null y el drawer oculta el dato.
+        const billingStatus =
+          entry.allocation === 'bill_to_client' ? detailRow.billStatus ?? 'Pending' : null
         return (
           <EntryDetailDrawer
             entry={entry}

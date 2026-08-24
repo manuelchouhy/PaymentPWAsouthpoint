@@ -156,3 +156,31 @@ test('groupReadonly: sin entries → lista vacía', () => {
   assert.deepEqual(groupReadonly([], 'user'), [])
   assert.deepEqual(groupReadonly(undefined, 'user'), [])
 })
+
+test('groupBillToClient statusFilter separa pendientes de facturadas (C9)', () => {
+  const entries = [
+    e({ id: 1, client: 'HSS', user: 'Ana', project: 'P', task: 'T', date: '2026-08-14', hours: 4 }),
+    e({ id: 2, client: 'HSS', user: 'Ana', project: 'P', task: 'T', date: '2026-08-14', hours: 3 }),
+  ]
+  const isInvoiced = (x) => x.id === 2
+
+  // pending (default): sólo la no facturada.
+  const [pend] = groupBillToClient(entries, { isInvoiced })
+  const pendRows = pend.weeks.flatMap((w) => w.rows)
+  assert.equal(pendRows.length, 1)
+  assert.equal(pendRows[0].hours, 4)
+  assert.equal(pendRows[0].invoiced, false)
+
+  // invoiced: sólo la facturada, marcada invoiced.
+  const [inv] = groupBillToClient(entries, { isInvoiced, statusFilter: 'invoiced' })
+  const invRows = inv.weeks.flatMap((w) => w.rows)
+  assert.equal(invRows.length, 1)
+  assert.equal(invRows[0].hours, 3)
+  assert.equal(invRows[0].invoiced, true)
+
+  // all: ambas, como filas SEPARADAS (misma terna, distinto estado).
+  const [all] = groupBillToClient(entries, { isInvoiced, statusFilter: 'all' })
+  const allRows = all.weeks.flatMap((w) => w.rows)
+  assert.equal(allRows.length, 2)
+  assert.ok(allRows.some((r) => r.invoiced) && allRows.some((r) => !r.invoiced))
+})
