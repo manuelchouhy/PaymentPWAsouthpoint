@@ -1,4 +1,4 @@
-import { isoWeek, isoWeekYear } from './format.js'
+import { sundayWeek, sundayWeekYear } from './format.js'
 
 // ---------------------------------------------------------------------------
 // Agrupación de la tab "Bill to client": las horas facturables ordenadas POR
@@ -64,8 +64,8 @@ function groupRows(entries) {
 function groupWeeks(entries) {
   const byWeek = new Map()
   for (const entry of entries) {
-    const weekNum = isoWeek(entry.date ?? '')
-    const weekYear = isoWeekYear(entry.date ?? '')
+    const weekNum = sundayWeek(entry.date ?? '')
+    const weekYear = sundayWeekYear(entry.date ?? '')
     const weekId = weekNum ? `${weekYear}-${weekNum}` : 'sin-fecha'
     const date = entry.date ?? ''
     const week = byWeek.get(weekId)

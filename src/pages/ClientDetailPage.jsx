@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
-import { formatHours, isoWeek } from '../lib/format'
+import { formatHours, sundayWeek } from '../lib/format'
 
 const VIEWS = [
   { id: 'line', label: 'Line' },
@@ -175,7 +175,7 @@ export function ClientDetailPage() {
     const weekFirstDate = new Map()
     const map = new Map()
     for (const entry of inPeriod) {
-      const week = isoWeek(entry.date)
+      const week = sundayWeek(entry.date)
       if (week == null) continue
       const earliest = weekFirstDate.get(week)
       if (!earliest || entry.date < earliest) weekFirstDate.set(week, entry.date)
@@ -225,7 +225,7 @@ export function ClientDetailPage() {
     const map = new Map()
     for (const entry of inPeriod) {
       const line = lineByTask.get(entry.task) ?? UNMAPPED
-      const week = isoWeek(entry.date)
+      const week = sundayWeek(entry.date)
       const key = `${line}||${entry.task ?? ''}||${week ?? ''}`
       const row = map.get(key) ?? { line, task: entry.task ?? '—', week, hours: 0, firstDate: '' }
       row.hours += Number(entry.hours) || 0

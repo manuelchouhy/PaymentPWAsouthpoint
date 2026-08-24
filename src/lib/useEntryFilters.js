@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useState } from 'react'
-import { isoWeek } from './format'
+import { sundayWeek } from './format'
 
 /**
  * Estado y lógica de filtrado de la grilla (FR-03), centralizado en un solo
  * lugar. Maneja multi-selects (Contractor, Client, Project, Payment Status),
- * rango de fechas y número de semana ISO.
+ * rango de fechas y número de semana (domingo–sábado, ver sundayWeek: 1..54).
+ * El filtro de semana compara sólo el número, no el año (limitación conocida:
+ * si el dataset abarca varios años, la semana N matchea en todos).
  *
  * El filtro se aplica ENCIMA de los datos crudos; la tab (FR-04) y la regla de
  * "un proveedor por pago" se resuelven aparte en App.
@@ -166,7 +168,7 @@ export function applyEntryFilters(entries, filters, invoiceByEntryId) {
       return false
     }
     if (week !== null && !Number.isNaN(week)) {
-      if (isoWeek(entry.date) !== week) return false
+      if (sundayWeek(entry.date) !== week) return false
     }
     return true
   })
