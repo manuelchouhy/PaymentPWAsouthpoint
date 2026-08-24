@@ -53,7 +53,14 @@ begin
   -- hashtextextended sobre un prefijo de dominio para no colisionar con otros
   -- usos de advisory locks en el mismo keyspace global de 64 bits. La granularidad
   -- del lock es sólo optimización: el EXISTS de abajo es exacto igual.
-  for r in select distinct unnest(new.entry_ids) as eid order by eid loop
+  -- where e is not null: pg_advisory_xact_lock es STRICT (arg NULL → no toma lock);
+  -- se descartan elementos NULL para no saltar la serialización en silencio.
+  for r in
+    select distinct e as eid
+    from unnest(new.entry_ids) as e
+    where e is not null
+    order by eid
+  loop
     perform pg_advisory_xact_lock(hashtextextended('payments_overage_entry:' || r.eid, 0));
   end loop;
 
