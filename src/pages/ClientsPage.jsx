@@ -85,7 +85,7 @@ export function ClientsPage() {
     // Si el cliente todavía tiene proyectos vinculados, deactivateClient lanza
     // (code 'has_projects'); se deja PROPAGAR para que el drawer muestre el motivo
     // inline y no se toque la lista.
-    await api.clients.deactivate({ id: client.id })
+    await api.clients.deactivate(client)
     // El audit es fire-and-forget pero con catch (acción sensible).
     Promise.resolve(
       api.audit.log({

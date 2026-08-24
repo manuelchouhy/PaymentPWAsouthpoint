@@ -252,19 +252,22 @@ export async function updateClient(current, updates) {
  * lo único que se suelta es el vínculo con el grupo.
  *
  * Bloqueo: no se puede desactivar un cliente que todavía tenga proyectos ACTIVOS
- * vinculados por client_id (los archivados no cuentan — son trabajo histórico).
- * Primero se reasignan o quitan esos proyectos. Error con code 'has_projects'.
+ * que dependan de él — tanto por client_id (link manual) como por resolución vía
+ * su alias de grupo de Zoho (zoho_project_group == zohoGroupName). Los archivados
+ * no cuentan (trabajo histórico). Primero se reasignan/quitan esos proyectos.
+ * Error con code 'has_projects'. Así desactivar nunca deja horas activas huérfanas
+ * en silencio (ni por link directo ni por grupo).
  *
  * OJO (TOCTOU aceptado): el chequeo de proyectos y el update no son atómicos. Un
  * proyecto vinculado en esa ventana quedaría apuntando a un cliente desactivado.
  * Es una acción de admin de baja frecuencia; cerrar la carrera del todo pediría un
  * trigger en la BD, desproporcionado para el caso. Un re-vínculo posterior degrada
  * a resolución por grupo/legacy, no rompe datos.
- * @param {{ id: string|number }} client
+ * @param {{ id: string|number, zohoGroupName?: ?string }} client
  * @returns {Promise<{ id: string|number }>}
  */
 export async function deactivateClient(client) {
-  const projectCount = await countLinkedProjects(client.id)
+  const projectCount = await countLinkedProjects(client)
   if (projectCount > 0) {
     const err = new Error(
       `This client still has ${projectCount} linked project(s). Reassign or remove them before deactivating.`,
@@ -299,27 +302,23 @@ export async function deactivateClient(client) {
 }
 
 /**
- * Cantidad de proyectos ACTIVOS vinculados (client_id) a este cliente. Los
- * archivados (zoho_status='archived') no cuentan: son trabajo cerrado y no deben
- * bloquear para siempre la desactivación de un cliente.
+ * Cantidad de proyectos ACTIVOS que dependen de este cliente: por client_id (link
+ * manual) O por resolución vía su alias de grupo de Zoho (zoho_project_group ==
+ * zohoGroupName, normalizado igual que el resolver). Los archivados
+ * (zoho_status='archived') no cuentan: trabajo cerrado, no deben bloquear para
+ * siempre. Se hace en JS (mismo camino en Supabase y demo) porque el match por
+ * grupo necesita la misma normalización que clientResolver, no expresable en un
+ * filtro SQL simple.
+ * @param {{ id: string|number, zohoGroupName?: ?string }} client
  */
-async function countLinkedProjects(clientId) {
-  if (!isSupabaseConfigured) {
-    const projects = await getProjects()
-    return projects.filter(
-      (p) => String(p.clientId) === String(clientId) && p.zohoStatus !== 'archived',
-    ).length
-  }
-  // (zoho_status IS NULL OR <> 'archived'): un .neq solo excluiría también los
-  // NULL (proyectos manuales, no de Zoho), que SÍ deben bloquear. Sólo se excluyen
-  // los explícitamente 'archived'.
-  const { count, error } = await supabase
-    .from('projects')
-    .select('id', { count: 'exact', head: true })
-    .eq('client_id', clientId)
-    .or('zoho_status.is.null,zoho_status.neq.archived')
-  if (error) throw new Error(`Could not check linked projects: ${error.message}`)
-  return count ?? 0
+async function countLinkedProjects(client) {
+  const projects = await getProjects()
+  const aliasKey = normalizeClientKey(client.zohoGroupName)
+  return projects.filter((p) => {
+    if (p.zohoStatus === 'archived') return false
+    if (String(p.clientId) === String(client.id)) return true
+    return Boolean(aliasKey) && normalizeClientKey(p.zohoProjectGroup) === aliasKey
+  }).length
 }
 
 /**

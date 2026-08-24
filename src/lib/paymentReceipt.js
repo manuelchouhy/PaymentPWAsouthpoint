@@ -24,7 +24,10 @@ export function downloadPaymentReceipt({ invoice, payment, generatedBy }) {
   // tipo de cambio con el que se convierte a USD.
   const currency = payment.currency || 'USD'
   const sym = getCurrencySymbol(currency)
-  const hasRate = currency !== 'USD' && payment.exchangeRate != null
+  // Sólo se imprime la conversión a USD si el tipo de cambio es un número > 0
+  // (dato válido); un 0 o valor no finito daría "$ 0.00"/"NaN" engañosos.
+  const rate = Number(payment.exchangeRate)
+  const hasRate = currency !== 'USD' && Number.isFinite(rate) && rate > 0
 
   // --- Header ---
   doc.setFillColor(10, 10, 10)
@@ -64,8 +67,8 @@ export function downloadPaymentReceipt({ invoice, payment, generatedBy }) {
       ['Amount paid', `${sym} ${fmtAmount(payment.amountPaid)} ${currency}`],
       ...(hasRate
         ? [
-            ['Exchange rate', `${payment.exchangeRate} (${currency} → USD)`],
-            ['Amount paid (USD)', `$ ${fmtAmount(Number(payment.amountPaid) * Number(payment.exchangeRate))}`],
+            ['Exchange rate', `${rate} (${currency} → USD)`],
+            ['Amount paid (USD)', `$ ${fmtAmount(Number(payment.amountPaid) * rate)}`],
           ]
         : []),
       ['Payment date', formatDate(payment.paymentDate) + (payment.backDated ? '  (back-dated)' : '')],

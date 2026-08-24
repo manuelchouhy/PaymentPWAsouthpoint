@@ -375,8 +375,9 @@ export interface ApiClient {
     create(payload: Partial<Client>, createdBy?: string | null): Promise<Client>
     update(current: Client, updates: Partial<Client>): Promise<Client>
     /** Borrado lógico: pone active=false y libera el alias de Zoho. Lanza con
-     *  code 'has_projects' si el cliente tiene proyectos activos vinculados. */
-    deactivate(client: Pick<Client, 'id'>): Promise<{ id: string | number }>
+     *  code 'has_projects' si el cliente tiene proyectos activos que dependan de él
+     *  (por client_id o por su alias de grupo). Necesita id y zohoGroupName. */
+    deactivate(client: Pick<Client, 'id' | 'zohoGroupName'>): Promise<{ id: string | number }>
     uploadMsa(file: File): Promise<string>
     getMsaUrl(msaUrl: string): Promise<string | null>
     recordMsaVersion(params: {

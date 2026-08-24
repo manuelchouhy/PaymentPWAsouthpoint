@@ -825,7 +825,7 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 
 .bill-client__head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 12px 16px;
