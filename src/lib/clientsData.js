@@ -60,13 +60,22 @@ async function assertAliasFree(alias, selfId) {
   if (!key) return
   let others
   if (isSupabaseConfigured) {
-    const { data, error } = await supabase.from('clients').select('id, client_name, zoho_group_name')
+    // Sólo clientes ACTIVOS: un cliente desactivado no está en getClients ni en el
+    // resolver, así que su nombre/alias no genera ambigüedad real y no debe
+    // bloquear asignar ese alias a otro cliente (coincide con ensureClientsForGroups,
+    // que también ignora inactivos).
+    const { data, error } = await supabase
+      .from('clients')
+      .select('id, client_name, zoho_group_name')
+      .eq('active', true)
     // Fail-closed: si no se puede leer para validar, NO se escribe (un `?? []`
     // dejaría pasar el alias sin chequear la colisión que el índice no cubre).
     if (error) throw new Error(`Could not validate the alias: ${error.message}`)
     others = data ?? []
   } else {
-    others = demoClients.map((c) => ({ id: c.id, client_name: c.clientName, zoho_group_name: c.zohoGroupName ?? null }))
+    others = demoClients
+      .filter((c) => c.active !== false)
+      .map((c) => ({ id: c.id, client_name: c.clientName, zoho_group_name: c.zohoGroupName ?? null }))
   }
   for (const c of others) {
     if (String(c.id) === String(selfId)) continue
@@ -280,7 +289,9 @@ export async function deactivateClient(client) {
     .update({ active: false, zoho_group_name: null })
     .eq('id', client.id)
     .select('id')
-  if (error) throw friendlyClientError(error)
+  // No se usa friendlyClientError: nullificar el alias no puede violar el índice
+  // único de alias (parcial, WHERE zoho_group_name IS NOT NULL) ni disparar 23505.
+  if (error) throw new Error(error.message)
   if (!data || data.length === 0) {
     throw new Error('The client was not deactivated — it may no longer exist or you may not have permission.')
   }

@@ -192,12 +192,13 @@ export function ClientDetailDrawer({ client, canEdit = false, canDeactivate = fa
         {deletable && confirming && (
           <div className="confirm-delete" role="group" aria-label="Confirm deactivate">
             <p className="confirm-delete__msg">
-              Deactivate <strong>{client.clientName}</strong>? Its data and MSA history are
-              kept, but it will be hidden from the client list and release its Zoho group
-              alias (the group is re-created as a fresh client to review on the next sync;
-              hours resolved only through that group show as “no client” until then).
-              Deactivation is blocked while active projects are directly linked to it —
-              reassign or remove them first.
+              Deactivate <strong>{client.clientName}</strong>? Its record and MSA history are
+              kept, but it is removed from client resolution: it’s hidden from the client
+              list and releases its Zoho group alias (the group is re-created as a fresh
+              client to review on the next sync). Any hours that resolved to this client —
+              including past/invoiced ones, via its group or a direct link — will show as
+              “no client” in Billing and Entries. Deactivation is blocked while active
+              projects are directly linked to it — reassign or remove them first.
             </p>
             {deleteError && (
               <p className="field__error" role="alert">
