@@ -329,11 +329,13 @@ export async function createOveragePayment(payload, createdBy) {
     .select(PAYMENT_COLUMNS)
     .single()
   if (error) {
-    // El trigger payments_entry_ids_no_overlap rechaza con 23505 si alguna hora
-    // ya está cubierta por otro pago (doble-pago). Mensaje legible para el modal.
-    if (error.code === '23505' || error.message?.includes('entry_ids overlap')) {
+    // El trigger payments_entry_ids_no_overlap rechaza con 23505 y un mensaje que
+    // contiene 'entry_ids overlap' cuando alguna hora ya está cubierta por otro
+    // pago o una factura. Se exige ESE mensaje (no sólo el 23505 genérico) para no
+    // confundir un futuro unique-violation distinto con un doble-pago.
+    if (error.code === '23505' && /entry_ids overlap/.test(error.message ?? '')) {
       const err = new Error(
-        'One or more of these hours are already covered by another payment. Refresh and try again.',
+        'One or more of these hours are already covered by another payment or invoice. Refresh and try again.',
       )
       err.code = 'overlap'
       throw err

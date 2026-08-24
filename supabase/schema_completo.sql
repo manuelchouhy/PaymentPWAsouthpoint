@@ -99,7 +99,12 @@ create table if not exists public.payments (
   notes               text,
   back_dated          boolean not null default false,
   created_at          timestamptz not null default now(),
-  created_by          text
+  created_by          text,
+  -- Overage (migración 0035): un pago sin factura cubre estas horas y se le paga
+  -- a este contractor. Para pagos por factura quedan NULL (el contractor sale de
+  -- la factura y las horas viven en invoices.entry_ids).
+  entry_ids           bigint[],
+  user_name           text
 );
 
 -- Un solo pago por factura (unicidad garantizada en la BD)
@@ -444,6 +449,8 @@ begin
   if new.entry_ids is null or array_length(new.entry_ids, 1) is null then
     return new;
   end if;
+  -- Serializa overage concurrente (EXISTS no es atómico en READ COMMITTED).
+  perform pg_advisory_xact_lock(hashtext('payments_entry_ids_no_overlap')::bigint);
   if exists (
     select 1 from public.payments p
     where p.id <> coalesce(new.id, -1)
@@ -451,6 +458,15 @@ begin
   ) then
     raise exception
       'One or more of these hours are already covered by another payment (entry_ids overlap)'
+      using errcode = '23505';
+  end if;
+  -- Horas ya cubiertas por una factura (invoices.entry_ids; payments.entry_ids NULL).
+  if exists (
+    select 1 from public.invoices i
+    where i.entry_ids && new.entry_ids
+  ) then
+    raise exception
+      'One or more of these hours are already covered by an invoice (entry_ids overlap)'
       using errcode = '23505';
   end if;
   return new;
