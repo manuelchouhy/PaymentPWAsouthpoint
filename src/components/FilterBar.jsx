@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ListFilter, X } from 'lucide-react'
 import { MultiSelectDropdown } from './MultiSelectDropdown'
+import { WeekField } from './WeekField'
 
 const BILLING_STATUS_OPTIONS = ['Pending', 'Invoiced', 'Collected', 'Paid']
 
@@ -150,19 +151,7 @@ export function FilterBar({
             />
           </div>
 
-          <div className="filterfield filterfield--week">
-            <span className="filterfield__label">Week</span>
-            <input
-              type="number"
-              inputMode="numeric"
-              min="1"
-              max="53"
-              placeholder="e.g. 23"
-              className="filterfield__input"
-              value={weekDraft}
-              onChange={(event) => setWeekDraft(event.target.value)}
-            />
-          </div>
+          <WeekField value={weekDraft} onChange={setWeekDraft} />
 
           <button
             type="button"

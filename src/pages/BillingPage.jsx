@@ -1219,7 +1219,7 @@ export function BillingPage() {
                                             {row.invoiced ? (
                                               <BillingBadge status={row.billStatus} />
                                             ) : (
-                                              <span className="badge badge--pending">to bill</span>
+                                              <span className="badge badge--tobill">to bill</span>
                                             )}
                                           </td>
                                           <DetailButtonCell

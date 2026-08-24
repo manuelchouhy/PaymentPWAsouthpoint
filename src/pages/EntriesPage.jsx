@@ -10,6 +10,7 @@ import { isEntryFrozen } from '../lib/entryFreeze'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { exportGrid } from '../lib/exportGrid'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
+import { WeekField } from '../components/WeekField'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { StatusBadge } from '../components/StatusBadge'
 import { BillingBadge } from '../components/BillingBadge'
@@ -435,17 +436,7 @@ export function EntriesPage() {
                 onToggle={(v) => toggleValue('allocations', v)}
                 getLabel={allocationLabel}
               />
-              <div className="filterfield">
-                <span className="filterfield__label">Week</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="53"
-                  className="filterfield__input"
-                  value={filters.week}
-                  onChange={(e) => setField('week', e.target.value)}
-                />
-              </div>
+              <WeekField value={filters.week} onChange={(v) => setField('week', v)} />
               {isActive && (
                 <button type="button" className="btn btn--ghost filterbar__clear" onClick={clear}>
                   Clear
