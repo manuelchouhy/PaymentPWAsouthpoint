@@ -22,10 +22,8 @@ function fmtAmount(value) {
 
 // Estados de factura PAGABLES al contractor. El flujo es Billing → Payments (sin
 // paso de Collections): una factura emitida (Invoiced) se paga directo y al pagarla
-// pasa a Paid. 'Collected' quedó fuera del flujo: no se lista acá (su vencimiento
-// dependía de la fecha de cobro, que ya no se computa; el edge payment-alerts y el
-// frontend calculan todo desde la fecha de factura). Una sola fuente para el
-// listado, KPIs, filtros, resaltado y el botón de pago — así no se desincronizan.
+// pasa a Paid. 'Collected' quedó fuera del flujo (dependía del cobro, que ya no se
+// computa). Una sola fuente para el listado y el botón de pago.
 const PAYABLE_STATUSES = ['Invoiced']
 const isPayable = (status) => PAYABLE_STATUSES.includes(status)
 
@@ -148,8 +146,8 @@ export function PaymentsPage() {
       [...allRows].sort(
         (a, b) =>
           (isPayable(a.inv.status) ? 0 : 1) - (isPayable(b.inv.status) ? 0 : 1) ||
-          String(a.inv.supplierInvoiceNumber).localeCompare(
-            String(b.inv.supplierInvoiceNumber),
+          String(a.inv.supplierInvoiceNumber ?? '').localeCompare(
+            String(b.inv.supplierInvoiceNumber ?? ''),
             'es',
             { numeric: true },
           ),
