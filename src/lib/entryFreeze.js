@@ -22,7 +22,21 @@
  * @returns {boolean}
  */
 export function isEntryFrozen(entry, { invoicedEntryIds, paidEntryIds } = {}) {
-  if (!entry) return false
+  return entryFrozenReason(entry, { invoicedEntryIds, paidEntryIds }) !== null
+}
+
+/**
+ * POR QUÉ está congelada una hora (para rotularlo con precisión en la UI): por
+ * estar facturada o por estar pagada. 'invoiced' tiene precedencia sobre 'paid'
+ * (en la práctica son allocations disjuntas, pero el orden hace la salida estable).
+ * @param {{ id: string|number }} entry
+ * @param {{ invoicedEntryIds?: Set<string>, paidEntryIds?: Set<string> }} opts
+ * @returns {'invoiced' | 'paid' | null}
+ */
+export function entryFrozenReason(entry, { invoicedEntryIds, paidEntryIds } = {}) {
+  if (!entry) return null
   const id = String(entry.id)
-  return Boolean(invoicedEntryIds?.has(id) || paidEntryIds?.has(id))
+  if (invoicedEntryIds?.has(id)) return 'invoiced'
+  if (paidEntryIds?.has(id)) return 'paid'
+  return null
 }

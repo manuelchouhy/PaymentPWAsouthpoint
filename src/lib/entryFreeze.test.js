@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { isEntryFrozen } from './entryFreeze.js'
+import { isEntryFrozen, entryFrozenReason } from './entryFreeze.js'
 
 const invoiced = new Set(['1'])
 const paid = new Set(['2'])
@@ -30,4 +30,15 @@ test('id number o string matchea igual (el Set guarda strings)', () => {
 test('sin opts / sin entry → no congela (falla-abierta, se puede clasificar)', () => {
   assert.equal(isEntryFrozen({ id: 1 }), false)
   assert.equal(isEntryFrozen(null, { invoicedEntryIds: invoiced }), false)
+})
+
+test('entryFrozenReason distingue factura vs pago (invoiced tiene precedencia)', () => {
+  const opts = { invoicedEntryIds: invoiced, paidEntryIds: paid }
+  assert.equal(entryFrozenReason({ id: 1 }, opts), 'invoiced')
+  assert.equal(entryFrozenReason({ id: 2 }, opts), 'paid')
+  assert.equal(entryFrozenReason({ id: 9 }, opts), null)
+  // Facturada Y pagada → 'invoiced' (precedencia estable).
+  const both = { invoicedEntryIds: new Set(['3']), paidEntryIds: new Set(['3']) }
+  assert.equal(entryFrozenReason({ id: 3 }, both), 'invoiced')
+  assert.equal(entryFrozenReason(null, opts), null)
 })

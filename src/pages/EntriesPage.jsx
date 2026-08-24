@@ -6,7 +6,7 @@ import { api } from '../lib/api'
 import { formatDate, formatHours, formatWeek } from '../lib/format'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, UNALLOCATED } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
-import { isEntryFrozen } from '../lib/entryFreeze'
+import { isEntryFrozen, entryFrozenReason } from '../lib/entryFreeze'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { exportGrid } from '../lib/exportGrid'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
@@ -189,6 +189,8 @@ export function EntriesPage() {
   const invoicedEntryIds = useMemo(() => new Set(invoiceByEntryId.keys()), [invoiceByEntryId])
   const paidEntryIds = useMemo(() => paidEntryIdsFrom(payments), [payments])
   const isFrozen = (entry) => isEntryFrozen(entry, { invoicedEntryIds, paidEntryIds })
+  // Motivo del congelado ('invoiced' | 'paid' | null), para rotular con precisión.
+  const frozenReasonOf = (entry) => entryFrozenReason(entry, { invoicedEntryIds, paidEntryIds })
   const selectableOnPage = page.filter((e) => !isFrozen(e))
   const allPageSelected =
     selectableOnPage.length > 0 && selectableOnPage.every((e) => selectedIds.has(e.id))
@@ -300,7 +302,7 @@ export function EntriesPage() {
       const rejected = Math.max(0, missing - frozen - unconfirmed)
       if (missing > 0) {
         const parts = []
-        if (frozen) parts.push(`${frozen} already invoiced (those can never be reclassified)`)
+        if (frozen) parts.push(`${frozen} already billed or paid (those can never be reclassified)`)
         if (rejected) parts.push(`${rejected} rejected by the server — select them again and retry`)
         if (unconfirmed) {
           parts.push(
@@ -538,10 +540,11 @@ export function EntriesPage() {
                     {page.map((entry) => {
                       const allocation = entry.allocation ? ALLOCATION_LABELS[entry.allocation] : null
                       const billingStatus = invoiceByEntryId.get(String(entry.id))?.status ?? 'Pending'
-                      const frozen = isFrozen(entry)
+                      const frozenReason = frozenReasonOf(entry)
+                      const frozen = frozenReason !== null
                       // Una fila es seleccionable si el usuario puede clasificar y
-                      // la hora no está congelada (ya facturada). Sólo esas responden
-                      // al click en la fila.
+                      // la hora no está congelada (ya facturada O pagada). Sólo esas
+                      // responden al click en la fila.
                       const selectable = canAllocate && !frozen
                       return (
                         <tr
@@ -563,7 +566,15 @@ export function EntriesPage() {
                           data-selected={selectable ? selectedIds.has(entry.id) : undefined}
                         >
                           {canAllocate && (
-                            <td title={frozen ? 'Already invoiced — cannot be reclassified' : undefined}>
+                            <td
+                              title={
+                                frozenReason === 'paid'
+                                  ? 'Already paid (overage) — cannot be reclassified'
+                                  : frozenReason === 'invoiced'
+                                    ? 'Already invoiced — cannot be reclassified'
+                                    : undefined
+                              }
+                            >
                               {/* stopPropagation SÓLO alrededor del control: el
                                   checkbox ya togglea por su onChange, y sin esto el
                                   click burbujea al <tr> y togglea de nuevo (doble =
