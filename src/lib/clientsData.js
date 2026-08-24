@@ -236,9 +236,21 @@ export async function updateClient(current, updates) {
  * cliente sale de getClients (listas + resolución grupo→cliente) pero sus datos,
  * MSA e historial quedan intactos.
  *
- * Bloqueo: no se puede desactivar un cliente que todavía tenga proyectos
- * vinculados (client_id) — primero se reasignan o quitan esos proyectos. Se lanza
- * un error con code 'has_projects' y la cantidad, para que la UI lo explique.
+ * Además LIBERA el alias de grupo de Zoho (zoho_group_name = null): así el índice
+ * único de alias no bloquea crear otro cliente para ese grupo, y el próximo sync
+ * vuelve a auto-crear un cliente para el grupo (que quedaría huérfano si el alias
+ * siguiera ocupado por la fila desactivada). El historial del cliente se conserva;
+ * lo único que se suelta es el vínculo con el grupo.
+ *
+ * Bloqueo: no se puede desactivar un cliente que todavía tenga proyectos ACTIVOS
+ * vinculados por client_id (los archivados no cuentan — son trabajo histórico).
+ * Primero se reasignan o quitan esos proyectos. Error con code 'has_projects'.
+ *
+ * OJO (TOCTOU aceptado): el chequeo de proyectos y el update no son atómicos. Un
+ * proyecto vinculado en esa ventana quedaría apuntando a un cliente desactivado.
+ * Es una acción de admin de baja frecuencia; cerrar la carrera del todo pediría un
+ * trigger en la BD, desproporcionado para el caso. Un re-vínculo posterior degrada
+ * a resolución por grupo/legacy, no rompe datos.
  * @param {{ id: string|number }} client
  * @returns {Promise<{ id: string|number }>}
  */
@@ -255,16 +267,17 @@ export async function deactivateClient(client) {
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 250))
     demoClients = demoClients.map((c) =>
-      String(c.id) === String(client.id) ? { ...c, active: false } : c,
+      String(c.id) === String(client.id) ? { ...c, active: false, zohoGroupName: null } : c,
     )
     return { id: client.id }
   }
   // .select(): un update que matchea 0 filas (RLS que lo bloquea, id inexistente)
   // devuelve { error: null } → sin verificar, la UI reportaría una desactivación
-  // que nunca pasó. Se exige que vuelva la fila.
+  // que nunca pasó. Se exige que vuelva la fila. updated_at lo pone el trigger
+  // clients_set_updated_at, no se manda desde acá.
   const { data, error } = await supabase
     .from('clients')
-    .update({ active: false, updated_at: new Date().toISOString() })
+    .update({ active: false, zoho_group_name: null })
     .eq('id', client.id)
     .select('id')
   if (error) throw friendlyClientError(error)
@@ -274,16 +287,26 @@ export async function deactivateClient(client) {
   return { id: client.id }
 }
 
-/** Cantidad de proyectos vinculados (client_id) a este cliente. */
+/**
+ * Cantidad de proyectos ACTIVOS vinculados (client_id) a este cliente. Los
+ * archivados (zoho_status='archived') no cuentan: son trabajo cerrado y no deben
+ * bloquear para siempre la desactivación de un cliente.
+ */
 async function countLinkedProjects(clientId) {
   if (!isSupabaseConfigured) {
     const projects = await getProjects()
-    return projects.filter((p) => String(p.clientId) === String(clientId)).length
+    return projects.filter(
+      (p) => String(p.clientId) === String(clientId) && p.zohoStatus !== 'archived',
+    ).length
   }
+  // (zoho_status IS NULL OR <> 'archived'): un .neq solo excluiría también los
+  // NULL (proyectos manuales, no de Zoho), que SÍ deben bloquear. Sólo se excluyen
+  // los explícitamente 'archived'.
   const { count, error } = await supabase
     .from('projects')
     .select('id', { count: 'exact', head: true })
     .eq('client_id', clientId)
+    .or('zoho_status.is.null,zoho_status.neq.archived')
   if (error) throw new Error(`Could not check linked projects: ${error.message}`)
   return count ?? 0
 }
