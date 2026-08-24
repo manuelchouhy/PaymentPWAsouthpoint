@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Banknote, X } from 'lucide-react'
 import { BANK_METHODS } from '../lib/paymentsData'
-import { getCurrencySymbol } from '../lib/currenciesData'
+import { CURRENCIES, getCurrencySymbol } from '../lib/currenciesData'
 import { useScrollLock } from '../lib/useScrollLock'
 
 function todayISO() {
@@ -42,6 +42,9 @@ function fmtAmount(value) {
 export function RegisterPaymentModal({
   invoice,
   currency = 'USD',
+  currencyEditable = false,
+  extraContent,
+  extraValid = true,
   title = 'Register Payment',
   submitLabel = 'Register Payment',
   summaryName,
@@ -53,8 +56,11 @@ export function RegisterPaymentModal({
   onClose,
   onConfirm,
 }) {
-  const sym = getCurrencySymbol(currency)
-  const needsExchangeRate = currency !== 'USD'
+  // Moneda: fija (viene de la factura) o editable (overage, sin factura → la elige
+  // el usuario, D7). Cuando no es USD aparece el campo de tipo de cambio (abajo).
+  const [cur, setCur] = useState(currency)
+  const sym = getCurrencySymbol(cur)
+  const needsExchangeRate = cur !== 'USD'
 
   const [amount, setAmount] = useState(
     defaultAmount != null ? defaultAmount : invoice ? String(invoice.totalAmount) : '',
@@ -79,7 +85,9 @@ export function RegisterPaymentModal({
   const noteOk = !isBackDated || notes.trim().length > 0
   const rateNum = Number(exchangeRate)
   const rateValid = !needsExchangeRate || (exchangeRate !== '' && Number.isFinite(rateNum) && rateNum > 0)
-  const valid = amountValid && dateValid && noteOk && rateValid
+  // extraValid: gancho para validez adicional del llamador (p. ej. overage exige
+  // ≥1 hora seleccionada). Default true → no afecta el caso por factura.
+  const valid = amountValid && dateValid && noteOk && rateValid && extraValid
 
   useScrollLock()
 
@@ -106,6 +114,7 @@ export function RegisterPaymentModal({
       await onConfirm({
         amountPaid: amountNum,
         paymentDate,
+        currency: cur,
         transferReference: transferReference.trim(),
         bankMethod,
         notes: notes.trim(),
@@ -115,7 +124,7 @@ export function RegisterPaymentModal({
       setSubmitting(false)
       setSubmitError(
         error?.code === 'not_collected'
-          ? 'The invoice must be in Collected status before registering a payment.'
+          ? 'The invoice must be Invoiced or Collected before registering a payment.'
           : error?.message ?? 'Could not register the payment.',
       )
     }
@@ -158,7 +167,7 @@ export function RegisterPaymentModal({
           <div className="modal__summary-id">
             <span className="modal__summary-user">{summaryName ?? invoice?.userName}</span>
             <span className="modal__summary-meta">
-              {summaryMeta ?? `${invoice?.supplierInvoiceNumber} · Collected`}
+              {summaryMeta ?? `${invoice?.supplierInvoiceNumber} · ${invoice?.status ?? ''}`}
             </span>
           </div>
           <div className="modal__summary-hours">
@@ -166,12 +175,37 @@ export function RegisterPaymentModal({
               {summaryFigure ?? `${sym}${fmtAmount(invoice?.totalAmount)}`}
             </span>
             <span className="modal__summary-hours-label">
-              {summaryFigureLabel ?? `Amount ${currency !== 'USD' ? `(${currency})` : ''}`}
+              {summaryFigureLabel ?? `Amount ${cur !== 'USD' ? `(${cur})` : ''}`}
             </span>
           </div>
         </div>
 
+        {extraContent}
+
         <form className="modal__form" onSubmit={handleSubmit} noValidate>
+          {currencyEditable && (
+            <div className="field">
+              <label className="field__label" htmlFor="pay-currency">Currency</label>
+              <select
+                id="pay-currency"
+                className="field__input"
+                value={cur}
+                onChange={(e) => {
+                  // Al cambiar de moneda, el tipo de cambio tipeado ya no aplica:
+                  // se limpia para forzar reingresarlo (evita guardar una tasa de
+                  // otra moneda). El monto también queda en otra magnitud, se avisa.
+                  setCur(e.target.value)
+                  setExchangeRate('')
+                }}
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code} · {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="modal__form-row">
             <div className="field">
               <label className="field__label" htmlFor="pay-amount">
@@ -238,7 +272,7 @@ export function RegisterPaymentModal({
           {needsExchangeRate && (
             <div className="field">
               <label className="field__label" htmlFor="pay-rate">
-                Exchange rate ({currency} → USD)
+                Exchange rate ({cur} → USD)
                 <span className="field__req">required</span>
               </label>
               <input

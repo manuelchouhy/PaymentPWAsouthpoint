@@ -31,6 +31,12 @@ function daysUntil(iso) {
   return Math.round((target - today) / 86400000)
 }
 
+// Estados de factura PAGABLES al contractor (flujo Billing → Payments, sin
+// Collections): emitida (Invoiced) o cobrada (Collected). Una sola fuente para el
+// listado, KPIs, filtros, resaltado y el botón de pago — así no se desincronizan.
+const PAYABLE_STATUSES = ['Invoiced', 'Collected']
+const isPayable = (status) => PAYABLE_STATUSES.includes(status)
+
 export function PaymentsPage() {
   const { user, profile, can } = useOutletContext()
   const [invoices, setInvoices] = useState([])
@@ -43,6 +49,9 @@ export function PaymentsPage() {
   const [modalInvoice, setModalInvoice] = useState(null)
   // Contractor cuyo overage pendiente se está por pagar (null = modal cerrado).
   const [overageTarget, setOverageTarget] = useState(null)
+  // Horas de overage seleccionadas para pagar (D6): por defecto todas las del
+  // contractor; el usuario puede destildar para pagar sólo algunas.
+  const [overageSelectedIds, setOverageSelectedIds] = useState(() => new Set())
   const [entries, setEntries] = useState([])
   const [toast, setToast] = useState(null)
 
@@ -101,9 +110,17 @@ export function PaymentsPage() {
     for (const e of entries) {
       if (e.allocation !== 'overage' || e.status !== 'Approved') continue
       if (paid.has(String(e.id)) || invoiced.has(String(e.id))) continue
-      const group = byUser.get(e.user) ?? { user: e.user, hours: 0, entryIds: [] }
+      const group = byUser.get(e.user) ?? { user: e.user, hours: 0, entryIds: [], entries: [] }
       group.hours += Number(e.hours) || 0
       group.entryIds.push(e.id)
+      // Desglose por hora, para poder pagar sólo algunas (D6).
+      group.entries.push({
+        id: e.id,
+        hours: Number(e.hours) || 0,
+        project: e.project,
+        task: e.task,
+        date: e.date,
+      })
       byUser.set(e.user, group)
     }
     return [...byUser.values()].sort(
@@ -117,17 +134,34 @@ export function PaymentsPage() {
   const allRows = useMemo(
     () =>
       invoices
-        .filter((inv) => inv.status === 'Collected' || (showPaid && inv.status === 'Paid'))
+        // Flujo Billing → Payments (Collections no se usa por ahora): una factura
+        // emitida en Billing (Invoiced) es pagable directo, sin paso de cobro. Se
+        // listan Invoiced y Collected (esta última por datos viejos), y Paid con el
+        // toggle. Ver createPayment / migración 0036.
+        .filter((inv) => isPayable(inv.status) || (showPaid && inv.status === 'Paid'))
         .map((inv) => {
-          const collectionDate = collectionDateByInvoice.get(inv.id) ?? inv.invoiceDate
-          const dueDate = addDaysISO(collectionDate, inv.paymentTermsDays ?? 30)
-          const daysUntilDue = daysUntil(dueDate)
+          // El vencimiento de pago al contractor SÓLO aplica a facturas COBRADAS:
+          // el plazo (paymentTermsDays) corre desde el cobro. Una Invoiced es
+          // pagable ya, pero sin deadline → sin fecha de vencimiento ni alerta. Así
+          // no se rotula la fecha de factura como cobro, no se marca overdue una
+          // Invoiced vieja, y no se calcula sobre una fecha nula si falta invoiceDate.
+          // Registro de cobro (si existe) — para mostrar la fecha real de cobro.
+          const collectionDate = collectionDateByInvoice.get(inv.id) ?? null
+          // El vencimiento de pago aplica a las COBRADAS (por status): base = fecha
+          // de cobro, o la de factura como fallback si falta el registro (dato
+          // incompleto — una Collected debería tener cobro). Una Invoiced es pagable
+          // pero sin deadline → sin dueDate. El guard evita addDaysISO sobre null.
+          const dueBase =
+            inv.status === 'Collected' ? collectionDate ?? inv.invoiceDate ?? null : null
+          const dueDate = dueBase ? addDaysISO(dueBase, inv.paymentTermsDays ?? 30) : null
+          const daysUntilDue = dueDate ? daysUntil(dueDate) : null
           const alertLevel =
-            inv.status === 'Paid'
+            inv.status === 'Paid' || !dueDate
               ? 'on_time'
               : paymentAlertLevel(daysUntilDue, warningBefore)
           return {
             inv,
+            collected: Boolean(collectionDate),
             collectionDate,
             dueDate,
             daysUntilDue,
@@ -138,16 +172,21 @@ export function PaymentsPage() {
     [invoices, showPaid, collectionDateByInvoice, paymentByInvoice, warningBefore],
   )
 
-  // KPIs sobre las facturas pendientes de pago (Collected).
+  // KPIs sobre las facturas pendientes de pago (Invoiced o Collected — ambas son
+  // pagables en el flujo Billing → Payments; ver allRows).
   const kpis = useMemo(() => {
     let overdue = 0
     let dueThisWeek = 0
     let totalDue = 0
     for (const r of allRows) {
-      if (r.inv.status !== 'Collected') continue
+      if (!isPayable(r.inv.status)) continue
       totalDue += r.inv.totalAmount
-      if (r.alertLevel === 'overdue') overdue += 1
-      if (r.daysUntilDue >= 0 && r.daysUntilDue <= 7) dueThisWeek += 1
+      // Vencido / esta-semana sólo cuentan las que tienen deadline (cobradas);
+      // una Invoiced es pagable pero no "vence".
+      if (r.dueDate) {
+        if (r.alertLevel === 'overdue') overdue += 1
+        if (r.daysUntilDue >= 0 && r.daysUntilDue <= 7) dueThisWeek += 1
+      }
     }
     return { overdue, dueThisWeek, totalDue }
   }, [allRows])
@@ -156,14 +195,17 @@ export function PaymentsPage() {
     const filtered = allRows.filter((r) => {
       if (alertFilter === 'overdue') return r.alertLevel === 'overdue'
       if (alertFilter === 'dueThisWeek')
-        return r.inv.status === 'Collected' && r.daysUntilDue >= 0 && r.daysUntilDue <= 7
+        // r.dueDate guard: sin él, daysUntilDue null pasaría (null>=0 es true en JS).
+        return Boolean(r.dueDate) && r.daysUntilDue >= 0 && r.daysUntilDue <= 7
       return true
     })
     // Orden: vencidos arriba, después warning, después por fecha de vencimiento.
+    // dueDate puede ser null (Invoiced/Paid sin deadline): se ordenan al final
+    // (coalesce a una fecha alta) para no romper el localeCompare.
     return filtered.sort(
       (a, b) =>
-        (ALERT_RANK[a.alertLevel] - ALERT_RANK[b.alertLevel]) ||
-        a.dueDate.localeCompare(b.dueDate),
+        ALERT_RANK[a.alertLevel] - ALERT_RANK[b.alertLevel] ||
+        (a.dueDate ?? '9999-12-31').localeCompare(b.dueDate ?? '9999-12-31'),
     )
   }, [allRows, alertFilter])
 
@@ -180,11 +222,14 @@ export function PaymentsPage() {
     })
   }
 
-  // Pago de overage: cubre todas las horas overage pendientes del contractor
-  // (overageTarget.entryIds). No hay factura; las horas quedan congeladas y salen
-  // del pendiente. Se recarga para reflejar el nuevo pago en todos los memos.
+  // Pago de overage: cubre las horas SELECCIONADAS del contractor (D6 — por defecto
+  // todas, pero se pueden pagar sólo algunas). No hay factura; las horas cubiertas
+  // quedan congeladas y salen del pendiente. payload trae también la moneda (D7).
   async function handleRegisterOverage(payload) {
-    const { user: contractor, entryIds, hours } = overageTarget
+    const contractor = overageTarget.user
+    const selected = overageTarget.entries.filter((e) => overageSelectedIds.has(String(e.id)))
+    const entryIds = selected.map((e) => e.id)
+    const hours = selected.reduce((sum, e) => sum + e.hours, 0)
     const { payment } = await api.payments.createOverage(
       { userName: contractor, entryIds, ...payload },
       user?.email ?? null,
@@ -200,6 +245,7 @@ export function PaymentsPage() {
         userName: contractor,
         entryCount: entryIds.length,
         amountPaid: payload.amountPaid,
+        currency: payload.currency,
         paymentDate: payload.paymentDate,
       },
     })
@@ -237,9 +283,11 @@ export function PaymentsPage() {
       invoiceNumber: r.inv.supplierInvoiceNumber,
       currency: r.inv.currency ?? 'USD',
       totalAmount: r.inv.totalAmount,
-      collectionDate: r.collectionDate,
-      dueDate: r.dueDate,
-      daysUntilDue: r.daysUntilDue,
+      // Coalesce a '' (no null): una Invoiced no tiene cobro ni vencimiento, y una
+      // celda vacía en el export es más limpia que un null literal.
+      collectionDate: r.collectionDate ?? '',
+      dueDate: r.dueDate ?? '',
+      daysUntilDue: r.daysUntilDue ?? '',
       alertLevel: r.alertLevel,
       status: r.inv.status,
       paymentDate: r.payment?.paymentDate ?? '',
@@ -263,9 +311,9 @@ export function PaymentsPage() {
         </div>
         <h1 className="masthead__title">Payments</h1>
         <p className="masthead__sub">
-          Contractor payment for already-collected invoices (Collected): once paid,
-          they move to Paid. Overage hours are paid here too — per contractor,
-          without an invoice — and freeze once paid.
+          Contractor payment for invoices ready to pay — issued in Billing
+          (Invoiced) or Collected: once paid, they move to Paid. Overage hours are
+          paid here too — per contractor, without an invoice — and freeze once paid.
         </p>
       </motion.header>
 
@@ -353,8 +401,12 @@ export function PaymentsPage() {
                 </thead>
                 <tbody>
                   {rows.map((r, index) => {
-                    const overdue = r.inv.status === 'Collected' && r.alertLevel === 'overdue'
-                    const warning = r.inv.status === 'Collected' && r.alertLevel === 'warning'
+                    // Pagable = emitida o cobrada (flujo Billing → Payments). El
+                    // resaltado de vencimiento, el badge de alerta y el botón de
+                    // pago aplican a ambas; sólo Paid queda fuera.
+                    const payable = isPayable(r.inv.status)
+                    const overdue = payable && r.alertLevel === 'overdue'
+                    const warning = payable && r.alertLevel === 'warning'
                     const rowClass = overdue
                       ? 'row--overdue-high'
                       : warning
@@ -371,10 +423,12 @@ export function PaymentsPage() {
                         <td>{r.inv.userName}</td>
                         <td className="cell-mono">{r.inv.supplierInvoiceNumber}</td>
                         <td className="col-num cell-mono">{getCurrencySymbol(r.inv.currency)}{fmtAmount(r.inv.totalAmount)}</td>
-                        <td className="cell-mono">{formatDate(r.collectionDate)}</td>
-                        <td className="cell-mono">{formatDate(r.dueDate)}</td>
+                        <td className="cell-mono">
+                          {r.collected ? formatDate(r.collectionDate) : '—'}
+                        </td>
+                        <td className="cell-mono">{r.dueDate ? formatDate(r.dueDate) : '—'}</td>
                         <td className={`col-num cell-mono${overdue ? ' proj-days--overdue' : ''}`}>
-                          {r.inv.status === 'Paid' ? '—' : r.daysUntilDue}
+                          {r.daysUntilDue == null ? '—' : r.daysUntilDue}
                         </td>
                         <td>
                           {overdue ? (
@@ -387,7 +441,7 @@ export function PaymentsPage() {
                         </td>
                         <td><BillingBadge status={r.inv.status} /></td>
                         <td>
-                          {r.inv.status === 'Collected' && can('payments.create') ? (
+                          {payable && can('payments.create') ? (
                             <button
                               type="button"
                               className="btn btn--pay btn--row"
@@ -395,7 +449,7 @@ export function PaymentsPage() {
                             >
                               Register Payment
                             </button>
-                          ) : r.inv.status !== 'Collected' ? (
+                          ) : r.inv.status === 'Paid' ? (
                             <button
                               type="button"
                               className="btn btn--ghost btn--row"
@@ -446,7 +500,11 @@ export function PaymentsPage() {
                             <button
                               type="button"
                               className="btn btn--pay btn--row"
-                              onClick={() => setOverageTarget(group)}
+                              onClick={() => {
+                                setOverageTarget(group)
+                                // Arranca con todas las horas seleccionadas (D6).
+                                setOverageSelectedIds(new Set(group.entryIds.map(String)))
+                              }}
                             >
                               Pay overage
                             </button>
@@ -475,28 +533,72 @@ export function PaymentsPage() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {overageTarget && (
-          <RegisterPaymentModal
-            key={`overage-${overageTarget.user}`}
-            title="Register overage payment"
-            submitLabel="Register overage payment"
-            summaryName={overageTarget.user}
-            summaryMeta={`Overage · ${overageTarget.entryIds.length} ${
-              overageTarget.entryIds.length === 1 ? 'entry' : 'entries'
-            }`}
-            summaryFigure={`${formatHours(overageTarget.hours)} h`}
-            summaryFigureLabel="Overage hours"
-            defaultAmount=""
-            footerNote={
-              <>
-                Registers a contractor payment for these overage hours (no invoice).
-                They’ll be frozen and drop off the pending list.
-              </>
-            }
-            onClose={() => setOverageTarget(null)}
-            onConfirm={handleRegisterOverage}
-          />
-        )}
+        {overageTarget &&
+          (() => {
+            const selected = overageTarget.entries.filter((e) =>
+              overageSelectedIds.has(String(e.id)),
+            )
+            const selHours = selected.reduce((sum, e) => sum + e.hours, 0)
+            const toggle = (id) =>
+              setOverageSelectedIds((prev) => {
+                const next = new Set(prev)
+                const k = String(id)
+                if (next.has(k)) next.delete(k)
+                else next.add(k)
+                return next
+              })
+            return (
+              <RegisterPaymentModal
+                key={`overage-${overageTarget.user}`}
+                title="Register overage payment"
+                submitLabel="Register overage payment"
+                currencyEditable
+                extraValid={selected.length > 0}
+                summaryName={overageTarget.user}
+                summaryMeta={`Overage · ${selected.length} of ${overageTarget.entries.length} ${
+                  overageTarget.entries.length === 1 ? 'entry' : 'entries'
+                }`}
+                summaryFigure={`${formatHours(selHours)} h`}
+                summaryFigureLabel="Overage hours (selected)"
+                defaultAmount=""
+                extraContent={
+                  <div className="overage-picker">
+                    <span className="overage-picker__title">Hours to pay</span>
+                    <ul className="overage-picker__list">
+                      {overageTarget.entries.map((e) => (
+                        <li key={e.id}>
+                          <label className="overage-picker__row">
+                            <input
+                              type="checkbox"
+                              checked={overageSelectedIds.has(String(e.id))}
+                              onChange={() => toggle(e.id)}
+                            />
+                            <span className="overage-picker__desc">
+                              {e.project || '—'}
+                              {e.task ? ` · ${e.task}` : ''}
+                              {e.date ? ` · ${formatDate(e.date)}` : ''}
+                            </span>
+                            <span className="overage-picker__hours">{formatHours(e.hours)} h</span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                    {selected.length === 0 && (
+                      <span className="field__error">Select at least one hour to pay.</span>
+                    )}
+                  </div>
+                }
+                footerNote={
+                  <>
+                    Registers a contractor payment for the selected overage hours (no
+                    invoice). They’ll be frozen and drop off the pending list.
+                  </>
+                }
+                onClose={() => setOverageTarget(null)}
+                onConfirm={handleRegisterOverage}
+              />
+            )
+          })()}
       </AnimatePresence>
 
       <AnimatePresence>

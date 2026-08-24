@@ -697,7 +697,10 @@ export async function createInvoice({
 export const BILLING_STATUSES = ['Pending', 'Invoiced', 'Collected', 'Paid']
 
 const VALID_TRANSITIONS = {
-  Invoiced: ['Collected'],
+  // Invoiced puede ir a Collected (cobro) o directo a Paid: en el flujo actual
+  // Collections no se usa y una factura emitida se paga directo (ver migración
+  // 0036 / createPayment). nextStatus sigue devolviendo el primero (Collected).
+  Invoiced: ['Collected', 'Paid'],
   Collected: ['Paid'],
 }
 

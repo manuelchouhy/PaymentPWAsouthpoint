@@ -1,6 +1,7 @@
 /**
  * Capa de datos del módulo Payments al contractor (FR-10).
- * Un payment se vincula a una invoice que YA está en estado 'Collected'.
+ * Un payment se vincula a una invoice pagable: 'Invoiced' o 'Collected' (flujo
+ * Billing → Payments; Collections no es parte del flujo por ahora).
  *
  * @typedef {Object} ContractorPayment
  * @property {string|number} id
@@ -174,7 +175,9 @@ export async function getPaymentByInvoice(invoiceId) {
 
 /**
  * Registra un pago al contractor. VALIDACIÓN DURA: la invoice debe estar en
- * 'Collected'. Al confirmar, avanza la invoice a 'Paid' (+ historial).
+ * 'Invoiced' o 'Collected' (flujo Billing → Payments: una factura emitida en
+ * Billing se paga directo, Collections no es parte del flujo por ahora). Al
+ * confirmar, avanza la invoice a 'Paid' (+ historial) desde su estado actual.
  *
  * @param {{ id, status, totalAmount }} invoice
  * @param {{ amountPaid:number, paymentDate:string, transferReference?:string, bankMethod?:string, notes?:string }} payload
@@ -182,8 +185,8 @@ export async function getPaymentByInvoice(invoiceId) {
  * @returns {Promise<{ payment: ContractorPayment }>}
  */
 export async function createPayment(invoice, payload, createdBy) {
-  if (invoice.status !== 'Collected') {
-    const err = new Error('Invoice must be Collected before payment')
+  if (invoice.status !== 'Invoiced' && invoice.status !== 'Collected') {
+    const err = new Error('Invoice must be Invoiced or Collected before payment')
     err.code = 'not_collected'
     throw err
   }
@@ -209,7 +212,7 @@ export async function createPayment(invoice, payload, createdBy) {
     demoPayments = [payment, ...demoPayments]
     await updateInvoiceStatus({
       invoiceId: invoice.id,
-      fromStatus: 'Collected',
+      fromStatus: invoice.status,
       toStatus: 'Paid',
       changedBy: createdBy ?? null,
       note: 'Contractor payment registered',
@@ -218,9 +221,10 @@ export async function createPayment(invoice, payload, createdBy) {
   }
 
   // Registro ATÓMICO en el servidor (función register_contractor_payment):
-  // valida que la factura esté en 'Collected', inserta el pago, avanza la factura
-  // a 'Paid' y registra el historial, todo en una sola transacción. El índice
-  // único payments_invoice_id_unique impide un segundo pago para la misma factura.
+  // valida que la factura esté en 'Invoiced' o 'Collected' (migración 0036),
+  // inserta el pago, avanza la factura a 'Paid' y registra el historial, todo en
+  // una sola transacción. El índice único payments_invoice_id_unique impide un
+  // segundo pago para la misma factura.
   const { data, error } = await supabase.rpc('register_contractor_payment', {
     p_invoice_id: invoice.id,
     p_amount_paid: Number(payload.amountPaid),
@@ -239,7 +243,7 @@ export async function createPayment(invoice, payload, createdBy) {
       throw err
     }
     if (error.message?.includes('not_collected')) {
-      const err = new Error('Invoice must be Collected before payment')
+      const err = new Error('Invoice must be Invoiced or Collected before payment')
       err.code = 'not_collected'
       throw err
     }
