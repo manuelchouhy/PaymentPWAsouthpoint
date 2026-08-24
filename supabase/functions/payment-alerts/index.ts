@@ -1,9 +1,12 @@
 // ============================================================
 // Supabase Edge Function: payment-alerts  (FR-13)
-// Corre 1 vez por día. Revisa invoices Collected sin pago al contractor y
-// encola un email-digest con las que están en warning u overdue.
+// Corre 1 vez por día. Revisa invoices Invoiced sin pago al contractor y encola
+// un email-digest con las que están en warning u overdue.
 //
-//   payment_due_date = collection_date + payment_terms_days
+// Flujo Billing → Payments (sin Collections): una factura emitida (Invoiced) es
+// pagable directo; al pagarla pasa a Paid. El vencimiento corre desde la fecha de
+// factura (igual que el frontend en PaymentsPage):
+//   payment_due_date = invoice_date + payment_terms_days
 //   days_until_due   = payment_due_date - hoy
 //   warning : days_until_due <= warning_days_before_due
 //   overdue : days_until_due < 0
@@ -57,31 +60,18 @@ Deno.serve(async (req) => {
     const warnBefore: number = settings.warning_days_before_due ?? 3;
     const recipients: string[] = settings.email_recipients ?? [];
 
-    // Invoices Collected (pendientes de pago al contractor).
+    // Invoices Invoiced (pendientes de pago al contractor; al pagar pasan a Paid).
     const { data: invoices, error } = await supabase
       .from("invoices")
       .select("id, supplier_invoice_number, user_name, total_amount, invoice_date, payment_terms_days")
-      .eq("status", "Collected");
+      .eq("status", "Invoiced");
     if (error) return json({ ok: false, error: error.message }, 200);
-
-    // Fecha de cobro (máxima) por invoice.
-    const ids = (invoices ?? []).map((i) => i.id);
-    const collDateByInvoice = new Map<number, string>();
-    if (ids.length) {
-      const { data: cols } = await supabase
-        .from("collections")
-        .select("invoice_id, collection_date")
-        .in("invoice_id", ids);
-      for (const c of cols ?? []) {
-        const prev = collDateByInvoice.get(c.invoice_id);
-        if (!prev || c.collection_date > prev) collDateByInvoice.set(c.invoice_id, c.collection_date);
-      }
-    }
 
     const affected: any[] = [];
     for (const inv of invoices ?? []) {
-      const collDate = collDateByInvoice.get(inv.id) ?? inv.invoice_date;
-      const dueDate = addDaysISO(collDate, inv.payment_terms_days ?? 30);
+      // Sin fecha de factura no hay deadline calculable → se omite.
+      if (!inv.invoice_date) continue;
+      const dueDate = addDaysISO(inv.invoice_date, inv.payment_terms_days ?? 30);
       const days = daysUntil(dueDate);
       let level: "warning" | "overdue" | null = null;
       if (days < 0) level = "overdue";

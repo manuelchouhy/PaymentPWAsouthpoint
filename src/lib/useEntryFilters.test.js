@@ -19,26 +19,27 @@ const entries = [
   { id: 2, allocation: 'bill_to_client' },
   { id: 3, allocation: 'overage' },
   { id: 4, allocation: 'unknown' }, // X (también es "aplicada")
+  { id: 5, allocation: '' }, // vacía → cuenta como sin clasificar, no como aplicada
 ]
 const ids = (rows) => rows.map((e) => e.id)
 
 test('sin filtro de allocation → todas', () => {
-  assert.deepEqual(ids(applyEntryFilters(entries, base, new Map())), [1, 2, 3, 4])
+  assert.deepEqual(ids(applyEntryFilters(entries, base, new Map())), [1, 2, 3, 4, 5])
 })
 
-test('ALLOCATED → sólo las que tienen allocation puesta (incluye X)', () => {
+test('ALLOCATED → sólo las que tienen allocation puesta (incluye X, excluye la vacía)', () => {
   const r = applyEntryFilters(entries, { ...base, allocations: [ALLOCATED] }, new Map())
   assert.deepEqual(ids(r), [2, 3, 4])
 })
 
-test('UNALLOCATED → sólo las sin clasificar', () => {
+test('UNALLOCATED → sin clasificar: null y también la cadena vacía', () => {
   const r = applyEntryFilters(entries, { ...base, allocations: [UNALLOCATED] }, new Map())
-  assert.deepEqual(ids(r), [1])
+  assert.deepEqual(ids(r), [1, 5])
 })
 
 test('UNALLOCATED + ALLOCATED (OR) → todas', () => {
   const r = applyEntryFilters(entries, { ...base, allocations: [UNALLOCATED, ALLOCATED] }, new Map())
-  assert.deepEqual(ids(r), [1, 2, 3, 4])
+  assert.deepEqual(ids(r), [1, 2, 3, 4, 5])
 })
 
 test('selección puntual sigue funcionando y convive con ALLOCATED', () => {

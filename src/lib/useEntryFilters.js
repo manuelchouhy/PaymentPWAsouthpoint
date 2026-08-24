@@ -160,9 +160,11 @@ export function applyEntryFilters(entries, filters, invoiceByEntryId) {
     }
     if (filters.allocations?.length) {
       // Match por OR: la allocation puntual seleccionada, el centinela UNALLOCATED
-      // (sin clasificar, null) o el centinela ALLOCATED (cualquiera != null → "ya
-      // aplicadas"). Así ALLOCATED convive con selecciones puntuales.
-      const alloc = entry.allocation ?? null
+      // (sin clasificar) o el centinela ALLOCATED (cualquiera aplicada → "ya
+      // aplicadas"). `|| null` (no `??`) para que un '' —además de null— cuente como
+      // sin clasificar y no como aplicada. Así ALLOCATED convive con selecciones
+      // puntuales.
+      const alloc = entry.allocation || null
       const key = alloc ?? UNALLOCATED
       const matches =
         filters.allocations.includes(key) ||
