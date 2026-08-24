@@ -16,7 +16,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabase'
-import { recordProjectDocument } from './projectsData'
+import { recordProjectDocument, getProjects } from './projectsData'
 import { normalizeClientKey } from './clientResolver'
 
 const BUCKET = 'client-msa'
@@ -120,6 +120,8 @@ function rowToClient(row) {
     zohoGroupName: row.zoho_group_name ?? null,
     // true = auto-creado por el sync desde un grupo de Zoho, datos a completar.
     needsReview: row.needs_review ?? false,
+    // false = cliente desactivado (borrado lógico). getClients sólo trae activos.
+    active: row.active ?? true,
     email: row.email ?? null,
     domain: row.domain ?? null,
     primaryContactName: row.primary_contact_name,
@@ -141,15 +143,22 @@ function clientToRow(client) {
 
 // ---------- CRUD ----------
 
-/** @returns {Promise<Client[]>} ordenados alfabéticamente por nombre. */
+/**
+ * Clientes ACTIVOS, ordenados alfabéticamente por nombre. Los desactivados
+ * (borrado lógico) no se listan ni participan de la resolución grupo→cliente.
+ * @returns {Promise<Client[]>}
+ */
 export async function getClients() {
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 200))
-    return [...demoClients].sort((a, b) => a.clientName.localeCompare(b.clientName, 'es'))
+    return [...demoClients]
+      .filter((c) => c.active !== false)
+      .sort((a, b) => a.clientName.localeCompare(b.clientName, 'es'))
   }
   const { data, error } = await supabase
     .from('clients')
     .select('*')
+    .eq('active', true)
     .order('client_name', { ascending: true })
   if (error) throw new Error(error.message)
   return data.map(rowToClient)
@@ -222,32 +231,61 @@ export async function updateClient(current, updates) {
 }
 
 /**
- * Borra un cliente. La única FK que referencia clients es projects.client_id, ON
- * DELETE SET NULL: los proyectos de ese cliente NO se borran, quedan con client_id
- * NULL. Por eso el delete no falla por FK. Devuelve el id borrado.
+ * DESACTIVA un cliente (borrado lógico, definido en la reunión: no borrar
+ * información de la base). No elimina la fila: pone active=false, con lo que el
+ * cliente sale de getClients (listas + resolución grupo→cliente) pero sus datos,
+ * MSA e historial quedan intactos.
  *
- * OJO (open item): el MSA se guarda en project_documents (subject_type='msa',
- * subject_id=clientId) SIN FK a clients, y el archivo en el bucket 'client-msa'.
- * Esas filas y blobs NO se borran acá (la app mantiene el historial de MSAs a
- * propósito) → quedan huérfanos. Purgar o no es decisión de producto.
+ * Bloqueo: no se puede desactivar un cliente que todavía tenga proyectos
+ * vinculados (client_id) — primero se reasignan o quitan esos proyectos. Se lanza
+ * un error con code 'has_projects' y la cantidad, para que la UI lo explique.
  * @param {{ id: string|number }} client
  * @returns {Promise<{ id: string|number }>}
  */
-export async function deleteClient(client) {
+export async function deactivateClient(client) {
+  const projectCount = await countLinkedProjects(client.id)
+  if (projectCount > 0) {
+    const err = new Error(
+      `This client still has ${projectCount} linked project(s). Reassign or remove them before deactivating.`,
+    )
+    err.code = 'has_projects'
+    throw err
+  }
+
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 250))
-    demoClients = demoClients.filter((c) => String(c.id) !== String(client.id))
+    demoClients = demoClients.map((c) =>
+      String(c.id) === String(client.id) ? { ...c, active: false } : c,
+    )
     return { id: client.id }
   }
-  // .select(): un delete que matchea 0 filas (RLS que lo bloquea, id inexistente o
-  // ya borrado) devuelve { error: null } → sin verificar, la UI reportaría un
-  // "borrado" que nunca pasó. Se exige que vuelva la fila borrada.
-  const { data, error } = await supabase.from('clients').delete().eq('id', client.id).select('id')
+  // .select(): un update que matchea 0 filas (RLS que lo bloquea, id inexistente)
+  // devuelve { error: null } → sin verificar, la UI reportaría una desactivación
+  // que nunca pasó. Se exige que vuelva la fila.
+  const { data, error } = await supabase
+    .from('clients')
+    .update({ active: false, updated_at: new Date().toISOString() })
+    .eq('id', client.id)
+    .select('id')
   if (error) throw friendlyClientError(error)
   if (!data || data.length === 0) {
-    throw new Error('The client was not deleted — it may no longer exist or you may not have permission.')
+    throw new Error('The client was not deactivated — it may no longer exist or you may not have permission.')
   }
   return { id: client.id }
+}
+
+/** Cantidad de proyectos vinculados (client_id) a este cliente. */
+async function countLinkedProjects(clientId) {
+  if (!isSupabaseConfigured) {
+    const projects = await getProjects()
+    return projects.filter((p) => String(p.clientId) === String(clientId)).length
+  }
+  const { count, error } = await supabase
+    .from('projects')
+    .select('id', { count: 'exact', head: true })
+    .eq('client_id', clientId)
+  if (error) throw new Error(`Could not check linked projects: ${error.message}`)
+  return count ?? 0
 }
 
 /**

@@ -80,25 +80,26 @@ export function ClientsPage() {
     setToast({ id: Date.now(), message: `Client updated: ${updated.clientName}` })
   }
 
-  async function handleDelete(client) {
-    // El borrado sólo toca clients: la única FK (projects.client_id) es SET NULL,
-    // así que los proyectos quedan sin cliente, no se borran (ver deleteClient).
-    await api.clients.delete({ id: client.id })
-    // El audit no debe tumbar el flujo ni quedar como rejection sin manejar: es
-    // fire-and-forget pero con catch (a diferencia de create/update, que no lo
-    // tienen; acá importa más por ser una acción irreversible).
+  async function handleDeactivate(client) {
+    // Borrado lógico (definido en la reunión): no se elimina la fila, se desactiva.
+    // Si el cliente todavía tiene proyectos vinculados, deactivateClient lanza
+    // (code 'has_projects'); se deja PROPAGAR para que el drawer muestre el motivo
+    // inline y no se toque la lista.
+    await api.clients.deactivate({ id: client.id })
+    // El audit es fire-and-forget pero con catch (acción sensible).
     Promise.resolve(
       api.audit.log({
         actorEmail: user?.email,
-        action: 'client.delete',
+        action: 'client.deactivate',
         resourceType: 'client',
         resourceId: client.id,
         before: { clientName: client.clientName },
       }),
-    ).catch((e) => console.error('No se pudo registrar el audit de client.delete:', e))
+    ).catch((e) => console.error('No se pudo registrar el audit de client.deactivate:', e))
+    // getClients ya no lo trae (sólo activos): sale de la lista visible.
     setClients((prev) => prev.filter((c) => c.id !== client.id))
     setDetail(null)
-    setToast({ id: Date.now(), message: `Client deleted: ${client.clientName}` })
+    setToast({ id: Date.now(), message: `Client deactivated: ${client.clientName}` })
   }
 
   // Clientes auto-creados por el sync a completar (un solo scan para banner + count).
@@ -226,13 +227,13 @@ export function ClientsPage() {
             key={`client-detail-${detail.id}`}
             client={detail}
             canEdit={can('clients.edit')}
-            canDelete={can('clients.delete')}
+            canDeactivate={can('clients.deactivate')}
             onClose={() => setDetail(null)}
             onEdit={() => {
               setDetail(null)
               setEditing(detail)
             }}
-            onDelete={() => handleDelete(detail)}
+            onDeactivate={() => handleDeactivate(detail)}
           />
         )}
       </AnimatePresence>

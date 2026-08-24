@@ -20,16 +20,16 @@ const FIELDS = [
  * @param {{
  *   client: object,
  *   canEdit?: boolean,
- *   canDelete?: boolean,
+ *   canDeactivate?: boolean,
  *   onClose: () => void,
  *   onEdit: () => void,
- *   onDelete?: () => Promise<void>,
+ *   onDeactivate?: () => Promise<void>,
  * }} props
  */
-export function ClientDetailDrawer({ client, canEdit = false, canDelete = false, onClose, onEdit, onDelete }) {
-  // Sólo se ofrece borrar si además hay handler: canDelete sin onDelete rompería
-  // en el confirm (onDelete es opcional en el contrato).
-  const deletable = canDelete && typeof onDelete === 'function'
+export function ClientDetailDrawer({ client, canEdit = false, canDeactivate = false, onClose, onEdit, onDeactivate }) {
+  // Sólo se ofrece desactivar si además hay handler: canDeactivate sin onDeactivate
+  // rompería en el confirm (onDeactivate es opcional en el contrato).
+  const deletable = canDeactivate && typeof onDeactivate === 'function'
   const [opening, setOpening] = useState(false)
   const [msaMsg, setMsaMsg] = useState('')
   // Confirmación de borrado inline (dos pasos), sin confirm() nativo.
@@ -37,7 +37,7 @@ export function ClientDetailDrawer({ client, canEdit = false, canDelete = false,
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   // Guard síncrono contra doble-click: setDeleting(true) es async y un segundo
-  // click antes del re-render dispararía onDelete() dos veces (dos borrados/audits).
+  // click antes del re-render dispararía onDeactivate() dos veces (doble audit).
   const deletingRef = useRef(false)
   const isDemoMsa = typeof client.msaUrl === 'string' && client.msaUrl.startsWith('demo/')
 
@@ -47,11 +47,11 @@ export function ClientDetailDrawer({ client, canEdit = false, canDelete = false,
     setDeleteError('')
     setDeleting(true)
     try {
-      await onDelete()
-      // onDelete cierra el drawer y recarga; no se setea estado después por si el
-      // componente ya se desmontó.
+      await onDeactivate()
+      // onDeactivate cierra el drawer y recarga; no se setea estado después por si
+      // el componente ya se desmontó.
     } catch (err) {
-      setDeleteError(err?.message ?? 'Could not delete the client.')
+      setDeleteError(err?.message ?? 'Could not deactivate the client.')
       setDeleting(false)
       deletingRef.current = false // permitir reintentar tras un error
     }
@@ -182,7 +182,7 @@ export function ClientDetailDrawer({ client, canEdit = false, canDelete = false,
                   }}
                 >
                   <Trash2 size={16} strokeWidth={2.2} aria-hidden="true" />
-                  Delete
+                  Deactivate
                 </button>
               )}
             </div>
@@ -190,10 +190,12 @@ export function ClientDetailDrawer({ client, canEdit = false, canDelete = false,
         )}
 
         {deletable && confirming && (
-          <div className="confirm-delete" role="group" aria-label="Confirm delete">
+          <div className="confirm-delete" role="group" aria-label="Confirm deactivate">
             <p className="confirm-delete__msg">
-              Delete <strong>{client.clientName}</strong>? This can’t be undone. Any projects
-              linked to this client will be unassigned (they are not deleted).
+              Deactivate <strong>{client.clientName}</strong>? It will be hidden from the
+              client list and stop resolving Zoho groups, but its data and MSA history are
+              kept. A client with linked projects can’t be deactivated — reassign or remove
+              its projects first.
             </p>
             {deleteError && (
               <p className="field__error" role="alert">
@@ -215,7 +217,7 @@ export function ClientDetailDrawer({ client, canEdit = false, canDelete = false,
                 onClick={handleConfirmDelete}
                 disabled={deleting}
               >
-                {deleting ? 'Deleting…' : 'Delete client'}
+                {deleting ? 'Deactivating…' : 'Deactivate client'}
               </button>
             </div>
           </div>

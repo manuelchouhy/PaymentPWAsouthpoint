@@ -30,7 +30,7 @@ import {
 
 import {
   createClient as createClientRecord,
-  deleteClient,
+  deactivateClient,
   getClientMsaUrl,
   getClients,
   recordClientMsaVersion,
@@ -274,7 +274,7 @@ export const supabaseApiClient = {
     list: getClients,
     create: createClientRecord,
     update: updateClient,
-    delete: deleteClient,
+    deactivate: deactivateClient,
     uploadMsa: uploadClientMsa,
     getMsaUrl: getClientMsaUrl,
     recordMsaVersion: recordClientMsaVersion,
