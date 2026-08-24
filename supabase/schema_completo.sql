@@ -449,15 +449,19 @@ create or replace function public.payments_entry_ids_no_overlap()
 returns trigger
 language plpgsql
 as $$
+declare
+  r record;
 begin
   if new.entry_ids is null or array_length(new.entry_ids, 1) is null then
     return new;
   end if;
-  -- Un advisory lock por hora (orden asc, sin deadlock): serializa sólo pagos que
-  -- comparten horas; el EXISTS de un BEFORE-trigger no es atómico en READ COMMITTED.
-  perform pg_advisory_xact_lock(eid)
-  from (select distinct unnest(new.entry_ids) as eid) s
-  order by s.eid;
+  -- Un advisory lock por hora en un FOR LOOP ordenado por entry_id (orden de
+  -- adquisición garantizado → sin deadlock); clave namespaceada con hashtextextended
+  -- para no colisionar con otros advisory locks. La granularidad es sólo opt: el
+  -- EXISTS de abajo es exacto. Ver migración 0037 para el detalle.
+  for r in select distinct unnest(new.entry_ids) as eid order by eid loop
+    perform pg_advisory_xact_lock(hashtextextended('payments_overage_entry:' || r.eid, 0));
+  end loop;
   if exists (
     select 1 from public.payments p
     where p.id <> coalesce(new.id, -1)

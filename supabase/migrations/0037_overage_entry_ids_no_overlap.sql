@@ -26,6 +26,10 @@
 -- histórico (verificado sin solapamientos antes de aplicar).
 
 -- Índices GIN para que los chequeos de solape `&&` usen índice y no seq-scan.
+-- (En tablas grandes convendría CREATE INDEX CONCURRENTLY para no bloquear
+-- escrituras durante el build; acá payments/invoices son chicas y el build es
+-- instantáneo, así que se deja el CREATE simple —además CONCURRENTLY no puede
+-- correr dentro de la transacción de esta migración.)
 create index if not exists payments_entry_ids_gin
   on public.payments using gin (entry_ids);
 create index if not exists invoices_entry_ids_gin
@@ -35,20 +39,27 @@ create or replace function public.payments_entry_ids_no_overlap()
 returns trigger
 language plpgsql
 as $$
+declare
+  r record;
 begin
   -- Pagos por factura (o sin horas) no tienen entry_ids en payments que proteger.
   if new.entry_ids is null or array_length(new.entry_ids, 1) is null then
     return new;
   end if;
 
-  -- Un advisory lock por hora, en orden ascendente (ver nota de atomicidad).
-  perform pg_advisory_xact_lock(eid)
-  from (select distinct unnest(new.entry_ids) as eid) s
-  order by s.eid;
+  -- Un advisory lock por hora, tomados en orden ascendente de entry_id para no
+  -- deadlockear (un FOR LOOP garantiza el orden de adquisición; un PERFORM con
+  -- ORDER BY sobre la target-list NO lo garantiza). La clave se namespacea con
+  -- hashtextextended sobre un prefijo de dominio para no colisionar con otros
+  -- usos de advisory locks en el mismo keyspace global de 64 bits. La granularidad
+  -- del lock es sólo optimización: el EXISTS de abajo es exacto igual.
+  for r in select distinct unnest(new.entry_ids) as eid order by eid loop
+    perform pg_advisory_xact_lock(hashtextextended('payments_overage_entry:' || r.eid, 0));
+  end loop;
 
   -- ¿Ya cubierta por OTRO pago de overage? coalesce(new.id, -1) excluye la propia
   -- fila en UPDATE (en INSERT el id ya viene del default identity, aplicado antes
-  -- de los triggers BEFORE).
+  -- de los triggers BEFORE). Atómico: ambos pagos toman el mismo lock por hora.
   if exists (
     select 1 from public.payments p
     where p.id <> coalesce(new.id, -1)
@@ -58,7 +69,12 @@ begin
       using errcode = 'OV001';
   end if;
 
-  -- ¿Ya cubierta por una FACTURA? Sus horas viven en invoices.entry_ids.
+  -- ¿Ya cubierta por una FACTURA? Sus horas viven en invoices.entry_ids. Este
+  -- chequeo es BEST-EFFORT: es exacto contra facturas ya commiteadas, pero NO es
+  -- atómico contra una factura creándose en paralelo (los inserts de invoices no
+  -- toman este lock). Ese caso concurrente lo evita la app: overage y
+  -- bill_to_client son allocations disjuntas, así que nunca se factura una hora de
+  -- overage ni viceversa.
   if exists (
     select 1 from public.invoices i
     where i.entry_ids && new.entry_ids
