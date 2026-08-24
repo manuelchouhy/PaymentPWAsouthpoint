@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FolderPlus, Save, X } from 'lucide-react'
+import { ClientPicker } from './ClientPicker'
 import { useScrollLock } from '../lib/useScrollLock'
 
 // Definición de campos (orden, label, tipo). "required" queda resuelto por
@@ -62,8 +63,13 @@ function emptyForm() {
 export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
   const isEdit = Boolean(initial)
   const [form, setForm] = useState(() => {
-    if (!initial) return emptyForm()
-    return Object.fromEntries(FIELDS.map((f) => [f.key, initial[f.key] ?? '']))
+    const base = initial
+      ? Object.fromEntries(FIELDS.map((f) => [f.key, initial[f.key] ?? '']))
+      : emptyForm()
+    // clientId acompaña al texto `client`: para un proyecto SIN cliente vinculado
+    // se elige con el ClientPicker y se persiste como override real (E5), que el
+    // resolver prioriza sobre el nombre libre.
+    return { ...base, clientId: initial?.clientId ?? null }
   })
   const [touched, setTouched] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -71,7 +77,15 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
   const [dupError, setDupError] = useState(false)
   const dialogRef = useRef(null)
   const firstRef = useRef(null)
-  const required = useMemo(() => requiredKeys(initial), [initial])
+  // `client` deja de ser requerido si el proyecto está VINCULADO a un cliente real
+  // (form.clientId, vivo): sea porque ya venía linkeado o porque se acaba de
+  // vincular con el linker (E5). Una sola fuente para required/missing/isMissing y
+  // el badge del label — así no se contradicen (badge "required" con Save activo).
+  const required = useMemo(() => {
+    const req = requiredKeys(initial)
+    if (form.clientId) req.delete('client')
+    return req
+  }, [initial, form.clientId])
   // El autofocus al abrir debe caer en el primer campo que sea un <input>
   // real — "client" no lo es si está linkeado (ver render más abajo).
   const firstFocusableIndex = useMemo(
@@ -115,6 +129,12 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
         // relajada) — a diferencia del resto, no puede mandarse null aunque
         // ya no sea required acá (proyecto linkeado con texto legacy vacío).
         payload[f.key] = f.key === 'client' ? trimmed : trimmed || null
+      }
+      // Cliente no vinculado: además del nombre, persistir client_id como override
+      // real (E5). Sólo cuando el campo es editable acá (no linkeado) — para un
+      // proyecto ya vinculado el cliente se maneja desde Clients, no se toca acá.
+      if (!isClientLinked(initial) && form.clientId) {
+        payload.clientId = form.clientId
       }
       await onSubmit(payload)
     } catch (error) {
@@ -202,6 +222,31 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
               )
             })}
           </div>
+
+          {/* Linker opcional (E5): además del nombre libre de arriba, vincular el
+              proyecto a un cliente REAL setea client_id, el override que el resolver
+              prioriza (más robusto que el match por nombre). Al vincular, el nombre
+              libre deja de ser requerido (el link ya provee el cliente); el texto de
+              arriba no se toca. Sólo para proyectos no vinculados; uno ya vinculado
+              se maneja desde Clients. */}
+          {!isClientLinked(initial) && (
+            <div className="project-form__link">
+              <ClientPicker
+                id="pf-client-link"
+                label="Link to a client record"
+                required={false}
+                showMsaHint={false}
+                disabled={submitting}
+                value={form.clientId}
+                onChange={(id) => setForm((prev) => ({ ...prev, clientId: id }))}
+              />
+              <p className="field__hint">
+                Optional. Links this project to a client record for billing
+                (client_id, which the resolver prefers over the free-text name). When
+                linked, the Client name above is no longer required.
+              </p>
+            </div>
+          )}
 
           {submitError && (
             <p className="modal__submit-error" role="alert">

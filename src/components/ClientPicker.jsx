@@ -15,7 +15,16 @@ import { api } from '../lib/api'
  *   error?: string,
  * }} props
  */
-export function ClientPicker({ value, onChange, disabled, error }) {
+export function ClientPicker({
+  value,
+  onChange,
+  disabled,
+  error,
+  label = 'Client',
+  required = true,
+  id = 'client-picker',
+  showMsaHint = true,
+}) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -36,12 +45,12 @@ export function ClientPicker({ value, onChange, disabled, error }) {
 
   return (
     <div className="field">
-      <label className="field__label" htmlFor="client-picker">
-        Client
-        <span className="field__req">required</span>
+      <label className="field__label" htmlFor={id}>
+        {label}
+        {required && <span className="field__req">required</span>}
       </label>
       <select
-        id="client-picker"
+        id={id}
         className={`field__input${error ? ' field__input--error' : ''}`}
         value={value ?? ''}
         disabled={disabled || loading}
@@ -60,7 +69,7 @@ export function ClientPicker({ value, onChange, disabled, error }) {
       {error && <span className="field__error">{error}</span>}
       {loadError && <span className="field__error">{loadError}</span>}
 
-      {selected && (
+      {selected && showMsaHint && (
         <div className="field__hint" style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
           <FileText size={13} strokeWidth={2} aria-hidden="true" />
           MSA on file · autopopulated from {selected.clientName}, not editable here
