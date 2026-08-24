@@ -10,6 +10,7 @@ import { deriveEntriesClient } from '../lib/entryClient'
 import { groupBillToClient, groupReadonly } from '../lib/billingGrouping'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
+import { Checkbox } from '../components/Checkbox'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { BillModal } from '../components/BillModal'
 import { EntryDetailDrawer } from '../components/EntryDetailDrawer'
@@ -1116,13 +1117,16 @@ export function BillingPage() {
                                     <tr>
                                       {canCreate && weekRowIds.length > 0 && (
                                         <th scope="col" style={{ width: 34 }}>
-                                          <input
-                                            type="checkbox"
+                                          <Checkbox
                                             checked={allWeekSelected}
+                                            indeterminate={
+                                              !allWeekSelected &&
+                                              weekRowIds.some((k) => selectedKeys.has(k))
+                                            }
                                             onChange={() =>
                                               toggleWeekSelection(weekRowIds, allWeekSelected)
                                             }
-                                            aria-label={`Select all rows in ${week.week}`}
+                                            ariaLabel={`Select all rows in ${week.week}`}
                                           />
                                         </th>
                                       )}
@@ -1187,11 +1191,10 @@ export function BillingPage() {
                                             // onChange; sin esto el click burbujea al <tr>.
                                             <td onClick={(e) => e.stopPropagation()}>
                                               {selectable && (
-                                                <input
-                                                  type="checkbox"
+                                                <Checkbox
                                                   checked={selectedKeys.has(id)}
                                                   onChange={() => toggleGroup(id)}
-                                                  aria-label={`Select ${row.user} · ${row.project}`}
+                                                  ariaLabel={`Select ${row.user} · ${row.project}`}
                                                 />
                                               )}
                                             </td>

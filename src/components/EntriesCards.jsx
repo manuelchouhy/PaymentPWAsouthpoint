@@ -76,7 +76,7 @@ export function EntriesCards({
             >
               <div className="card__top">
                 {isInvoiced ? (
-                  <Checkbox checked={false} disabled />
+                  <Checkbox checked={false} readOnly disabled />
                 ) : (
                   <Checkbox checked={selected} readOnly />
                 )}

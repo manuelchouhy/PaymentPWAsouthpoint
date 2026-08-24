@@ -11,6 +11,7 @@ import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { exportGrid } from '../lib/exportGrid'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { WeekField } from '../components/WeekField'
+import { Checkbox } from '../components/Checkbox'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { StatusBadge } from '../components/StatusBadge'
 import { BillingBadge } from '../components/BillingBadge'
@@ -506,12 +507,15 @@ export function EntriesPage() {
                     <tr>
                       {canAllocate && (
                         <th scope="col" style={{ width: 34 }}>
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={allPageSelected}
-                            onChange={toggleAllOnPage}
+                            indeterminate={
+                              !allPageSelected &&
+                              selectableOnPage.some((e) => selectedIds.has(e.id))
+                            }
+                            onChange={() => toggleAllOnPage()}
                             disabled={selectableOnPage.length === 0}
-                            aria-label="Select all selectable rows on this page"
+                            ariaLabel="Select all selectable rows on this page"
                           />
                         </th>
                       )}
@@ -559,19 +563,23 @@ export function EntriesPage() {
                           data-selected={selectable ? selectedIds.has(entry.id) : undefined}
                         >
                           {canAllocate && (
-                            <td>
-                              <input
-                                type="checkbox"
-                                checked={selectedIds.has(entry.id)}
-                                onChange={() => toggleRow(entry.id)}
-                                // El click del checkbox no debe además disparar el
-                                // onClick de la fila (si no, togglea dos veces y se
-                                // cancela). onChange sigue funcionando igual.
+                            <td title={frozen ? 'Already invoiced — cannot be reclassified' : undefined}>
+                              {/* stopPropagation SÓLO alrededor del control: el
+                                  checkbox ya togglea por su onChange, y sin esto el
+                                  click burbujea al <tr> y togglea de nuevo (doble =
+                                  no-op). El padding de la celda sigue burbujeando,
+                                  así que clickearlo togglea la fila como antes. */}
+                              <span
                                 onClick={(e) => e.stopPropagation()}
-                                disabled={frozen}
-                                title={frozen ? 'Already invoiced — cannot be reclassified' : undefined}
-                                aria-label={`Select entry ${entry.id}`}
-                              />
+                                style={{ display: 'inline-flex' }}
+                              >
+                                <Checkbox
+                                  checked={selectedIds.has(entry.id)}
+                                  onChange={() => toggleRow(entry.id)}
+                                  disabled={frozen}
+                                  ariaLabel={`Select entry ${entry.id}`}
+                                />
+                              </span>
                             </td>
                           )}
                           <td>{entry.user}</td>
