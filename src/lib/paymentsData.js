@@ -21,6 +21,19 @@ import { updateInvoiceStatus } from './data'
 
 export const BANK_METHODS = ['BBVA', 'Itaú', 'Santander', 'Other']
 
+/**
+ * Nivel de alerta de pago al contractor (FR-13).
+ *   overdue : days_until_due < 0
+ *   warning : days_until_due <= warning_days_before_due
+ *   on_time : el resto
+ * @returns {'overdue'|'warning'|'on_time'}
+ */
+export function paymentAlertLevel(daysUntilDue, warningDaysBeforeDue) {
+  if (daysUntilDue < 0) return 'overdue'
+  if (daysUntilDue <= (warningDaysBeforeDue ?? 3)) return 'warning'
+  return 'on_time'
+}
+
 let demoPaymentAlertSettings = {
   warningDaysBeforeDue: 3,
   emailRecipients: ['pagos@southpoint.local'],
