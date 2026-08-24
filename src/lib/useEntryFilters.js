@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { sundayWeek } from './format'
+import { sundayWeek } from './format.js'
 
 /**
  * Estado y lógica de filtrado de la grilla (FR-03), centralizado en un solo
@@ -28,6 +28,9 @@ const EMPTY_FILTERS = {
 
 // Centinela del filtro para las horas sin clasificar (allocation === null).
 export const UNALLOCATED = 'unallocated'
+// Centinela del filtro para las horas YA APLICADAS (cualquier allocation != null),
+// sin tener que tildar las 4 categorías una por una.
+export const ALLOCATED = 'allocated'
 
 /**
  * @param {Partial<typeof EMPTY_FILTERS>} [initial] filtros de arranque — los usa
@@ -156,9 +159,15 @@ export function applyEntryFilters(entries, filters, invoiceByEntryId) {
       if (!filters.billingStatuses.includes(billingStatus)) return false
     }
     if (filters.allocations?.length) {
-      // null (sin clasificar) matchea contra el centinela 'unallocated'.
-      const allocation = entry.allocation ?? UNALLOCATED
-      if (!filters.allocations.includes(allocation)) return false
+      // Match por OR: la allocation puntual seleccionada, el centinela UNALLOCATED
+      // (sin clasificar, null) o el centinela ALLOCATED (cualquiera != null → "ya
+      // aplicadas"). Así ALLOCATED convive con selecciones puntuales.
+      const alloc = entry.allocation ?? null
+      const key = alloc ?? UNALLOCATED
+      const matches =
+        filters.allocations.includes(key) ||
+        (alloc !== null && filters.allocations.includes(ALLOCATED))
+      if (!matches) return false
     }
     // log_date es ISO YYYY-MM-DD → la comparación de strings respeta el orden.
     if (filters.dateFrom && (!entry.date || entry.date < filters.dateFrom)) {

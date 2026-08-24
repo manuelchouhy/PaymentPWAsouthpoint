@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { AlertTriangle, Info } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatDate, formatHours, formatWeek } from '../lib/format'
-import { useEntryFilters, applyEntryFilters, buildFilterOptions, UNALLOCATED } from '../lib/useEntryFilters'
+import { useEntryFilters, applyEntryFilters, buildFilterOptions, UNALLOCATED, ALLOCATED } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
 import { isEntryFrozen, entryFrozenReason } from '../lib/entryFreeze'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
@@ -28,19 +28,22 @@ const PAGE_SIZE = 100
 // hora llega con allocation puesta.
 
 // Opciones fijas del filtro de allocation (no se derivan de las entries). Incluye
-// UNALLOCATED (sin clasificar, null) y 'unknown' (la categoría X, allocation real
-// desde el CHECK 0034). Son cosas distintas: UNALLOCATED = sin triagear; X =
-// clasificada explícitamente como "no encaja en las otras".
-const ALLOCATION_FILTER_OPTIONS = [UNALLOCATED, 'bill_to_client', 'overage', 'sp_internal', 'unknown']
+// UNALLOCATED (sin clasificar, null), ALLOCATED (atajo: cualquiera ya aplicada) y
+// 'unknown' (la categoría X, allocation real desde el CHECK 0034). UNALLOCATED = sin
+// triagear; X = clasificada explícitamente como "no encaja en las otras".
+const ALLOCATION_FILTER_OPTIONS = [UNALLOCATED, ALLOCATED, 'bill_to_client', 'overage', 'sp_internal', 'unknown']
 
 // Etiqueta visible de una allocation, usada por el filtro y el export. null o el
-// centinela UNALLOCATED → "unallocated" (sin clasificar); 'unknown' → "X" (vía
-// ALLOCATION_LABELS). Tolera claves desconocidas cayendo al valor crudo en vez de
-// romper — el export hacía `[value].label` sin guardas y crasheaba.
+// centinela UNALLOCATED → "unallocated" (sin clasificar); ALLOCATED → "allocated"
+// (ya aplicadas); 'unknown' → "X" (vía ALLOCATION_LABELS). Tolera claves
+// desconocidas cayendo al valor crudo en vez de romper — el export hacía
+// `[value].label` sin guardas y crasheaba.
 const allocationLabel = (value) =>
   value == null || value === UNALLOCATED
     ? 'unallocated'
-    : ALLOCATION_LABELS[value]?.label ?? value
+    : value === ALLOCATED
+      ? 'allocated'
+      : ALLOCATION_LABELS[value]?.label ?? value
 
 export function EntriesPage() {
   const { user, can } = useOutletContext()
