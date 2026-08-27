@@ -87,8 +87,18 @@ export function buildClientResolver(clients = []) {
     }
 
     // 3. Texto legacy (proyectos del wizard/QA sin client_id ni match de grupo).
+    // Se canonicaliza contra la MISMA clave normalizada que el grupo: si el texto
+    // legacy nombra a un cliente conocido (con otra grafía/espacios/mayúsculas), se
+    // devuelve su nombre canónico. Si no, el dropdown de Cliente listaba el mismo
+    // cliente dos veces —una canónica (grupo/manual) y otra con el texto crudo—, que
+    // es exactamente lo que se veía como "clientes duplicados/mal escritos". Sólo si
+    // el legacy no matchea ningún cliente se devuelve el texto tal cual (último
+    // recurso para proyectos viejos sin contraparte cargada).
     const legacy = project.customerName || project.client
-    if (legacy) return { client: legacy, source: 'legacy', reason: null }
+    if (legacy) {
+      const canonical = byKey.get(normalizeClientKey(legacy))
+      return { client: canonical || legacy, source: 'legacy', reason: null }
+    }
 
     // 4. Sin cliente, con el motivo que dice dónde arreglarlo.
     return { client: null, source: null, reason: group ? GROUP_UNCLAIMED : NO_GROUP }
