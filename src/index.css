@@ -3766,9 +3766,9 @@ th.col-pop { text-align: center; }
   width: auto;
   user-select: none;
   -webkit-user-drag: none;
-  /* El color del logo lo resuelve Sidebar.jsx eligiendo la variante del SVG según
-     el tema (blanco en dark, negro en claro). No se aplica invert acá: invertía
-     también el gradiente de marca del ícono y lo volvía naranja en tema claro. */
+  /* No se aplica invert: invertía también el gradiente de marca del ícono y lo
+     volvía naranja en tema claro. La variante del SVG (texto blanco / texto
+     oscuro, gradiente intacto) la elige Sidebar.jsx según el tema activo. */
 }
 
 /* Wordmark "DESK" al lado del logo. */
