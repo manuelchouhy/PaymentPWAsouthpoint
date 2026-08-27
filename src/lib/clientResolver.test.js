@@ -55,6 +55,22 @@ test('texto legacy (customerName) resuelve cuando no hay clientId ni grupo', () 
   assert.deepEqual(r, { client: 'QA Customer Corp', source: 'legacy', reason: null })
 })
 
+test('texto legacy que nombra a un cliente conocido se canonicaliza (no duplica)', () => {
+  const resolve = buildClientResolver(CLIENTS)
+  // El proyecto trae 'hss' en el customer_name legacy; el grupo no matchea acá,
+  // pero ese texto nombra al mismo cliente que 'HSS' (alias) → debe devolver el
+  // nombre canónico 'HSSStaffing', no el texto crudo, para no listar dos veces al
+  // mismo cliente en el dropdown de Cliente.
+  const r = resolve({ customerName: '  hss ' })
+  assert.deepEqual(r, { client: 'HSSStaffing', source: 'legacy', reason: null })
+})
+
+test('texto legacy sin cliente conocido sigue devolviendo el texto crudo', () => {
+  const resolve = buildClientResolver(CLIENTS)
+  const r = resolve({ customerName: 'Cliente Viejo Sin Alta' })
+  assert.deepEqual(r, { client: 'Cliente Viejo Sin Alta', source: 'legacy', reason: null })
+})
+
 test('clientId colgado (cliente borrado) cae al grupo, no a sin-cliente', () => {
   const resolve = buildClientResolver(CLIENTS)
   const r = resolve({ clientId: 999, zohoProjectGroup: 'HSS' })

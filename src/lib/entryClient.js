@@ -62,10 +62,12 @@ export function findProjectForEntry(entry, index) {
 /**
  * Completa `client` en cada entry derivándolo del proyecto (por id → nombre) y
  * del cliente resuelto (clientResolver). El valor propio de la entry gana si
- * existe: si algún día Zoho manda el cliente en la hora, ese es dato de primera
- * mano. Adjunta `clientReason` (null si resolvió; 'group-unclaimed' | 'no-group'
- * si no) para que Billing pueda explicar, en el bucket "Sin cliente", por qué una
- * hora quedó sin cliente.
+ * existe (dato de primera mano de Zoho), pero se CANONICALIZA contra la lista de
+ * clientes: el sync puede mandarlo con grafía no canónica (mayúsculas/espacios/
+ * alias) y, sin canonicalizar, el mismo cliente salía dos veces en el filtro (uno
+ * crudo de la hora, otro canónico del proyecto). Adjunta `clientReason` (null si
+ * resolvió; 'group-unclaimed' | 'no-group' si no) para que Billing pueda explicar,
+ * en el bucket "Sin cliente", por qué una hora quedó sin cliente.
  *
  * @param {Array<object>} entries
  * @param {Array<object>} projects
@@ -76,7 +78,13 @@ export function deriveEntriesClient(entries = [], projects = [], clients = []) {
   const index = buildProjectIndex(projects)
   const resolve = buildClientResolver(clients)
   return entries.map((entry) => {
-    if (entry.client) return { ...entry, clientReason: null }
+    if (entry.client) {
+      // Canonicaliza el cliente propio de la hora contra la lista de clientes: si el
+      // texto de Zoho nombra a un cliente cargado —con otra grafía o alias— colapsa a
+      // su nombre canónico; si no matchea a nadie (o es ambiguo), se conserva tal cual.
+      const canonical = resolve.canonicalizeName(entry.client)
+      return { ...entry, client: canonical || entry.client, clientReason: null }
+    }
     const project = findProjectForEntry(entry, index)
     const resolution = project ? resolve(project) : { client: null, reason: NO_GROUP }
     return { ...entry, client: resolution.client ?? '', clientReason: resolution.reason ?? null }
