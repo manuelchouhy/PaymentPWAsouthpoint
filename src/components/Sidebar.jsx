@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
+import { useTheme } from '../lib/theme'
 import {
   LayoutDashboard,
   Building2,
@@ -98,11 +99,18 @@ export function Sidebar({ can, open, onNavigate, user, profile, onSignOut }) {
   // para intercalar el divisor entre ambos tramos.
   const activeItems = NAV_ITEMS.filter((item) => !item.disabled)
   const deferredItems = NAV_ITEMS.filter((item) => item.disabled)
+  // El SVG tiene dos partes: el texto (blanco/oscuro) y el ícono con gradiente
+  // de marca. Invertir la imagen entera —como se hacía antes— invertía también
+  // el gradiente y lo volvía naranja en tema claro. En su lugar hay dos variantes
+  // del SVG (texto blanco / texto oscuro, gradiente intacto) y se sirve solo la
+  // del tema activo, para no bajar los ~67 KB de la otra en cada carga.
+  const { theme } = useTheme()
+  const logoSrc = theme === 'dark' ? '/sp_techlabs_blanco.svg' : '/sp_techlabs_negro.svg'
   return (
     <aside className={`sidebar${open ? ' is-open' : ''}`}>
       <div className="sidebar__brand">
         <img
-          src="/sp_techlabs_blanco.svg"
+          src={logoSrc}
           alt="Southpoint Tech Labs"
           className="sidebar__logo"
         />
