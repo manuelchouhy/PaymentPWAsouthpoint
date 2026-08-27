@@ -5,7 +5,7 @@ import { AlertTriangle, ArrowRight, Info } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatHours, formatWeek, sundayWeekYear } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
-import { useEntryFilters, applyEntryFilters, buildFilterOptions } from '../lib/useEntryFilters'
+import { useEntryFilters, applyEntryFilters, buildFilterOptions, sortedUnique, clientFilterOptions, OTHER_CLIENT } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
 import { groupBillToClient, groupReadonly } from '../lib/billingGrouping'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
@@ -17,9 +17,6 @@ import { EntryDetailDrawer } from '../components/EntryDetailDrawer'
 import { BillingBadge } from '../components/BillingBadge'
 import { Avatar } from '../components/Avatar'
 import { ALLOCATION_LABELS } from '../lib/allocations'
-
-const sortedUnique = (values) =>
-  [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
 
 // Un proyecto se identifica por cliente + nombre, no por nombre solo.
 const sowKey = (client, projectName) => `${client ?? ''}||${projectName ?? ''}`
@@ -269,24 +266,33 @@ export function BillingPage() {
   //    559 entries tienen client vacío. Arreglarlo pide una opción explícita
   //    tipo "—" en MultiSelectDropdown, que es compartido por varias pantallas:
   //    va en su propio slice.
-  const options = useMemo(
-    () => buildFilterOptions(entriesConCliente, filters, invoiceByEntryId),
-    [entriesConCliente, filters, invoiceByEntryId],
+  // Nombres del maestro (los mismos que la página Clients): con este Set el
+  // filtro de Cliente agrupa bajo "Others" a los clientes que no están en él.
+  const masterNames = useMemo(
+    () => new Set(clients.map((c) => c.clientName).filter(Boolean)),
+    [clients],
   )
 
-  // El desplegable Client lista TODOS los clientes del maestro, no sólo los que
-  // hoy tienen horas: así un cliente sin tiempo cargado (p. ej. un grupo de Zoho
-  // recién creado) sigue siendo elegible. Se une con los que aparecen en las
-  // entries por si alguno resuelve a un nombre que no está en el maestro.
+  const options = useMemo(
+    () => buildFilterOptions(entriesConCliente, filters, invoiceByEntryId, masterNames),
+    [entriesConCliente, filters, invoiceByEntryId, masterNames],
+  )
+
+  // El desplegable Client lista SÓLO los clientes del maestro (mismos que la
+  // página Clients), no los nombres legacy sueltos; las horas que resuelven a un
+  // cliente fuera del maestro —o sin cliente— se agrupan bajo el centinela Others.
+  // Mismo criterio que Entries y Projects. Que Others aparezca se decide sobre lo
+  // scoped (options.clients, cruzado con los otros filtros). (El agrupado bill-to y
+  // la columna siguen mostrando el nombre real.)
   const clientOptions = useMemo(
-    () => sortedUnique([...options.clients, ...clients.map((c) => c.clientName)]),
-    [options.clients, clients],
+    () => clientFilterOptions(clients, options.clients.includes(OTHER_CLIENT)),
+    [clients, options.clients],
   )
 
   // Todas las filas que pasan los filtros del usuario, sin mirar allocation.
   const filteredAllAllocations = useMemo(
-    () => applyEntryFilters(entriesConCliente, filters, invoiceByEntryId),
-    [entriesConCliente, filters, invoiceByEntryId],
+    () => applyEntryFilters(entriesConCliente, filters, invoiceByEntryId, masterNames),
+    [entriesConCliente, filters, invoiceByEntryId, masterNames],
   )
 
   // La grilla y "Pending to bill" miran sólo horas facturables al cliente:

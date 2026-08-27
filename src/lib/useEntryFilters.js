@@ -32,6 +32,24 @@ export const UNALLOCATED = 'unallocated'
 // sin tener que tildar las 4 categorías una por una.
 export const ALLOCATED = 'allocated'
 
+// Centinela del filtro de Cliente: agrupa bajo una sola opción a todo lo que NO
+// está en el maestro de clientes (nombre legacy o cliente sin resolver), para que
+// el desplegable liste exactamente los clientes de la página Clients + esta. Lo
+// comparten Entries, Billing y Projects.
+export const OTHER_CLIENT = 'Others (not in Clients)'
+
+/**
+ * Clave con la que un cliente resuelto entra al filtro de Cliente: el nombre del
+ * maestro tal cual si está en él, o el centinela Others si no (legacy o vacío).
+ * La usan por igual el matcheo (applyEntryFilters) y las opciones
+ * (buildFilterOptions) para que el dropdown y el filtro hablen del mismo valor.
+ * @param {string} client
+ * @param {Set<string>} masterClients
+ * @returns {string}
+ */
+export const clientFilterKey = (client, masterClients) =>
+  masterClients.has(client) ? client : OTHER_CLIENT
+
 /**
  * @param {Partial<typeof EMPTY_FILTERS>} [initial] filtros de arranque — los usa
  *   Client Summary al mandar a Entries ya filtrado por cliente/proyecto. Sólo
@@ -90,9 +108,27 @@ const OPTION_DIMENSIONS = {
 }
 
 // localeCompare 'es': un .sort() plano manda los acentuados (Álvaro, Ñandú) al
-// final del dropdown, donde nadie los busca.
-const sortedUnique = (values) =>
+// final del dropdown, donde nadie los busca. Exportada porque las páginas con
+// filtro de Cliente (Entries, Billing) arman su lista de opciones uniendo los
+// clientes derivados de las filas con el maestro, y necesitan el mismo criterio
+// de orden/deduplicación.
+export const sortedUnique = (values) =>
   [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
+
+/**
+ * Opciones del desplegable de Cliente: los nombres del maestro (los mismos que la
+ * página Clients), ordenados, más el centinela Others al final SÓLO si `hasOther`.
+ * Lo comparten Entries, Billing y Projects para que la lista se arme igual en las
+ * tres (cada una calcula `hasOther` a su manera: scoped por buildFilterOptions en
+ * Entries/Billing, sobre los proyectos resueltos en Projects).
+ * @param {Array<{clientName?: string}>} clients  maestro de clientes
+ * @param {boolean} hasOther  hay al menos una fila cuyo cliente cae fuera del maestro
+ * @returns {string[]}
+ */
+export const clientFilterOptions = (clients, hasOther) => {
+  const names = sortedUnique(clients.map((c) => c.clientName))
+  return hasOther ? [...names, OTHER_CLIENT] : names
+}
 
 /**
  * Opciones entrelazadas de los multi-selects: cada lista se arma sobre las
@@ -119,13 +155,21 @@ const sortedUnique = (values) =>
  * @param {import('./data').TimeEntry[]} entries
  * @param {typeof EMPTY_FILTERS} filters
  * @param {Map<string, {status: string}>} invoiceByEntryId
+ * @param {Set<string>} [masterClients] si viene, la dimensión Cliente ofrece las
+ *   mismas claves que matchea el filtro (nombre del maestro o centinela Others).
  * @returns {{contractors: string[], clients: string[], projects: string[], tasks: string[]}}
  */
-export function buildFilterOptions(entries, filters, invoiceByEntryId) {
+export function buildFilterOptions(entries, filters, invoiceByEntryId, masterClients) {
   const options = {}
   for (const [key, pick] of Object.entries(OPTION_DIMENSIONS)) {
-    const scoped = applyEntryFilters(entries, { ...filters, [key]: [] }, invoiceByEntryId)
-    options[key] = sortedUnique([...scoped.map(pick), ...(filters[key] ?? [])])
+    const scoped = applyEntryFilters(entries, { ...filters, [key]: [] }, invoiceByEntryId, masterClients)
+    // El dropdown de Cliente ofrece las claves del filtro (nombre del maestro o
+    // Others); el resto de dimensiones, su valor crudo.
+    const pickValue =
+      key === 'clients' && masterClients
+        ? (entry) => clientFilterKey(entry.client, masterClients)
+        : pick
+    options[key] = sortedUnique([...scoped.map(pickValue), ...(filters[key] ?? [])])
   }
   return options
 }
@@ -136,17 +180,21 @@ export function buildFilterOptions(entries, filters, invoiceByEntryId) {
  * @param {import('./data').TimeEntry[]} entries
  * @param {typeof EMPTY_FILTERS} filters
  * @param {Map<string, {status: string}>} invoiceByEntryId  mapa id→factura para resolver Billing Status
+ * @param {Set<string>} [masterClients] si viene, el filtro de Cliente matchea por
+ *   clave (nombre del maestro o centinela Others); si no, por el valor crudo de
+ *   entry.client (comportamiento previo, para los llamadores que no derivan cliente).
  * @returns {import('./data').TimeEntry[]}
  */
-export function applyEntryFilters(entries, filters, invoiceByEntryId) {
+export function applyEntryFilters(entries, filters, invoiceByEntryId, masterClients) {
   const week = filters.week ? Number(filters.week) : null
 
   return entries.filter((entry) => {
     if (filters.contractors.length && !filters.contractors.includes(entry.user)) {
       return false
     }
-    if (filters.clients.length && !filters.clients.includes(entry.client)) {
-      return false
+    if (filters.clients.length) {
+      const clientValue = masterClients ? clientFilterKey(entry.client, masterClients) : entry.client
+      if (!filters.clients.includes(clientValue)) return false
     }
     if (filters.projects.length && !filters.projects.includes(entry.project)) {
       return false

@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { AlertTriangle, Info } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatDate, formatHours, formatWeek } from '../lib/format'
-import { useEntryFilters, applyEntryFilters, buildFilterOptions, UNALLOCATED, ALLOCATED } from '../lib/useEntryFilters'
+import { useEntryFilters, applyEntryFilters, buildFilterOptions, clientFilterOptions, OTHER_CLIENT, UNALLOCATED, ALLOCATED } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
 import { isEntryFrozen, entryFrozenReason } from '../lib/entryFreeze'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
@@ -57,6 +57,9 @@ export function EntriesPage() {
   // para el aviso con link a Billing. null = no hay Apply reciente que mostrar.
   const [applyNotice, setApplyNotice] = useState(null)
   const [entries, setEntries] = useState([])
+  // Maestro de clientes (página Clients): alimenta el dropdown de Client para que
+  // liste TODOS los clientes, no sólo los que hoy tienen horas resueltas.
+  const [clients, setClients] = useState([])
   const [invoices, setInvoices] = useState([])
   // Pagos: para congelar las horas de overage ya pagadas (entryFreeze).
   const [payments, setPayments] = useState([])
@@ -116,6 +119,7 @@ export function EntriesPage() {
       .then(([entryRows, invoiceRows, projectRows, clientRows, paymentRows]) => {
         if (cancelled) return
         setEntries(deriveEntriesClient(entryRows, projectRows, clientRows))
+        setClients(clientRows)
         setInvoices(invoiceRows)
         setPayments(paymentRows)
         // Los datos se releyeron: una selección armada sobre la tanda anterior
@@ -143,17 +147,36 @@ export function EntriesPage() {
     return map
   }, [invoices])
 
+  // Nombres del maestro (los mismos que la página Clients): con este Set el
+  // filtro de Cliente agrupa bajo "Others" a los clientes que no están en él.
+  const masterNames = useMemo(
+    () => new Set(clients.map((c) => c.clientName).filter(Boolean)),
+    [clients],
+  )
+
   // Listas entrelazadas: cada dropdown se arma sobre lo que pasa los otros
   // filtros (ver buildFilterOptions), así elegir un proyecto recorta la lista de
   // contractors a los que cargaron horas ahí. La semana sí puede vaciarlas —
   // está documentado en buildFilterOptions.
   const options = useMemo(
-    () => buildFilterOptions(entries, filters, invoiceByEntryId),
-    [entries, filters, invoiceByEntryId],
+    () => buildFilterOptions(entries, filters, invoiceByEntryId, masterNames),
+    [entries, filters, invoiceByEntryId, masterNames],
+  )
+
+  // El desplegable Client lista SÓLO los clientes del maestro (mismos que la
+  // página Clients), no los nombres legacy sueltos; los que resuelven a un cliente
+  // fuera del maestro —o sin cliente— se agrupan bajo el centinela Others. Mismo
+  // criterio que Billing y Projects. Que Others aparezca se decide sobre lo scoped
+  // (options.clients, que buildFilterOptions arma cruzando los otros filtros): si
+  // la semana/proyecto activos no dejan ninguna fila fuera del maestro, no se
+  // ofrece —igual que el resto de los dropdowns entrelazados—.
+  const clientOptions = useMemo(
+    () => clientFilterOptions(clients, options.clients.includes(OTHER_CLIENT)),
+    [clients, options.clients],
   )
 
   const visible = useMemo(() => {
-    const filtered = applyEntryFilters(entries, filters, invoiceByEntryId)
+    const filtered = applyEntryFilters(entries, filters, invoiceByEntryId, masterNames)
     // Las sin clasificar primero SIEMPRE — son las que hay que triagear, y si
     // se mezclaran con las ya clasificadas se perderían de vista. Dentro de
     // cada grupo, la más reciente primero.
@@ -163,7 +186,7 @@ export function EntriesPage() {
       if (aPending !== bPending) return aPending ? -1 : 1
       return (b.date ?? '').localeCompare(a.date ?? '')
     })
-  }, [entries, filters, invoiceByEntryId])
+  }, [entries, filters, invoiceByEntryId, masterNames])
 
   // Al cambiar los filtros se vuelve a la primera tanda: mantener el "ver más"
   // acumulado de la búsqueda anterior mostraría un conteo que no se pidió.
@@ -409,7 +432,7 @@ export function EntriesPage() {
             <div className="filterbar__controls">
               <MultiSelectDropdown
                 label="Client"
-                options={options.clients}
+                options={clientOptions}
                 selected={filters.clients}
                 onToggle={(v) => toggleValue('clients', v)}
               />
