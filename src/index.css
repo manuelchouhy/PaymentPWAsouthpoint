@@ -3732,11 +3732,10 @@ th.col-pop { text-align: center; }
   width: auto;
   user-select: none;
   -webkit-user-drag: none;
-  /* El SVG es blanco: en tema claro se invierte a oscuro para que se vea; en dark
-     queda blanco tal cual. */
-  filter: invert(1);
+  /* No se aplica invert: invertía también el gradiente de marca del ícono y lo
+     volvía naranja en tema claro. La variante del SVG (texto blanco / texto
+     oscuro, gradiente intacto) la elige Sidebar.jsx según el tema activo. */
 }
-.dark .sidebar__logo { filter: none; }
 
 /* Wordmark "DESK" al lado del logo. */
 .sidebar__wordmark {
