@@ -226,7 +226,7 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
         <form className="modal__form" onSubmit={handleSubmit} noValidate>
           <div className="field">
             <label className="field__label" htmlFor="supplier-invoice-number">
-              Supplier invoice number
+              SouthPointLabs invoice number
               <span className="field__req">required</span>
             </label>
             <input
@@ -244,7 +244,7 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
             />
             {touched && !invoiceValid && (
               <span className="field__error">
-                Please enter the supplier invoice number.
+                Please enter the SouthPointLabs invoice number.
               </span>
             )}
           </div>
