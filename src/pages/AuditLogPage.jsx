@@ -11,13 +11,32 @@ const ACTIONS = [
   'payment.create',
   'project.create',
   'project.update',
+  'client.create',
+  'client.update',
+  'client.deactivate',
   'supplier_contract.create',
   'supplier_contract.update',
   'supplier_contract.renew',
   'supplier_contract.mark_renewal',
+  'change_request.create',
+  'change_request.approved',
+  'change_request.rejected',
+  'assignment.create',
+  'assignment.update_hours',
+  'entries.allocate',
 ]
 
-const RESOURCE_TYPES = ['invoice', 'collection', 'payment', 'project', 'supplier_contract']
+const RESOURCE_TYPES = [
+  'invoice',
+  'collection',
+  'payment',
+  'project',
+  'client',
+  'supplier_contract',
+  'change_request',
+  'provider_assignment',
+  'time_entries',
+]
 
 const EMPTY_FILTERS = { search: '', action: '', resourceType: '', dateFrom: '', dateTo: '' }
 

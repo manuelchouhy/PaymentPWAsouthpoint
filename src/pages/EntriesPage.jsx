@@ -456,10 +456,18 @@ export function EntriesPage() {
               las filas de arriba, y había que bajar para encontrar el Apply. */}
           {canAllocate && selectedIds.size > 0 && (
             <div className="selbar">
-              <span className="selbar__count">
-                Selected: <b>{formatHours(selectedHours)} h</b> · {selectedIds.size}{' '}
-                {selectedIds.size === 1 ? 'entry' : 'entries'}
-              </span>
+              {/* Métrica de la selección con el mismo estilo big-number de las KPI
+                  cards del dashboard (label / valor mono / hint). */}
+              <div className="selbar__selected">
+                <span className="selbar__selected-label">Selected</span>
+                <span className="selbar__selected-value">
+                  {formatHours(selectedHours)}
+                  <span className="selbar__selected-unit"> h</span>
+                </span>
+                <span className="selbar__selected-hint">
+                  {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'}
+                </span>
+              </div>
               <div className="selbar__action">
                 <span className="selbar__label">Set allocation</span>
                 <select
