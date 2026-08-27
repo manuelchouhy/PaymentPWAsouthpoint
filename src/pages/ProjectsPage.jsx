@@ -9,6 +9,8 @@ import {
   daysRemaining,
 } from '../lib/projectsData'
 import { api } from '../lib/api'
+import { buildClientResolver } from '../lib/clientResolver'
+import { clientFilterKey, clientFilterOptions } from '../lib/useEntryFilters'
 import { formatDate } from '../lib/format'
 import { ContractBadge } from '../components/ContractBadge'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
@@ -18,6 +20,11 @@ import { ProjectDetailCarousel } from '../components/ProjectDetailCarousel'
 import { Toast } from '../components/Toast'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { exportGrid } from '../lib/exportGrid'
+
+// El centinela del filtro de Cliente (OTHER_CLIENT) vive en useEntryFilters, la
+// misma fuente que usan Entries y Billing: agrupa los proyectos cuyo cliente
+// resuelto NO está en el maestro (legacy o sin cliente), que si no quedarían
+// fuera de todo filtro. Se agrega al dropdown sólo si existe alguno.
 
 // Ordena por vencimiento ascendente; los proyectos sin fecha de contrato
 // (recién traídos de Zoho) van al final.
@@ -31,6 +38,9 @@ const sortByExp = (list) =>
 export function ProjectsPage() {
   const { user, profile, can } = useOutletContext()
   const [projects, setProjects] = useState([])
+  // Maestro de clientes (página Clients): resuelve el cliente de cada proyecto por
+  // la cadena grupo→cliente y alimenta el dropdown con TODOS los clientes.
+  const [clients, setClients] = useState([])
   const [status, setStatus] = useState('loading')
   const [filters, setFilters] = useState({
     clients: [],
@@ -48,10 +58,22 @@ export function ProjectsPage() {
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
-    api.projects.list()
-      .then((data) => {
+    // clients alimenta el filtro de Cliente (resolver grupo→cliente + lista del
+    // maestro), pero NO es esencial para ver los proyectos: si su fetch falla
+    // (permisos, modo http donde clients.list no está implementado, red), se
+    // degrada a [] y la grilla igual se muestra; sólo se ve el filtro sin
+    // resolver. Antes Projects cargaba independiente de la tabla clients.
+    // El fetch se envuelve en Promise.resolve().then(...) porque el stub http
+    // (notImplemented) LANZA de forma síncrona: un `.catch` pelado no lo atraparía
+    // —el throw ocurre al construir el array, antes de encadenar el catch—.
+    const clientsList = Promise.resolve()
+      .then(() => api.clients.list())
+      .catch(() => [])
+    Promise.all([api.projects.list(), clientsList])
+      .then(([projectRows, clientRows]) => {
         if (cancelled) return
-        setProjects(data)
+        setProjects(projectRows)
+        setClients(clientRows)
         setStatus('ready')
       })
       .catch((error) => {
@@ -64,9 +86,36 @@ export function ProjectsPage() {
     }
   }, [])
 
+  // Cliente resuelto de cada proyecto (cadena manual→grupo→legacy; ver
+  // clientResolver). Un proyecto cuyo grupo de Zoho es "GS3" resuelve al cliente
+  // "GS3" aunque el texto plano projects.client venga vacío. Se guarda en un
+  // campo aparte (resolvedClient) para NO pisar projects.client, que detail/edit
+  // siguen usando tal cual llega del sync.
+  const withClient = useMemo(() => {
+    const resolve = buildClientResolver(clients)
+    // resolve() ya cae al texto legacy (customerName || client) en su último paso,
+    // y sólo devuelve null cuando el proyecto no tiene ni grupo reclamado ni texto
+    // legacy — es decir, cuando p.client también está vacío. Por eso alcanza con
+    // `?? ''`; un `?? p.client` extra sería código muerto.
+    return projects.map((p) => ({ ...p, resolvedClient: resolve(p).client ?? '' }))
+  }, [projects, clients])
+
+  // Nombres del maestro (los mismos que la página Clients), para saber qué
+  // resolvedClient cae "en el maestro" y qué cae en el centinela Others.
+  const masterNames = useMemo(
+    () => new Set(clients.map((c) => c.clientName).filter(Boolean)),
+    [clients],
+  )
+
+  // El desplegable Client lista SÓLO los clientes del maestro; cada proyecto se
+  // filtra por el cliente que resuelve su Project Group (resolvedClient). Los
+  // proyectos cuyo resolvedClient no está en el maestro (legacy o sin cliente) se
+  // agrupan bajo la opción centinela Others, que se agrega al final sólo si hay al
+  // menos uno — así la lista queda idéntica a la de Clients sin dejar esos
+  // proyectos fuera de todo filtro. Mismo armado que Entries y Billing.
   const clientOptions = useMemo(
-    () => [...new Set(projects.map((p) => p.client).filter(Boolean))].sort(),
-    [projects],
+    () => clientFilterOptions(clients, withClient.some((p) => !masterNames.has(p.resolvedClient))),
+    [clients, withClient, masterNames],
   )
   const leadDevOptions = useMemo(
     () => [...new Set(projects.map((p) => p.leadDeveloper).filter(Boolean))].sort(),
@@ -76,8 +125,15 @@ export function ProjectsPage() {
   const statusCounts = useMemo(() => countByStatus(projects), [projects])
 
   const visible = useMemo(() => {
-    const filtered = projects.filter((p) => {
-      if (filters.clients.length && !filters.clients.includes(p.client)) return false
+    const filtered = withClient.filter((p) => {
+      if (filters.clients.length) {
+        // La clave del proyecto es su cliente del maestro, o el centinela Others si
+        // resuelve fuera de él (legacy o sin cliente) — mismo criterio que
+        // applyEntryFilters usa en Entries/Billing (clientFilterKey).
+        if (!filters.clients.includes(clientFilterKey(p.resolvedClient, masterNames))) {
+          return false
+        }
+      }
       if (
         filters.leadDevelopers.length &&
         !filters.leadDevelopers.includes(p.leadDeveloper)
@@ -93,7 +149,7 @@ export function ProjectsPage() {
       return true
     })
     return sortByExp(filtered)
-  }, [projects, filters, statusFilter])
+  }, [withClient, filters, statusFilter, masterNames])
 
   const toggle = (key, value) =>
     setFilters((prev) => ({
@@ -123,6 +179,8 @@ export function ProjectsPage() {
     ]
     const exportRows = visible.map((p) => ({
       ...p,
+      // La columna Client del export usa el cliente resuelto, igual que la grilla.
+      client: p.resolvedClient || '',
       contractStatus: contractStatus(daysRemaining(p.contractExpirationDate)),
       daysLeft: daysRemaining(p.contractExpirationDate),
     }))
@@ -483,7 +541,7 @@ export function ProjectsPage() {
                         onClick={() => setDetail(p)}
                         title={`View ${p.projectName}`}
                       >
-                        <td>{p.client}</td>
+                        <td>{p.resolvedClient || '—'}</td>
                         <td className="cell-strong">{p.projectName}</td>
                         <td className="cell-mono">{p.projectNumber}</td>
                         <td>
