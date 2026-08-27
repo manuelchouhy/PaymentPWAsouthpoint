@@ -79,11 +79,10 @@ export function deriveEntriesClient(entries = [], projects = [], clients = []) {
   const resolve = buildClientResolver(clients)
   return entries.map((entry) => {
     if (entry.client) {
-      // Canonicaliza el cliente propio de la hora contra la misma clave normalizada
-      // que usa el resolver (paso legacy: proyecto sintético sólo-texto). Si el
-      // texto de Zoho nombra a un cliente cargado —con otra grafía o alias— colapsa
-      // a su nombre canónico; si no matchea a nadie, se conserva tal cual.
-      const canonical = resolve({ customerName: entry.client }).client
+      // Canonicaliza el cliente propio de la hora contra la lista de clientes: si el
+      // texto de Zoho nombra a un cliente cargado —con otra grafía o alias— colapsa a
+      // su nombre canónico; si no matchea a nadie (o es ambiguo), se conserva tal cual.
+      const canonical = resolve.canonicalizeName(entry.client)
       return { ...entry, client: canonical || entry.client, clientReason: null }
     }
     const project = findProjectForEntry(entry, index)

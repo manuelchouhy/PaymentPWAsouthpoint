@@ -68,7 +68,15 @@ export function buildClientResolver(clients = []) {
     if (client?.zohoGroupName) claimKey(normalizeClientKey(client.zohoGroupName), client.clientName)
   }
 
-  return function resolve(project) {
+  // Canonicaliza un texto libre (nombre de cliente o alias de grupo) contra la
+  // misma clave normalizada del índice. Devuelve el nombre canónico, o null si no
+  // matchea ningún cliente o si la clave es ambigua (dos clientes la reclaman). Se
+  // expone en `resolve.canonicalizeName` para que entryClient canonicalice el
+  // cliente crudo de la hora con ESTA misma lógica, sin duplicarla ni fabricar un
+  // proyecto sintético.
+  const canonicalizeName = (name) => byKey.get(normalizeClientKey(name)) ?? null
+
+  function resolve(project) {
     if (!project) return { client: null, source: null, reason: NO_GROUP }
 
     // 1. Override manual.
@@ -96,11 +104,13 @@ export function buildClientResolver(clients = []) {
     // recurso para proyectos viejos sin contraparte cargada).
     const legacy = project.customerName || project.client
     if (legacy) {
-      const canonical = byKey.get(normalizeClientKey(legacy))
-      return { client: canonical || legacy, source: 'legacy', reason: null }
+      return { client: canonicalizeName(legacy) || legacy, source: 'legacy', reason: null }
     }
 
     // 4. Sin cliente, con el motivo que dice dónde arreglarlo.
     return { client: null, source: null, reason: group ? GROUP_UNCLAIMED : NO_GROUP }
   }
+
+  resolve.canonicalizeName = canonicalizeName
+  return resolve
 }
