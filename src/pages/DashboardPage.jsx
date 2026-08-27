@@ -85,6 +85,9 @@ function last7DaysSeries(items, dateKey, valueKey) {
 // marcado y estilos (billing-dist) entre el reparto por estado de factura y el
 // reparto por allocation. Cada dato de `data` trae su propio `color` (así el
 // color no depende de matchear el label visible con un mapa externo).
+// `total` llega como prop a propósito (NO se deriva de `data`): es el total de
+// horas crudo, compartido por los dos donuts, para que ambos centros muestren el
+// mismo número. Sumar `data` reintroduciría el drift de redondeo entre donuts.
 function HoursDonut({ icon, title, data, total }) {
   return (
     <div className="dash-widget">
@@ -284,13 +287,27 @@ export function DashboardPage() {
       .filter((d) => d.value > 0)
   }, [data])
 
-  // El total del centro de cada donut es la suma de SUS PROPIOS buckets ya
-  // mostrados, así el número del medio siempre cuadra con la leyenda de al lado.
-  // Ambos repartos cubren las mismas entries y las horas vienen a 1 decimal, de modo
-  // que los dos centros dan el mismo número igual (la suma de valores de 1 decimal es
-  // exacta a 1 decimal — no hay drift de redondeo entre un donut y el otro).
-  const billingTotal = billingDist.reduce((sum, e) => sum + e.value, 0)
-  const allocationTotal = allocationDist.reduce((sum, e) => sum + e.value, 0)
+  // Ambos donuts reparten EXACTAMENTE las mismas entries (mismo data.entries,
+  // misma suma de e.hours), solo que particionadas distinto (por estado de factura
+  // vs por allocation). El total del centro tiene que ser el mismo en los dos, así
+  // que se calcula UNA vez sobre las horas crudas y se redondea una sola vez.
+  //
+  // Ojo: NO se suma billingDist/allocationDist, porque esos buckets ya vienen
+  // redondeados a 1 decimal y, al redondear por-bucket sobre particiones distintas,
+  // las dos sumas pueden diferir en 0.1 h (p. ej. dos entries de 0.25 h: juntas en un
+  // bucket dan 0.5; separadas en dos dan 0.3 + 0.3 = 0.6). Usar el total crudo evita
+  // ese drift entre los dos centros. Como contrapartida, en esos casos límite el
+  // centro puede diferir en 0.1 de la suma visible de su propia leyenda —el
+  // compromiso habitual de redondear las partes y el total por separado.
+  //
+  // Memoizado sobre [data] igual que billingDist/allocationDist (evita re-sumar
+  // todas las entries en cada render). Suma e.hours crudo, igual que el resto del
+  // componente (billingDist/allocationDist/kpis): confía en el tipo number, sin
+  // guards extra que solo cubrirían este consumidor y no los otros tres.
+  const totalHours = useMemo(
+    () => (data ? data.entries.reduce((sum, e) => sum + e.hours, 0) : 0),
+    [data],
+  )
 
   const now = new Date()
   const monthLabel = now.toLocaleString('en', { month: 'long', year: 'numeric' })
@@ -398,13 +415,13 @@ export function DashboardPage() {
               icon={<TrendingUp size={14} />}
               title="Billing Status Distribution"
               data={billingDist}
-              total={billingTotal}
+              total={totalHours}
             />
             <HoursDonut
               icon={<TrendingUp size={14} />}
               title="Allocation Hours Distribution"
               data={allocationDist}
-              total={allocationTotal}
+              total={totalHours}
             />
           </div>
 
