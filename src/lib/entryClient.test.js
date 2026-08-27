@@ -67,6 +67,15 @@ test('deriveEntriesClient: el valor propio de la entry gana', () => {
   assert.equal(e.client, 'Cliente Zoho')
 })
 
+test('deriveEntriesClient: el cliente propio de Zoho se canonicaliza (no duplica)', () => {
+  // Zoho manda la hora con 'hss' (minúsculas, espacios) — el mismo cliente que el
+  // proyecto resuelve como 'HSSStaffing'. Sin canonicalizar, el filtro listaba
+  // ambos; ahora colapsa al nombre canónico.
+  const [e] = deriveEntriesClient([{ id: 'e2b', client: '  hss ' }], PROJECTS, CLIENTS)
+  assert.equal(e.client, 'HSSStaffing')
+  assert.equal(e.clientReason, null)
+})
+
 test('deriveEntriesClient: hora de proyecto homónimo queda sin cliente (no el equivocado)', () => {
   const [e] = deriveEntriesClient([{ id: 'e3', project: 'Maintenance' }], PROJECTS, CLIENTS)
   assert.equal(e.client, '')
