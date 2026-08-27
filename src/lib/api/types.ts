@@ -67,8 +67,11 @@ export interface TimeEntry {
   date: string // ISO YYYY-MM-DD
   hours: number
   status: 'Approved' | 'Rejected'
-  /** null = sin clasificar (triage manual en Entries). */
-  allocation?: 'bill_to_client' | 'overage' | 'sp_internal' | null
+  /**
+   * null = sin clasificar (triage manual en Entries). 'unknown' es la categoría X
+   * (allocation real del CHECK 0034): una hora que no encaja en las otras tres.
+   */
+  allocation?: 'bill_to_client' | 'overage' | 'sp_internal' | 'unknown' | null
 }
 
 export type BillingStatus = 'Pending' | 'Invoiced' | 'Collected' | 'Paid'

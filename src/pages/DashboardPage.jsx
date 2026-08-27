@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { api } from '../lib/api'
+import { ALLOCATION_LABELS } from '../lib/allocations'
 import { ContractsExpiringWidget } from '../components/dashboard/ContractsExpiringWidget'
 import { SupplierContractsWidget } from '../components/dashboard/SupplierContractsWidget'
 import { Sparkline } from '../components/Sparkline'
@@ -23,6 +24,27 @@ const STATUS_COLORS = {
   Collected: '#00BFD4',
   Paid: '#10B981',
 }
+
+// Orden fijo del donut de allocation: sin clasificar primero, después las cuatro
+// categorías reales (null + los valores del CHECK 0034). El label sale del mapa
+// compartido ALLOCATION_LABELS para no divergir de Entries/Billing; null → "Unallocated".
+const ALLOCATION_ORDER = [null, 'bill_to_client', 'overage', 'sp_internal', 'unknown']
+const allocationName = (key) => (key == null ? 'Unallocated' : ALLOCATION_LABELS[key]?.label ?? key)
+
+// Colores del donut de allocation, keyados por la allocation KEY estable (no por el
+// label visible): así renombrar un label en ALLOCATION_LABELS no tira el color al
+// fallback. Espejan los badges badge--alloc-*: teal primary, naranja overage, violeta
+// SP internal, slate X. Unallocated (null) se resuelve aparte (mismo gris que Pending),
+// sin depender de que null coaccione a la string 'null' como clave de objeto.
+const UNALLOCATED_COLOR = '#52525B'
+const ALLOCATION_COLORS = {
+  bill_to_client: '#00BFD4',
+  overage: '#FB923C',
+  sp_internal: '#8B5CF6',
+  unknown: '#64748B',
+}
+const allocationColor = (key) =>
+  key == null ? UNALLOCATED_COLOR : ALLOCATION_COLORS[key] ?? '#6b7280'
 
 function addDaysISO(iso, days) {
   const [y, m, d] = iso.split('-').map(Number)
@@ -57,6 +79,74 @@ function last7DaysSeries(items, dateKey, valueKey) {
     if (iso in sums) sums[iso] += valueKey ? item[valueKey] : 1
   }
   return days.map((d) => sums[d])
+}
+
+// Donut de horas con el total en el centro y la leyenda a la derecha. Comparte
+// marcado y estilos (billing-dist) entre el reparto por estado de factura y el
+// reparto por allocation. Cada dato de `data` trae su propio `color` (así el
+// color no depende de matchear el label visible con un mapa externo).
+function HoursDonut({ icon, title, data, total }) {
+  return (
+    <div className="dash-widget">
+      <div className="dash-widget__head">
+        <span className="dash-widget__title">
+          {icon}
+          {title}
+        </span>
+      </div>
+      {data.length === 0 ? (
+        <p className="dash-widget__empty">No hour data available.</p>
+      ) : (
+        <div className="billing-dist">
+          {/* Donut con el total en el centro (como el mockup). */}
+          <div className="billing-dist__chart">
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie
+                  data={data}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={64}
+                  outerRadius={90}
+                  paddingAngle={2}
+                  dataKey="value"
+                  isAnimationActive={false}
+                >
+                  {data.map((entry) => (
+                    <Cell key={entry.key} fill={entry.color} stroke="transparent" />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value, name) => [`${value} h`, name]}
+                  contentStyle={{
+                    background: 'var(--surface)',
+                    border: '1px solid var(--line-strong)',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    color: 'var(--text)',
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="billing-dist__center" aria-hidden="true">
+              <span className="billing-dist__total">{total.toFixed(1)}</span>
+              <span className="billing-dist__unit">Hours</span>
+            </div>
+          </div>
+          {/* Leyenda a la derecha con las horas de cada categoría. */}
+          <ul className="billing-dist__legend">
+            {data.map((entry) => (
+              <li key={entry.key} className="billing-dist__row">
+                <span className="billing-dist__dot" style={{ background: entry.color }} />
+                <span className="billing-dist__name">{entry.name}</span>
+                <span className="billing-dist__val">{entry.value.toFixed(1)} h</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function DashboardPage() {
@@ -160,10 +250,47 @@ export function DashboardPage() {
     }
     return Object.entries(sums)
       .filter(([, v]) => v > 0)
-      .map(([name, value]) => ({ name, value: Number(value.toFixed(1)) }))
+      .map(([name, value]) => ({
+        key: name,
+        name,
+        value: Number(value.toFixed(1)),
+        color: STATUS_COLORS[name] ?? '#6b7280',
+      }))
   }, [data, invoiceByEntryId])
 
+  // Mismas horas que el donut de billing, pero repartidas por allocation en vez de
+  // por estado de factura. Las categorías conocidas (null + los 4 valores del CHECK
+  // 0034) se muestran en orden fijo; si apareciera una allocation fuera de ese set
+  // (p. ej. si el CHECK se ampliara) se agrega al final en vez de descartar sus horas
+  // en silencio. El color sale de la KEY estable, no del label visible.
+  const allocationDist = useMemo(() => {
+    if (!data) return []
+    const sums = new Map()
+    for (const e of data.entries) {
+      const key = e.allocation ?? null
+      sums.set(key, (sums.get(key) || 0) + e.hours)
+    }
+    const orderedKeys = [
+      ...ALLOCATION_ORDER,
+      ...[...sums.keys()].filter((k) => !ALLOCATION_ORDER.includes(k)),
+    ]
+    return orderedKeys
+      .map((key) => ({
+        key: key == null ? 'unallocated' : String(key),
+        name: allocationName(key),
+        value: Number((sums.get(key) || 0).toFixed(1)),
+        color: allocationColor(key),
+      }))
+      .filter((d) => d.value > 0)
+  }, [data])
+
+  // El total del centro de cada donut es la suma de SUS PROPIOS buckets ya
+  // mostrados, así el número del medio siempre cuadra con la leyenda de al lado.
+  // Ambos repartos cubren las mismas entries y las horas vienen a 1 decimal, de modo
+  // que los dos centros dan el mismo número igual (la suma de valores de 1 decimal es
+  // exacta a 1 decimal — no hay drift de redondeo entre un donut y el otro).
   const billingTotal = billingDist.reduce((sum, e) => sum + e.value, 0)
+  const allocationTotal = allocationDist.reduce((sum, e) => sum + e.value, 0)
 
   const now = new Date()
   const monthLabel = now.toLocaleString('en', { month: 'long', year: 'numeric' })
@@ -265,80 +392,26 @@ export function DashboardPage() {
             </Link>
           </div>
 
-          {/* Billing Status Chart + Contracts Expiring */}
+          {/* Dos donuts: horas por estado de factura y por allocation, lado a lado. */}
           <div className="dash-main">
-            <div className="dash-widget" style={{ maxWidth: 'none' }}>
-              <div className="dash-widget__head">
-                <span className="dash-widget__title">
-                  <TrendingUp size={14} />
-                  Billing Status Distribution
-                </span>
-              </div>
-              {billingDist.length === 0 ? (
-                <p className="dash-widget__empty">No hour data available.</p>
-              ) : (
-                <div className="billing-dist">
-                  {/* Donut con el total en el centro (como el mockup). */}
-                  <div className="billing-dist__chart">
-                    <ResponsiveContainer width="100%" height={200}>
-                      <PieChart>
-                        <Pie
-                          data={billingDist}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={64}
-                          outerRadius={90}
-                          paddingAngle={2}
-                          dataKey="value"
-                          isAnimationActive={false}
-                        >
-                          {billingDist.map((entry) => (
-                            <Cell
-                              key={entry.name}
-                              fill={STATUS_COLORS[entry.name] ?? '#6b7280'}
-                              stroke="transparent"
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value, name) => [`${value} h`, name]}
-                          contentStyle={{
-                            background: '#1a1a1f',
-                            border: '1px solid rgba(255,255,255,.12)',
-                            borderRadius: 8,
-                            fontSize: 12,
-                            color: '#e4e4e7',
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="billing-dist__center" aria-hidden="true">
-                      <span className="billing-dist__total">{billingTotal.toFixed(1)}</span>
-                      <span className="billing-dist__unit">Hours</span>
-                    </div>
-                  </div>
-                  {/* Leyenda a la derecha con las horas de cada estado. */}
-                  <ul className="billing-dist__legend">
-                    {billingDist.map((entry) => (
-                      <li key={entry.name} className="billing-dist__row">
-                        <span
-                          className="billing-dist__dot"
-                          style={{ background: STATUS_COLORS[entry.name] ?? '#6b7280' }}
-                        />
-                        <span className="billing-dist__name">{entry.name}</span>
-                        <span className="billing-dist__val">{entry.value.toFixed(1)} h</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-
-            <ContractsExpiringWidget limit={5} />
+            <HoursDonut
+              icon={<TrendingUp size={14} />}
+              title="Billing Status Distribution"
+              data={billingDist}
+              total={billingTotal}
+            />
+            <HoursDonut
+              icon={<TrendingUp size={14} />}
+              title="Allocation Hours Distribution"
+              data={allocationDist}
+              total={allocationTotal}
+            />
           </div>
 
-          {/* Supplier Contracts Widget */}
-          <div style={{ marginTop: 16 }}>
+          {/* Contracts + Supplier Contracts en dos columnas, para equilibrar el
+              ancho debajo de los donuts en vez de dejar la derecha vacía. */}
+          <div className="dash-secondary">
+            <ContractsExpiringWidget limit={5} />
             <SupplierContractsWidget />
           </div>
 

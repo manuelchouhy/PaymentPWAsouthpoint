@@ -777,8 +777,10 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .cell-user { display: inline-flex; align-items: center; gap: 9px; white-space: nowrap; }
 
 /* --- Dashboard: Billing Status Distribution (donut + leyenda) -------------- */
-.billing-dist { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
-.billing-dist__chart { position: relative; flex: 1 1 220px; min-width: 200px; }
+/* Donut + leyenda centrados como un par: el chart no crece para llenar todo el
+   ancho del widget (eso abría un hueco entre el donut y la leyenda). */
+.billing-dist { display: flex; align-items: center; justify-content: center; gap: 28px; flex-wrap: wrap; }
+.billing-dist__chart { position: relative; flex: 0 1 240px; min-width: 200px; }
 .billing-dist__center {
   position: absolute;
   inset: 0;
@@ -1083,6 +1085,38 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   font-family: var(--mono);
   font-size: 12px;
   color: var(--text-faint);
+}
+
+/* Métrica de selección de Entries: mismo estilo big-number que las KPI cards del
+   dashboard (.dash-kpi__label/__value/__unit/__hint), para que el conteo de horas
+   se lea igual en toda la app. */
+.selbar__selected {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.selbar__selected-label {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-faint);
+}
+.selbar__selected-value {
+  font-family: var(--mono);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.selbar__selected-unit {
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text-soft);
+}
+.selbar__selected-hint {
+  font-size: 11px;
+  color: var(--text-ghost);
 }
 
 .selbar__dot {
@@ -3732,11 +3766,10 @@ th.col-pop { text-align: center; }
   width: auto;
   user-select: none;
   -webkit-user-drag: none;
-  /* El SVG es blanco: en tema claro se invierte a oscuro para que se vea; en dark
-     queda blanco tal cual. */
-  filter: invert(1);
+  /* El color del logo lo resuelve Sidebar.jsx eligiendo la variante del SVG según
+     el tema (blanco en dark, negro en claro). No se aplica invert acá: invertía
+     también el gradiente de marca del ícono y lo volvía naranja en tema claro. */
 }
-.dark .sidebar__logo { filter: none; }
 
 /* Wordmark "DESK" al lado del logo. */
 .sidebar__wordmark {
@@ -4758,7 +4791,9 @@ select.field__input { cursor: pointer; }
 /* --- Dashboard page (Prompt 20) ------------------------------------------- */
 .dash-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  /* auto-fit (no auto-fill): los tracks se estiran para llenar el ancho en vez de
+     dejar columnas fantasma a la derecha con las cards agrupadas a la izquierda. */
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -4873,14 +4908,31 @@ select.field__input { cursor: pointer; }
   gap: 16px;
   margin-bottom: 0;
 }
+/* Los donuts (y los widgets de la fila secundaria) anulan el max-width:480px por
+   defecto de .dash-widget para llenar su columna del grid. */
+.dash-main .dash-widget,
+.dash-secondary .dash-widget { max-width: none; }
+
+/* Fila secundaria: Contracts (más ancho, es una lista) + Supplier Contracts.
+   Dos columnas para que el contenido llene el ancho y no quede la mitad derecha vacía. */
+.dash-secondary {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+  align-items: start;
+}
 
 @media (max-width: 760px) {
-  .dash-main { grid-template-columns: 1fr; }
+  .dash-main,
+  .dash-secondary { grid-template-columns: 1fr; }
 }
 
 .dash-actions {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  /* auto-fit: los botones se reparten el ancho completo en vez de amontonarse
+     a la izquierda dejando tracks vacíos. */
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 12px;
   margin-top: 16px;
 }
@@ -5050,7 +5102,7 @@ select.field__input { cursor: pointer; }
   .settings-grid { grid-template-columns: repeat(2, 1fr); }
 
   /* Dashboard action grid adjusts naturally via minmax, but give it a hint */
-  .dash-actions { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .dash-actions { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 
   /* Toolbar: let count go below the export button on tight widths */
   .toolbar { flex-wrap: wrap; gap: 10px; }
