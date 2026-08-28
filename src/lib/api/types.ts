@@ -66,7 +66,7 @@ export interface TimeEntry {
   notes: string
   date: string // ISO YYYY-MM-DD
   hours: number
-  status: 'Approved' | 'Rejected'
+  status: 'Approved' | 'Rejected' | 'Pending' // approval_status de Zoho
   /**
    * null = sin clasificar (triage manual en Entries). 'unknown' es la categoría X
    * (allocation real del CHECK 0034): una hora que no encaja en las otras tres.

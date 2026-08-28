@@ -218,6 +218,23 @@ const MOCK_TIME_ENTRIES = [
     status: 'Approved',
     allocation: 'bill_to_client',
   },
+  {
+    // Hora aún sin aprobar en Zoho (approval_status = Pending): sin clasificar y
+    // sin facturar. Existe para que el modo demo muestre el tercer estado del
+    // badge y la opción "Pending" del filtro de Status tenga al menos una fila.
+    id: 'te-13',
+    user: 'Diego Pérez',
+    client: 'Acme Analytics',
+    taskNumber: '2002',
+    project: 'Analytics Platform',
+    task: 'Development',
+    description: 'Ajustes de UI pendientes de revisión',
+    notes: 'A la espera de aprobación del líder',
+    date: demoDate(-2),
+    hours: 4,
+    status: 'Pending',
+    allocation: null,
+  },
 ]
 
 /** @type {Invoice[]} — 2 facturas de ejemplo (FR-05) sobre las mismas entries. */
