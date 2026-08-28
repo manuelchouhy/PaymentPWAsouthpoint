@@ -1,0 +1,44 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": [
+      "/assets/*",
+      "/*.{js,css,map,png,jpg,jpeg,gif,svg,ico,webp,webmanifest,woff,woff2,ttf,eot}"
+    ]
+  },
+  "routes": [
+    {
+      "route": "/",
+      "headers": {
+        "Cache-Control": "no-cache"
+      }
+    },
+    {
+      "route": "/index.html",
+      "headers": {
+        "Cache-Control": "no-cache"
+      }
+    },
+    {
+      "route": "/sw.js",
+      "headers": {
+        "Cache-Control": "no-cache"
+      }
+    },
+    {
+      "route": "/registerSW.js",
+      "headers": {
+        "Cache-Control": "no-cache"
+      }
+    },
+    {
+      "route": "/manifest.webmanifest",
+      "headers": {
+        "Cache-Control": "no-cache"
+      }
+    }
+  ],
+  "mimeTypes": {
+    ".webmanifest": "application/manifest+json"
+  }
+}
