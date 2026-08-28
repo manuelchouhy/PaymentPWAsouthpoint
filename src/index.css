@@ -1911,6 +1911,11 @@ th.col-pop { text-align: center; }
 
 .badge--ok { background: hsl(var(--success) / .15); color: hsl(var(--success)); border-color: hsl(var(--success) / .3); }
 .badge--no { background: hsl(var(--destructive) / .15); color: hsl(var(--destructive)); border-color: hsl(var(--destructive) / .3); }
+/* Aprobación Pending (columna Status): slate suave, neutral — "a la espera", ni
+   ok ni rechazado. Tinte suave como badge--ok/--no (no el gris sólido de
+   badge--pending, que es el chip de Billing Status y desentonaría en esta columna). */
+.badge--wait { background: rgba(100, 116, 139, .16); color: #475569; border-color: rgba(100, 116, 139, .34); }
+.dark .badge--wait { color: #94A3B8; }
 
 /* Billing Status · 4 estados, fondo sólido (Southpoint, Fase 2). */
 .badge--pending {

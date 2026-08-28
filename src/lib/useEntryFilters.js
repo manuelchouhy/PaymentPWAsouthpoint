@@ -17,6 +17,10 @@ const EMPTY_FILTERS = {
   projects: [],
   tasks: [],
   billingStatuses: [], // 'Pending' | 'Invoiced' | 'Collected' | 'Paid'
+  // Estado de aprobación de la entry (viene de Zoho approval_status y se guarda
+  // tal cual). Opciones fijas 'Approved' | 'Rejected' | 'Pending' — no se derivan
+  // de las entries, igual que billingStatuses.
+  statuses: [],
   // allocation de la entry. El valor null (sin clasificar) se representa con el
   // centinela 'unallocated' para poder tildarlo en el filtro — es justamente el
   // caso más buscado ("ver sólo lo que falta triagear").
@@ -87,6 +91,7 @@ export function useEntryFilters(initial) {
       filters.projects.length > 0 ||
       filters.tasks.length > 0 ||
       filters.billingStatuses.length > 0 ||
+      filters.statuses.length > 0 ||
       filters.allocations.length > 0 ||
       Boolean(filters.dateFrom) ||
       Boolean(filters.dateTo) ||
@@ -200,6 +205,13 @@ export function applyEntryFilters(entries, filters, invoiceByEntryId, masterClie
       return false
     }
     if (filters.tasks.length && !filters.tasks.includes(entry.task)) {
+      return false
+    }
+    // Estado de aprobación (Approved/Rejected/Pending): match exacto contra el
+    // valor guardado. Una entry con un status inesperado (fuera de los tres) no
+    // matchea ninguna opción, así que un filtro activo la oculta — coherente con
+    // el resto de los multi-selects.
+    if (filters.statuses.length && !filters.statuses.includes(entry.status)) {
       return false
     }
     if (filters.billingStatuses.length) {

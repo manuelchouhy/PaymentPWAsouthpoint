@@ -15,7 +15,7 @@
  * @property {string} notes
  * @property {string} date      ISO YYYY-MM-DD
  * @property {number} hours
- * @property {'Approved'|'Rejected'} status
+ * @property {'Approved'|'Rejected'|'Pending'} status  approval_status de Zoho
  *
  * @typedef {Object} Payment
  * @property {string|number} id

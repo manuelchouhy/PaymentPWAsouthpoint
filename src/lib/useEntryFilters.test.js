@@ -15,6 +15,7 @@ const base = {
   projects: [],
   tasks: [],
   billingStatuses: [],
+  statuses: [],
   allocations: [],
   dateFrom: '',
   dateTo: '',
@@ -57,6 +58,41 @@ test('selección puntual sigue funcionando y convive con ALLOCATED', () => {
   assert.deepEqual(
     ids(applyEntryFilters(entries, { ...base, allocations: ['overage', ALLOCATED] }, new Map())),
     [2, 3, 4],
+  )
+})
+
+// --- Filtro de Status de aprobación (Approved / Rejected / Pending) ----------
+// El status llega de Zoho (approval_status) y se guarda tal cual en la entry.
+// En producción hoy conviven Approved y Pending; Rejected lo contempla el modelo.
+const statusEntries = [
+  { id: 1, status: 'Approved' },
+  { id: 2, status: 'Pending' },
+  { id: 3, status: 'Rejected' },
+  { id: 4, status: 'Approved' },
+]
+
+test('sin filtro de status → todas', () => {
+  assert.deepEqual(ids(applyEntryFilters(statusEntries, base, new Map())), [1, 2, 3, 4])
+})
+
+test('un status → sólo las de ese status', () => {
+  const r = applyEntryFilters(statusEntries, { ...base, statuses: ['Approved'] }, new Map())
+  assert.deepEqual(ids(r), [1, 4])
+})
+
+test('varios status (OR) → cualquiera de los tildados', () => {
+  const r = applyEntryFilters(statusEntries, { ...base, statuses: ['Pending', 'Rejected'] }, new Map())
+  assert.deepEqual(ids(r), [2, 3])
+})
+
+test('status inesperado (fuera de los tres) → se oculta con filtro activo, se ve sin filtro', () => {
+  const weird = [{ id: 9, status: '' }, { id: 10, status: 'Whatever' }]
+  // Sin filtro de status: pasan las dos.
+  assert.deepEqual(ids(applyEntryFilters(weird, base, new Map())), [9, 10])
+  // Con filtro activo: ninguna matchea ninguna opción → se ocultan.
+  assert.deepEqual(
+    ids(applyEntryFilters(weird, { ...base, statuses: ['Approved', 'Rejected', 'Pending'] }, new Map())),
+    [],
   )
 })
 

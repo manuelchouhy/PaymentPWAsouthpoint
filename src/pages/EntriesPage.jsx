@@ -33,6 +33,11 @@ const PAGE_SIZE = 100
 // triagear; X = clasificada explícitamente como "no encaja en las otras".
 const ALLOCATION_FILTER_OPTIONS = [UNALLOCATED, ALLOCATED, 'bill_to_client', 'overage', 'sp_internal', 'unknown']
 
+// Opciones fijas del filtro de Status de aprobación (viene de Zoho, no se deriva
+// de las entries). Rejected se incluye aunque hoy no haya ninguna en la base: el
+// modelo lo contempla y el mock lo usa.
+const STATUS_FILTER_OPTIONS = ['Approved', 'Rejected', 'Pending']
+
 // Etiqueta visible de una allocation, usada por el filtro y el export. null o el
 // centinela UNALLOCATED → "unallocated" (sin clasificar); ALLOCATED → "allocated"
 // (ya aplicadas); 'unknown' → "X" (vía ALLOCATION_LABELS). Tolera claves
@@ -447,6 +452,15 @@ export function EntriesPage() {
                 options={options.contractors}
                 selected={filters.contractors}
                 onToggle={(v) => toggleValue('contractors', v)}
+              />
+              {/* Status de aprobación (Approved/Rejected/Pending): opciones fijas,
+                  NO entrelazadas — los tres estados existen en el modelo aunque
+                  no haya ninguna entry con ese status bajo los otros filtros. */}
+              <MultiSelectDropdown
+                label="Status"
+                options={STATUS_FILTER_OPTIONS}
+                selected={filters.statuses}
+                onToggle={(v) => toggleValue('statuses', v)}
               />
               {/* Opciones fijas, NO entrelazadas (a diferencia de Cliente /
                   Proyecto / Contractor, que se cruzan en buildFilterOptions).
