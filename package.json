@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:domo": "vite build --config vite.config.domo.js",
     "preview": "vite preview",
+    "preview:domo": "vite preview --config vite.config.domo.js",
     "icons": "node scripts/generate-icons.mjs",
     "test:unit": "node --test \"src/**/*.test.js\"",
     "test:e2e": "playwright test",

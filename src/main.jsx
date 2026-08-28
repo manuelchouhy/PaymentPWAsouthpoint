@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Route, Routes } from 'react-router-dom'
 import App from './App.jsx'
 import { Layout } from './components/Layout.jsx'
 import { ClientsPage } from './pages/ClientsPage.jsx'
@@ -24,10 +24,18 @@ import { DashboardPage } from './pages/DashboardPage.jsx'
 import { AuthGate } from './components/AuthGate.jsx'
 import { TestLoginPage } from './pages/TestLoginPage.jsx'
 import { can as checkCan } from './lib/permissions.js'
+import { isMockMode } from './lib/supabase.js'
 import { ThemeProvider } from './lib/theme.jsx'
 import './index.css'
 
 const isTestMode = import.meta.env.VITE_TEST_MODE === 'true'
+
+// En el bundle de DOMO (modo mock) usamos HashRouter: dentro del iframe sandbox
+// de DOMO (*.domoapps.com) la app no se sirve desde el root y no hay rewrite de
+// servidor, así que el routing por hash (#/) es el único robusto. El build web
+// mantiene BrowserRouter (URLs limpias). El flag viene de supabase.js (isMockMode)
+// para no duplicar la detección del modo mock.
+const Router = isMockMode ? HashRouter : BrowserRouter
 
 function AuthenticatedApp() {
   return (
@@ -78,7 +86,7 @@ function AuthenticatedApp() {
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider>
-      <BrowserRouter>
+      <Router>
         {isTestMode ? (
           <Routes>
             <Route path="/test-login" element={<TestLoginPage />} />
@@ -87,7 +95,7 @@ createRoot(document.getElementById('root')).render(
         ) : (
           <AuthenticatedApp />
         )}
-      </BrowserRouter>
+      </Router>
     </ThemeProvider>
   </StrictMode>,
 )

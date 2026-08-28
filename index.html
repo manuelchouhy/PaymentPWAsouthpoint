@@ -34,8 +34,16 @@
       // incorrecto). ThemeProvider (src/lib/theme.jsx) reactiva sobre esto
       // mismo una vez React monta.
       ;(function () {
-        var stored = localStorage.getItem('southpoint-theme')
-        var dark = stored ? stored === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+        // localStorage/matchMedia pueden tirar (p.ej. SecurityError) dentro de
+        // un iframe sandbox como el de DOMO (*.domoapps.com). Envolvemos todo:
+        // ante cualquier error caemos a tema claro y NO rompemos el primer paint.
+        var dark = false
+        try {
+          var stored = localStorage.getItem('southpoint-theme')
+          dark = stored ? stored === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+        } catch (e) {
+          try { dark = matchMedia('(prefers-color-scheme: dark)').matches } catch (_) { dark = false }
+        }
         document.documentElement.classList.toggle('dark', dark)
         var meta = document.getElementById('theme-color-meta')
         if (meta) meta.setAttribute('content', dark ? '#0A0A0A' : '#FAFAFA')

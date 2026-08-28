@@ -1,0 +1,12 @@
+{
+  "name": "SouthPoint Payments (demo)",
+  "version": "1.0.0",
+  "fullpage": true,
+  "size": {
+    "width": 4,
+    "height": 3
+  },
+  "fileName": "manifest.json",
+  "datasetsMapping": [],
+  "id": "6f352c55-ab46-40aa-a82a-d3a724cf837e"
+}

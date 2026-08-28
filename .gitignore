@@ -1,5 +1,6 @@
 node_modules
 dist
+dist-domo
 dist-ssr
 build
 *.local
@@ -17,6 +18,11 @@ dev-dist
 .env.*.local
 .env.*
 !.env.example
+# Excepción: el .env del build de DOMO NO tiene claves (solo VITE_FORCE_MOCK=true
+# + vars vacías). DEBE viajar en el repo/CI: si falta, el build de DOMO deja de
+# forzar mock y podría embeber credenciales reales del entorno. (Sólo se
+# re-incluye ese archivo puntual; domo/env/.env.local sigue ignorado por *.local.)
+!domo/env/.env
 
 # Logs
 *.log

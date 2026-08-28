@@ -16,7 +16,14 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
-    localStorage.setItem(STORAGE_KEY, theme)
+    // localStorage puede tirar (SecurityError) dentro de un iframe sandbox como
+    // el de DOMO; persistir la preferencia es best-effort, no debe romper el
+    // render. El tema visual ya se aplicó vía la clase de arriba.
+    try {
+      localStorage.setItem(STORAGE_KEY, theme)
+    } catch (e) {
+      /* almacenamiento no disponible: seguimos sin persistir */
+    }
     document.getElementById('theme-color-meta')
       ?.setAttribute('content', theme === 'dark' ? '#0A0A0A' : '#FAFAFA')
   }, [theme])
