@@ -32,7 +32,11 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        # npm install (no npm ci): el lockfile congela optional deps de Rolldown
+        # resueltas en Windows y el runner Linux necesita otras (ej.
+        # @emnapi/runtime), lo que rompe `npm ci`. npm install re-resuelve en el
+        # runner. Follow-up: regenerar el lock en Linux para volver a npm ci.
+        run: npm install --no-audit --no-fund
 
       - name: Build
         run: npm run build
