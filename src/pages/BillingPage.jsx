@@ -3,7 +3,7 @@ import { useOutletContext, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowRight, Info } from 'lucide-react'
 import { api } from '../lib/api'
-import { formatHours, formatWeek, sundayWeekYear } from '../lib/format'
+import { formatDate, formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, sortedUnique, clientFilterOptions, OTHER_CLIENT } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
@@ -76,6 +76,7 @@ function ReadonlyRows({ rows, showProvider = true, onDetail }) {
           <tr>
             {showProvider && <th scope="col">Provider</th>}
             <th scope="col">Project · task</th>
+            <th scope="col">Date</th>
             <th scope="col" className="col-num">Hours</th>
             <th scope="col" style={{ width: 40 }}>
               <span className="sr-only">Detail</span>
@@ -100,6 +101,7 @@ function ReadonlyRows({ rows, showProvider = true, onDetail }) {
                 {row.project || '—'}
                 {row.task && <div className="cell-soft">{row.task}</div>}
               </td>
+              <td className="cell-mono">{row.date ? formatDate(row.date) : '—'}</td>
               <td className="col-num cell-mono">{formatHours(row.hours)}</td>
               <DetailButtonCell
                 label={`View detail for ${row.project || 'entry'}`}
@@ -151,14 +153,10 @@ export function BillingPage() {
   // (read-only); 'all' = ambas. Las facturadas no son seleccionables.
   const [billStatusFilter, setBillStatusFilter] = useState('pending')
   // Fila mostrada en el drawer de detalle (o null): snapshot al momento del click,
-  // { entry, hours, count, periodLabel }. Una fila de Billing agrupa N entries de
-  // la misma terna proveedor·proyecto·task; en las tabs con semana (overage/SP
-  // internal/bill_to_client) es una semana domingo→sábado, pero la X (unknown, withWeeks:
-  // false) agrega a través de semanas. Por eso se guarda `entry` (primera, para
-  // los campos COMPARTIDOS: cliente/proyecto/task/allocation), las HORAS del total
-  // de la fila, el conteo y una etiqueta de período derivada de las entries reales
-  // (una semana, o "N weeks"). Es sólo-lectura y no edita nada, así que el snapshot
-  // no necesita re-resolverse contra la data viva. Ver el render del drawer.
+  // { entry, billStatus }. Cada fila de la grilla es UN log individual (groupRows
+  // emite una fila por hora), así que el snapshot guarda esa entry y el billStatus
+  // de la fila. Es sólo-lectura y no edita nada, así que no necesita re-resolverse
+  // contra la data viva. Ver el render del drawer.
   const [detailRow, setDetailRow] = useState(null)
   const { filters, toggleValue, clear, isActive } = useEntryFilters()
 
@@ -464,10 +462,10 @@ export function BillingPage() {
     return m
   }, [entriesConCliente, invoiceByEntryId])
 
-  // Índice de filas facturables por clave única (cliente·semana·terna). La
-  // selección y la factura trabajan a nivel de fila, no de cliente: una factura
-  // cubre UN proveedor, y la misma terna proveedor·proyecto·task puede caer en dos
-  // semanas y son filas distintas. El bucket "Sin cliente" no entra: no se factura.
+  // Índice de filas facturables por clave única (cliente·semana·log). La selección
+  // y la factura trabajan a nivel de fila, y cada fila es un log individual (una
+  // hora), así que se factura hora por hora; una factura cubre UN proveedor. El
+  // bucket "Sin cliente" no entra: no se factura.
   const billableRows = useMemo(() => {
     const map = new Map()
     for (const group of clientGroups) {
@@ -544,36 +542,15 @@ export function BillingPage() {
     })
   }
 
-  // Abre el drawer de detalle para una fila (ver detailRow). El período sale de
-  // las semanas domingo→sábado reales de las sub-entries: una sola → esa semana ("W32 · 2025",
-  // igual que el header de la grilla); varias (caso X, que agrega cross-week) →
-  // "N weeks". La dedup lleva el AÑO en la clave: dos años con el mismo número de
-  // semana domingo→sábado son semanas distintas (mismo criterio que weekId en billingGrouping),
-  // si no una fila W10-2025 + W10-2026 se etiquetaría como una sola semana.
+  // Abre el drawer de detalle para una fila. Cada fila es UN log (groupRows emite
+  // una fila por hora), así que el detalle es el de esa entry —con su fecha y sus
+  // horas propias—; el drawer resuelve la semana desde entry.date.
   function openRowDetail(row) {
-    const entries = row?.entries ?? []
-    const entry = entries[0]
+    const entry = row?.entries?.[0]
     if (!entry) return
-    const seen = new Set()
-    const labels = []
-    for (const e of entries) {
-      if (!e.date) continue
-      const key = `${sundayWeekYear(e.date)}-${formatWeek(e.date)}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      labels.push(`${formatWeek(e.date)} · ${sundayWeekYear(e.date)}`)
-    }
-    const periodLabel =
-      labels.length === 1 ? labels[0] : labels.length === 0 ? '—' : `${labels.length} weeks`
     // billStatus: estado de billing de la fila (bill_to_client). Para las filas de
     // las tabs de lectura (overage/SP/X) no aplica y queda null.
-    setDetailRow({
-      entry,
-      hours: row.hours,
-      count: entries.length,
-      periodLabel,
-      billStatus: row.billStatus ?? null,
-    })
+    setDetailRow({ entry, billStatus: row.billStatus ?? null })
   }
 
   function toggleWeek(id) {
@@ -630,6 +607,7 @@ export function BillingPage() {
       { header: 'Week', key: 'week' },
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
+      { header: 'Date', key: 'date' },
       { header: 'Reason', key: 'reason' },
       { header: 'Hours', key: 'hours' },
       { header: 'Entries', key: 'entries' },
@@ -651,6 +629,9 @@ export function BillingPage() {
             week: '—',
             project: project.project,
             task: '',
+            // Bucket "Sin cliente" agrega por proyecto (varios logs) → sin una
+            // fecha única que exportar.
+            date: '',
             reason: reasonLabel(project.reason),
             hours: project.hours,
             entries: project.entries.length,
@@ -666,6 +647,7 @@ export function BillingPage() {
               week: week.week,
               project: row.project,
               task: row.task,
+              date: row.date ? formatDate(row.date) : '',
               reason: '',
               hours: row.hours,
               entries: row.entries.length,
@@ -698,6 +680,7 @@ export function BillingPage() {
       { header: 'Week', key: 'week' },
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
+      { header: 'Date', key: 'date' },
       { header: 'Hours', key: 'hours' },
       { header: 'Entries', key: 'entries' },
     ]
@@ -709,6 +692,7 @@ export function BillingPage() {
         week: week ? week.week : '—',
         project: row.project || '',
         task: row.task || '',
+        date: row.date ? formatDate(row.date) : '',
         hours: row.hours,
         entries: row.entries.length,
       })
@@ -1187,6 +1171,7 @@ export function BillingPage() {
                                       )}
                                       <th scope="col">Provider</th>
                                       <th scope="col">Project · task</th>
+                                      <th scope="col">Date</th>
                                       <th scope="col" className="col-num">Hours</th>
                                       <th scope="col">Status</th>
                                       <th scope="col" style={{ width: 40 }}>
@@ -1269,6 +1254,9 @@ export function BillingPage() {
                                                 {sow}
                                               </div>
                                             )}
+                                          </td>
+                                          <td className="cell-mono">
+                                            {row.date ? formatDate(row.date) : '—'}
                                           </td>
                                           <td className="col-num cell-mono">
                                             {formatHours(row.hours)}
@@ -1375,14 +1363,9 @@ export function BillingPage() {
       )}
 
       {detailRow && (() => {
-        // Horas = total de la fila (no las de una sub-entry): es el número que
-        // importa al facturar. En filas multi-entry la nota de una sola sub-entry
-        // no representa la fila (se omite); el drawer muestra conteo + período en
-        // vez de la fecha de una sola. Fila de una sola entry → pasa igual.
-        const aggregate = detailRow.count > 1
-        const entry = aggregate
-          ? { ...detailRow.entry, hours: detailRow.hours, description: '', notes: '' }
-          : detailRow.entry
+        // Cada fila de la grilla es un log individual, así que el drawer muestra esa
+        // entry tal cual (sus horas ya son las de la fila).
+        const entry = detailRow.entry
         // Billing sólo aplica a lo facturable al cliente. Con el filtro de estado
         // (C9) la grilla puede mostrar filas facturadas, así que se usa el
         // billStatus real de la fila (Pending para pendientes; Invoiced/Collected/
@@ -1395,8 +1378,6 @@ export function BillingPage() {
             entry={entry}
             allocationLabel={entry.allocation ? ALLOCATION_LABELS[entry.allocation] : null}
             billingStatus={billingStatus}
-            entryCount={detailRow.count}
-            periodLabel={aggregate ? detailRow.periodLabel : null}
             onClose={() => setDetailRow(null)}
           />
         )

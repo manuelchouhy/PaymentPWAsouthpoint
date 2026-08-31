@@ -15,12 +15,30 @@ test('agrupa bill_to_client por cliente → semana → filas', () => {
   assert.equal(hss.client, 'HSS')
   assert.equal(hss.hours, 9)
   assert.equal(hss.weeks.length, 2)
-  // Más reciente arriba: la semana de 08-14/13 (6h), Ana·P1·T1 combinadas en 1 fila.
+  // UNA FILA POR LOG (sin combinar): la semana de 08-14/13 tiene 2 filas, 6h total.
   assert.equal(hss.weeks[0].hours, 6)
-  assert.equal(hss.weeks[0].rows.length, 1)
-  assert.equal(hss.weeks[0].rows[0].hours, 6)
+  assert.equal(hss.weeks[0].rows.length, 2)
+  // Ordenadas por fecha desc: el log del 14 (4h) arriba, el del 13 (2h) después.
+  assert.equal(hss.weeks[0].rows[0].date, '2026-08-14')
+  assert.equal(hss.weeks[0].rows[0].hours, 4)
+  assert.equal(hss.weeks[0].rows[1].hours, 2)
   assert.ok(hss.weeks[0].latestDate > hss.weeks[1].latestDate)
   assert.equal(hss.weeks[1].hours, 3)
+})
+
+test('cada fila es UN log con su propia info (no se combinan por terna)', () => {
+  const entries = [
+    e({ id: 1, client: 'HSS', user: 'Ana', project: 'P1', task: 'T1', date: '2026-08-14', hours: 4 }),
+    e({ id: 2, client: 'HSS', user: 'Ana', project: 'P1', task: 'T1', date: '2026-08-13', hours: 2 }),
+  ]
+  const [hss] = groupBillToClient(entries, {})
+  const rows = hss.weeks.flatMap((w) => w.rows)
+  // Misma terna Ana·P1·T1 pero DOS filas, cada una con su fecha, horas y su entry.
+  assert.equal(rows.length, 2)
+  assert.deepEqual(rows.map((r) => r.hours).sort(), [2, 4])
+  assert.ok(rows.every((r) => r.entries.length === 1))
+  assert.ok(rows.every((r) => r.date))
+  assert.deepEqual([...new Set(rows.map((r) => r.key))].length, 2) // keys únicas por log
 })
 
 test('no fusiona la misma semana ISO de años distintos', () => {
@@ -130,7 +148,7 @@ test('groupReadonly: withWeeks false → filas planas (X por contractor)', () =>
   const [g] = groupReadonly(entries, 'user', { withWeeks: false })
   assert.equal(g.entity, 'Ana')
   assert.equal(g.hours, 3)
-  assert.equal(g.rows.length, 1) // misma terna combinada
+  assert.equal(g.rows.length, 2) // una fila por log (ya no se combinan)
   assert.equal(g.weeks, undefined)
 })
 

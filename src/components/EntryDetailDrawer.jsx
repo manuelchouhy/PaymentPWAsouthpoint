@@ -19,31 +19,17 @@ import { useScrollLock } from '../lib/useScrollLock'
  * allocationLabel y billingStatus se pasan ya resueltos desde la página para no
  * duplicar el mapa de allocations ni la lectura de facturas en este componente.
  *
- * entryCount > 1 marca que la "entry" es el representante de una fila agregada
- * (varias horas de la misma terna, como en Billing): en ese caso se muestran el
- * conteo y periodLabel (una semana ISO, o "N weeks" si la fila abarca varias) en
- * vez de la fecha/semana de una sola sub-entry, y las horas ya vienen sumadas
- * desde el llamador. billingStatus null oculta el dato de Billing (para
- * allocations que no se facturan al cliente: overage / SP internal / X).
+ * billingStatus null oculta el dato de Billing (para allocations que no se
+ * facturan al cliente: overage / SP internal / X).
  *
  * @param {{
  *   entry: import('../lib/data').TimeEntry,
  *   allocationLabel: ?{ label: string, cls: string },
  *   billingStatus: ?string,
- *   entryCount: ?number,
- *   periodLabel: ?string,
  *   onClose: () => void,
  * }} props
  */
-export function EntryDetailDrawer({
-  entry,
-  allocationLabel,
-  billingStatus,
-  entryCount,
-  periodLabel,
-  onClose,
-}) {
-  const aggregate = entryCount > 1
+export function EntryDetailDrawer({ entry, allocationLabel, billingStatus, onClose }) {
   useScrollLock()
 
   // Cierre con Escape (mismo patrón que los otros drawers).
@@ -103,33 +89,14 @@ export function EntryDetailDrawer({
             <dt>Task number</dt>
             <dd>{entry.taskNumber || '—'}</dd>
           </div>
-          {aggregate ? (
-            // Fila agregada: ni la fecha ni "la semana" de una sola sub-entry
-            // representan la fila (puede abarcar varios días, y en la X varias
-            // semanas). Se muestran el conteo y el período ya calculado por el
-            // llamador desde las semanas reales de las sub-entries.
-            <>
-              <div className="drawer__fact">
-                <dt>Entries</dt>
-                <dd>{entryCount}</dd>
-              </div>
-              <div className="drawer__fact">
-                <dt>Period</dt>
-                <dd>{periodLabel || '—'}</dd>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="drawer__fact">
-                <dt>Date</dt>
-                <dd>{entry.date ? formatDate(entry.date) : '—'}</dd>
-              </div>
-              <div className="drawer__fact">
-                <dt>Week</dt>
-                <dd>{entry.date ? formatWeek(entry.date) : '—'}</dd>
-              </div>
-            </>
-          )}
+          <div className="drawer__fact">
+            <dt>Date</dt>
+            <dd>{entry.date ? formatDate(entry.date) : '—'}</dd>
+          </div>
+          <div className="drawer__fact">
+            <dt>Week</dt>
+            <dd>{entry.date ? formatWeek(entry.date) : '—'}</dd>
+          </div>
           <div className="drawer__fact">
             <dt>Hours</dt>
             <dd>{formatHours(entry.hours)} h</dd>

@@ -3,7 +3,8 @@ import { sundayWeek, sundayWeekYear } from './format.js'
 // ---------------------------------------------------------------------------
 // Agrupación de la tab "Bill to client": las horas facturables ordenadas POR
 // CLIENTE (lo que se definió en el grill). De cada cliente cuelgan sus semanas
-// ISO (la más reciente arriba) y de cada semana sus filas proveedor·proyecto·task.
+// (domingo→sábado, la más reciente arriba) y de cada semana sus filas, UNA POR
+// HORA (log individual, sin combinar), cada una con su fecha/horas/estado.
 //
 // Sólo entran las horas realmente pendientes de facturar: allocation
 // 'bill_to_client', status 'Approved' y que no estén ya en una factura
@@ -19,51 +20,48 @@ import { sundayWeek, sundayWeekYear } from './format.js'
 
 const hoursOf = (entry) => Number(entry?.hours) || 0
 const sumHours = (entries) => entries.reduce((total, entry) => total + hoursOf(entry), 0)
-// El sufijo separa las filas facturadas de las pendientes de la misma terna (C9),
-// e incluye el ESTADO de la factura ('Collected'/'Paid'/…): así una terna con
-// horas en facturas de estados distintos no colapsa en una fila de estado mixto —
-// cada fila queda con un estado único y su badge es exacto. Sólo se agrega cuando
-// la hora está facturada, así las keys de las filas pendientes (default) no cambian.
-const rowKey = (entry) =>
-  `${entry.user ?? ''}||${entry.project ?? ''}||${entry.task ?? ''}` +
-  (entry._invoiced ? `||inv-${entry._billStatus ?? 'x'}` : '')
 
 /**
- * Filas proveedor·proyecto·task de una semana, combinando las horas de la misma
- * terna y ordenadas por horas desc (desempata por usuario).
+ * Filas de una semana: UNA FILA POR HORA (log individual), sin combinar. Antes se
+ * fusionaban los logs de la misma terna proveedor·proyecto·task en una sola fila
+ * sumada; ahora cada hora se muestra con su propia info (fecha, horas, estado de
+ * facturación) para que nada quede escondido dentro de un total —una hora puede
+ * ser overage, un contractor pudo cargar de más, etc.—. El total de la semana
+ * sigue en `week.hours` (sumHours). Ordena por fecha desc (log más nuevo arriba),
+ * desempata por usuario y luego por horas desc.
  */
 function groupRows(entries) {
-  const byKey = new Map()
-  // (el billStatus por fila se calcula después de acumular las entries — abajo)
-  for (const entry of entries) {
-    const key = rowKey(entry)
-    const row = byKey.get(key)
-    if (row) {
-      row.hours += hoursOf(entry)
-      row.entries.push(entry)
-    } else {
-      byKey.set(key, {
-        key,
-        user: entry.user ?? '',
-        project: entry.project ?? '',
-        task: entry.task ?? '',
-        // invoiced: la fila es de horas ya facturadas (read-only en la grilla). La
-        // key separa facturadas de pendientes, así una fila es puramente una u otra.
-        invoiced: Boolean(entry._invoiced),
-        hours: hoursOf(entry),
-        entries: [entry],
-      })
-    }
-  }
-  // billStatus de cada fila: pendiente → 'Pending'; facturada → el estado de su
-  // factura (las filas ya están keyadas por estado, así que todas las entries de
-  // una fila comparten _billStatus). Si falta el estado (dato incompleto) → floor
-  // 'Invoiced' (es al menos eso). Lo consumen el badge, el drawer y el export.
-  const rows = [...byKey.values()]
-  for (const row of rows) {
-    row.billStatus = row.invoiced ? row.entries[0]?._billStatus ?? 'Invoiced' : 'Pending'
-  }
-  return rows.sort((a, b) => b.hours - a.hours || a.user.localeCompare(b.user, 'es'))
+  return entries
+    .map((entry, i) => ({
+      // key único por log = id de la entry: lo usan React (key de fila), la
+      // selección (rowId) y el drawer. Fallback a una huella terna·fecha MÁS el
+      // índice para datos viejos sin id: sin el índice, dos logs sin id de la misma
+      // terna y fecha colisionarían y la selección perdería uno al facturar.
+      key: String(
+        entry.id ??
+          `${entry.user ?? ''}|${entry.project ?? ''}|${entry.task ?? ''}|${entry.date ?? ''}|#${i}`,
+      ),
+      id: entry.id,
+      user: entry.user ?? '',
+      project: entry.project ?? '',
+      task: entry.task ?? '',
+      date: entry.date ?? '',
+      // invoiced: la hora ya está facturada (read-only en la grilla).
+      invoiced: Boolean(entry._invoiced),
+      // billStatus: facturada → el estado de su factura (floor 'Invoiced' si falta
+      // el dato); pendiente → 'Pending'. Lo consumen el badge, el drawer y el export.
+      billStatus: entry._invoiced ? entry._billStatus ?? 'Invoiced' : 'Pending',
+      hours: hoursOf(entry),
+      // entries: [entry] — se conserva el array (longitud 1) porque los consumidores
+      // (selección → ids a facturar, export, drawer) leen row.entries.
+      entries: [entry],
+    }))
+    .sort(
+      (a, b) =>
+        (b.date || '').localeCompare(a.date || '') ||
+        a.user.localeCompare(b.user, 'es') ||
+        b.hours - a.hours,
+    )
 }
 
 /**
