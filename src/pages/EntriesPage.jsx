@@ -20,7 +20,7 @@ import { EntryDetailDrawer } from '../components/EntryDetailDrawer'
 // Clases propias (definidas en index.css): reusar las de billing/status haría que
 // "SP internal" se viera igual que "sin clasificar" y que "bill to client" se
 // confundiera con la columna Billing, que significa otra cosa.
-import { ALLOCATION_LABELS } from '../lib/allocations'
+import { ALLOCATION_LABELS, splitApprovalReadiness } from '../lib/allocations'
 
 const PAGE_SIZE = 100
 
@@ -49,6 +49,46 @@ const allocationLabel = (value) =>
     : value === ALLOCATED
       ? 'allocated'
       : ALLOCATION_LABELS[value]?.label ?? value
+
+// Aviso de un Apply de bill_to_client, honesto respecto del gate de aprobación:
+// Billing sólo muestra horas Approved, así que las recién clasificadas que NO están
+// aprobadas en Zoho no aparecen ahí (y el sync las mantiene así hasta aprobarlas).
+// `notice.readiness` (splitApprovalReadiness) separa aprobado de no-aprobado. Se
+// dice "aren't Approved", no "pending approval": el bucket no-aprobado incluye
+// Rejected, que no está pendiente de nada y nunca facturará al aprobarse.
+function BillToClientNotice({ notice }) {
+  const r = notice.readiness
+  // Sin desglose (defensivo) o todo aprobado: ya están todas en Billing.
+  if (!r || r.notApprovedCount === 0) {
+    return (
+      <>
+        ✓ {formatHours(notice.hours)} h ({notice.count}{' '}
+        {notice.count === 1 ? 'entry' : 'entries'}) classified as bill to client — already in{' '}
+        <Link to="/billing">Billing ↗</Link>.
+      </>
+    )
+  }
+  // Ninguna aprobada: no se linkea a Billing como si estuvieran ahí.
+  if (r.approvedCount === 0) {
+    return (
+      <>
+        ✓ {r.notApprovedCount} {r.notApprovedCount === 1 ? 'entry' : 'entries'} classified as bill to
+        client, but all {formatHours(r.notApprovedHours)} h aren’t Approved in Zoho, so they won’t appear
+        in <Link to="/billing">Billing</Link> unless approved.
+      </>
+    )
+  }
+  // Mixto: lo aprobado ya está en Billing; lo no aprobado se avisa aparte.
+  return (
+    <>
+      ✓ {formatHours(r.approvedHours)} h ({r.approvedCount}{' '}
+      {r.approvedCount === 1 ? 'entry' : 'entries'}) classified as bill to client — already in{' '}
+      <Link to="/billing">Billing ↗</Link>. ⚠️ {formatHours(r.notApprovedHours)} h ({r.notApprovedCount}{' '}
+      {r.notApprovedCount === 1 ? 'entry' : 'entries'}) aren’t Approved in Zoho, so they won’t appear there
+      unless approved.
+    </>
+  )
+}
 
 export function EntriesPage() {
   const { user, can } = useOutletContext()
@@ -294,9 +334,6 @@ export function EntriesPage() {
     if (!ids.length || applying) return
     // allocationChoice es siempre una allocation real (bill_to_client / overage /
     // sp_internal / unknown=X): ya no hay opción de "sin clasificar" en el dropdown.
-    // Horas por id, leídas de la selección ANTES de limpiarla, para poder sumar
-    // en el aviso sólo las filas que la base confirme.
-    const hoursById = new Map(selectedEntries.map((e) => [String(e.id), Number(e.hours) || 0]))
     setApplying(true)
     setApplyError('')
     setApplyNotice(null)
@@ -320,8 +357,25 @@ export function EntriesPage() {
       // abajo): confirma que la hora entró al circuito y, para bill to client,
       // linkea a Billing. Las horas se suman de la confirmación de la base.
       if (applied.size > 0) {
-        const appliedHours = updatedIds.reduce((sum, id) => sum + (hoursById.get(String(id)) || 0), 0)
-        setApplyNotice({ allocation: allocationChoice, count: applied.size, hours: appliedHours })
+        // Un SOLO origen para todo el aviso: las entries seleccionadas que la base
+        // confirmó (intersección selección ∩ updatedIds). count, hours y el desglose
+        // readiness salen de esta misma lista, así que no pueden contradecirse entre
+        // sí, y por ser subconjunto de la selección cada fila trae su status/hours.
+        const appliedEntries = selectedEntries.filter((e) => applied.has(String(e.id)))
+        const appliedHours = appliedEntries.reduce((sum, e) => sum + (Number(e.hours) || 0), 0)
+        // Sólo bill_to_client mira el gate de aprobación: Billing muestra sólo horas
+        // Approved, así que una hora no aprobada recién clasificada NO aparece ahí (y
+        // el sync la mantiene así hasta aprobarla en Zoho). Se desglosa lo aplicado en
+        // aprobado (ya facturable) vs no aprobado para que el aviso no afirme "already
+        // in Billing" sobre horas que no llegaron. El resto de las allocations no
+        // facturan al cliente, así que no necesitan el desglose.
+        const readiness = allocationChoice === 'bill_to_client' ? splitApprovalReadiness(appliedEntries) : null
+        setApplyNotice({
+          allocation: allocationChoice,
+          count: appliedEntries.length,
+          hours: appliedHours,
+          readiness,
+        })
       }
 
       // Los motivos NO se suman en un único "N no se aplicaron": cada uno pide
@@ -400,11 +454,7 @@ export function EntriesPage() {
       {applyNotice && (
         <p className="state__hint">
           {applyNotice.allocation === 'bill_to_client' ? (
-            <>
-              ✓ {formatHours(applyNotice.hours)} h ({applyNotice.count}{' '}
-              {applyNotice.count === 1 ? 'entry' : 'entries'}) classified as bill to client — already
-              in <Link to="/billing">Billing ↗</Link>.
-            </>
+            <BillToClientNotice notice={applyNotice} />
           ) : (
             <>
               ✓ {formatHours(applyNotice.hours)} h ({applyNotice.count}{' '}
