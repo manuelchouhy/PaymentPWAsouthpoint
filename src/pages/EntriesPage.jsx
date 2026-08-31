@@ -58,34 +58,38 @@ const allocationLabel = (value) =>
 // Rejected, que no está pendiente de nada y nunca facturará al aprobarse.
 function BillToClientNotice({ notice }) {
   const r = notice.readiness
-  // Sin desglose (defensivo) o todo aprobado: ya están todas en Billing.
+  // Sin desglose (defensivo) o todo aprobado: confirma discretamente (hint) que ya
+  // están en Billing — no hay nada que alertar.
   if (!r || r.notApprovedCount === 0) {
     return (
-      <>
+      <p className="state__hint">
         ✓ {formatHours(notice.hours)} h ({notice.count}{' '}
         {notice.count === 1 ? 'entry' : 'entries'}) classified as bill to client — already in{' '}
         <Link to="/billing">Billing ↗</Link>.
-      </>
+      </p>
     )
   }
-  // Ninguna aprobada: no se linkea a Billing como si estuvieran ahí.
-  if (r.approvedCount === 0) {
-    return (
-      <>
-        ✓ {r.notApprovedCount} {r.notApprovedCount === 1 ? 'entry' : 'entries'} classified as bill to
-        client, but all {formatHours(r.notApprovedHours)} h aren’t Approved in Zoho, so they won’t appear
-        in <Link to="/billing">Billing</Link> unless approved.
-      </>
-    )
-  }
-  // Mixto: lo aprobado ya está en Billing; lo no aprobado se avisa aparte.
+  // Hay horas NO aprobadas: el aviso de que no llegaron a Billing tiene que ser
+  // PROMINENTE (banner ámbar con ícono), no un hint discreto — es justo lo que el
+  // usuario necesita ver. Si además hubo aprobadas, se confirman aparte en un hint.
   return (
     <>
-      ✓ {formatHours(r.approvedHours)} h ({r.approvedCount}{' '}
-      {r.approvedCount === 1 ? 'entry' : 'entries'}) classified as bill to client — already in{' '}
-      <Link to="/billing">Billing ↗</Link>. ⚠️ {formatHours(r.notApprovedHours)} h ({r.notApprovedCount}{' '}
-      {r.notApprovedCount === 1 ? 'entry' : 'entries'}) aren’t Approved in Zoho, so they won’t appear there
-      unless approved.
+      {r.approvedCount > 0 && (
+        <p className="state__hint">
+          ✓ {formatHours(r.approvedHours)} h ({r.approvedCount}{' '}
+          {r.approvedCount === 1 ? 'entry' : 'entries'}) already in <Link to="/billing">Billing ↗</Link>.
+        </p>
+      )}
+      <div className="apply-warn" role="alert">
+        <AlertTriangle size={18} strokeWidth={2} aria-hidden="true" />
+        <span>
+          <strong>
+            {formatHours(r.notApprovedHours)} h ({r.notApprovedCount}{' '}
+            {r.notApprovedCount === 1 ? 'entry' : 'entries'}) aren’t Approved in Zoho.
+          </strong>{' '}
+          They won’t appear in <Link to="/billing">Billing</Link> until they’re approved in Zoho.
+        </span>
+      </div>
     </>
   )
 }
@@ -451,20 +455,18 @@ export function EntriesPage() {
           (overage/SP internal/X) aclara que no se le cobran al cliente y que se ven
           en su tab de Billing una vez aprobadas. Convive con applyError: uno
           reporta lo que entró, el otro lo que no. */}
-      {applyNotice && (
-        <p className="state__hint">
-          {applyNotice.allocation === 'bill_to_client' ? (
-            <BillToClientNotice notice={applyNotice} />
-          ) : (
-            <>
-              ✓ {formatHours(applyNotice.hours)} h ({applyNotice.count}{' '}
-              {applyNotice.count === 1 ? 'entry' : 'entries'}) classified as{' '}
-              {ALLOCATION_LABELS[applyNotice.allocation]?.label ?? applyNotice.allocation} — not billed to
-              the client; shown in its <Link to="/billing">Billing ↗</Link> tab once approved.
-            </>
-          )}
-        </p>
-      )}
+      {applyNotice &&
+        (applyNotice.allocation === 'bill_to_client' ? (
+          // Devuelve su propia estructura (hint discreto y/o banner ámbar prominente).
+          <BillToClientNotice notice={applyNotice} />
+        ) : (
+          <p className="state__hint">
+            ✓ {formatHours(applyNotice.hours)} h ({applyNotice.count}{' '}
+            {applyNotice.count === 1 ? 'entry' : 'entries'}) classified as{' '}
+            {ALLOCATION_LABELS[applyNotice.allocation]?.label ?? applyNotice.allocation} — not billed to
+            the client; shown in its <Link to="/billing">Billing ↗</Link> tab once approved.
+          </p>
+        ))}
 
       {status === 'loading' && <p className="state__hint">Loading entries…</p>}
 

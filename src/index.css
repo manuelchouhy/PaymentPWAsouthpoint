@@ -3122,6 +3122,28 @@ th.col-pop { text-align: center; }
   text-align: center;
 }
 
+/* Aviso PROMINENTE post-Apply: horas clasificadas bill_to_client que aún NO están
+   aprobadas en Zoho y por eso NO llegaron a Billing. Banner ámbar con ícono para
+   que no pase desapercibido (a diferencia del hint discreto del caso "todo ok").
+   Reusa los tokens de warning del tema (--warn/--warn-bg/--warn-line). */
+.apply-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--warn);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  border-radius: var(--r);
+}
+.apply-warn strong { font-weight: 700; color: var(--warn); }
+.dark .apply-warn strong { color: #FCD34D; }
+.apply-warn svg { flex-shrink: 0; margin-top: 1px; color: var(--warn); }
+.apply-warn a { color: inherit; text-decoration: underline; }
+
 .skeleton-table {
   background: var(--surface);
   border: 1px solid var(--line-strong);
