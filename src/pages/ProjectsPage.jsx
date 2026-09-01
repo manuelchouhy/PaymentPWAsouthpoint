@@ -11,7 +11,7 @@ import {
 import { api } from '../lib/api'
 import { buildClientResolver } from '../lib/clientResolver'
 import { clientFilterKey, clientFilterOptions } from '../lib/useEntryFilters'
-import { formatDate } from '../lib/format'
+import { formatDate, formatHours } from '../lib/format'
 import { ContractBadge } from '../components/ContractBadge'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ProjectFormModal } from '../components/ProjectFormModal'
@@ -44,6 +44,8 @@ export function ProjectsPage() {
   const [status, setStatus] = useState('loading')
   const [filters, setFilters] = useState({
     clients: [],
+    projectNames: [],
+    sows: [],
     leadDevelopers: [],
     expFrom: '',
     expTo: '',
@@ -121,6 +123,14 @@ export function ProjectsPage() {
     () => [...new Set(projects.map((p) => p.leadDeveloper).filter(Boolean))].sort(),
     [projects],
   )
+  const projectNameOptions = useMemo(
+    () => [...new Set(projects.map((p) => p.projectName).filter(Boolean))].sort(),
+    [projects],
+  )
+  const sowOptions = useMemo(
+    () => [...new Set(projects.map((p) => p.sowNumber).filter(Boolean))].sort(),
+    [projects],
+  )
 
   const statusCounts = useMemo(() => countByStatus(projects), [projects])
 
@@ -134,6 +144,9 @@ export function ProjectsPage() {
           return false
         }
       }
+      if (filters.projectNames.length && !filters.projectNames.includes(p.projectName))
+        return false
+      if (filters.sows.length && !filters.sows.includes(p.sowNumber)) return false
       if (
         filters.leadDevelopers.length &&
         !filters.leadDevelopers.includes(p.leadDeveloper)
@@ -161,6 +174,8 @@ export function ProjectsPage() {
 
   const filtersActive =
     filters.clients.length ||
+    filters.projectNames.length ||
+    filters.sows.length ||
     filters.leadDevelopers.length ||
     filters.expFrom ||
     filters.expTo
@@ -458,6 +473,18 @@ export function ProjectsPage() {
                 onToggle={(v) => toggle('clients', v)}
               />
               <MultiSelectDropdown
+                label="Project"
+                options={projectNameOptions}
+                selected={filters.projectNames}
+                onToggle={(v) => toggle('projectNames', v)}
+              />
+              <MultiSelectDropdown
+                label="SOW"
+                options={sowOptions}
+                selected={filters.sows}
+                onToggle={(v) => toggle('sows', v)}
+              />
+              <MultiSelectDropdown
                 label="Lead Developer"
                 options={leadDevOptions}
                 selected={filters.leadDevelopers}
@@ -488,7 +515,14 @@ export function ProjectsPage() {
                   type="button"
                   className="btn btn--ghost filterbar__clear"
                   onClick={() =>
-                    setFilters({ clients: [], leadDevelopers: [], expFrom: '', expTo: '' })
+                    setFilters({
+                      clients: [],
+                      projectNames: [],
+                      sows: [],
+                      leadDevelopers: [],
+                      expFrom: '',
+                      expTo: '',
+                    })
                   }
                 >
                   Clear
@@ -516,8 +550,7 @@ export function ProjectsPage() {
                     <th scope="col">Project #</th>
                     <th scope="col">Zoho Status</th>
                     <th scope="col">Customer</th>
-                    <th scope="col">Code</th>
-                    <th scope="col">Proposal</th>
+                    <th scope="col" className="col-num">Budget Hours</th>
                     <th scope="col">Proposal #</th>
                     <th scope="col">Approver</th>
                     <th scope="col">Cust. Manager</th>
@@ -552,8 +585,9 @@ export function ProjectsPage() {
                           )}
                         </td>
                         <td className="cell-soft">{p.customerName || '—'}</td>
-                        <td className="cell-mono">{p.customerCode || '—'}</td>
-                        <td className="cell-soft">{p.proposalName || '—'}</td>
+                        <td className="col-num cell-mono">
+                          {p.baseBudgetHours != null ? formatHours(p.baseBudgetHours) : '—'}
+                        </td>
                         <td className="cell-mono">{p.proposalNumber || '—'}</td>
                         <td>{p.approver || '—'}</td>
                         <td>{p.customerManager || '—'}</td>
