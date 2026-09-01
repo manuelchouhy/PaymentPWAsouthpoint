@@ -381,30 +381,46 @@ export async function getProjects() {
         ),
       )
   }
-  const { data, error } = await supabase
-    .from('projects')
-    .select('*')
-    .order('contract_expiration_date', { ascending: true })
-  if (error) throw new Error(error.message)
-  const projects = data.map(rowToProject)
+  // La lista de proyectos (crítica) y los SOW de stage que la enriquecen (no
+  // críticos) son independientes → en paralelo, para no duplicar la latencia.
+  // Solo se traen las filas con sow_number (las únicas que aportan al filtro y
+  // la columna SOW del listado). Ver ProjectsPage.
+  const [projectsRes, stagesRes] = await Promise.all([
+    supabase
+      .from('projects')
+      .select('*')
+      .order('contract_expiration_date', { ascending: true }),
+    supabase
+      .from('project_stages')
+      .select('project_id, sow_number')
+      .not('sow_number', 'is', null),
+  ])
+  if (projectsRes.error) throw new Error(projectsRes.error.message)
+  const projects = projectsRes.data.map(rowToProject)
 
-  // Los SOW de stage (uno por stage) alimentan el filtro y la columna SOW del
-  // listado. Se traen en UNA sola query (no una por proyecto) y se agrupan por
-  // project_id. Solo los proyectos con stages aportan filas. Ver ProjectsPage.
-  const { data: stageRows, error: stageError } = await supabase
-    .from('project_stages')
-    .select('project_id, sow_number')
-  if (stageError) throw new Error(stageError.message)
-
-  const sowsByProject = new Map()
-  for (const row of stageRows) {
-    if (!row.sow_number) continue
-    const list = sowsByProject.get(row.project_id) ?? []
-    list.push(row.sow_number)
-    sowsByProject.set(row.project_id, list)
-  }
-  for (const project of projects) {
-    project.stageSowNumbers = sowsByProject.get(project.id) ?? []
+  // El enriquecimiento con SOW de stage NO tumba la página: si falla (RLS, red,
+  // tabla no disponible) se loguea y los proyectos quedan con stageSowNumbers
+  // vacío. La lista —el objetivo de la página— igual carga.
+  if (stagesRes.error) {
+    console.warn('No se pudieron cargar los SOW de stage:', stagesRes.error.message)
+  } else {
+    // PostgREST corta en 1000 filas por defecto. Hoy el volumen está muy por
+    // debajo; si algún día se acerca, hay que paginar acá. Avisamos al tocar el
+    // tope para que la truncación no sea silenciosa.
+    if (stagesRes.data.length === 1000) {
+      console.warn(
+        'project_stages devolvió 1000 filas (posible tope de PostgREST); los SOW de stage podrían estar truncados — paginar getProjects.',
+      )
+    }
+    const sowsByProject = new Map()
+    for (const row of stagesRes.data) {
+      const list = sowsByProject.get(row.project_id) ?? []
+      list.push(row.sow_number)
+      sowsByProject.set(row.project_id, list)
+    }
+    for (const project of projects) {
+      project.stageSowNumbers = sowsByProject.get(project.id) ?? []
+    }
   }
   return projects
 }
