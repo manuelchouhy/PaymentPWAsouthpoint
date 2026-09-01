@@ -186,6 +186,7 @@ export function ProjectsPage() {
       { header: 'Project', key: 'projectName' },
       { header: 'Project #', key: 'projectNumber' },
       { header: 'Contract #', key: 'contractNumber' },
+      { header: 'Budget Hours', key: 'baseBudgetHours' },
       { header: 'Lead Dev', key: 'leadDeveloper' },
       { header: 'Approver', key: 'approver' },
       { header: 'Contract Expiration', key: 'contractExpirationDate' },
