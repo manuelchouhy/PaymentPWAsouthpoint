@@ -8,6 +8,7 @@ import {
   countByStatus,
   daysRemaining,
 } from '../lib/projectsData'
+import { projectSows } from '../lib/projectSows'
 import { api } from '../lib/api'
 import { buildClientResolver } from '../lib/clientResolver'
 import { clientFilterKey, clientFilterOptions } from '../lib/useEntryFilters'
@@ -25,12 +26,6 @@ import { exportGrid } from '../lib/exportGrid'
 // misma fuente que usan Entries y Billing: agrupa los proyectos cuyo cliente
 // resuelto NO está en el maestro (legacy o sin cliente), que si no quedarían
 // fuera de todo filtro. Se agrega al dropdown sólo si existe alguno.
-
-// Todos los SOW de un proyecto, sin duplicados: el sowNumber de proyecto más
-// los SOW de cada stage (uno por stage). Fuente única para las opciones del
-// filtro, el predicado y la columna SOW, así los tres coinciden siempre.
-const projectSows = (p) =>
-  [...new Set([p.sowNumber, ...(p.stageSowNumbers ?? [])].filter(Boolean))]
 
 // Ordena por vencimiento ascendente; los proyectos sin fecha de contrato
 // (recién traídos de Zoho) van al final.
@@ -224,12 +219,13 @@ export function ProjectsPage() {
   }
 
   // rowToProject devuelve stageSowNumbers vacío (solo getProjects lo llena con
-  // su query batch). Tras crear/editar un proyecto con stages, re-consultamos
-  // sus stages para que la columna y el filtro SOW no queden desactualizados
-  // hasta recargar. No crítico: si la consulta falla, se deja como está y se
-  // corrige en el próximo getProjects. Ver projectsData.js.
+  // su query batch). Tras crear/editar un proyecto, re-consultamos sus stages
+  // para que la columna y el filtro SOW no queden desactualizados hasta
+  // recargar. Se consulta siempre (no se asume que hasStages venga al día tras
+  // el guardado): sin stages devuelve [] y queda igual. No crítico: si la
+  // consulta falla, se deja como está y se corrige en el próximo getProjects.
+  // Ver projectsData.js.
   async function withStageSows(project) {
-    if (!project.hasStages) return project
     try {
       const stages = await api.projects.getStages(project.id)
       return { ...project, stageSowNumbers: stages.map((s) => s.sowNumber).filter(Boolean) }
@@ -255,13 +251,12 @@ export function ProjectsPage() {
       resourceId: project.id,
       after: { projectNumber: project.projectNumber, projectName: project.projectName, client: project.client },
     })
-    setProjects((prev) => sortByExp([project, ...prev]))
+    // Se adjuntan los SOW de stage del proyecto recién creado antes de meterlo
+    // en la lista, para que la columna y el filtro SOW queden al día sin
+    // recargar (mismo patrón que handleUpdateFromWizard).
+    const withSows = await withStageSows(project)
+    setProjects((prev) => sortByExp([withSows, ...prev]))
     setWizardOpen(false)
-    // Refresca los SOW de stage del proyecto recién creado (async, no bloquea
-    // el cierre del wizard ni el toast de abajo).
-    withStageSows(project).then((withSows) =>
-      setProjects((prev) => sortByExp(prev.map((p) => (p.id === withSows.id ? withSows : p)))),
-    )
 
     if (partialFailure) {
       // No hay política de borrado para projects (se conserva el historial a
