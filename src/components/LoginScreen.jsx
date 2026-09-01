@@ -42,7 +42,7 @@ export function LoginScreen() {
         </div>
 
         <div className="login__kicker-row">
-          <span className="login__kicker">Contractor payment management</span>
+          <span className="login__kicker">SouthPoint Service Desk</span>
           <span className="login__rule" aria-hidden="true" />
         </div>
 

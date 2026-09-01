@@ -21,10 +21,10 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         id: '/',
-        name: 'Contractor Payment Management',
-        short_name: 'Payment',
+        name: 'SouthPoint Service Desk',
+        short_name: 'Service Desk',
         description:
-          'Contractor payment management: review logged hours and process payments.',
+          'SouthPoint Service Desk: review logged hours and process payments.',
         lang: 'en',
         dir: 'ltr',
         start_url: '/',
