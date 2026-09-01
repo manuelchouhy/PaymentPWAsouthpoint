@@ -209,6 +209,10 @@ function rowToProject(row) {
     zohoProjectGroup: row.zoho_project_group ?? null,
     sowNumber: row.sow_number ?? null,
     sowUrl: row.sow_url ?? null,
+    // SOW de cada stage (uno por stage). Lo rellena getProjects con una query
+    // batch; en el resto de los caminos (createProject/updateProject) queda [].
+    // Alimenta el filtro y la columna SOW del listado. Ver ProjectsPage.
+    stageSowNumbers: [],
     hasStages: row.has_stages ?? false,
     stageName: row.stage_name ?? null,
     model: row.model ?? null,
@@ -364,18 +368,45 @@ export async function updateContractAlertSettings(settings, updatedBy) {
 export async function getProjects() {
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 250))
-    return [...demoProjects].sort((a, b) =>
-      (a.contractExpirationDate || '9999-99-99').localeCompare(
-        b.contractExpirationDate || '9999-99-99',
-      ),
-    )
+    return [...demoProjects]
+      .map((p) => ({
+        ...p,
+        stageSowNumbers: (demoStages[p.id] ?? [])
+          .map((s) => s.sowNumber)
+          .filter(Boolean),
+      }))
+      .sort((a, b) =>
+        (a.contractExpirationDate || '9999-99-99').localeCompare(
+          b.contractExpirationDate || '9999-99-99',
+        ),
+      )
   }
   const { data, error } = await supabase
     .from('projects')
     .select('*')
     .order('contract_expiration_date', { ascending: true })
   if (error) throw new Error(error.message)
-  return data.map(rowToProject)
+  const projects = data.map(rowToProject)
+
+  // Los SOW de stage (uno por stage) alimentan el filtro y la columna SOW del
+  // listado. Se traen en UNA sola query (no una por proyecto) y se agrupan por
+  // project_id. Solo los proyectos con stages aportan filas. Ver ProjectsPage.
+  const { data: stageRows, error: stageError } = await supabase
+    .from('project_stages')
+    .select('project_id, sow_number')
+  if (stageError) throw new Error(stageError.message)
+
+  const sowsByProject = new Map()
+  for (const row of stageRows) {
+    if (!row.sow_number) continue
+    const list = sowsByProject.get(row.project_id) ?? []
+    list.push(row.sow_number)
+    sowsByProject.set(row.project_id, list)
+  }
+  for (const project of projects) {
+    project.stageSowNumbers = sowsByProject.get(project.id) ?? []
+  }
+  return projects
 }
 
 /**

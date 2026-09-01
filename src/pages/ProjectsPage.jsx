@@ -26,6 +26,12 @@ import { exportGrid } from '../lib/exportGrid'
 // resuelto NO está en el maestro (legacy o sin cliente), que si no quedarían
 // fuera de todo filtro. Se agrega al dropdown sólo si existe alguno.
 
+// Todos los SOW de un proyecto, sin duplicados: el sowNumber de proyecto más
+// los SOW de cada stage (uno por stage). Fuente única para las opciones del
+// filtro, el predicado y la columna SOW, así los tres coinciden siempre.
+const projectSows = (p) =>
+  [...new Set([p.sowNumber, ...(p.stageSowNumbers ?? [])].filter(Boolean))]
+
 // Ordena por vencimiento ascendente; los proyectos sin fecha de contrato
 // (recién traídos de Zoho) van al final.
 const sortByExp = (list) =>
@@ -127,8 +133,16 @@ export function ProjectsPage() {
     () => [...new Set(projects.map((p) => p.projectName).filter(Boolean))].sort(),
     [projects],
   )
+  // Los SOW de un proyecto viven en dos lugares: el sowNumber de proyecto y, si
+  // tiene stages, un SOW por stage (stageSowNumbers, cargado en batch por
+  // getProjects). El filtro y la columna consideran ambos. Ver projectsData.js.
   const sowOptions = useMemo(
-    () => [...new Set(projects.map((p) => p.sowNumber).filter(Boolean))].sort(),
+    () =>
+      [
+        ...new Set(
+          projects.flatMap((p) => projectSows(p)),
+        ),
+      ].sort(),
     [projects],
   )
 
@@ -146,7 +160,10 @@ export function ProjectsPage() {
       }
       if (filters.projectNames.length && !filters.projectNames.includes(p.projectName))
         return false
-      if (filters.sows.length && !filters.sows.includes(p.sowNumber)) return false
+      if (filters.sows.length) {
+        const sows = projectSows(p)
+        if (!filters.sows.some((s) => sows.includes(s))) return false
+      }
       if (
         filters.leadDevelopers.length &&
         !filters.leadDevelopers.includes(p.leadDeveloper)
@@ -186,6 +203,7 @@ export function ProjectsPage() {
       { header: 'Project', key: 'projectName' },
       { header: 'Project #', key: 'projectNumber' },
       { header: 'Contract #', key: 'contractNumber' },
+      { header: 'SOW', key: 'sows' },
       { header: 'Base Budget Hours', key: 'baseBudgetHours' },
       { header: 'Lead Dev', key: 'leadDeveloper' },
       { header: 'Approver', key: 'approver' },
@@ -197,6 +215,8 @@ export function ProjectsPage() {
       ...p,
       // La columna Client del export usa el cliente resuelto, igual que la grilla.
       client: p.resolvedClient || '',
+      // SOW de proyecto + SOW de cada stage, igual que la columna de la grilla.
+      sows: projectSows(p).join(', '),
       contractStatus: contractStatus(daysRemaining(p.contractExpirationDate)),
       daysLeft: daysRemaining(p.contractExpirationDate),
     }))
@@ -557,6 +577,7 @@ export function ProjectsPage() {
                     <th scope="col">Cust. Manager</th>
                     <th scope="col">Lead Dev</th>
                     <th scope="col">Contract #</th>
+                    <th scope="col">SOW</th>
                     <th scope="col">Expiration</th>
                     <th scope="col" className="col-num">Days</th>
                     <th scope="col">Status</th>
@@ -594,6 +615,9 @@ export function ProjectsPage() {
                         <td>{p.customerManager || '—'}</td>
                         <td>{p.leadDeveloper || '—'}</td>
                         <td className="cell-mono">{p.contractNumber || '—'}</td>
+                        <td className="cell-mono">
+                          {projectSows(p).join(', ') || '—'}
+                        </td>
                         <td className="cell-mono">
                           {p.contractExpirationDate
                             ? formatDate(p.contractExpirationDate)
