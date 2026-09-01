@@ -223,6 +223,22 @@ export function ProjectsPage() {
     exportGrid({ rows: exportRows, columns: cols, title: 'Projects and SOW', gridName: 'projects', format, generatedBy: user?.email ?? '' })
   }
 
+  // rowToProject devuelve stageSowNumbers vacío (solo getProjects lo llena con
+  // su query batch). Tras crear/editar un proyecto con stages, re-consultamos
+  // sus stages para que la columna y el filtro SOW no queden desactualizados
+  // hasta recargar. No crítico: si la consulta falla, se deja como está y se
+  // corrige en el próximo getProjects. Ver projectsData.js.
+  async function withStageSows(project) {
+    if (!project.hasStages) return project
+    try {
+      const stages = await api.projects.getStages(project.id)
+      return { ...project, stageSowNumbers: stages.map((s) => s.sowNumber).filter(Boolean) }
+    } catch (error) {
+      console.warn('No se pudieron refrescar los SOW de stage tras guardar:', error?.message)
+      return project
+    }
+  }
+
   /**
    * Alta desde el wizard de Projects and SOW. La orquestación (subir SOWs,
    * crear el proyecto, sus stages/tasks, versionar documentos) vive en
@@ -241,6 +257,11 @@ export function ProjectsPage() {
     })
     setProjects((prev) => sortByExp([project, ...prev]))
     setWizardOpen(false)
+    // Refresca los SOW de stage del proyecto recién creado (async, no bloquea
+    // el cierre del wizard ni el toast de abajo).
+    withStageSows(project).then((withSows) =>
+      setProjects((prev) => sortByExp(prev.map((p) => (p.id === withSows.id ? withSows : p)))),
+    )
 
     if (partialFailure) {
       // No hay política de borrado para projects (se conserva el historial a
@@ -261,7 +282,17 @@ export function ProjectsPage() {
   async function handleUpdate(payload) {
     const updated = await api.projects.update(form.project, payload, user?.email ?? null)
     api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'project.update', resourceType: 'project', resourceId: updated.id, before: { projectNumber: form.project.projectNumber }, after: { projectNumber: updated.projectNumber, projectName: updated.projectName, client: updated.client } })
-    setProjects((prev) => sortByExp(prev.map((p) => (p.id === updated.id ? updated : p))))
+    // El form no-wizard no edita stages: se preserva el stageSowNumbers que ya
+    // tenía la fila (updated viene con [] de rowToProject).
+    setProjects((prev) =>
+      sortByExp(
+        prev.map((p) =>
+          p.id === updated.id
+            ? { ...updated, stageSowNumbers: p.stageSowNumbers ?? [] }
+            : p,
+        ),
+      ),
+    )
     setForm(null)
     setToast({ id: Date.now(), message: `Project updated: ${updated.projectName}` })
   }
@@ -408,7 +439,10 @@ export function ProjectsPage() {
       before: { projectNumber: wizardEditing.projectNumber },
       after: { projectNumber: updated.projectNumber, projectName: updated.projectName, client: updated.client },
     })
-    setProjects((prev) => sortByExp(prev.map((p) => (p.id === updated.id ? updated : p))))
+    // El wizard pudo editar/agregar stages: se re-consultan sus SOW para que la
+    // columna y el filtro reflejen los cambios sin recargar.
+    const updatedWithSows = await withStageSows(updated)
+    setProjects((prev) => sortByExp(prev.map((p) => (p.id === updatedWithSows.id ? updatedWithSows : p))))
     setWizardEditing(null)
     setToast({ id: Date.now(), message: `Project updated: ${updated.projectName}` })
   }
