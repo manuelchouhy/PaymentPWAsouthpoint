@@ -498,7 +498,7 @@ export default function App() {
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         >
           <div className="masthead__top">
-            <span className="masthead__kicker">Contractor payment management</span>
+            <span className="masthead__kicker">SouthPoint Service Desk</span>
             <span className="masthead__rule" aria-hidden="true" />
           </div>
           <h1 className="masthead__title">Time Entries</h1>
