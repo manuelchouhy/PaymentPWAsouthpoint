@@ -4069,6 +4069,23 @@ th.col-pop { text-align: center; }
 .proj-table th,
 .proj-table td { white-space: nowrap; }
 .proj-table tbody tr { cursor: pointer; }
+
+/* Grilla de Projects (14 columnas): entra sin scroll horizontal ocupando todo
+   el ancho del contenedor. Scopeado a --fit para NO tocar las otras tablas que
+   comparten .proj-table (Capacity, Demand by SOW, etc.). El texto largo
+   (cliente, nombre de proyecto, approver, managers) puede cortar en 2 líneas en
+   vez de forzar scroll; los datos monoespaciados (IDs, #s, fechas) y los
+   numéricos siguen sin cortar. */
+.proj-table--fit { width: 100%; }
+.proj-table--fit th,
+.proj-table--fit td { white-space: normal; }
+/* Solo las celdas de datos monoespaciadas/numéricas se mantienen sin cortar
+   (IDs, #s, fechas, horas, el badge de estado). Los encabezados sí pueden
+   cortar en 2 líneas ("Base Budget Hours", "Cust. Manager"...) para ganar
+   ancho. */
+.proj-table--fit td.cell-mono,
+.proj-table--fit td.col-num,
+.proj-table--fit .zoho-status { white-space: nowrap; }
 /* Filas sin acción de fila (sólo el botón de detalle actúa): no deben insinuar
    que toda la fila es clickeable. */
 .proj-table tbody tr.row-static { cursor: default; }

@@ -592,7 +592,7 @@ export function ProjectsPage() {
             <div className="empty">No projects to display.</div>
           ) : (
             <div className="table-wrap table-wrap--scroll">
-              <table className="table proj-table">
+              <table className="table proj-table proj-table--fit">
                 <thead>
                   <tr>
                     <th scope="col">Client</th>
