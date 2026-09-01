@@ -18,6 +18,7 @@
 
 import { supabase, isSupabaseConfigured } from './supabase'
 import { updateInvoiceStatus } from './data'
+import { paidEntryIdsFrom } from './paymentsGrouping'
 
 export const BANK_METHODS = ['BBVA', 'Itaú', 'Santander', 'Other']
 
@@ -347,16 +348,8 @@ export async function createOveragePayment(payload, createdBy) {
   return { payment: rowToPayment(data) }
 }
 
-/**
- * Set de ids (string) de horas cubiertas por algún pago — para congelarlas
- * (entryFreeze) y para excluirlas del overage pendiente en Billing.
- * @param {ContractorPayment[]} payments
- * @returns {Set<string>}
- */
-export function paidEntryIdsFrom(payments) {
-  const set = new Set()
-  for (const payment of payments ?? []) {
-    for (const id of payment.entryIds ?? []) set.add(String(id))
-  }
-  return set
-}
+// Set de ids (string) de horas cubiertas por algún pago — para congelarlas
+// (entryFreeze) y para excluirlas del pendiente invoice-less en Billing. La
+// implementación canónica vive en el módulo puro paymentsGrouping.js (testeable
+// bajo node --test); se re-exporta acá para no romper los imports existentes.
+export { paidEntryIdsFrom }

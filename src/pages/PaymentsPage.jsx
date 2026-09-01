@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, BellRing, Download } from 'lucide-react'
-import { paymentAlertLevel, paidEntryIdsFrom } from '../lib/paymentsData'
+import { paymentAlertLevel } from '../lib/paymentsData'
+import { pendingToPayByContractor, invoicelessPaidRows } from '../lib/paymentsGrouping'
 import { api } from '../lib/api'
 import { downloadPaymentReceipt } from '../lib/paymentReceipt'
 import { formatDate, formatHours } from '../lib/format'
@@ -40,6 +41,15 @@ function daysUntil(iso) {
 const PAYABLE_STATUSES = ['Invoiced']
 const isPayable = (status) => PAYABLE_STATUSES.includes(status)
 
+// Allocations que se pagan al contractor SIN factura al cliente (invoice-less):
+// overage y sp_internal. Mismo mecanismo de pago; sólo cambia la etiqueta. `low`
+// va en el copy en minúscula ("Register overage payment"), `cap` como título de
+// bloque/toast ("SP internal paid").
+const PAY_LABELS = {
+  overage: { low: 'overage', cap: 'Overage' },
+  sp_internal: { low: 'SP internal', cap: 'SP internal' },
+}
+
 export function PaymentsPage() {
   const { user, profile, can } = useOutletContext()
   const [invoices, setInvoices] = useState([])
@@ -49,11 +59,13 @@ export function PaymentsPage() {
   const [showPaid, setShowPaid] = useState(false)
   const [alertFilter, setAlertFilter] = useState(null) // null|'overdue'|'dueThisWeek'
   const [modalInvoice, setModalInvoice] = useState(null)
-  // Contractor cuyo overage pendiente se está por pagar (null = modal cerrado).
-  const [overageTarget, setOverageTarget] = useState(null)
-  // Horas de overage seleccionadas para pagar (D6): por defecto todas las del
-  // contractor; el usuario puede destildar para pagar sólo algunas.
-  const [overageSelectedIds, setOverageSelectedIds] = useState(() => new Set())
+  // Contractor cuyo pago invoice-less (overage o sp_internal) se está por
+  // registrar (null = modal cerrado). Lleva su `allocation` para el copy y el
+  // audit; el mecanismo de pago es idéntico para ambos.
+  const [payTarget, setPayTarget] = useState(null)
+  // Horas seleccionadas para pagar (D6): por defecto todas las del contractor;
+  // el usuario puede destildar para pagar sólo algunas.
+  const [paySelectedIds, setPaySelectedIds] = useState(() => new Set())
   const [entries, setEntries] = useState([])
   const [toast, setToast] = useState(null)
 
@@ -89,55 +101,26 @@ export function PaymentsPage() {
     return map
   }, [payments])
 
-  // Overage pendiente de pago, agrupado por contractor: horas allocation='overage',
-  // aprobadas y NO cubiertas todavía por ningún pago (paidEntryIdsFrom). El overage
-  // se le paga al contractor sin pasar por factura al cliente.
-  const overagePending = useMemo(() => {
-    const paid = paidEntryIdsFrom(payments)
-    // Horas ya en una factura de proveedor: se pagan por esa factura, NO por
-    // overage — excluirlas evita pagar dos veces la misma hora.
-    const invoiced = new Set(invoices.flatMap((inv) => (inv.entryIds ?? []).map(String)))
-    const byUser = new Map()
-    for (const e of entries) {
-      if (e.allocation !== 'overage' || e.status !== 'Approved') continue
-      if (paid.has(String(e.id)) || invoiced.has(String(e.id))) continue
-      const group = byUser.get(e.user) ?? { user: e.user, hours: 0, entryIds: [], entries: [] }
-      group.hours += Number(e.hours) || 0
-      group.entryIds.push(e.id)
-      // Desglose por hora, para poder pagar sólo algunas (D6).
-      group.entries.push({
-        id: e.id,
-        hours: Number(e.hours) || 0,
-        project: e.project,
-        task: e.task,
-        date: e.date,
-      })
-      byUser.set(e.user, group)
-    }
-    return [...byUser.values()].sort(
-      (a, b) => b.hours - a.hours || (a.user || '').localeCompare(b.user || '', 'es'),
-    )
-  }, [entries, payments, invoices])
+  // Horas invoice-less pendientes de pago, por contractor. Overage y sp_internal
+  // se le pagan directo al contractor sin factura al cliente (misma lógica; ver
+  // pendingToPayByContractor). sp_internal se ruteó a Payments igual que overage:
+  // saltea Billing porque no se factura al cliente, pero es un pago a alguien.
+  const overagePending = useMemo(
+    () => pendingToPayByContractor(entries, payments, invoices, 'overage'),
+    [entries, payments, invoices],
+  )
+  const spInternalPending = useMemo(
+    () => pendingToPayByContractor(entries, payments, invoices, 'sp_internal'),
+    [entries, payments, invoices],
+  )
 
-  // Overage YA pagado (read-only): un pago de overage es el que no tiene factura
-  // (invoiceId null) y cubre horas (entryIds). Se muestra para poder auditar lo
-  // pagado, ya que esas horas salen del pendiente. Las horas se suman mapeando
-  // entryIds → horas de la entry. Más reciente arriba.
-  const overagePaid = useMemo(() => {
-    const hoursById = new Map(entries.map((e) => [String(e.id), Number(e.hours) || 0]))
-    return payments
-      .filter((p) => !p.invoiceId && (p.entryIds?.length ?? 0) > 0)
-      .map((p) => ({
-        id: p.id,
-        user: p.userName,
-        hours: (p.entryIds ?? []).reduce((sum, id) => sum + (hoursById.get(String(id)) || 0), 0),
-        entryCount: p.entryIds?.length ?? 0,
-        amountPaid: p.amountPaid,
-        currency: p.currency || 'USD',
-        paymentDate: p.paymentDate,
-      }))
-      .sort((a, b) => (b.paymentDate || '').localeCompare(a.paymentDate || ''))
-  }, [payments, entries])
+  // Pagos invoice-less YA hechos (read-only), separados por allocation para
+  // dejar rastro auditable de qué se pagó por qué (si no, desaparecerían de la
+  // pantalla al salir del pendiente). Ver invoicelessPaidRows.
+  const { overage: overagePaid, spInternal: spInternalPaid } = useMemo(
+    () => invoicelessPaidRows(payments, entries),
+    [payments, entries],
+  )
 
   const warningBefore = alertSettings?.warningDaysBeforeDue ?? 3
   const ALERT_RANK = { overdue: 0, warning: 1, on_time: 2 }
@@ -221,12 +204,15 @@ export function PaymentsPage() {
     })
   }
 
-  // Pago de overage: cubre las horas SELECCIONADAS del contractor (D6 — por defecto
-  // todas, pero se pueden pagar sólo algunas). No hay factura; las horas cubiertas
-  // quedan congeladas y salen del pendiente. payload trae también la moneda (D7).
-  async function handleRegisterOverage(payload) {
-    const contractor = overageTarget.user
-    const selected = overageTarget.entries.filter((e) => overageSelectedIds.has(String(e.id)))
+  // Pago invoice-less (overage o sp_internal): cubre las horas SELECCIONADAS del
+  // contractor (D6 — por defecto todas, pero se pueden pagar sólo algunas). No
+  // hay factura al cliente; las horas cubiertas quedan congeladas y salen del
+  // pendiente. El allocation sólo cambia el copy/audit — el pago es idéntico
+  // (createOverage inserta un pago sin invoice con entryIds+userName). payload
+  // trae también la moneda (D7).
+  async function handleRegisterPayment(payload) {
+    const { allocation, user: contractor } = payTarget
+    const selected = payTarget.entries.filter((e) => paySelectedIds.has(String(e.id)))
     const entryIds = selected.map((e) => e.id)
     const hours = selected.reduce((sum, e) => sum + e.hours, 0)
     const { payment } = await api.payments.createOverage(
@@ -240,7 +226,8 @@ export function PaymentsPage() {
       resourceType: 'payment',
       resourceId: payment.id,
       after: {
-        overage: true,
+        invoiceless: true,
+        allocation,
         userName: contractor,
         entryCount: entryIds.length,
         amountPaid: payload.amountPaid,
@@ -249,8 +236,11 @@ export function PaymentsPage() {
       },
     })
     setPayments((prev) => [payment, ...prev])
-    setOverageTarget(null)
-    setToast({ id: Date.now(), message: `Overage paid to ${contractor} — ${formatHours(hours)} h (frozen)` })
+    setPayTarget(null)
+    setToast({
+      id: Date.now(),
+      message: `${PAY_LABELS[allocation].cap} paid to ${contractor} — ${formatHours(hours)} h (frozen)`,
+    })
   }
 
   function handleDownload(row) {
@@ -294,6 +284,105 @@ export function PaymentsPage() {
     exportGrid({ rows: exportRows, columns: cols, title: 'Payments', gridName: 'payments', format, generatedBy: user?.email ?? '' })
   }
 
+  // Bloque "a pagar" de un allocation invoice-less (overage / sp_internal): horas
+  // aprobadas y sin pagar por contractor. Overage y sp_internal comparten diseño;
+  // sólo cambian la etiqueta y el allocation que dispara el modal de pago.
+  function renderToPay(allocation, pending) {
+    const label = PAY_LABELS[allocation]
+    return (
+      <section className="pay-overage">
+        <div className="toolbar">
+          <span className="toolbar__count">
+            {label.cap} to pay · {pending.length}{' '}
+            {pending.length === 1 ? 'contractor' : 'contractors'}
+          </span>
+        </div>
+        {pending.length === 0 ? (
+          <div className="empty">No pending {label.low} hours to pay.</div>
+        ) : (
+          <div className="table-wrap table-wrap--scroll">
+            <table className="table proj-table">
+              <thead>
+                <tr>
+                  <th scope="col">Contractor</th>
+                  <th scope="col" className="col-num">Hours</th>
+                  <th scope="col" style={{ width: 160 }} />
+                </tr>
+              </thead>
+              <tbody>
+                {pending.map((group) => (
+                  <tr key={group.user || '—'}>
+                    <td className="cell-strong">{group.user || '—'}</td>
+                    <td className="col-num cell-mono">{formatHours(group.hours)} h</td>
+                    <td>
+                      {can('payments.create') && (
+                        <button
+                          type="button"
+                          className="btn btn--pay btn--row"
+                          onClick={() => {
+                            setPayTarget({ ...group, allocation })
+                            // Arranca con todas las horas seleccionadas (D6).
+                            setPaySelectedIds(new Set(group.entryIds.map(String)))
+                          }}
+                        >
+                          Pay {label.low}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    )
+  }
+
+  // Bloque "ya pagado" (read-only) de un allocation invoice-less: deja rastro
+  // auditable de lo pagado, que si no desaparecería al salir del pendiente.
+  function renderPaid(allocation, rows) {
+    if (rows.length === 0) return null
+    const label = PAY_LABELS[allocation]
+    return (
+      <section className="pay-overage">
+        <div className="toolbar">
+          <span className="toolbar__count">
+            {label.cap} paid · {rows.length} {rows.length === 1 ? 'payment' : 'payments'}
+          </span>
+        </div>
+        <div className="table-wrap table-wrap--scroll">
+          <table className="table proj-table">
+            <thead>
+              <tr>
+                <th scope="col">Contractor</th>
+                <th scope="col" className="col-num">Hours</th>
+                <th scope="col" className="col-num">Amount</th>
+                <th scope="col">Paid on</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id} className="row-static">
+                  <td className="cell-strong">{row.user || '—'}</td>
+                  <td className="col-num cell-mono">
+                    {formatHours(row.hours)} h
+                    <span className="cell-soft"> · {row.entryCount}</span>
+                  </td>
+                  <td className="col-num cell-mono">
+                    {getCurrencySymbol(row.currency)}
+                    {fmtAmount(row.amountPaid)} {row.currency}
+                  </td>
+                  <td className="cell-mono">{formatDate(row.paymentDate)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <>
       <motion.header
@@ -309,8 +398,9 @@ export function PaymentsPage() {
         <h1 className="masthead__title">Payments</h1>
         <p className="masthead__sub">
           Contractor payment for invoices ready to pay — issued in Billing
-          (Invoiced); once paid, they move to Paid. Overage hours are paid here too
-          — per contractor, without an invoice — and freeze once paid.
+          (Invoiced); once paid, they move to Paid. Overage and SP internal hours
+          are paid here too — per contractor, without an invoice — and freeze once
+          paid.
         </p>
       </motion.header>
 
@@ -461,96 +551,15 @@ export function PaymentsPage() {
             </div>
           )}
 
-          {/* Overage a pagar: horas de overage aprobadas y sin pagar, por
-              contractor. Se pagan sin factura al cliente; al pagarlas quedan
-              congeladas y salen del pendiente. */}
-          <section className="pay-overage">
-            <div className="toolbar">
-              <span className="toolbar__count">
-                Overage to pay · {overagePending.length}{' '}
-                {overagePending.length === 1 ? 'contractor' : 'contractors'}
-              </span>
-            </div>
-            {overagePending.length === 0 ? (
-              <div className="empty">No pending overage hours to pay.</div>
-            ) : (
-              <div className="table-wrap table-wrap--scroll">
-                <table className="table proj-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">Contractor</th>
-                      <th scope="col" className="col-num">Overage hours</th>
-                      <th scope="col" style={{ width: 160 }} />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {overagePending.map((group) => (
-                      <tr key={group.user || '—'}>
-                        <td className="cell-strong">{group.user || '—'}</td>
-                        <td className="col-num cell-mono">{formatHours(group.hours)} h</td>
-                        <td>
-                          {can('payments.create') && (
-                            <button
-                              type="button"
-                              className="btn btn--pay btn--row"
-                              onClick={() => {
-                                setOverageTarget(group)
-                                // Arranca con todas las horas seleccionadas (D6).
-                                setOverageSelectedIds(new Set(group.entryIds.map(String)))
-                              }}
-                            >
-                              Pay overage
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
+          {/* Horas invoice-less a pagar (sin factura al cliente): overage y
+              sp_internal, cada una en su bloque. sp_internal saltea Billing pero
+              es un pago a alguien, por eso vive acá igual que overage. */}
+          {renderToPay('overage', overagePending)}
+          {renderToPay('sp_internal', spInternalPending)}
 
-          {/* Overage ya pagado (read-only): deja rastro auditable de lo pagado,
-              que si no desaparecería de la pantalla al salir del pendiente. */}
-          {overagePaid.length > 0 && (
-            <section className="pay-overage">
-              <div className="toolbar">
-                <span className="toolbar__count">
-                  Overage paid · {overagePaid.length}{' '}
-                  {overagePaid.length === 1 ? 'payment' : 'payments'}
-                </span>
-              </div>
-              <div className="table-wrap table-wrap--scroll">
-                <table className="table proj-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">Contractor</th>
-                      <th scope="col" className="col-num">Hours</th>
-                      <th scope="col" className="col-num">Amount</th>
-                      <th scope="col">Paid on</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {overagePaid.map((row) => (
-                      <tr key={row.id} className="row-static">
-                        <td className="cell-strong">{row.user || '—'}</td>
-                        <td className="col-num cell-mono">
-                          {formatHours(row.hours)} h
-                          <span className="cell-soft"> · {row.entryCount}</span>
-                        </td>
-                        <td className="col-num cell-mono">
-                          {getCurrencySymbol(row.currency)}
-                          {fmtAmount(row.amountPaid)} {row.currency}
-                        </td>
-                        <td className="cell-mono">{formatDate(row.paymentDate)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
+          {/* Pagos invoice-less ya hechos (read-only), separados por allocation. */}
+          {renderPaid('overage', overagePaid)}
+          {renderPaid('sp_internal', spInternalPaid)}
         </motion.div>
       )}
 
@@ -567,14 +576,15 @@ export function PaymentsPage() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {overageTarget &&
+        {payTarget &&
           (() => {
-            const selected = overageTarget.entries.filter((e) =>
-              overageSelectedIds.has(String(e.id)),
+            const label = PAY_LABELS[payTarget.allocation]
+            const selected = payTarget.entries.filter((e) =>
+              paySelectedIds.has(String(e.id)),
             )
             const selHours = selected.reduce((sum, e) => sum + e.hours, 0)
             const toggle = (id) =>
-              setOverageSelectedIds((prev) => {
+              setPaySelectedIds((prev) => {
                 const next = new Set(prev)
                 const k = String(id)
                 if (next.has(k)) next.delete(k)
@@ -583,28 +593,28 @@ export function PaymentsPage() {
               })
             return (
               <RegisterPaymentModal
-                key={`overage-${overageTarget.user}`}
-                title="Register overage payment"
-                submitLabel="Register overage payment"
+                key={`${payTarget.allocation}-${payTarget.user}`}
+                title={`Register ${label.low} payment`}
+                submitLabel={`Register ${label.low} payment`}
                 currencyEditable
                 extraValid={selected.length > 0}
-                summaryName={overageTarget.user}
-                summaryMeta={`Overage · ${selected.length} of ${overageTarget.entries.length} ${
-                  overageTarget.entries.length === 1 ? 'entry' : 'entries'
+                summaryName={payTarget.user}
+                summaryMeta={`${label.cap} · ${selected.length} of ${payTarget.entries.length} ${
+                  payTarget.entries.length === 1 ? 'entry' : 'entries'
                 }`}
                 summaryFigure={`${formatHours(selHours)} h`}
-                summaryFigureLabel="Overage hours (selected)"
+                summaryFigureLabel={`${label.cap} hours (selected)`}
                 defaultAmount=""
                 extraContent={
                   <div className="overage-picker">
                     <span className="overage-picker__title">Hours to pay</span>
                     <ul className="overage-picker__list">
-                      {overageTarget.entries.map((e) => (
+                      {payTarget.entries.map((e) => (
                         <li key={e.id}>
                           <label className="overage-picker__row">
                             <input
                               type="checkbox"
-                              checked={overageSelectedIds.has(String(e.id))}
+                              checked={paySelectedIds.has(String(e.id))}
                               onChange={() => toggle(e.id)}
                             />
                             <span className="overage-picker__desc">
@@ -624,12 +634,12 @@ export function PaymentsPage() {
                 }
                 footerNote={
                   <>
-                    Registers a contractor payment for the selected overage hours (no
+                    Registers a contractor payment for the selected {label.low} hours (no
                     invoice). They’ll be frozen and drop off the pending list.
                   </>
                 }
-                onClose={() => setOverageTarget(null)}
-                onConfirm={handleRegisterOverage}
+                onClose={() => setPayTarget(null)}
+                onConfirm={handleRegisterPayment}
               />
             )
           })()}

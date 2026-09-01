@@ -314,7 +314,8 @@ export function BillingPage() {
     () => (entry) => invoiceByEntryId.has(String(entry.id)),
     [invoiceByEntryId],
   )
-  // Horas de overage ya pagadas: salen de la tab Overage (no son pendientes).
+  // Horas invoice-less ya pagadas (overage y sp_internal): salen de su tab en
+  // Billing — ya se le pagaron al contractor desde Payments, no son pendientes.
   const paidEntryIds = useMemo(() => paidEntryIdsFrom(payments), [payments])
   const overageGroups = useMemo(
     () =>
@@ -329,11 +330,14 @@ export function BillingPage() {
   )
   const spInternalGroups = useMemo(
     () =>
-      groupReadonly(filteredAllAllocations.filter((e) => e.allocation === 'sp_internal'), 'client', {
-        withWeeks: true,
-        isInvoiced: isInvoicedFn,
-      }),
-    [filteredAllAllocations, isInvoicedFn],
+      groupReadonly(
+        filteredAllAllocations.filter(
+          (e) => e.allocation === 'sp_internal' && !paidEntryIds.has(String(e.id)),
+        ),
+        'client',
+        { withWeeks: true, isInvoiced: isInvoicedFn },
+      ),
+    [filteredAllAllocations, isInvoicedFn, paidEntryIds],
   )
   // X = allocation 'unknown' (categoría real, NO las null sin clasificar), por
   // contractor. Sólo las horas clasificadas explícitamente como X.
