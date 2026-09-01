@@ -2239,6 +2239,28 @@ th.col-pop { text-align: center; }
   position: relative;
 }
 
+/* Modales transaccionales de Billing/Payments: más anchos, con más aire y
+   texto más grande para que el formulario (fila de fecha/moneda/monto, resumen,
+   notas) se lea cómodo. Scopeado a --wide: no afecta al resto de los modales. */
+.modal--wide {
+  max-width: 720px;
+  padding: 36px;
+}
+
+.modal--wide .modal__title { font-size: 25px; }
+.modal--wide .modal__kicker { font-size: 12px; }
+.modal--wide .modal__summary-user { font-size: 18px; }
+.modal--wide .modal__summary-meta { font-size: 13.5px; }
+.modal--wide .modal__summary-hours-value { font-size: 2.1rem; }
+.modal--wide .field__label { font-size: 13.5px; }
+.modal--wide .field__req,
+.modal--wide .field__opt { font-size: 10.5px; }
+.modal--wide .field__input { font-size: 16.5px; }
+.modal--wide .modal__note { font-size: 14px; }
+.modal--wide .modal__entry-task { font-size: 15px; }
+.modal--wide .modal__entry-project { font-size: 12.5px; }
+.modal--wide .modal__entry-hours { font-size: 14px; }
+
 .modal__head {
   display: flex;
   align-items: flex-start;
@@ -2657,8 +2679,26 @@ th.col-pop { text-align: center; }
   /* Más ancho que el .modal base (480px): el detalle de una hora tiene proyecto,
      tarea y notas largas — con más ancho el texto entra sin scrollear ni cortarse.
      En mobile lo acota igual el max-width de la media query de abajo. */
-  max-width: 720px;
+  max-width: 780px;
+  padding: 32px;
 }
+
+/* Texto más grande para el detalle de horas (Entries/Billing), en línea con los
+   modales --wide de Billing/Payments. Scopeado: no afecta otros drawers. */
+.modal--entry-detail .drawer__title { font-size: 1.5rem; }
+.modal--entry-detail .drawer__kicker { font-size: 12px; }
+.modal--entry-detail .drawer__provider-name { font-size: 17px; }
+.modal--entry-detail .drawer__provider-meta { font-size: 12.5px; }
+.modal--entry-detail .drawer__fact dt { font-size: 12px; }
+.modal--entry-detail .drawer__fact dd { font-size: 15.5px; }
+.modal--entry-detail .drawer__section-label { font-size: 12px; }
+.modal--entry-detail .drawer__notes p { font-size: 15px; }
+.modal--entry-detail .drawer__entry-date { font-size: 12.5px; }
+.modal--entry-detail .drawer__entry-task { font-size: 14.5px; }
+.modal--entry-detail .drawer__entry-hours { font-size: 13.5px; }
+.modal--entry-detail .drawer__history-status { font-size: 13.5px; }
+.modal--entry-detail .drawer__history-meta { font-size: 12.5px; }
+.modal--entry-detail .drawer__history-note { font-size: 13.5px; }
 
 .drawer__head {
   display: flex;
@@ -4029,6 +4069,23 @@ th.col-pop { text-align: center; }
 .proj-table th,
 .proj-table td { white-space: nowrap; }
 .proj-table tbody tr { cursor: pointer; }
+
+/* Grilla de Projects (14 columnas): entra sin scroll horizontal ocupando todo
+   el ancho del contenedor. Scopeado a --fit para NO tocar las otras tablas que
+   comparten .proj-table (Capacity, Demand by SOW, etc.). El texto largo
+   (cliente, nombre de proyecto, approver, managers) puede cortar en 2 líneas en
+   vez de forzar scroll; los datos monoespaciados (IDs, #s, fechas) y los
+   numéricos siguen sin cortar. */
+.proj-table--fit { width: 100%; }
+.proj-table--fit th,
+.proj-table--fit td { white-space: normal; }
+/* Solo las celdas de datos monoespaciadas/numéricas se mantienen sin cortar
+   (IDs, #s, fechas, horas, el badge de estado). Los encabezados sí pueden
+   cortar en 2 líneas ("Base Budget Hours", "Cust. Manager"...) para ganar
+   ancho. */
+.proj-table--fit td.cell-mono,
+.proj-table--fit td.col-num,
+.proj-table--fit .zoho-status { white-space: nowrap; }
 /* Filas sin acción de fila (sólo el botón de detalle actúa): no deben insinuar
    que toda la fila es clickeable. */
 .proj-table tbody tr.row-static { cursor: default; }
@@ -4087,10 +4144,21 @@ th.col-pop { text-align: center; }
 
 /* Fase 4d: wizard más ancho para las pestañas de Mantenimiento y Tasks
    (tabla de severidad / tasks necesitan más aire que un form de 2 columnas). */
-/* Ancho generoso: la altura del wizard la manda la cantidad de stages, y a más
-   ancho entran de a dos por fila — que es lo que evita el scroll, no el tope de
-   altura. Ver .stage-list abajo. */
-.modal--wizard { max-width: 1040px; }
+/* El ancho interno no puede bajar de ~900px: cada .stage-row es una grilla de 4
+   columnas (nombre, SOW#, archivo, quitar) que necesita ~900px para no desbordar
+   —ver .stage-list abajo—. Con padding:40px (80px total) el max-width debe quedar
+   ≥ 980px. La altura la resuelve el tope + scroll de .modal--form, no el ancho. */
+.modal--wizard { max-width: 1000px; padding: 40px; }
+
+/* Texto más grande para el wizard "New Project", en línea con los otros
+   pop-ups agrandados. Scopeado: no afecta otros modales --form. */
+.modal--wizard .modal__title { font-size: 27px; }
+.modal--wizard .modal__kicker { font-size: 12.5px; }
+.modal--wizard .wizard-steps__item { font-size: 14.5px; }
+.modal--wizard .field__label { font-size: 14.5px; }
+.modal--wizard .field__req,
+.modal--wizard .field__opt { font-size: 11px; }
+.modal--wizard .field__input { font-size: 17.5px; }
 
 /* Todo modal de formulario tiene tope de altura y scroll interno.
    Sin esto crecían con el contenido sin límite: el wizard de proyecto, con cada
@@ -4374,7 +4442,32 @@ th.col-pop { text-align: center; }
    tablas de 4 a 6 columnas (documento/vinculado a/version/subido,
    proveedor/task/autorizadas/consumidas/restantes/estado) que quedaban
    scrolleando en horizontal dentro de su .table-wrap. */
-.modal--carousel { max-width: 980px; }
+.modal--carousel { max-width: 1040px; padding: 36px; gap: 22px; }
+
+/* Texto más grande para el detalle de proyecto (carrusel), en línea con los
+   otros pop-ups agrandados. Scopeado: no afecta otros modales --form. */
+.modal--carousel .modal__title { font-size: 24px; }
+.modal--carousel .modal__kicker { font-size: 12px; }
+.modal--carousel .carousel__title { font-size: 15.5px; }
+.modal--carousel .drawer__provider-name { font-size: 17px; }
+.modal--carousel .drawer__provider-meta { font-size: 12.5px; }
+.modal--carousel .drawer__fact dt { font-size: 12px; }
+.modal--carousel .drawer__fact dd { font-size: 15.5px; }
+.modal--carousel .drawer__section-label { font-size: 12px; }
+.modal--carousel .proj-record > summary { font-size: 13px; }
+.modal--carousel .table thead th { font-size: 12px; }
+.modal--carousel .table tbody td { font-size: 13.5px; }
+/* Más aire para que no se lea apretado: cuerpo del slide, ficha de datos,
+   header/nav del carrusel y filas de la tabla y el historial. */
+.modal--carousel .carousel__body { padding: 24px; }
+.modal--carousel .carousel__head { padding: 16px 22px; }
+.modal--carousel .carousel__nav { padding: 14px 22px; }
+.modal--carousel .drawer__provider { padding: 16px 18px; }
+.modal--carousel .drawer__facts { gap: 18px 26px; }
+.modal--carousel .drawer__fact dd { line-height: 1.5; }
+.modal--carousel .drawer__history { gap: 20px; }
+.modal--carousel .table tbody td { padding: 15px 13px; }
+.modal--carousel .table thead th { padding: 15px 13px; }
 /* nowrap + flex-shrink:0: con el número de SOW en el título, el encabezado se
    hizo más ancho y los botones envolvían, dejando la ✕ colgada en una segunda
    línea debajo de "Edit". Los controles se mantienen en una sola fila y es el

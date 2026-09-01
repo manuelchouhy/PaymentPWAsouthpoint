@@ -8,10 +8,11 @@ import {
   countByStatus,
   daysRemaining,
 } from '../lib/projectsData'
+import { projectSows, stageSows } from '../lib/projectSows'
 import { api } from '../lib/api'
 import { buildClientResolver } from '../lib/clientResolver'
 import { clientFilterKey, clientFilterOptions } from '../lib/useEntryFilters'
-import { formatDate } from '../lib/format'
+import { formatDate, formatHours } from '../lib/format'
 import { ContractBadge } from '../components/ContractBadge'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ProjectFormModal } from '../components/ProjectFormModal'
@@ -44,6 +45,8 @@ export function ProjectsPage() {
   const [status, setStatus] = useState('loading')
   const [filters, setFilters] = useState({
     clients: [],
+    projectNames: [],
+    sows: [],
     leadDevelopers: [],
     expFrom: '',
     expTo: '',
@@ -121,6 +124,22 @@ export function ProjectsPage() {
     () => [...new Set(projects.map((p) => p.leadDeveloper).filter(Boolean))].sort(),
     [projects],
   )
+  const projectNameOptions = useMemo(
+    () => [...new Set(projects.map((p) => p.projectName).filter(Boolean))].sort(),
+    [projects],
+  )
+  // Los SOW de un proyecto viven en dos lugares: el sowNumber de proyecto y, si
+  // tiene stages, un SOW por stage (stageSowNumbers, cargado en batch por
+  // getProjects). El filtro y la columna consideran ambos. Ver projectsData.js.
+  const sowOptions = useMemo(
+    () =>
+      [
+        ...new Set(
+          projects.flatMap((p) => projectSows(p)),
+        ),
+      ].sort(),
+    [projects],
+  )
 
   const statusCounts = useMemo(() => countByStatus(projects), [projects])
 
@@ -133,6 +152,12 @@ export function ProjectsPage() {
         if (!filters.clients.includes(clientFilterKey(p.resolvedClient, masterNames))) {
           return false
         }
+      }
+      if (filters.projectNames.length && !filters.projectNames.includes(p.projectName))
+        return false
+      if (filters.sows.length) {
+        const sows = projectSows(p)
+        if (!filters.sows.some((s) => sows.includes(s))) return false
       }
       if (
         filters.leadDevelopers.length &&
@@ -161,6 +186,8 @@ export function ProjectsPage() {
 
   const filtersActive =
     filters.clients.length ||
+    filters.projectNames.length ||
+    filters.sows.length ||
     filters.leadDevelopers.length ||
     filters.expFrom ||
     filters.expTo
@@ -171,6 +198,8 @@ export function ProjectsPage() {
       { header: 'Project', key: 'projectName' },
       { header: 'Project #', key: 'projectNumber' },
       { header: 'Contract #', key: 'contractNumber' },
+      { header: 'SOW', key: 'sows' },
+      { header: 'Base Budget Hours', key: 'baseBudgetHours' },
       { header: 'Lead Dev', key: 'leadDeveloper' },
       { header: 'Approver', key: 'approver' },
       { header: 'Contract Expiration', key: 'contractExpirationDate' },
@@ -181,10 +210,29 @@ export function ProjectsPage() {
       ...p,
       // La columna Client del export usa el cliente resuelto, igual que la grilla.
       client: p.resolvedClient || '',
+      // SOW de proyecto + SOW de cada stage, igual que la columna de la grilla.
+      sows: projectSows(p).join(', '),
       contractStatus: contractStatus(daysRemaining(p.contractExpirationDate)),
       daysLeft: daysRemaining(p.contractExpirationDate),
     }))
     exportGrid({ rows: exportRows, columns: cols, title: 'Projects and SOW', gridName: 'projects', format, generatedBy: user?.email ?? '' })
+  }
+
+  // rowToProject devuelve stageSowNumbers vacío (solo getProjects lo llena con
+  // su query batch). Tras crear/editar un proyecto, re-consultamos sus stages
+  // para que la columna y el filtro SOW no queden desactualizados hasta
+  // recargar. Se consulta siempre (no se asume que hasStages venga al día tras
+  // el guardado): sin stages devuelve [] y queda igual. No crítico: si la
+  // consulta falla, se deja como está y se corrige en el próximo getProjects.
+  // Ver projectsData.js.
+  async function withStageSows(project) {
+    try {
+      const stages = await api.projects.getStages(project.id)
+      return { ...project, stageSowNumbers: stageSows(stages) }
+    } catch (error) {
+      console.warn('No se pudieron refrescar los SOW de stage tras guardar:', error?.message)
+      return project
+    }
   }
 
   /**
@@ -203,7 +251,11 @@ export function ProjectsPage() {
       resourceId: project.id,
       after: { projectNumber: project.projectNumber, projectName: project.projectName, client: project.client },
     })
-    setProjects((prev) => sortByExp([project, ...prev]))
+    // Se adjuntan los SOW de stage del proyecto recién creado antes de meterlo
+    // en la lista, para que la columna y el filtro SOW queden al día sin
+    // recargar (mismo patrón que handleUpdateFromWizard).
+    const withSows = await withStageSows(project)
+    setProjects((prev) => sortByExp([withSows, ...prev]))
     setWizardOpen(false)
 
     if (partialFailure) {
@@ -225,7 +277,17 @@ export function ProjectsPage() {
   async function handleUpdate(payload) {
     const updated = await api.projects.update(form.project, payload, user?.email ?? null)
     api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'project.update', resourceType: 'project', resourceId: updated.id, before: { projectNumber: form.project.projectNumber }, after: { projectNumber: updated.projectNumber, projectName: updated.projectName, client: updated.client } })
-    setProjects((prev) => sortByExp(prev.map((p) => (p.id === updated.id ? updated : p))))
+    // El form no-wizard no edita stages: se preserva el stageSowNumbers que ya
+    // tenía la fila (updated viene con [] de rowToProject).
+    setProjects((prev) =>
+      sortByExp(
+        prev.map((p) =>
+          p.id === updated.id
+            ? { ...updated, stageSowNumbers: p.stageSowNumbers ?? [] }
+            : p,
+        ),
+      ),
+    )
     setForm(null)
     setToast({ id: Date.now(), message: `Project updated: ${updated.projectName}` })
   }
@@ -372,7 +434,10 @@ export function ProjectsPage() {
       before: { projectNumber: wizardEditing.projectNumber },
       after: { projectNumber: updated.projectNumber, projectName: updated.projectName, client: updated.client },
     })
-    setProjects((prev) => sortByExp(prev.map((p) => (p.id === updated.id ? updated : p))))
+    // El wizard pudo editar/agregar stages: se re-consultan sus SOW para que la
+    // columna y el filtro reflejen los cambios sin recargar.
+    const updatedWithSows = await withStageSows(updated)
+    setProjects((prev) => sortByExp(prev.map((p) => (p.id === updatedWithSows.id ? updatedWithSows : p))))
     setWizardEditing(null)
     setToast({ id: Date.now(), message: `Project updated: ${updated.projectName}` })
   }
@@ -458,6 +523,18 @@ export function ProjectsPage() {
                 onToggle={(v) => toggle('clients', v)}
               />
               <MultiSelectDropdown
+                label="Project"
+                options={projectNameOptions}
+                selected={filters.projectNames}
+                onToggle={(v) => toggle('projectNames', v)}
+              />
+              <MultiSelectDropdown
+                label="SOW"
+                options={sowOptions}
+                selected={filters.sows}
+                onToggle={(v) => toggle('sows', v)}
+              />
+              <MultiSelectDropdown
                 label="Lead Developer"
                 options={leadDevOptions}
                 selected={filters.leadDevelopers}
@@ -488,7 +565,14 @@ export function ProjectsPage() {
                   type="button"
                   className="btn btn--ghost filterbar__clear"
                   onClick={() =>
-                    setFilters({ clients: [], leadDevelopers: [], expFrom: '', expTo: '' })
+                    setFilters({
+                      clients: [],
+                      projectNames: [],
+                      sows: [],
+                      leadDevelopers: [],
+                      expFrom: '',
+                      expTo: '',
+                    })
                   }
                 >
                   Clear
@@ -508,7 +592,7 @@ export function ProjectsPage() {
             <div className="empty">No projects to display.</div>
           ) : (
             <div className="table-wrap table-wrap--scroll">
-              <table className="table proj-table">
+              <table className="table proj-table proj-table--fit">
                 <thead>
                   <tr>
                     <th scope="col">Client</th>
@@ -516,13 +600,12 @@ export function ProjectsPage() {
                     <th scope="col">Project #</th>
                     <th scope="col">Zoho Status</th>
                     <th scope="col">Customer</th>
-                    <th scope="col">Code</th>
-                    <th scope="col">Proposal</th>
-                    <th scope="col">Proposal #</th>
+                    <th scope="col" className="col-num">Base Budget Hours</th>
                     <th scope="col">Approver</th>
                     <th scope="col">Cust. Manager</th>
                     <th scope="col">Lead Dev</th>
                     <th scope="col">Contract #</th>
+                    <th scope="col">SOW</th>
                     <th scope="col">Expiration</th>
                     <th scope="col" className="col-num">Days</th>
                     <th scope="col">Status</th>
@@ -552,13 +635,16 @@ export function ProjectsPage() {
                           )}
                         </td>
                         <td className="cell-soft">{p.customerName || '—'}</td>
-                        <td className="cell-mono">{p.customerCode || '—'}</td>
-                        <td className="cell-soft">{p.proposalName || '—'}</td>
-                        <td className="cell-mono">{p.proposalNumber || '—'}</td>
+                        <td className="col-num cell-mono">
+                          {p.baseBudgetHours != null ? formatHours(p.baseBudgetHours) : '—'}
+                        </td>
                         <td>{p.approver || '—'}</td>
                         <td>{p.customerManager || '—'}</td>
                         <td>{p.leadDeveloper || '—'}</td>
                         <td className="cell-mono">{p.contractNumber || '—'}</td>
+                        <td className="cell-mono">
+                          {projectSows(p).join(', ') || '—'}
+                        </td>
                         <td className="cell-mono">
                           {p.contractExpirationDate
                             ? formatDate(p.contractExpirationDate)

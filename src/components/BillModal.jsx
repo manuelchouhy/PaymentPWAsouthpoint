@@ -146,7 +146,7 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
       transition={{ duration: 0.2 }}
     >
       <motion.div
-        className="modal"
+        className="modal modal--wide"
         role="dialog"
         aria-modal="true"
         aria-labelledby="bill-modal-title"

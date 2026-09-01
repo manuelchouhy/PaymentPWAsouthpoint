@@ -140,7 +140,7 @@ export function RegisterPaymentModal({
       transition={{ duration: 0.2 }}
     >
       <motion.div
-        className="modal"
+        className="modal modal--wide"
         role="dialog"
         aria-modal="true"
         aria-labelledby="payment-modal-title"
