@@ -34,6 +34,9 @@ npm-debug.log*
 .playwright-mcp
 supabase/.idea
 
+# Config de MCP por-desarrollador (apunta al backend; no versionar)
+.mcp.json
+
 # Scratch (issues técnicos locales)
 .scratch
 
