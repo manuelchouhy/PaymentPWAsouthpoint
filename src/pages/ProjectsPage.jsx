@@ -601,7 +601,6 @@ export function ProjectsPage() {
                     <th scope="col">Zoho Status</th>
                     <th scope="col">Customer</th>
                     <th scope="col" className="col-num">Base Budget Hours</th>
-                    <th scope="col">Proposal #</th>
                     <th scope="col">Approver</th>
                     <th scope="col">Cust. Manager</th>
                     <th scope="col">Lead Dev</th>
@@ -639,7 +638,6 @@ export function ProjectsPage() {
                         <td className="col-num cell-mono">
                           {p.baseBudgetHours != null ? formatHours(p.baseBudgetHours) : '—'}
                         </td>
-                        <td className="cell-mono">{p.proposalNumber || '—'}</td>
                         <td>{p.approver || '—'}</td>
                         <td>{p.customerManager || '—'}</td>
                         <td>{p.leadDeveloper || '—'}</td>
