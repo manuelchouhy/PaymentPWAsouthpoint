@@ -4127,10 +4127,11 @@ th.col-pop { text-align: center; }
 
 /* Fase 4d: wizard más ancho para las pestañas de Mantenimiento y Tasks
    (tabla de severidad / tasks necesitan más aire que un form de 2 columnas). */
-/* Ancho generoso: la altura del wizard la manda la cantidad de stages, y a más
-   ancho entran de a dos por fila — que es lo que evita el scroll, no el tope de
-   altura. Ver .stage-list abajo. */
-.modal--wizard { max-width: 900px; padding: 40px; }
+/* El ancho interno no puede bajar de ~900px: cada .stage-row es una grilla de 4
+   columnas (nombre, SOW#, archivo, quitar) que necesita ~900px para no desbordar
+   —ver .stage-list abajo—. Con padding:40px (80px total) el max-width debe quedar
+   ≥ 980px. La altura la resuelve el tope + scroll de .modal--form, no el ancho. */
+.modal--wizard { max-width: 1000px; padding: 40px; }
 
 /* Texto más grande para el wizard "New Project", en línea con los otros
    pop-ups agrandados. Scopeado: no afecta otros modales --form. */
