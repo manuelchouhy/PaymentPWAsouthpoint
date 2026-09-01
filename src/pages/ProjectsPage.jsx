@@ -8,7 +8,7 @@ import {
   countByStatus,
   daysRemaining,
 } from '../lib/projectsData'
-import { projectSows } from '../lib/projectSows'
+import { projectSows, stageSows } from '../lib/projectSows'
 import { api } from '../lib/api'
 import { buildClientResolver } from '../lib/clientResolver'
 import { clientFilterKey, clientFilterOptions } from '../lib/useEntryFilters'
@@ -228,7 +228,7 @@ export function ProjectsPage() {
   async function withStageSows(project) {
     try {
       const stages = await api.projects.getStages(project.id)
-      return { ...project, stageSowNumbers: stages.map((s) => s.sowNumber).filter(Boolean) }
+      return { ...project, stageSowNumbers: stageSows(stages) }
     } catch (error) {
       console.warn('No se pudieron refrescar los SOW de stage tras guardar:', error?.message)
       return project

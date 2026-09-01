@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { projectSows } from './projectSows.js'
+import { projectSows, stageSows } from './projectSows.js'
 
 test('combina el SOW de proyecto con los de stage', () => {
   assert.deepEqual(
@@ -37,4 +37,16 @@ test('proyecto sin stages: solo el SOW de proyecto', () => {
 test('proyecto sin ningún SOW: lista vacía', () => {
   assert.deepEqual(projectSows({ sowNumber: null, stageSowNumbers: [] }), [])
   assert.deepEqual(projectSows({}), [])
+})
+
+test('stageSows: extrae sowNumber no vacíos de una lista de stages', () => {
+  assert.deepEqual(
+    stageSows([{ sowNumber: 'SOW-1' }, { sowNumber: null }, { sowNumber: 'SOW-2' }, { sowNumber: '' }]),
+    ['SOW-1', 'SOW-2'],
+  )
+})
+
+test('stageSows: sin stages (undefined o vacío) → lista vacía', () => {
+  assert.deepEqual(stageSows(undefined), [])
+  assert.deepEqual(stageSows([]), [])
 })

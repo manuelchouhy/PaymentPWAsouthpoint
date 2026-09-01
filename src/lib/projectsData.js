@@ -23,6 +23,7 @@
 
 import { supabase, isSupabaseConfigured } from './supabase'
 import { demoDate } from './demoDates'
+import { stageSows } from './projectSows'
 
 // Campos editables ↔ columnas, para mapeo y auditoría.
 const FIELD_TO_COLUMN = {
@@ -371,9 +372,7 @@ export async function getProjects() {
     return [...demoProjects]
       .map((p) => ({
         ...p,
-        stageSowNumbers: (demoStages[p.id] ?? [])
-          .map((s) => s.sowNumber)
-          .filter(Boolean),
+        stageSowNumbers: stageSows(demoStages[p.id]),
       }))
       .sort((a, b) =>
         (a.contractExpirationDate || '9999-99-99').localeCompare(

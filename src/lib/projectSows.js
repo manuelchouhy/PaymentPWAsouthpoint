@@ -19,3 +19,15 @@ export function projectSows(project) {
     ),
   ]
 }
+
+/**
+ * Los sowNumber no vacíos de una lista de stages (ProjectStage[]). Fuente única
+ * de la derivación stages→SOW: la usan withStageSows (refresh tras guardar) y el
+ * path demo de getProjects, para que un cambio de regla (ej. normalizar el
+ * string del SOW) se haga en un solo lugar.
+ * @param {{ sowNumber?: ?string }[]} [stages]
+ * @returns {string[]}
+ */
+export function stageSows(stages) {
+  return (stages ?? []).map((s) => s.sowNumber).filter(Boolean)
+}
