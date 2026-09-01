@@ -186,7 +186,7 @@ export function ProjectsPage() {
       { header: 'Project', key: 'projectName' },
       { header: 'Project #', key: 'projectNumber' },
       { header: 'Contract #', key: 'contractNumber' },
-      { header: 'Budget Hours', key: 'baseBudgetHours' },
+      { header: 'Base Budget Hours', key: 'baseBudgetHours' },
       { header: 'Lead Dev', key: 'leadDeveloper' },
       { header: 'Approver', key: 'approver' },
       { header: 'Contract Expiration', key: 'contractExpirationDate' },
@@ -551,7 +551,7 @@ export function ProjectsPage() {
                     <th scope="col">Project #</th>
                     <th scope="col">Zoho Status</th>
                     <th scope="col">Customer</th>
-                    <th scope="col" className="col-num">Budget Hours</th>
+                    <th scope="col" className="col-num">Base Budget Hours</th>
                     <th scope="col">Proposal #</th>
                     <th scope="col">Approver</th>
                     <th scope="col">Cust. Manager</th>
