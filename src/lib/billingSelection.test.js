@@ -174,6 +174,27 @@ test('projectsForContractWarnings: match por id NO duplica banners para un mismo
   assert.deepEqual(out.map((p) => p.id), [1])
 })
 
+test('projectsForContractWarnings: id ausente en projects → cae a fallback por nombre (no oculta aviso)', () => {
+  // La hora trae id 'zX' pero projects no tiene esa fila; sí hay un homónimo del mismo
+  // cliente maestro con contrato. Se avisa igual (fail-safe), sin depender del id.
+  const projects = [{ id: 7, projectName: 'Support', client: 'HSS Group' }]
+  const resolve = resolverFrom({ 'HSS Group': 'HSS' })
+  const out = projectsForContractWarnings(projects, [ent({ zohoProjectId: 'zX', project: 'Support' })], 'HSS', resolve)
+  assert.deepEqual(out.map((p) => p.id), [7])
+})
+
+test('projectsForContractWarnings: id presente → su nombre NO entra al fallback (sin banner duplicado)', () => {
+  // Se factura z1 (presente). Existe un homónimo z2 del mismo cliente. Sólo z1 avisa:
+  // el nombre 'Support' no se suma al fallback porque su id está presente.
+  const projects = [
+    { id: 1, projectName: 'Support', client: 'HSS', zohoProjectId: 'z1' },
+    { id: 2, projectName: 'Support', client: 'HSS', zohoProjectId: 'z2' },
+  ]
+  const resolve = resolverFrom({ HSS: 'HSS' })
+  const out = projectsForContractWarnings(projects, [ent({ zohoProjectId: 'z1', project: 'Support' })], 'HSS', resolve)
+  assert.deepEqual(out.map((p) => p.id), [1])
+})
+
 test('projectsForContractWarnings: fallback por nombre (sin id) — descarta el de OTRO cliente', () => {
   // Horas legacy sin zohoProjectId: cae al match por nombre + cliente maestro.
   const projects = [

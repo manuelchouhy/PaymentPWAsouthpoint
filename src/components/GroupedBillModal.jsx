@@ -63,11 +63,13 @@ export function GroupedBillModal({
   // cada render del padre, así que depender de él recomputaría los avisos sin
   // necesidad. Se depende del conjunto de proyectos (id, o nombre si la hora no trae
   // id), que sólo cambia si cambia la selección de proyectos.
-  const selectionProjectKey = [
-    ...new Set(entries.map((e) => (e.zohoProjectId ? `#${e.zohoProjectId}` : e.project)).filter(Boolean)),
-  ]
-    .sort()
-    .join('|')
+  const selectionProjectKey = useMemo(
+    () =>
+      [...new Set(entries.map((e) => (e.zohoProjectId ? `#${e.zohoProjectId}` : e.project)).filter(Boolean))]
+        .sort()
+        .join('|'),
+    [entries],
+  )
 
   // Avisos de contrato (Expired/Critical/Expiring Soon) de los proyectos de la
   // selección. Los proyectos ya vienen del padre (BillingPage los cargó para la
