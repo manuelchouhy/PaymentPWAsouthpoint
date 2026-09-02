@@ -42,6 +42,7 @@
 import { supabase, isSupabaseConfigured } from './supabase'
 import { logAudit } from './auditData'
 import { demoDate, demoTimestamp } from './demoDates'
+import { buildGroupedInvoicePayload } from './invoiceContractors'
 
 /** @type {TimeEntry[]} */
 const MOCK_TIME_ENTRIES = [
@@ -345,6 +346,14 @@ function rowToInvoice(row) {
   return {
     id: row.id,
     supplierInvoiceNumber: row.supplier_invoice_number,
+    // Modelo multi-contractor (migración 0039): la unidad facturable pasa a ser
+    // Cliente + Proyecto + Semana y el número propio de SouthPoint (SP invoice
+    // number) vive en su columna. Lecturas tolerantes: null en las facturas
+    // legacy (single-contractor), que no tienen estas columnas cargadas.
+    spInvoiceNumber: row.sp_invoice_number ?? null,
+    project: row.project ?? null,
+    client: row.client ?? null,
+    weekStart: row.week_start ?? null,
     invoiceDate: row.invoice_date,
     totalAmount: Number(row.total_amount),
     currency: row.currency ?? 'USD',
@@ -615,7 +624,7 @@ export async function getInvoices() {
   const { data, error } = await supabase
     .from('invoices')
     .select(
-      'id, supplier_invoice_number, invoice_date, total_amount, currency, notes, user_name, entry_ids, status, payment_terms_days, created_at, created_by',
+      'id, supplier_invoice_number, sp_invoice_number, project, client, week_start, invoice_date, total_amount, currency, notes, user_name, entry_ids, status, payment_terms_days, created_at, created_by',
     )
     .order('created_at', { ascending: false })
 
@@ -704,6 +713,130 @@ export async function createInvoice({
 
   if (error) throw new Error(error.message)
   return { ok: true, mode: 'supabase', invoice: rowToInvoice(data) }
+}
+
+/**
+ * Emite una factura AGRUPADA multi-contractor (modelo migración 0039): una sola
+ * factura cubre UN cliente + UN proyecto + UNA semana y agrupa a varios
+ * contractors. Inserta la fila `invoices` (SP invoice number + unidad facturable
+ * + status `Invoiced`, sin plata) y N filas hijas `invoice_contractors`
+ * (contractor + entry_ids + horas). Medida en HORAS: no toca monto/moneda.
+ *
+ * La construcción y validación del payload viven en el módulo puro
+ * `invoiceContractors.js` (testeable con node --test); acá va sólo el I/O.
+ *
+ * @param {{
+ *   spInvoiceNumber: string,
+ *   project: string,
+ *   client?: string,
+ *   weekStart?: string,
+ *   notes?: string,
+ *   contractors: Array<{ contractor: string, entries: Array<{ id: string|number, hours: number }> }>,
+ *   createdBy?: string,
+ * }} selection
+ * @returns {Promise<{ ok: true, mode: 'supabase'|'demo', invoice: object, contractors: object[] }>}
+ */
+export async function createGroupedInvoice({ createdBy, ...selection }) {
+  const { invoice, contractorRows } = buildGroupedInvoicePayload(selection)
+
+  if (!isSupabaseConfigured) {
+    await new Promise((resolve) => setTimeout(resolve, 350))
+    const id = `inv-demo-${Date.now()}`
+    // Se arma una fila sintética (snake_case) y se pasa por rowToInvoice —la misma
+    // normalización que la rama Supabase— para que demo y prod no puedan diverger
+    // en el shape aunque rowToInvoice cambie. La factura agrupada es "sin plata".
+    const invoiceRow = {
+      id,
+      supplier_invoice_number: null,
+      sp_invoice_number: invoice.sp_invoice_number,
+      project: invoice.project,
+      client: invoice.client,
+      week_start: invoice.week_start,
+      invoice_date: null,
+      total_amount: null,
+      currency: 'USD',
+      notes: invoice.notes,
+      user_name: null,
+      entry_ids: [...invoice.entry_ids],
+      status: 'Invoiced',
+      payment_terms_days: 30,
+      created_at: new Date().toISOString(),
+      created_by: createdBy || null,
+    }
+    return {
+      ok: true,
+      mode: 'demo',
+      invoice: rowToInvoice(invoiceRow),
+      contractors: contractorRows.map((r, i) => ({
+        id: `invc-demo-${Date.now()}-${i}`,
+        invoiceId: id,
+        contractor: r.contractor,
+        entryIds: [...r.entry_ids],
+        hours: r.hours,
+        supplierInvoiceNumber: null,
+        paymentDate: null,
+        paymentId: null,
+      })),
+    }
+  }
+
+  // Emisión ATÓMICA en el servidor (create_grouped_invoice, migración 0039):
+  // valida el SP invoice number (dedup en app: no hay constraint único por los
+  // duplicados históricos del supplier#), inserta la factura y las N filas
+  // `invoice_contractors` en una sola transacción. Un insert client-side en dos
+  // pasos no sirve: la policy de DELETE de invoices sólo permite borrar facturas
+  // de test, así que un rollback client-side de una factura real sería no-op y
+  // dejaría una factura huérfana.
+  // entry_ids de la factura los DERIVA el RPC de contractorRows (una sola fuente
+  // de verdad); no se manda invoice.entry_ids aparte para que no puedan diverger.
+  const { data, error } = await supabase.rpc('create_grouped_invoice', {
+    p_sp_invoice_number: invoice.sp_invoice_number,
+    p_project: invoice.project,
+    p_client: invoice.client,
+    p_week_start: invoice.week_start,
+    p_notes: invoice.notes,
+    p_created_by: createdBy || null,
+    p_contractors: contractorRows,
+  })
+  if (error) {
+    if (error.code === '23505' || /already exists/i.test(error.message ?? '')) {
+      const err = new Error('That SP invoice number already exists. Please use a different one.')
+      err.code = 'duplicate'
+      throw err
+    }
+    // El guard anti-doble-factura del RPC (y el trigger 0037) rechazan con el
+    // SQLSTATE propio OV001 si alguna hora ya está cubierta por otra factura o un
+    // pago. Se matchea por ese código, no por el texto del mensaje.
+    if (error.code === 'OV001') {
+      const err = new Error(
+        'One or more of these hours are already covered by another invoice or payment. Refresh and try again.',
+      )
+      err.code = 'overlap'
+      throw err
+    }
+    throw new Error(error.message)
+  }
+
+  return {
+    ok: true,
+    mode: 'supabase',
+    invoice: rowToInvoice(data.invoice),
+    contractors: (data.contractors ?? []).map(rowToInvoiceContractor),
+  }
+}
+
+// Normaliza una fila de `invoice_contractors` al shape de la UI.
+function rowToInvoiceContractor(row) {
+  return {
+    id: row.id,
+    invoiceId: row.invoice_id,
+    contractor: row.contractor,
+    entryIds: Array.isArray(row.entry_ids) ? row.entry_ids : [],
+    hours: row.hours != null ? Number(row.hours) : 0,
+    supplierInvoiceNumber: row.supplier_invoice_number ?? null,
+    paymentDate: row.payment_date ?? null,
+    paymentId: row.payment_id ?? null,
+  }
 }
 
 /**
