@@ -3,7 +3,7 @@ import { useOutletContext, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowRight, Info } from 'lucide-react'
 import { api } from '../lib/api'
-import { formatDate, formatHours } from '../lib/format'
+import { formatDate, formatHours, weekStartISO } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, sortedUnique, clientFilterOptions, OTHER_CLIENT } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
@@ -499,14 +499,18 @@ export function BillingPage() {
   // queda al contractor en ese cliente, no lo que el filtro de Proyecto/fecha deja
   // ver: si no, filtrar por un proyecto haría creer que no queda nada pendiente
   // cuando el contractor sí tiene horas sin facturar en otro proyecto del cliente.
-  const pendingByClientProvider = useMemo(() => {
+  // Pendiente facturable por UNIDAD (cliente + proyecto + semana) y contractor: es
+  // la base del aviso "remaining" del modal, que debe medirse en la misma unidad
+  // que la factura (no en todo el cliente). Clave `client||project||weekStart||user`.
+  const pendingByUnitUser = useMemo(() => {
     const m = new Map()
     for (const e of entriesConCliente) {
       if (e.status !== 'Approved') continue
       if (e.allocation !== 'bill_to_client') continue
       if (!e.client) continue
       if (invoiceByEntryId.has(String(e.id))) continue
-      const key = `${e.client}||${e.user}`
+      const ws = weekStartISO(e.date ?? '') ?? ''
+      const key = `${e.client}||${e.project ?? ''}||${ws}||${e.user}`
       m.set(key, (m.get(key) ?? 0) + (Number(e.hours) || 0))
     }
     return m
@@ -588,7 +592,16 @@ export function BillingPage() {
   // (sin selección no hay nada que avisar). El mensaje se comparte entre el <p> de
   // error y el title del botón para que no se contradigan.
   const blockReason = selectedRows.length ? billBlockReason(selectedRows) : null
-  const blockMessage = blockReason ? billBlockMessage(blockReason, selectedRows) : null
+  // Sin permiso de facturar, el botón se deshabilita aunque la selección sea válida:
+  // el aviso lo explica (si no, quedaría un botón muerto sin motivo). El permiso
+  // tiene precedencia sobre el motivo de selección.
+  const blockMessage = !selectedRows.length
+    ? null
+    : !canCreate
+      ? 'You do not have permission to issue invoices.'
+      : blockReason
+        ? billBlockMessage(blockReason, selectedRows)
+        : null
 
   // Contractors incluidos en la factura (para el modal): sólo se computa con el modal
   // abierto (no en cada render de la grilla).
@@ -600,7 +613,7 @@ export function BillingPage() {
   // Horas pendientes POR CONTRACTOR que quedan fuera de esta factura (C11). Sólo con
   // el modal abierto y la selección facturable (un cliente); la lógica pura decide.
   const remainingByContractor =
-    modalOpen && canBill ? remainingHoursByContractor(selectedRows, pendingByClientProvider) : []
+    modalOpen && canBill ? remainingHoursByContractor(selectedRows, pendingByUnitUser) : []
 
   function toggleGroup(key) {
     setSelectedKeys((prev) => {

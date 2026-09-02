@@ -93,12 +93,13 @@ export function contractorsFromSelection(selectedRows) {
     if (!name) continue
     if (!byName.has(name)) byName.set(name, { contractor: name, entries: [], hours: 0 })
     const c = byName.get(name)
-    // hours se suma de las ENTRIES (no de r.hours) para que el total mostrado use la
-    // misma fuente que el payload/builder (invoiceContractors), y no puedan diverger.
+    // Las horas de la entry se pasan CRUDAS al payload: así el guard de horas
+    // inválidas del builder (invoiceContractors.normalizeEntries, que rechaza null)
+    // sigue vivo por la ruta real de la UI. Para el total MOSTRADO se coerciona
+    // (Number||0), misma fuente (las entries) que el builder, sin diverger.
     for (const e of r.entries ?? []) {
-      const h = Number(e.hours) || 0
-      c.entries.push({ id: e.id, hours: h })
-      c.hours += h
+      c.entries.push({ id: e.id, hours: e.hours })
+      c.hours += Number(e.hours) || 0
     }
   }
   return [...byName.values()].sort(
@@ -107,19 +108,23 @@ export function contractorsFromSelection(selectedRows) {
 }
 
 /**
- * Horas pendientes de cada contractor en el cliente de la selección que NO entran
- * en esta factura (aviso C11 recalculado por-contractor). Sólo con un cliente en la
- * selección (con varios, la resta cruzaría clientes y sería ambigua).
- * @param {Map<string,number>} pendingByClientProvider clave `${client}||${user}`
+ * Horas pendientes de cada contractor que NO entran en esta factura (aviso C11).
+ * La factura es UN cliente + UN proyecto + UNA semana, así que el pendiente se mide
+ * en ESA misma unidad (no en todo el cliente): si no, reportaría como "omitidas"
+ * horas de otros proyectos/semanas que NO se pueden facturar acá.
+ * @param {Map<string,number>} pendingByUnitUser clave `${client}||${project}||${weekStart}||${user}`
  * @returns {Array<{contractor:string, remaining:number}>}
  */
-export function remainingHoursByContractor(selectedRows, pendingByClientProvider) {
-  const { clients } = selectionScope(selectedRows)
-  if (clients.size !== 1) return []
-  const [client] = clients
+export function remainingHoursByContractor(selectedRows, pendingByUnitUser) {
+  const { clients, projects } = selectionScope(selectedRows)
+  if (clients.size !== 1 || projects.size !== 1) return []
+  const client = [...clients][0]
+  const project = [...projects][0]
+  const weekStart = weekStartFromSelection(selectedRows)
+  if (client === '' || project === '' || weekStart == null) return []
   const out = []
   for (const c of contractorsFromSelection(selectedRows)) {
-    const pending = pendingByClientProvider?.get(`${client}||${c.contractor}`) ?? 0
+    const pending = pendingByUnitUser?.get(`${client}||${project}||${weekStart}||${c.contractor}`) ?? 0
     const remaining = Math.max(0, pending - c.hours)
     if (remaining > 0) out.push({ contractor: c.contractor, remaining })
   }

@@ -110,11 +110,13 @@ test('contractorsFromSelection: orden por horas y estructura de entries', () => 
   assert.deepEqual(ana.entries.map((e) => e.id), [1, 2])
 })
 
-test('remainingHoursByContractor: pendiente por contractor menos lo seleccionado; sólo > 0', () => {
+test('remainingHoursByContractor: pendiente por unidad (cliente+proyecto+semana) por contractor', () => {
+  // Filas de HSS / P1 / semana del 2026-08-09 (date 2026-08-12).
   const sel = [row({ id: 1, user: 'Ana', hours: 4 }), row({ id: 2, user: 'Bob', hours: 3 })]
   const pending = new Map([
-    ['HSS||Ana', 10], // Ana: 10 pendientes, factura 4 → quedan 6
-    ['HSS||Bob', 3], //  Bob: 3 pendientes, factura 3 → 0 (no aparece)
+    ['HSS||P1||2026-08-09||Ana', 10], // Ana: 10 pendientes en la unidad, factura 4 → 6
+    ['HSS||P1||2026-08-09||Bob', 3], //  Bob: 3 pendientes, factura 3 → 0 (no aparece)
+    ['HSS||P2||2026-08-09||Ana', 5], //  otra unidad (P2): NO cuenta para esta factura
   ])
   const out = remainingHoursByContractor(sel, pending)
   assert.deepEqual(out, [{ contractor: 'Ana', remaining: 6 }])

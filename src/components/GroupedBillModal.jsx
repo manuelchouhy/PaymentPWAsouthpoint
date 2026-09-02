@@ -47,6 +47,8 @@ export function GroupedBillModal({
   const firstFieldRef = useRef(null)
 
   const invoiceValid = spInvoiceNumber.trim().length > 0
+  // Umbral 0.05: por debajo, formatHours redondea a "0.0" y no vale la pena avisar.
+  const shownRemaining = remainingByContractor.filter((r) => r.remaining >= 0.05)
 
   useScrollLock()
 
@@ -225,13 +227,12 @@ export function GroupedBillModal({
 
         {/* Horas pendientes por contractor que quedan fuera de esta factura.
             Umbral 0.05: por debajo, formatHours redondea a "0.0". */}
-        {remainingByContractor.some((r) => r.remaining >= 0.05) && (
+        {shownRemaining.length > 0 && (
           <div className="modal__note" role="status">
             <AlertTriangle size={14} aria-hidden="true" />
             <span>
               Not included in this invoice:{' '}
-              {remainingByContractor
-                .filter((r) => r.remaining >= 0.05)
+              {shownRemaining
                 .map((r) => `${formatHours(r.remaining)} h of ${r.contractor}`)
                 .join(', ')}
               .
