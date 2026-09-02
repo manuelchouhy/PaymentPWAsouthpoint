@@ -15,12 +15,23 @@ const COUNTED = ['Expired', 'Critical', 'Expiring Soon', 'Active']
  */
 export function SupplierContractsWidget() {
   const [contracts, setContracts] = useState([])
+  const [widestThreshold, setWidestThreshold] = useState(90)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
-    api.supplierContracts.list()
-      .then((data) => !cancelled && setContracts(data))
+    // Mismo par que SupplierContractsPage: el umbral de "priority en alerta" sale
+    // de los ajustes guardados (threshold1Days), no del default fijo (90), para que
+    // widget y página coincidan en qué contratos están en alerta.
+    Promise.all([
+      api.supplierContracts.list(),
+      api.supplierContracts.getAlertSettings(),
+    ])
+      .then(([list, settings]) => {
+        if (cancelled) return
+        setContracts(list)
+        setWidestThreshold(settings?.threshold1Days ?? 90)
+      })
       .catch(() => !cancelled && setContracts([]))
       .finally(() => !cancelled && setLoading(false))
     return () => {
@@ -33,7 +44,8 @@ export function SupplierContractsWidget() {
     const st = displaySupplierStatus(c)
     if (st in counts) counts[st] += 1
   }
-  const priority = priorityAlertContracts(contracts)
+  const priority = priorityAlertContracts(contracts, widestThreshold)
+  const topDays = priority.length > 0 ? daysRemaining(priority[0].expirationDate) : null
 
   return (
     <section className="dash-widget" aria-label="Supplier contracts">
@@ -57,7 +69,9 @@ export function SupplierContractsWidget() {
               <span className="dash-widget__priority-name">{priority[0].supplierName}</span>
               <span className="dash-widget__priority-meta">
                 expires {formatDate(priority[0].expirationDate)} ·{' '}
-                {daysRemaining(priority[0].expirationDate)} d
+                {topDays != null && topDays < 0
+                  ? `${Math.abs(topDays)} d overdue`
+                  : `${topDays} d`}
               </span>
             </div>
           )}

@@ -207,8 +207,10 @@ export function DashboardPage() {
     const now = new Date()
     const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
+    // Sólo horas facturables: Approved y todavía sin factura. Las Rejected /
+    // Pending (Zoho) no se facturan nunca, así que no cuentan como "pendientes".
     const pendingHours = data.entries
-      .filter((e) => !invoiceByEntryId.has(String(e.id)))
+      .filter((e) => e.status === 'Approved' && !invoiceByEntryId.has(String(e.id)))
       .reduce((sum, e) => sum + e.hours, 0)
 
     const invoicesThisMonth = data.invoices.filter((i) =>
@@ -234,7 +236,9 @@ export function DashboardPage() {
   // dominio de esa card (no repite el número de la card, da contexto de tendencia).
   const sparklines = useMemo(() => {
     if (!data) return null
-    const unbilled = data.entries.filter((e) => !invoiceByEntryId.has(String(e.id)))
+    const unbilled = data.entries.filter(
+      (e) => e.status === 'Approved' && !invoiceByEntryId.has(String(e.id)),
+    )
     return {
       pendingHours: last7DaysSeries(unbilled, 'date', 'hours'),
       invoicesThisMonth: last7DaysSeries(data.invoices, 'invoiceDate'),
@@ -248,8 +252,10 @@ export function DashboardPage() {
     const sums = { Pending: 0, Invoiced: 0, Collected: 0, Paid: 0 }
     for (const e of data.entries) {
       const inv = invoiceByEntryId.get(String(e.id))
-      const st = inv ? inv.status : 'Pending'
-      sums[st] = (sums[st] || 0) + e.hours
+      // Facturada → cuenta bajo el estado de su factura. Sin factura → sólo entra
+      // como "Pending" si es Approved (facturable); Rejected/Pending no cuentan.
+      if (inv) sums[inv.status] = (sums[inv.status] || 0) + e.hours
+      else if (e.status === 'Approved') sums.Pending += e.hours
     }
     return Object.entries(sums)
       .filter(([, v]) => v > 0)
