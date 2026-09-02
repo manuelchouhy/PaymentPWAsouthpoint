@@ -31,7 +31,13 @@ const sowKey = (client, projectName) => `${client ?? ''}||${projectName ?? ''}`
 // horas en la misma semana calendario (mismo week.weekId), y sin el proyecto sus
 // semanas/filas colisionarían (se pisaría la selección y el colapso). week.weekId ya
 // incluye el año (semana domingo→sábado, ver billingGrouping).
-const projectId = (client, project) => `${client}||${project.project}`
+// Los segmentos de texto libre (cliente, nombre de proyecto) se ENCODEAN: sin esto,
+// como la selección se poda por prefijo `id||` (ver toggleCollapse), un proyecto
+// llamado "P|" generaría "cliente||P%7C||…" que —sin encodear— colisionaría con el
+// prefijo del proyecto "P" ("cliente||P||…") y podaría filas del proyecto equivocado.
+// week.weekId ("año-semana") y row.key van al final y no rompen el prefijo.
+const enc = (s) => encodeURIComponent(s ?? '')
+const projectId = (client, project) => `${enc(client)}||${enc(project.project)}`
 const weekId = (client, project, week) => `${projectId(client, project)}||${week.weekId}`
 const rowId = (client, project, week, row) => `${weekId(client, project, week)}||${row.key}`
 
@@ -490,13 +496,9 @@ export function BillingPage() {
             // al índice de selección ni pueden re-facturarse.
             if (row.invoiced) continue
             const id = rowId(group.client, project, week, row)
-            map.set(id, {
-              ...row,
-              rowId: id,
-              client: group.client,
-              project: project.project,
-              week: week.week,
-            })
+            // row ya trae `project` (groupRows lo copia de la entry, y la agrupación
+            // por proyecto usa ese mismo valor), así que no se re-asigna.
+            map.set(id, { ...row, rowId: id, client: group.client, week: week.week })
           }
         }
       }
@@ -585,36 +587,29 @@ export function BillingPage() {
     setDetailRow({ entry, billStatus: row.billStatus ?? null })
   }
 
-  function toggleWeek(id) {
-    const isOpen = openWeeks.has(id)
-    setOpenWeeks((prev) => {
+  // Colapsa/expande un id en su Set de estado y, al COLAPSAR, poda de la selección
+  // las filas colgadas de ese id (prefijo `id||`, que anida projectId ⊂ weekId ⊂
+  // rowId): si quedaran seleccionadas pero ocultas, se podrían facturar horas que ya
+  // no se ven. Compartido por semana y proyecto — la regla de poda vive en UN solo
+  // lugar, así no divergen (justo la divergencia que el comentario de las keys evita).
+  function toggleCollapse(setOpen, isOpen, id) {
+    setOpen((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
-    // Al colapsar (estaba abierta), se sacan de la selección las filas de esa
-    // semana: si quedaran seleccionadas pero ocultas, se podría facturar horas
-    // que ya no se ven.
     if (isOpen) {
       setSelectedKeys((prev) => new Set([...prev].filter((k) => !k.startsWith(`${id}||`))))
     }
   }
 
-  // Colapso del proyecto (mismo modelo que toggleWeek). Al colapsar se podan de la
-  // selección TODAS las filas del proyecto (prefijo pid ⊂ rowId): si quedaran
-  // seleccionadas pero ocultas, se podrían facturar horas que ya no se ven.
+  function toggleWeek(id) {
+    toggleCollapse(setOpenWeeks, openWeeks.has(id), id)
+  }
+
   function toggleProject(pid) {
-    const isOpen = openProjects.has(pid)
-    setOpenProjects((prev) => {
-      const next = new Set(prev)
-      if (next.has(pid)) next.delete(pid)
-      else next.add(pid)
-      return next
-    })
-    if (isOpen) {
-      setSelectedKeys((prev) => new Set([...prev].filter((k) => !k.startsWith(`${pid}||`))))
-    }
+    toggleCollapse(setOpenProjects, openProjects.has(pid), pid)
   }
 
   // Agrega o quita un conjunto de ids de la selección (base de los select-all).
