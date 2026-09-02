@@ -5,7 +5,7 @@ import { groupBillToClient, groupReadonly } from './billingGrouping.js'
 // Helper: una entry bill_to_client, aprobada, 1h — se sobreescribe lo que haga falta.
 const e = (o) => ({ status: 'Approved', allocation: 'bill_to_client', hours: 1, ...o })
 
-test('agrupa bill_to_client por cliente → semana → filas', () => {
+test('agrupa bill_to_client por cliente → proyecto → semana → filas', () => {
   const entries = [
     e({ id: 1, client: 'HSS', user: 'Ana', project: 'P1', task: 'T1', date: '2026-08-14', hours: 4 }),
     e({ id: 2, client: 'HSS', user: 'Ana', project: 'P1', task: 'T1', date: '2026-08-13', hours: 2 }),
@@ -14,16 +14,33 @@ test('agrupa bill_to_client por cliente → semana → filas', () => {
   const [hss] = groupBillToClient(entries, {})
   assert.equal(hss.client, 'HSS')
   assert.equal(hss.hours, 9)
-  assert.equal(hss.weeks.length, 2)
-  // UNA FILA POR LOG (sin combinar): la semana de 08-14/13 tiene 2 filas, 6h total.
-  assert.equal(hss.weeks[0].hours, 6)
-  assert.equal(hss.weeks[0].rows.length, 2)
-  // Ordenadas por fecha desc: el log del 14 (4h) arriba, el del 13 (2h) después.
-  assert.equal(hss.weeks[0].rows[0].date, '2026-08-14')
-  assert.equal(hss.weeks[0].rows[0].hours, 4)
-  assert.equal(hss.weeks[0].rows[1].hours, 2)
-  assert.ok(hss.weeks[0].latestDate > hss.weeks[1].latestDate)
-  assert.equal(hss.weeks[1].hours, 3)
+  // Nivel proyecto: P1 (6h) y P2 (3h) NO se mezclan; P1 arriba por horas desc.
+  assert.equal(hss.projects.length, 2)
+  const p1 = hss.projects.find((p) => p.project === 'P1')
+  const p2 = hss.projects.find((p) => p.project === 'P2')
+  assert.equal(p1.hours, 6)
+  assert.equal(p2.hours, 3)
+  // P1: una semana con 2 filas (una por log), 6h; fila del 14 (4h) arriba.
+  assert.equal(p1.weeks.length, 1)
+  assert.equal(p1.weeks[0].hours, 6)
+  assert.equal(p1.weeks[0].rows.length, 2)
+  assert.equal(p1.weeks[0].rows[0].date, '2026-08-14')
+  assert.equal(p1.weeks[0].rows[0].hours, 4)
+  assert.equal(p1.weeks[0].rows[1].hours, 2)
+  // P2: su propia semana, 3h.
+  assert.equal(p2.weeks.length, 1)
+  assert.equal(p2.weeks[0].hours, 3)
+})
+
+test('proyectos de un cliente ordenados por horas desc, desempate por nombre', () => {
+  const entries = [
+    e({ id: 1, client: 'HSS', project: 'Beta', date: '2026-08-14', hours: 5 }),
+    e({ id: 2, client: 'HSS', project: 'Alpha', date: '2026-08-14', hours: 5 }),
+    e({ id: 3, client: 'HSS', project: 'Gamma', date: '2026-08-14', hours: 9 }),
+  ]
+  const [hss] = groupBillToClient(entries, {})
+  // Gamma (9) primero; luego Alpha y Beta empatan en 5 → alfabético.
+  assert.deepEqual(hss.projects.map((p) => p.project), ['Gamma', 'Alpha', 'Beta'])
 })
 
 test('cada fila es UN log con su propia info (no se combinan por terna)', () => {
@@ -32,7 +49,7 @@ test('cada fila es UN log con su propia info (no se combinan por terna)', () => 
     e({ id: 2, client: 'HSS', user: 'Ana', project: 'P1', task: 'T1', date: '2026-08-13', hours: 2 }),
   ]
   const [hss] = groupBillToClient(entries, {})
-  const rows = hss.weeks.flatMap((w) => w.rows)
+  const rows = hss.projects.flatMap((p) => p.weeks).flatMap((w) => w.rows)
   // Misma terna Ana·P1·T1 pero DOS filas, cada una con su fecha, horas y su entry.
   assert.equal(rows.length, 2)
   assert.deepEqual(rows.map((r) => r.hours).sort(), [2, 4])
@@ -47,11 +64,14 @@ test('no fusiona la misma semana ISO de años distintos', () => {
     e({ id: 2, client: 'HSS', user: 'Ana', project: 'P', task: 'T', date: '2025-08-15', hours: 3 }), // W33 2025
   ]
   const [hss] = groupBillToClient(entries, {})
-  assert.equal(hss.weeks.length, 2)
+  // Mismo proyecto 'P': un solo nodo proyecto con sus 2 semanas (una por año).
+  assert.equal(hss.projects.length, 1)
+  const weeks = hss.projects[0].weeks
+  assert.equal(weeks.length, 2)
   // Ids distintos por año, y la de 2026 arriba (fecha más nueva).
-  assert.notEqual(hss.weeks[0].weekId, hss.weeks[1].weekId)
-  assert.equal(hss.weeks[0].weekYear, 2026)
-  assert.equal(hss.weeks[1].weekYear, 2025)
+  assert.notEqual(weeks[0].weekId, weeks[1].weekId)
+  assert.equal(weeks[0].weekYear, 2026)
+  assert.equal(weeks[1].weekYear, 2025)
 })
 
 test('ignora horas que no son bill_to_client, no aprobadas o ya facturadas', () => {
@@ -182,23 +202,25 @@ test('groupBillToClient statusFilter separa pendientes de facturadas (C9)', () =
   ]
   const isInvoiced = (x) => x.id === 2
 
+  const allRowsOf = (g) => g.projects.flatMap((p) => p.weeks).flatMap((w) => w.rows)
+
   // pending (default): sólo la no facturada.
   const [pend] = groupBillToClient(entries, { isInvoiced })
-  const pendRows = pend.weeks.flatMap((w) => w.rows)
+  const pendRows = allRowsOf(pend)
   assert.equal(pendRows.length, 1)
   assert.equal(pendRows[0].hours, 4)
   assert.equal(pendRows[0].invoiced, false)
 
   // invoiced: sólo la facturada, marcada invoiced.
   const [inv] = groupBillToClient(entries, { isInvoiced, statusFilter: 'invoiced' })
-  const invRows = inv.weeks.flatMap((w) => w.rows)
+  const invRows = allRowsOf(inv)
   assert.equal(invRows.length, 1)
   assert.equal(invRows[0].hours, 3)
   assert.equal(invRows[0].invoiced, true)
 
   // all: ambas, como filas SEPARADAS (misma terna, distinto estado).
   const [all] = groupBillToClient(entries, { isInvoiced, statusFilter: 'all' })
-  const allRows = all.weeks.flatMap((w) => w.rows)
+  const allRows = allRowsOf(all)
   assert.equal(allRows.length, 2)
   assert.ok(allRows.some((r) => r.invoiced) && allRows.some((r) => !r.invoiced))
 })

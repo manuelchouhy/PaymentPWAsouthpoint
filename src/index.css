@@ -865,6 +865,31 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .bill-week__label { font-weight: 600; font-family: var(--mono); }
 .bill-week__hours { color: var(--text-soft); font-family: var(--mono); font-size: 12px; }
 
+/* Nivel proyecto: unidad facturable, entre cliente y semana. Mismo toggle que la
+   semana pero más marcado (fondo suave, label más fuerte); sus semanas van
+   levemente indentadas para mostrar la jerarquía. */
+.bill-project { border-top: 1px solid var(--line); }
+.bill-project:first-of-type { border-top: none; }
+.bill-project__toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 16px;
+  background: var(--surface-2);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  font-size: 13px;
+}
+.bill-project__toggle:hover { background: var(--line); }
+.bill-project__toggle:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: -2px; }
+.bill-project__chev { color: var(--text-soft); font-size: 11px; width: 12px; }
+.bill-project__label { font-weight: 650; }
+.bill-project__hours { color: var(--text-soft); font-family: var(--mono); font-size: 12px; }
+.bill-project .bill-week { padding-left: 12px; }
+
 .toolbar__total {
   font-family: var(--mono);
   font-size: 12px;
