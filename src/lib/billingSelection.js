@@ -48,6 +48,10 @@ export function canBillSelection(selectedRows) {
   const { clients, projects } = selectionScope(rows)
   if (!hasEntries || clients.size !== 1 || projects.size !== 1) return false
   if ([...clients][0] === '' || [...projects][0] === '') return false
+  // Toda fila debe tener contractor: una fila sin `user` se caería del payload
+  // agrupado (contractorsFromSelection la ignora) pero sus horas contarían en los
+  // totales mostrados → mismatch. Se bloquea la emisión.
+  if (rows.some((r) => (r?.user ?? '') === '')) return false
   return weekStartFromSelection(rows) !== null
 }
 
@@ -55,9 +59,9 @@ export function canBillSelection(selectedRows) {
  * Por qué NO se puede emitir (para el aviso de la UI), o null si se puede. Cubre
  * TODOS los casos en que canBillSelection es false con algo seleccionado, así el
  * botón deshabilitado siempre tiene una explicación. Orden de precedencia: cruza
- * cliente, cruza proyecto, sin proyecto, cruza semana, sin fecha (semana no
- * resoluble). Con la selección vacía devuelve null (no hay nada que avisar).
- * @returns {'multi-client'|'multi-project'|'no-project'|'multi-week'|'no-week'|null}
+ * cliente, cruza proyecto, sin cliente, sin proyecto, sin contractor, cruza
+ * semana, sin fecha (semana no resoluble). Con la selección vacía devuelve null.
+ * @returns {'multi-client'|'multi-project'|'no-client'|'no-project'|'no-contractor'|'multi-week'|'no-week'|null}
  */
 export function billBlockReason(selectedRows) {
   const rows = selectedRows ?? []
@@ -65,7 +69,9 @@ export function billBlockReason(selectedRows) {
   const { clients, projects } = selectionScope(rows)
   if (clients.size > 1) return 'multi-client'
   if (projects.size > 1) return 'multi-project'
-  if (projects.size === 1 && [...projects][0] === '') return 'no-project'
+  if ([...clients][0] === '') return 'no-client'
+  if ([...projects][0] === '') return 'no-project'
+  if (rows.some((r) => (r?.user ?? '') === '')) return 'no-contractor'
   const weeks = selectionWeekStarts(rows)
   if (weeks.size > 1) return 'multi-week'
   // Una sola "semana" pero es '' → alguna hora no tiene fecha resoluble.

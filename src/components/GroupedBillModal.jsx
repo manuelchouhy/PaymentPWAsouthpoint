@@ -19,6 +19,7 @@ import { useScrollLock } from '../lib/useScrollLock'
  *
  * @param {{
  *   contractors: Array<{ contractor: string, entries: Array<{id:any,hours:number}>, hours: number }>,
+ *   client?: ?string,
  *   entries: import('../lib/data').TimeEntry[],
  *   hours: number,
  *   remainingByContractor?: Array<{ contractor: string, remaining: number }>,
@@ -28,6 +29,7 @@ import { useScrollLock } from '../lib/useScrollLock'
  */
 export function GroupedBillModal({
   contractors = [],
+  client = null,
   entries,
   hours,
   remainingByContractor = [],
@@ -72,6 +74,10 @@ export function GroupedBillModal({
         const warnings = []
         for (const p of all) {
           if (!names.has(p.projectName)) continue
+          // Scope por cliente: un proyecto homónimo de OTRO cliente no debe disparar
+          // el aviso de esta factura. Sólo se filtra si conocemos el cliente y el
+          // proyecto trae el suyo (si falta, no se descarta, para no perder avisos).
+          if (client && p.client && p.client !== client) continue
           const days = daysRemaining(p.contractExpirationDate)
           const status = contractStatus(days)
           if (status === 'Expired' || status === 'Critical' || status === 'Expiring Soon') {
@@ -90,7 +96,7 @@ export function GroupedBillModal({
     return () => {
       ignore = true
     }
-  }, [projectNamesKey])
+  }, [projectNamesKey, client])
 
   useEffect(() => {
     function onKeyDown(event) {

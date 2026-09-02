@@ -77,6 +77,18 @@ test('selección vacía: sin motivo de bloqueo (no hay nada que avisar)', () => 
   assert.equal(billBlockReason([]), null)
 })
 
+test('fila sin contractor: canBill false + reason no-contractor (no descuadra totales)', () => {
+  const sel = [row({ id: 1, user: '' })]
+  assert.equal(canBillSelection(sel), false)
+  assert.equal(billBlockReason(sel), 'no-contractor')
+})
+
+test('sin cliente resuelto: canBill false + reason no-client', () => {
+  const sel = [row({ id: 1, client: '' })]
+  assert.equal(canBillSelection(sel), false)
+  assert.equal(billBlockReason(sel), 'no-client')
+})
+
 test('contractorsFromSelection: orden por horas y estructura de entries', () => {
   const sel = [
     row({ id: 1, user: 'Ana', hours: 4 }),

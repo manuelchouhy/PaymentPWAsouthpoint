@@ -14,6 +14,7 @@ import {
   contractorsFromSelection,
   remainingHoursByContractor,
   weekStartFromSelection,
+  selectionScope,
 } from '../lib/billingSelection'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
@@ -36,8 +37,12 @@ function billBlockMessage(reason, selectedRows) {
       return `An invoice covers a single client. Selected: ${sortedUnique(selectedRows.map((r) => r.client)).join(', ')}.`
     case 'multi-project':
       return `An invoice covers a single project of one client. Selected projects: ${sortedUnique(selectedRows.map((r) => r.project || '(no project)')).join(', ')}.`
+    case 'no-client':
+      return 'These hours have no client resolved. Fix the client before billing them.'
     case 'no-project':
       return 'These hours have no project. Assign a project before billing them.'
+    case 'no-contractor':
+      return 'Some selected hours have no contractor.'
     case 'multi-week':
       return 'An invoice covers a single week (Sun–Sat). Narrow the selection to one week.'
     case 'no-week':
@@ -588,6 +593,9 @@ export function BillingPage() {
   // Contractors incluidos en la factura (para el modal): sólo se computa con el modal
   // abierto (no en cada render de la grilla).
   const selectedContractors = modalOpen ? contractorsFromSelection(selectedRows) : []
+  // Cliente único de la selección (canBill lo garantiza): lo usa el modal para
+  // scopear los avisos de contrato al proyecto DE ESE cliente (no de un homónimo).
+  const selectedClient = modalOpen ? [...selectionScope(selectedRows).clients][0] ?? null : null
 
   // Horas pendientes POR CONTRACTOR que quedan fuera de esta factura (C11). Sólo con
   // el modal abierto y la selección facturable (un cliente); la lógica pura decide.
@@ -787,10 +795,13 @@ export function BillingPage() {
   }
 
   async function handleConfirmBill({ spInvoiceNumber, notes }) {
-    // Selección garantizada a un solo cliente + proyecto por canBill.
-    const [client] = new Set(selectedRows.map((r) => r.client))
-    const [project] = new Set(selectedRows.map((r) => r.project))
-    const contractors = contractorsFromSelection(selectedRows)
+    // Selección garantizada a un solo cliente + proyecto por canBill; se reusan el
+    // scope y los contractors ya derivados (selectionScope / selectedContractors)
+    // en vez de recomputarlos por separado.
+    const { clients, projects } = selectionScope(selectedRows)
+    const [client] = clients
+    const [project] = projects
+    const contractors = selectedContractors
     const entryCount = selectedEntries.length
     const { invoice } = await api.invoices.createGrouped({
       spInvoiceNumber,
@@ -1457,6 +1468,7 @@ export function BillingPage() {
       {modalOpen && canBill && (
         <GroupedBillModal
           contractors={selectedContractors}
+          client={selectedClient}
           entries={selectedEntries}
           hours={selectedHours}
           remainingByContractor={remainingByContractor}
