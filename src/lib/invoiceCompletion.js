@@ -18,7 +18,17 @@
  * `payments` puede ser la lista COMPLETA de pagos del sistema, no hace falta pre-filtrar
  * a esta factura: los entry_ids son únicos por hora (una hora pertenece a UNA factura),
  * así que un pago de otra factura nunca cubre los entry_ids de ésta. Pasar sólo los de
- * la factura también es válido (mismo resultado).
+ * la factura también es válido (mismo resultado). Esa unicidad la GARANTIZA la base
+ * (migración 0039: entry_ids sin solapamiento entre facturas/pagos), no este módulo.
+ *
+ * ACOPLAMIENTO con la RPC de status (04c): esta derivación es sólo para MOSTRAR y para
+ * decidir a quién ofrecer pago; el `Paid` real lo escribe la RPC register_contractor_payment.
+ * Las dos deben coincidir en descartar las filas invoice_contractors sin entry_ids (ver
+ * el filtro abajo): lo más seguro es un CHECK en la base que impida crear una fila con
+ * entry_ids vacío, así el caso glitch no existe y UI y DB nunca divergen. Además,
+ * invoice_contractors.hours es por construcción la suma de las horas de sus entry_ids
+ * (lo arma buildGroupedInvoicePayload rechazando entries sin horas válidas), así que
+ * `hours` y `entry_ids` no divergen: una fila sin entry_ids tiene 0 horas reales.
  */
 
 import { paidEntryIdsFrom } from './paymentsGrouping.js'
