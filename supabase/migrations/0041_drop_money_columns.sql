@@ -7,9 +7,16 @@
 --       - createInvoice viejo (single-contractor, BillModal de Time Entries) setea
 --         total_amount/currency → hay que migrarlo primero o su INSERT fallará.
 --       - paymentsData/invoicelessPaidRows leen amountPaid/currency → migrar la UI.
---       - traceData.js (rowToTrace) lee invoice_amount/amount_paid de trace_view →
---         tras el drop la vista ya no los expone y esos campos van a null (sin crash,
---         pero el detalle de plata en la traza queda en blanco). Migrar en 04d.
+--       - traceData.js (04d, la vista cambia de forma):
+--           · rowToTrace lee invoice_amount/amount_paid → la vista ya no los expone
+--             (van a null, sin crash; el detalle de plata en la traza queda en blanco).
+--           · el supplier# de una factura AGRUPADA ahora vive en la columna nueva
+--             contractor_supplier_invoice_number (i.supplier_invoice_number queda NULL);
+--             hay que mapearla y buscar por ella, o la búsqueda por supplier# no
+--             encuentra facturas agrupadas.
+--           · searchTrace filtra `contractor` por time_entries.user_name; la vista ahora
+--             expone la columna `contractor` (de invoice_contractors) para filtrar por el
+--             contractor facturado, si se quiere ese criterio.
 --       - ⚠️ EDGE FUNCTIONS DEPLOYADAS (superficie aparte del frontend):
 --           supabase/functions/payment-alerts/index.ts   (select+uso de total_amount)
 --           supabase/functions/collection-alerts/index.ts (idem)
@@ -140,6 +147,15 @@ as
   -- 0039 ya está en prod y no se reescribe). Con solape, te.id haría fan-out otra vez.
   left join public.invoice_contractors ic
     on ic.invoice_id = i.id and ic.entry_ids @> array[te.id]
-  left join public.payments p on p.id = ic.payment_id;
+  -- Pago de la hora. Nuevo modelo: el enlazado por ic.payment_id (por contractor).
+  -- Facturas LEGACY single-contractor (pagadas por el flujo viejo) NO tienen fila ic;
+  -- su pago cuelga por invoice_id. La rama `ic.id is null and p.invoice_id = i.id`
+  -- rescata ese caso SIN reintroducir fan-out: se activa sólo cuando no hubo match de
+  -- ic (legacy), no en una factura agrupada —cuyas horas siempre están en alguna fila
+  -- ic, porque invoices.entry_ids es la unión de las ic (0039)—, así que ésta nunca
+  -- junta todos sus pagos por invoice_id. Legacy tenía un solo pago por factura.
+  left join public.payments p
+    on p.id = ic.payment_id
+    or (ic.id is null and p.invoice_id = i.id);
 
 commit;
