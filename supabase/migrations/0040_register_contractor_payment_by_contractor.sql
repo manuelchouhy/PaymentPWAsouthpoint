@@ -22,8 +22,18 @@
 --      tienen payment_id.
 --
 -- ⚠️ Rompe el flujo viejo de Payments (single-contractor) hasta que 04d rewire la UI
--- y la capa de datos: se DROPEAN los overloads viejos de register_contractor_payment.
--- Es un slice apilado; se aplica junto con 04d, no suelto en prod.
+-- y la capa de datos: se DROPEAN los overloads viejos de register_contractor_payment y
+-- se crea una firma NUEVA e incompatible. El caller vivo —src/lib/paymentsData.js
+-- (rpc 'register_contractor_payment' con p_invoice_id/p_amount_paid/…)— fallaría con
+-- PGRST202 'function not found' hasta que 04d lo reescriba a la firma por-contractor.
+-- Es un slice apilado; se aplica JUNTO con 04d, no suelto en prod.
+--
+-- ⚠️ CHEQUEO PRE-APLICACIÓN: el nuevo RPC sólo paga facturas en 'Invoiced' (ver nota en
+-- el guard). Si en prod hubiera facturas en 'Collected' (flujo viejo), quedarían sin
+-- forma de pasar a 'Paid'. Verificar antes de aplicar:
+--     select count(*) from invoices where status = 'Collected';   -- debe ser 0
+-- Si no es 0, decidir su migración (a 'Invoiced' o 'Paid') antes de aplicar. Hoy
+-- Collections no se usa, así que se espera 0.
 
 begin;
 
@@ -118,8 +128,9 @@ begin
   -- invoices.entry_ids (unión denormalizada) y ahí las congela/anti-doble-paga el
   -- modelo. Si se guardaran acá, el trigger 0037 las vería solapando su PROPIA
   -- factura y rechazaría el pago. user_name = contractor para trazar el pago.
-  -- Sin amount_paid/currency/exchange_rate: el modelo es en horas (0041 dropea esas
-  -- columnas; acá ya son nullable).
+  -- Sin amount_paid/currency/exchange_rate: el modelo es en horas. El INSERT los omite:
+  -- amount_paid quedó nullable (paso 1), currency toma su DEFAULT 'USD' y exchange_rate
+  -- es nullable de origen. Las tres columnas se dropean en 0041.
   insert into payments (invoice_id, user_name, payment_date, transfer_reference,
                         bank_method, notes, back_dated, created_by)
   values (v_ic.invoice_id, v_ic.contractor, p_payment_date, p_transfer_reference,

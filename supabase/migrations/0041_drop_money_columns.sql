@@ -51,15 +51,13 @@ alter table public.payments
 -- 3) Recrea trace_view SIN las 3 columnas de plata (invoice_amount, invoice_currency,
 --    amount_paid). Se conserva TODO lo demás, incluida la agregación de collections
 --    (no depende de las columnas dropeadas). Se agrega sp_invoice_number (identidad de
---    la factura agrupada, que suele dejar supplier_invoice_number NULL) y paid_contractor
---    (p.user_name), útil ahora que hay un pago por contractor.
---    ⚠️ NOTA (04d) — DOBLE-CONTEO: con el pago por-contractor una factura tiene VARIOS
---    pagos, así que `left join payments` hace fan-out a N filas por time entry (una por
---    contractor pagado). Las columnas de invoice y las de collections (collected_amount,
---    collection_count, del subquery ca) se REPITEN en esas N filas: cualquier consumidor
---    que SUME/CUENTE esas columnas por factura sobre trace_view las multiplicaría por N.
---    Hoy Collections no se usa (bajo riesgo), pero si trace_view va a alimentar agregados
---    hay que reestructurarla en 04d (separar el grano de pago del de factura/cobro).
+--    la factura agrupada, que suele dejar supplier_invoice_number NULL), paid_contractor
+--    y supplier_invoice_number por-contractor.
+--    El grano se mantiene UNA fila por time entry: el pago se toma vía la fila
+--    invoice_contractors cuyos entry_ids contienen la hora (los entry_ids no se solapan
+--    entre contractors), no con `join payments on invoice_id` —que con N pagos por
+--    factura mis-atribuiría el pago de otros contractors y duplicaría las columnas de
+--    invoice/collections—. Ver el detalle en los joins de abajo.
 create or replace view public.trace_view
   with (security_invoker = true)
 as
@@ -89,9 +87,11 @@ as
     coalesce(ca.amount_collected, 0)            as collected_amount,
     ca.last_collection_date,
     coalesce(ca.collection_count, 0)            as collection_count,
-    -- Payment al contractor (sin monto)
+    -- Payment del contractor de ESTA hora (sin monto). Ver el join por
+    -- invoice_contractors abajo: el pago es el de la fila cuyo entry_ids contiene te.id.
+    ic.contractor                               as paid_contractor,
+    ic.supplier_invoice_number                  as supplier_invoice_number,
     p.id                                        as payment_id,
-    p.user_name                                 as paid_contractor,
     p.payment_date,
     p.transfer_reference,
     p.bank_method,
@@ -110,6 +110,14 @@ as
     from public.collections
     group by invoice_id
   ) ca on ca.invoice_id = i.id
-  left join public.payments p on p.invoice_id = i.id;
+  -- El pago de ESTA hora, no todos los de la factura: su contractor es la fila
+  -- invoice_contractors cuyos entry_ids la contienen (los entry_ids NO se solapan entre
+  -- contractors), y su pago es el enlazado por payment_id. Así cada hora trae SU pago
+  -- (sin mis-atribuir los de otros contractors) y NO hay fan-out: te.id matchea una
+  -- sola fila ic, así que las columnas de invoice/collections no se duplican ni se
+  -- suman de más. Si el contractor aún no cobró, ic.payment_id es NULL y p queda NULL.
+  left join public.invoice_contractors ic
+    on ic.invoice_id = i.id and ic.entry_ids @> array[te.id]
+  left join public.payments p on p.id = ic.payment_id;
 
 commit;
