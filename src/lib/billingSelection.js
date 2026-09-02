@@ -143,3 +143,48 @@ export function weekStartFromSelection(selectedRows) {
   const [only] = starts
   return only === '' ? null : only
 }
+
+/**
+ * Proyectos de `projects` que corresponden a la selección para el AVISO DE CONTRATO
+ * del modal agrupado: nombre en `selectedProjectNames` Y cliente resuelto al MAESTRO
+ * igual al `client` de la grilla (que ya es maestro).
+ *
+ * El match se hace por cliente MAESTRO (via `resolveClient`, el mismo resolver que
+ * usa la grilla: proyecto → cliente por id/grupo/legacy), NO por `projects.client`
+ * crudo/alias. Comparar el crudo contra el maestro fallaba de dos formas, ambas
+ * finance-relevant:
+ *  - homónimos: ningún crudo igualaba al maestro, así que se descartaban TODOS los
+ *    proyectos de ese nombre y se ocultaba un aviso legítimo de contrato vencido
+ *    (falso negativo peligroso: se facturaba contra un contrato Expired sin aviso).
+ *  - nombre único de OTRO cliente: sin filtrar por cliente, se avisaba usando el
+ *    contrato del proyecto ajeno (cifra "expires in N days" engañosa en la factura).
+ *
+ * Regla de descarte: sólo se saltea un proyecto cuando resuelve a un cliente maestro
+ * DISTINTO y no vacío. Si resuelve a null (grupo sin reclamar / sin grupo) se INCLUYE
+ * a propósito: ante una resolución incierta se prefiere avisar de más que ocultar un
+ * vencimiento. Con `client` vacío (no debería pasar con el modal facturable) o sin
+ * `resolveClient` se cae a match por-nombre, preservando ese mismo criterio fail-safe.
+ *
+ * @param {Array<object>} projects  lista cruda de proyectos (api.projects.list)
+ * @param {Set<string>|Iterable<string>} selectedProjectNames  nombres de la selección
+ * @param {?string} client  cliente maestro de la grilla
+ * @param {?((project: object) => { client: string|null })} resolveClient  resolver maestro
+ * @returns {Array<object>}
+ */
+export function projectsForContractWarnings(projects, selectedProjectNames, client, resolveClient) {
+  const names =
+    selectedProjectNames instanceof Set
+      ? selectedProjectNames
+      : new Set(selectedProjectNames ?? [])
+  const out = []
+  for (const p of projects ?? []) {
+    if (!names.has(p?.projectName)) continue
+    if (client && typeof resolveClient === 'function') {
+      const master = resolveClient(p)?.client ?? null
+      // Sólo se descarta si resuelve a OTRO cliente; null (incierto) se incluye.
+      if (master && master !== client) continue
+    }
+    out.push(p)
+  }
+  return out
+}

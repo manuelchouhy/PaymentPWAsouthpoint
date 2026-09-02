@@ -7,6 +7,7 @@ import { formatDate, formatHours, weekStartISO } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, sortedUnique, clientFilterOptions, OTHER_CLIENT } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
+import { buildClientResolver } from '../lib/clientResolver'
 import { groupBillToClient, groupReadonly } from '../lib/billingGrouping'
 import {
   canBillSelection,
@@ -287,6 +288,11 @@ export function BillingPage() {
     () => deriveEntriesClient(entries, projects, clients),
     [entries, projects, clients],
   )
+
+  // Resolver maestro proyecto→cliente (id/grupo/legacy), el MISMO que canonicaliza
+  // el cliente de la grilla. El modal agrupado lo usa para matchear sus avisos de
+  // contrato por cliente maestro y no por projects.client crudo. Ver clientResolver.js.
+  const resolveClient = useMemo(() => buildClientResolver(clients), [clients])
 
   // Listas entrelazadas: cada dropdown se arma sobre lo que pasa los OTROS
   // filtros (ver buildFilterOptions) — elegir un proyecto recorta la lista de
@@ -1484,6 +1490,8 @@ export function BillingPage() {
           client={selectedClient}
           entries={selectedEntries}
           hours={selectedHours}
+          projects={projects}
+          resolveClient={resolveClient}
           remainingByContractor={remainingByContractor}
           onClose={() => setModalOpen(false)}
           onConfirm={handleConfirmBill}

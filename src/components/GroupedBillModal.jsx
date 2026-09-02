@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { AlertTriangle, FileText, X } from 'lucide-react'
 import { Avatar } from './Avatar'
 import { formatHours } from '../lib/format'
 import { contractStatus, daysRemaining } from '../lib/projectsData'
-import { api } from '../lib/api'
+import { projectsForContractWarnings } from '../lib/billingSelection'
 import { useScrollLock } from '../lib/useScrollLock'
 
 /**
@@ -22,6 +22,8 @@ import { useScrollLock } from '../lib/useScrollLock'
  *   client?: ?string,
  *   entries: import('../lib/data').TimeEntry[],
  *   hours: number,
+ *   projects?: Array<object>,
+ *   resolveClient?: ?((project: object) => { client: string|null }),
  *   remainingByContractor?: Array<{ contractor: string, remaining: number }>,
  *   onClose: () => void,
  *   onConfirm: (data: { spInvoiceNumber: string, notes: string }) => Promise<void>,
@@ -30,8 +32,10 @@ import { useScrollLock } from '../lib/useScrollLock'
 export function GroupedBillModal({
   contractors = [],
   client = null,
-  entries,
+  entries = [],
   hours,
+  projects = [],
+  resolveClient = null,
   remainingByContractor = [],
   onClose,
   onConfirm,
@@ -41,7 +45,6 @@ export function GroupedBillModal({
   const [touched, setTouched] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
-  const [contractWarnings, setContractWarnings] = useState([])
 
   const dialogRef = useRef(null)
   const firstFieldRef = useRef(null)
@@ -57,62 +60,37 @@ export function GroupedBillModal({
   }, [])
 
   // Clave estable de los proyectos de la selección: `entries` es un array nuevo en
-  // cada render del padre, así que depender de él refetcharía projects.list() sin
+  // cada render del padre, así que depender de él recomputaría los avisos sin
   // necesidad. Se depende del set de nombres, que sólo cambia si cambia la selección.
   const projectNamesKey = [...new Set(entries.map((e) => e.project).filter(Boolean))]
     .sort()
     .join('|')
 
-  useEffect(() => {
-    if (!projectNamesKey) {
-      setContractWarnings([])
-      return
-    }
+  // Avisos de contrato (Expired/Critical/Expiring Soon) de los proyectos de la
+  // selección. Los proyectos ya vienen del padre (BillingPage los cargó para la
+  // grilla) → sin fetch acá. El match proyecto→cliente usa el resolver MAESTRO
+  // compartido (mismo que la grilla): projectsForContractWarnings filtra por cliente
+  // canónico, no por projects.client crudo/alias, para no ocultar un vencimiento en
+  // homónimos ni avisar con el contrato de otro cliente. Ver billingSelection.js.
+  const contractWarnings = useMemo(() => {
+    if (!projectNamesKey) return []
     const names = new Set(projectNamesKey.split('|'))
-    let ignore = false // no setear estado si el modal ya se desmontó
-    api.projects.list()
-      .then((all) => {
-        if (ignore) return
-        // Nombres de proyecto con MÁS de un cliente en la tabla: sólo para esos
-        // desambiguamos por cliente. El nombre de cliente de la grilla (maestro,
-        // resuelto) y projects.client (crudo/alias) NO son el mismo namespace, así
-        // que filtrar por igualdad de cliente cuando el nombre es ÚNICO podría
-        // perder un aviso legítimo (falso negativo peligroso). Para un nombre único
-        // se avisa siempre; sólo ante homónimos se prefiere el que matchea el cliente.
-        const clientsByName = new Map()
-        for (const p of all) {
-          if (!clientsByName.has(p.projectName)) clientsByName.set(p.projectName, new Set())
-          clientsByName.get(p.projectName).add(p.client)
-        }
-        const warnings = []
-        for (const p of all) {
-          if (!names.has(p.projectName)) continue
-          const ambiguous = (clientsByName.get(p.projectName)?.size ?? 0) > 1
-          if (ambiguous && client && p.client && p.client !== client) continue
-          const days = daysRemaining(p.contractExpirationDate)
-          const status = contractStatus(days)
-          if (status === 'Expired' || status === 'Critical' || status === 'Expiring Soon') {
-            warnings.push({
-              id: p.id,
-              projectName: p.projectName,
-              contractNumber: p.contractNumber,
-              days,
-              status,
-            })
-          }
-        }
-        setContractWarnings(warnings)
-      })
-      .catch((error) => {
-        // No se pudo traer los proyectos: no hay avisos de contrato, pero se deja
-        // traza (si no, el usuario podría facturar contra un contrato vencido
-        // creyendo que no había avisos).
-        if (!ignore) console.warn('[GroupedBillModal] contract warnings fetch failed —', error?.message ?? error)
-      })
-    return () => {
-      ignore = true
+    const warnings = []
+    for (const p of projectsForContractWarnings(projects, names, client, resolveClient)) {
+      const days = daysRemaining(p.contractExpirationDate)
+      const status = contractStatus(days)
+      if (status === 'Expired' || status === 'Critical' || status === 'Expiring Soon') {
+        warnings.push({
+          id: p.id,
+          projectName: p.projectName,
+          contractNumber: p.contractNumber,
+          days,
+          status,
+        })
+      }
     }
-  }, [projectNamesKey, client])
+    return warnings
+  }, [projectNamesKey, projects, client, resolveClient])
 
   useEffect(() => {
     function onKeyDown(event) {
