@@ -59,17 +59,17 @@ export function GroupedBillModal({
     firstFieldRef.current?.focus()
   }, [])
 
-  // Clave estable de los proyectos de la selección: `entries` es un array nuevo en
-  // cada render del padre, así que depender de él recomputaría los avisos sin
-  // necesidad. Se depende del conjunto de proyectos (id, o nombre si la hora no trae
-  // id), que sólo cambia si cambia la selección de proyectos.
-  const selectionProjectKey = useMemo(
-    () =>
-      [...new Set(entries.map((e) => (e.zohoProjectId ? `#${e.zohoProjectId}` : e.project)).filter(Boolean))]
-        .sort()
-        .join('|'),
-    [entries],
-  )
+  // Clave de los proyectos de la selección: cadena barata que se recomputa cada
+  // render (no se memoiza porque `entries` es un array nuevo cada vez, así que un
+  // useMemo([entries]) no cachearía nada). Su VALOR sí es estable si la selección de
+  // proyectos no cambió, y es lo que gatea el useMemo caro de contractWarnings abajo:
+  // ahí está el ahorro real, no en calcular esta cadena. Id por proyecto, o nombre si
+  // la hora no trae id.
+  const selectionProjectKey = [
+    ...new Set(entries.map((e) => (e.zohoProjectId ? `#${e.zohoProjectId}` : e.project)).filter(Boolean)),
+  ]
+    .sort()
+    .join('|')
 
   // Avisos de contrato (Expired/Critical/Expiring Soon) de los proyectos de la
   // selección. Los proyectos ya vienen del padre (BillingPage los cargó para la

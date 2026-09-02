@@ -157,20 +157,21 @@ export function weekStartFromSelection(selectedRows) {
  *     Un match por id NO se filtra por cliente: es el contrato del proyecto real de
  *     las horas, así que se muestra tal cual. Ver findProjectForEntry (entryClient.js),
  *     que ya une hora→proyecto por este mismo id.
- *  2. Fallback por NOMBRE de proyecto, para horas SIN id (legacy/pre-sync) y para
- *     horas cuyo id NO aparece en `projects` (dato desincronizado): sin este fallback
- *     esas horas quedarían sin aviso aunque exista un proyecto homónimo con contrato
- *     vencido (falso negativo). El nombre es ambiguo, así que se filtra por cliente
- *     MAESTRO (via `resolveClient`, el mismo resolver de la grilla) para no avisar con
- *     el contrato de otro cliente ni ocultar un aviso en homónimos. Regla de descarte:
- *     sólo se saltea si el proyecto resuelve a un cliente maestro DISTINTO y no vacío;
- *     si resuelve a null (grupo sin reclamar / sin grupo) se INCLUYE a propósito
- *     (fail-safe: mejor avisar de más que ocultar un vencimiento). Sin `client` o sin
- *     `resolveClient`, el fallback sólo matchea por nombre, con ese mismo criterio.
+ *  2. Sólo para horas SIN id (legacy/pre-sync), fallback por NOMBRE de proyecto. Ahí
+ *     el nombre es ambiguo, así que se filtra por cliente MAESTRO (via `resolveClient`,
+ *     el mismo resolver de la grilla) para no avisar con el contrato de otro cliente
+ *     ni ocultar un aviso en homónimos. Regla de descarte: sólo se saltea si el
+ *     proyecto resuelve a un cliente maestro DISTINTO y no vacío; si resuelve a null
+ *     (grupo sin reclamar / sin grupo) se INCLUYE a propósito (fail-safe: mejor avisar
+ *     de más que ocultar un vencimiento). Sin `client` o sin `resolveClient`, el
+ *     fallback sólo matchea por nombre, preservando ese criterio fail-safe.
  *
- * El fallback por nombre se activa SÓLO para el nombre de una hora cuyo id NO está en
- * `projects` (o que no trae id): si el id está presente, ya lo cubre el paso 1 y su
- * nombre no entra al fallback, así un homónimo no genera un segundo aviso duplicado.
+ * Una hora que SÍ trae `zohoProjectId` pero cuyo id NO aparece en `projects` no cae al
+ * fallback por nombre a propósito: `projects` es la misma api.projects.list() que el
+ * sync usó para asignarle el id, así que un id ausente es una anomalía de datos, y
+ * ante ella se prefiere NO avisar antes que atribuirle el contrato de un proyecto
+ * homónimo distinto (un aviso con el vencimiento equivocado en pantalla de facturación
+ * es peor que ninguno). Si `projects` llega vacío, GroupedBillModal ya deja una traza.
  *
  * @param {Array<object>} projects  lista cruda de proyectos (api.projects.list)
  * @param {Iterable<{zohoProjectId?: ?(string|number), project?: ?string}>} selectedEntries  horas de la selección
@@ -180,26 +181,11 @@ export function weekStartFromSelection(selectedRows) {
  */
 export function projectsForContractWarnings(projects, selectedEntries, client, resolveClient) {
   const ids = new Set() // zohoProjectId de la selección (join preferido)
-  const nameById = new Map() // id → nombre de la hora, por si el id falta en projects
-  const namesNoId = new Set() // nombres de horas SIN id
+  const namesNoId = new Set() // nombres de horas SIN id (único caso de fallback)
   for (const e of selectedEntries ?? []) {
-    if (e?.zohoProjectId) {
-      ids.add(String(e.zohoProjectId))
-      if (e?.project) nameById.set(String(e.zohoProjectId), e.project)
-    } else if (e?.project) {
-      namesNoId.add(e.project)
-    }
+    if (e?.zohoProjectId) ids.add(String(e.zohoProjectId))
+    else if (e?.project) namesNoId.add(e.project)
   }
-  // Ids realmente presentes en projects: los que faltan caen al fallback por nombre.
-  const presentIds = new Set()
-  for (const p of projects ?? []) {
-    if (p?.zohoProjectId) presentIds.add(String(p.zohoProjectId))
-  }
-  const fallbackNames = new Set(namesNoId)
-  for (const [id, name] of nameById) {
-    if (!presentIds.has(id)) fallbackNames.add(name)
-  }
-
   const out = []
   for (const p of projects ?? []) {
     // 1. Match exacto por id: es la fila facturada, sin filtro de cliente.
@@ -207,8 +193,8 @@ export function projectsForContractWarnings(projects, selectedEntries, client, r
       out.push(p)
       continue
     }
-    // 2. Fallback por nombre (horas sin id o con id ausente), por cliente maestro.
-    if (fallbackNames.has(p?.projectName)) {
+    // 2. Fallback por nombre (sólo horas legacy sin id), filtrado por cliente maestro.
+    if (namesNoId.has(p?.projectName)) {
       if (client && typeof resolveClient === 'function') {
         const master = resolveClient(p)?.client ?? null
         if (master && master !== client) continue // sólo descarta si resuelve a OTRO
