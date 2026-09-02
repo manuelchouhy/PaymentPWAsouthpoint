@@ -52,7 +52,13 @@ export function ClientsPage() {
       throw err
     }
     if (msaUrl) {
-      await api.clients.recordMsaVersion({ clientId: created.id, fileUrl: msaUrl, uploadedBy: user?.email ?? null })
+      // El cliente ya existe: registrar la versión del MSA es secundario, así que
+      // es best-effort — que falle acá no debe romper la UI ni invitar a recrear.
+      try {
+        await api.clients.recordMsaVersion({ clientId: created.id, fileUrl: msaUrl, uploadedBy: user?.email ?? null })
+      } catch (e) {
+        console.error('No se pudo registrar la versión del MSA:', e)
+      }
     }
     api.audit.log({
       actorEmail: user?.email,
@@ -77,11 +83,16 @@ export function ClientsPage() {
     } catch (err) {
       // Si subimos un MSA nuevo y el update falló, lo limpiamos; el MSA anterior
       // (editing.msaUrl) sigue en uso, así que no se toca. removeMsa no lanza.
-      if (msaFile && msaUrl !== editing.msaUrl) await api.clients.removeMsa(msaUrl)
+      if (msaFile) await api.clients.removeMsa(msaUrl)
       throw err
     }
     if (msaFile) {
-      await api.clients.recordMsaVersion({ clientId: updated.id, fileUrl: msaUrl, uploadedBy: user?.email ?? null })
+      // Best-effort: el update ya se guardó, la versión del MSA es secundaria.
+      try {
+        await api.clients.recordMsaVersion({ clientId: updated.id, fileUrl: msaUrl, uploadedBy: user?.email ?? null })
+      } catch (e) {
+        console.error('No se pudo registrar la versión del MSA:', e)
+      }
     }
     api.audit.log({
       actorEmail: user?.email,

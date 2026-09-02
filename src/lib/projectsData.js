@@ -466,13 +466,28 @@ export async function createProject(payload, createdBy) {
   return rowToProject(data)
 }
 
+// Canoniza objetos/arrays ordenando las claves de los objetos (el orden de los
+// arrays SÍ es significativo, no se toca) para que un mismo contenido con claves
+// en otro orden no cuente como cambio (evita filas de history espurias).
+function canonicalize(v) {
+  if (v === null || typeof v !== 'object') return v
+  if (Array.isArray(v)) return v.map(canonicalize)
+  return Object.keys(v)
+    .sort()
+    .reduce((acc, k) => {
+      acc[k] = canonicalize(v[k])
+      return acc
+    }, {})
+}
+
 // Serializa un valor de campo para el historial. Los campos jsonb (p.ej.
 // maintenanceSlaTiers) son arrays/objetos: String() daría "[object Object]" y
 // perdería el contenido — y el diff nunca detectaría el cambio. Se usa tanto para
-// comparar (¿cambió?) como para escribir old_value/new_value (columnas text).
+// comparar (¿cambió?) como para escribir old_value/new_value (columnas text);
+// canoniza para no registrar cambios espurios por reordenamiento de claves.
 function historyValue(v) {
   if (v == null) return null
-  return typeof v === 'object' ? JSON.stringify(v) : String(v)
+  return typeof v === 'object' ? JSON.stringify(canonicalize(v)) : String(v)
 }
 
 /**
