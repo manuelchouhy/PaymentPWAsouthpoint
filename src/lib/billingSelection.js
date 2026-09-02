@@ -146,45 +146,51 @@ export function weekStartFromSelection(selectedRows) {
 
 /**
  * Proyectos de `projects` que corresponden a la selección para el AVISO DE CONTRATO
- * del modal agrupado: nombre en `selectedProjectNames` Y cliente resuelto al MAESTRO
- * igual al `client` de la grilla (que ya es maestro).
+ * del modal agrupado. La unión se hace, en orden de preferencia:
  *
- * El match se hace por cliente MAESTRO (via `resolveClient`, el mismo resolver que
- * usa la grilla: proyecto → cliente por id/grupo/legacy), NO por `projects.client`
- * crudo/alias. Comparar el crudo contra el maestro fallaba de dos formas, ambas
- * finance-relevant:
- *  - homónimos: ningún crudo igualaba al maestro, así que se descartaban TODOS los
- *    proyectos de ese nombre y se ocultaba un aviso legítimo de contrato vencido
- *    (falso negativo peligroso: se facturaba contra un contrato Expired sin aviso).
- *  - nombre único de OTRO cliente: sin filtrar por cliente, se avisaba usando el
- *    contrato del proyecto ajeno (cifra "expires in N days" engañosa en la factura).
- *
- * Regla de descarte: sólo se saltea un proyecto cuando resuelve a un cliente maestro
- * DISTINTO y no vacío. Si resuelve a null (grupo sin reclamar / sin grupo) se INCLUYE
- * a propósito: ante una resolución incierta se prefiere avisar de más que ocultar un
- * vencimiento. Con `client` vacío (no debería pasar con el modal facturable) o sin
- * `resolveClient` se cae a match por-nombre, preservando ese mismo criterio fail-safe.
+ *  1. Por `zohoProjectId` (clave del sync). Es el join CORRECTO: identifica LA fila
+ *     de proyecto exacta que se está facturando, sobrevive a renames (el id no
+ *     cambia) y a homónimos (dos proyectos con el mismo nombre tienen ids distintos).
+ *     Un match por id NO se filtra por cliente: es el contrato del proyecto real de
+ *     las horas, así que se muestra tal cual. Ver findProjectForEntry (entryClient.js),
+ *     que ya une hora→proyecto por este mismo id.
+ *  2. Sólo para horas SIN id (legacy/pre-sync), fallback por NOMBRE de proyecto. Ahí
+ *     el nombre es ambiguo, así que se filtra por cliente MAESTRO (via `resolveClient`,
+ *     el mismo resolver de la grilla) para no avisar con el contrato de otro cliente
+ *     ni ocultar un aviso en homónimos. Regla de descarte: sólo se saltea si el
+ *     proyecto resuelve a un cliente maestro DISTINTO y no vacío; si resuelve a null
+ *     (grupo sin reclamar / sin grupo) se INCLUYE a propósito (fail-safe: mejor avisar
+ *     de más que ocultar un vencimiento). Sin `client` o sin `resolveClient`, el
+ *     fallback sólo matchea por nombre, preservando ese criterio fail-safe.
  *
  * @param {Array<object>} projects  lista cruda de proyectos (api.projects.list)
- * @param {Set<string>|Iterable<string>} selectedProjectNames  nombres de la selección
+ * @param {Iterable<{zohoProjectId?: ?(string|number), project?: ?string}>} selectedEntries  horas de la selección
  * @param {?string} client  cliente maestro de la grilla
  * @param {?((project: object) => { client: string|null })} resolveClient  resolver maestro
  * @returns {Array<object>}
  */
-export function projectsForContractWarnings(projects, selectedProjectNames, client, resolveClient) {
-  const names =
-    selectedProjectNames instanceof Set
-      ? selectedProjectNames
-      : new Set(selectedProjectNames ?? [])
+export function projectsForContractWarnings(projects, selectedEntries, client, resolveClient) {
+  const ids = new Set() // zohoProjectId de la selección (join preferido)
+  const namesNoId = new Set() // nombres de horas SIN id (fallback)
+  for (const e of selectedEntries ?? []) {
+    if (e?.zohoProjectId) ids.add(String(e.zohoProjectId))
+    else if (e?.project) namesNoId.add(e.project)
+  }
   const out = []
   for (const p of projects ?? []) {
-    if (!names.has(p?.projectName)) continue
-    if (client && typeof resolveClient === 'function') {
-      const master = resolveClient(p)?.client ?? null
-      // Sólo se descarta si resuelve a OTRO cliente; null (incierto) se incluye.
-      if (master && master !== client) continue
+    // 1. Match exacto por id: es la fila facturada, sin filtro de cliente.
+    if (p?.zohoProjectId && ids.has(String(p.zohoProjectId))) {
+      out.push(p)
+      continue
     }
-    out.push(p)
+    // 2. Fallback por nombre (sólo horas legacy sin id), filtrado por cliente maestro.
+    if (namesNoId.has(p?.projectName)) {
+      if (client && typeof resolveClient === 'function') {
+        const master = resolveClient(p)?.client ?? null
+        if (master && master !== client) continue // sólo descarta si resuelve a OTRO
+      }
+      out.push(p)
+    }
   }
   return out
 }

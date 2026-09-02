@@ -61,22 +61,24 @@ export function GroupedBillModal({
 
   // Clave estable de los proyectos de la selección: `entries` es un array nuevo en
   // cada render del padre, así que depender de él recomputaría los avisos sin
-  // necesidad. Se depende del set de nombres, que sólo cambia si cambia la selección.
-  const projectNamesKey = [...new Set(entries.map((e) => e.project).filter(Boolean))]
+  // necesidad. Se depende del conjunto de proyectos (id, o nombre si la hora no trae
+  // id), que sólo cambia si cambia la selección de proyectos.
+  const selectionProjectKey = [
+    ...new Set(entries.map((e) => (e.zohoProjectId ? `#${e.zohoProjectId}` : e.project)).filter(Boolean)),
+  ]
     .sort()
     .join('|')
 
   // Avisos de contrato (Expired/Critical/Expiring Soon) de los proyectos de la
   // selección. Los proyectos ya vienen del padre (BillingPage los cargó para la
-  // grilla) → sin fetch acá. El match proyecto→cliente usa el resolver MAESTRO
-  // compartido (mismo que la grilla): projectsForContractWarnings filtra por cliente
-  // canónico, no por projects.client crudo/alias, para no ocultar un vencimiento en
-  // homónimos ni avisar con el contrato de otro cliente. Ver billingSelection.js.
+  // grilla) → sin fetch acá. La unión hora→proyecto la hace projectsForContractWarnings
+  // por zohoProjectId (o por nombre + cliente maestro para horas legacy sin id), así el
+  // aviso es el del proyecto EXACTO facturado y no el de un homónimo/otro cliente. Ver
+  // billingSelection.js. selectionProjectKey es el dep estable; se lee `entries` dentro.
   const contractWarnings = useMemo(() => {
-    if (!projectNamesKey) return []
-    const names = new Set(projectNamesKey.split('|'))
+    if (!selectionProjectKey) return []
     const warnings = []
-    for (const p of projectsForContractWarnings(projects, names, client, resolveClient)) {
+    for (const p of projectsForContractWarnings(projects, entries, client, resolveClient)) {
       const days = daysRemaining(p.contractExpirationDate)
       const status = contractStatus(days)
       if (status === 'Expired' || status === 'Critical' || status === 'Expiring Soon') {
@@ -90,7 +92,22 @@ export function GroupedBillModal({
       }
     }
     return warnings
-  }, [projectNamesKey, projects, client, resolveClient])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `entries` cambia de
+    // identidad cada render; selectionProjectKey es su proxy estable (encapsula los
+    // proyectos, lo único que afecta a los avisos).
+  }, [selectionProjectKey, projects, client, resolveClient])
+
+  // Traza si hay selección pero no llegaron proyectos: sin este aviso, el usuario
+  // podría facturar creyendo que no había avisos de contrato cuando en realidad no se
+  // pudieron computar (BillingPage no logra cargar projects y queda []). Reemplaza el
+  // console.warn del fetch que este componente hacía antes de recibir projects del padre.
+  useEffect(() => {
+    if (selectionProjectKey && projects.length === 0) {
+      console.warn(
+        '[GroupedBillModal] sin proyectos cargados: no se pudieron verificar vencimientos de contrato de la selección',
+      )
+    }
+  }, [selectionProjectKey, projects.length])
 
   useEffect(() => {
     function onKeyDown(event) {

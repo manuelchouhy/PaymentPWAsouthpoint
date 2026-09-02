@@ -140,54 +140,77 @@ test('weekStartFromSelection: una sola semana → domingo ISO; varias → null',
 const resolverFrom = (rawToMaster) => (project) => ({
   client: rawToMaster[project?.client] ?? null,
 })
+// Entry de la selección con override (id de proyecto y/o nombre).
+const ent = (o) => ({ zohoProjectId: o?.zohoProjectId, project: o?.project })
 
-test('projectsForContractWarnings: homónimo — descarta el de OTRO cliente, conserva el del maestro', () => {
-  // "Support" existe bajo dos clientes; el crudo ("HSS Group"/"Acme Inc") NO iguala
-  // al maestro ("HSS"/"Acme"), pero el resolver los canonicaliza y el match funciona.
+test('projectsForContractWarnings: join por zohoProjectId — homónimo se resuelve por id, no por nombre', () => {
+  // Dos "Support" bajo clientes distintos: se factura el id 'z1'. El match por id
+  // identifica LA fila exacta sin depender del nombre ni del cliente.
+  const projects = [
+    { id: 1, projectName: 'Support', client: 'HSS Group', zohoProjectId: 'z1' },
+    { id: 2, projectName: 'Support', client: 'Acme Inc', zohoProjectId: 'z2' },
+  ]
+  const resolve = resolverFrom({ 'HSS Group': 'HSS', 'Acme Inc': 'Acme' })
+  const out = projectsForContractWarnings(projects, [ent({ zohoProjectId: 'z1', project: 'Support' })], 'HSS', resolve)
+  assert.deepEqual(out.map((p) => p.id), [1])
+})
+
+test('projectsForContractWarnings: join por id sobrevive a rename del proyecto', () => {
+  // La hora trae el nombre viejo; el proyecto fue renombrado. El id sigue matcheando.
+  const projects = [{ id: 5, projectName: 'Nombre Nuevo', client: 'HSS', zohoProjectId: 'z9' }]
+  const resolve = resolverFrom({ HSS: 'HSS' })
+  const out = projectsForContractWarnings(projects, [ent({ zohoProjectId: 'z9', project: 'Nombre Viejo' })], 'HSS', resolve)
+  assert.deepEqual(out.map((p) => p.id), [5])
+})
+
+test('projectsForContractWarnings: match por id NO duplica banners para un mismo proyecto', () => {
+  // Un solo id facturado → un solo proyecto, aunque exista otro homónimo por nombre.
+  const projects = [
+    { id: 1, projectName: 'Support', client: 'HSS', zohoProjectId: 'z1' },
+    { id: 2, projectName: 'Support', client: 'HSS', zohoProjectId: 'z2' },
+  ]
+  const resolve = resolverFrom({ HSS: 'HSS' })
+  const out = projectsForContractWarnings(projects, [ent({ zohoProjectId: 'z1', project: 'Support' })], 'HSS', resolve)
+  assert.deepEqual(out.map((p) => p.id), [1])
+})
+
+test('projectsForContractWarnings: fallback por nombre (sin id) — descarta el de OTRO cliente', () => {
+  // Horas legacy sin zohoProjectId: cae al match por nombre + cliente maestro.
   const projects = [
     { id: 1, projectName: 'Support', client: 'HSS Group' },
     { id: 2, projectName: 'Support', client: 'Acme Inc' },
   ]
   const resolve = resolverFrom({ 'HSS Group': 'HSS', 'Acme Inc': 'Acme' })
-  const out = projectsForContractWarnings(projects, new Set(['Support']), 'HSS', resolve)
+  const out = projectsForContractWarnings(projects, [ent({ project: 'Support' })], 'HSS', resolve)
   assert.deepEqual(out.map((p) => p.id), [1])
 })
 
-test('projectsForContractWarnings: nombre único de OTRO cliente → se descarta (no avisa con contrato ajeno)', () => {
+test('projectsForContractWarnings: fallback por nombre — único de OTRO cliente → se descarta', () => {
   const projects = [{ id: 9, projectName: 'Analytics Platform', client: 'Acme Analytics' }]
   const resolve = resolverFrom({ 'Acme Analytics': 'Acme' })
-  const out = projectsForContractWarnings(projects, new Set(['Analytics Platform']), 'HSS', resolve)
+  const out = projectsForContractWarnings(projects, [ent({ project: 'Analytics Platform' })], 'HSS', resolve)
   assert.deepEqual(out, [])
 })
 
-test('projectsForContractWarnings: resuelve a null (incierto) → se INCLUYE (fail-safe, no oculta vencimiento)', () => {
+test('projectsForContractWarnings: fallback por nombre — resuelve a null (incierto) → se INCLUYE (fail-safe)', () => {
   const projects = [{ id: 3, projectName: 'Legacy', client: 'texto viejo' }]
   const resolve = resolverFrom({}) // nada matchea → null
-  const out = projectsForContractWarnings(projects, new Set(['Legacy']), 'HSS', resolve)
+  const out = projectsForContractWarnings(projects, [ent({ project: 'Legacy' })], 'HSS', resolve)
   assert.deepEqual(out.map((p) => p.id), [3])
 })
 
-test('projectsForContractWarnings: sin cliente o sin resolver → match sólo por nombre', () => {
+test('projectsForContractWarnings: fallback sin cliente o sin resolver → match sólo por nombre', () => {
   const projects = [
     { id: 1, projectName: 'P1', client: 'x' },
     { id: 2, projectName: 'P2', client: 'y' },
   ]
   const resolve = resolverFrom({ x: 'OtroCliente', y: 'OtroCliente' })
-  // Sin client: no se puede filtrar por maestro → los dos por nombre.
   assert.deepEqual(
-    projectsForContractWarnings(projects, new Set(['P1', 'P2']), null, resolve).map((p) => p.id),
+    projectsForContractWarnings(projects, [ent({ project: 'P1' }), ent({ project: 'P2' })], null, resolve).map((p) => p.id),
     [1, 2],
   )
-  // Con client pero sin resolver: también sólo por nombre.
   assert.deepEqual(
-    projectsForContractWarnings(projects, new Set(['P1']), 'HSS', null).map((p) => p.id),
+    projectsForContractWarnings(projects, [ent({ project: 'P1' })], 'HSS', null).map((p) => p.id),
     [1],
   )
-})
-
-test('projectsForContractWarnings: acepta un iterable de nombres, no sólo Set', () => {
-  const projects = [{ id: 1, projectName: 'P1', client: 'x' }]
-  const resolve = resolverFrom({ x: 'HSS' })
-  const out = projectsForContractWarnings(projects, ['P1'], 'HSS', resolve)
-  assert.deepEqual(out.map((p) => p.id), [1])
 })
