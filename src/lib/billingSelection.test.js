@@ -73,6 +73,14 @@ test('sin fecha resoluble: canBill false + reason no-week (no queda sin explicac
   assert.equal(billBlockReason(sel), 'no-week')
 })
 
+test('una fila con fecha y otra sin fecha: no-week (no el engañoso multi-week)', () => {
+  const sel = [
+    row({ id: 1, date: '2026-08-12' }),
+    { user: 'Ana', client: 'HSS', project: 'P1', hours: 1, entries: [{ id: 2, hours: 1, date: '' }] },
+  ]
+  assert.equal(billBlockReason(sel), 'no-week')
+})
+
 test('selección vacía: sin motivo de bloqueo (no hay nada que avisar)', () => {
   assert.equal(billBlockReason([]), null)
 })

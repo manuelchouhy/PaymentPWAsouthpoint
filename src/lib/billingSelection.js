@@ -59,8 +59,8 @@ export function canBillSelection(selectedRows) {
  * Por qué NO se puede emitir (para el aviso de la UI), o null si se puede. Cubre
  * TODOS los casos en que canBillSelection es false con algo seleccionado, así el
  * botón deshabilitado siempre tiene una explicación. Orden de precedencia: cruza
- * cliente, cruza proyecto, sin cliente, sin proyecto, sin contractor, cruza
- * semana, sin fecha (semana no resoluble). Con la selección vacía devuelve null.
+ * cliente, cruza proyecto, sin cliente, sin proyecto, sin contractor, sin fecha
+ * (semana no resoluble), cruza semana. Con la selección vacía devuelve null.
  * @returns {'multi-client'|'multi-project'|'no-client'|'no-project'|'no-contractor'|'multi-week'|'no-week'|null}
  */
 export function billBlockReason(selectedRows) {
@@ -73,9 +73,10 @@ export function billBlockReason(selectedRows) {
   if ([...projects][0] === '') return 'no-project'
   if (rows.some((r) => (r?.user ?? '') === '')) return 'no-contractor'
   const weeks = selectionWeekStarts(rows)
+  // Sin fecha resoluble tiene precedencia sobre multi-week: si alguna hora no tiene
+  // fecha, el problema es esa hora (no "cruza semanas"), aunque el resto sí resuelva.
+  if (weeks.has('')) return 'no-week'
   if (weeks.size > 1) return 'multi-week'
-  // Una sola "semana" pero es '' → alguna hora no tiene fecha resoluble.
-  if (weeks.size === 1 && [...weeks][0] === '') return 'no-week'
   return null
 }
 
@@ -92,8 +93,13 @@ export function contractorsFromSelection(selectedRows) {
     if (!name) continue
     if (!byName.has(name)) byName.set(name, { contractor: name, entries: [], hours: 0 })
     const c = byName.get(name)
-    for (const e of r.entries ?? []) c.entries.push({ id: e.id, hours: Number(e.hours) || 0 })
-    c.hours += Number(r.hours) || 0
+    // hours se suma de las ENTRIES (no de r.hours) para que el total mostrado use la
+    // misma fuente que el payload/builder (invoiceContractors), y no puedan diverger.
+    for (const e of r.entries ?? []) {
+      const h = Number(e.hours) || 0
+      c.entries.push({ id: e.id, hours: h })
+      c.hours += h
+    }
   }
   return [...byName.values()].sort(
     (a, b) => b.hours - a.hours || a.contractor.localeCompare(b.contractor, 'es'),

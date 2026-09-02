@@ -71,13 +71,22 @@ export function GroupedBillModal({
     api.projects.list()
       .then((all) => {
         if (ignore) return
+        // Nombres de proyecto con MÁS de un cliente en la tabla: sólo para esos
+        // desambiguamos por cliente. El nombre de cliente de la grilla (maestro,
+        // resuelto) y projects.client (crudo/alias) NO son el mismo namespace, así
+        // que filtrar por igualdad de cliente cuando el nombre es ÚNICO podría
+        // perder un aviso legítimo (falso negativo peligroso). Para un nombre único
+        // se avisa siempre; sólo ante homónimos se prefiere el que matchea el cliente.
+        const clientsByName = new Map()
+        for (const p of all) {
+          if (!clientsByName.has(p.projectName)) clientsByName.set(p.projectName, new Set())
+          clientsByName.get(p.projectName).add(p.client)
+        }
         const warnings = []
         for (const p of all) {
           if (!names.has(p.projectName)) continue
-          // Scope por cliente: un proyecto homónimo de OTRO cliente no debe disparar
-          // el aviso de esta factura. Sólo se filtra si conocemos el cliente y el
-          // proyecto trae el suyo (si falta, no se descarta, para no perder avisos).
-          if (client && p.client && p.client !== client) continue
+          const ambiguous = (clientsByName.get(p.projectName)?.size ?? 0) > 1
+          if (ambiguous && client && p.client && p.client !== client) continue
           const days = daysRemaining(p.contractExpirationDate)
           const status = contractStatus(days)
           if (status === 'Expired' || status === 'Critical' || status === 'Expiring Soon') {
@@ -92,7 +101,12 @@ export function GroupedBillModal({
         }
         setContractWarnings(warnings)
       })
-      .catch(() => {})
+      .catch((error) => {
+        // No se pudo traer los proyectos: no hay avisos de contrato, pero se deja
+        // traza (si no, el usuario podría facturar contra un contrato vencido
+        // creyendo que no había avisos).
+        if (!ignore) console.warn('[GroupedBillModal] contract warnings fetch failed —', error?.message ?? error)
+      })
     return () => {
       ignore = true
     }
