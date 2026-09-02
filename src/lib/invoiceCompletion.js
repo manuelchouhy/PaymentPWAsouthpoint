@@ -43,7 +43,17 @@ import { paidEntryIdsFrom } from './paymentsGrouping.js'
  * }}
  */
 export function invoiceCompletion(contractors, payments) {
-  const paidIds = paidEntryIdsFrom(payments)
+  return completionFromPaidIds(contractors, paidEntryIdsFrom(payments))
+}
+
+/**
+ * Núcleo de `invoiceCompletion` con el set de entry_ids pagados YA computado. Separar
+ * el armado del set (paidEntryIdsFrom, O(pagos)) del cálculo por factura permite
+ * reusarlo entre muchas facturas sin re-escanear todos los pagos cada vez.
+ * @param {Array<{contractor:string, entryIds:Array<string|number>, hours:number}>} contractors
+ * @param {Set<string>} paidIds
+ */
+function completionFromPaidIds(contractors, paidIds) {
   // Sólo filas facturables reales: con al menos un entry_id. Una fila sin entry_ids es
   // un dato anómalo (el builder invoiceContractors.js nunca la crea) y se DESCARTA: no
   // aporta horas y, si contara, una sola fila glitch dejaría la factura en 'partial'
@@ -76,8 +86,21 @@ export function invoiceCompletion(contractors, payments) {
 // clave cruda y su String, porque invoice.id puede venir number o string.
 function contractorsLookup(contractorsByInvoice) {
   if (contractorsByInvoice instanceof Map) {
-    return (id) => contractorsByInvoice.get(id) ?? contractorsByInvoice.get(String(id)) ?? []
+    // El Map lo arma la capa de datos y puede estar keyed por el id numérico de la
+    // base o por su String. invoice.id también puede venir number o string, así que
+    // se prueban las tres formas (cruda, String, Number) para no perder el match.
+    return (id) => {
+      const num = Number(id)
+      return (
+        contractorsByInvoice.get(id) ??
+        contractorsByInvoice.get(String(id)) ??
+        (Number.isFinite(num) ? contractorsByInvoice.get(num) : undefined) ??
+        []
+      )
+    }
   }
+  // Objeto plano: sus claves ya son strings (obj[5] y obj['5'] son la misma), así que
+  // alcanza con probar cruda y String.
   const obj = contractorsByInvoice ?? {}
   return (id) => obj[id] ?? obj[String(id)] ?? []
 }
@@ -91,7 +114,13 @@ function contractorsLookup(contractorsByInvoice) {
  * tengan al menos un contractor pendiente: una factura `Invoiced` con TODOS sus
  * contractors ya pagos es un estado transitorio (la RPC aún no flipeó el status a
  * `Paid`) y no tiene nada que pagar, así que no aparece en la lista. Orden: la más
- * vieja primero (worklist por antigüedad), desempate por id para orden estable.
+ * vieja primero (worklist por antigüedad; las sin fecha van al fondo, no como "más
+ * vieja"), desempate por id numérico para orden estable.
+ *
+ * REQUISITO 04c: para que ese estado transitorio no se vuelva permanente, la RPC
+ * register_contractor_payment debe flipear el status a `Paid` de forma ATÓMICA al
+ * pagar al ÚLTIMO contractor (en la misma transacción). Si no, una factura con todo
+ * pago quedaría `Invoiced` en la base y acá oculta (sin pendientes) para siempre.
  *
  * @param {Array<{id:string|number, status:string, invoiceDate?:string}>} invoices
  * @param {Map<string|number, Array>|Record<string, Array>} contractorsByInvoice  invoice_contractors por id de factura
@@ -100,17 +129,24 @@ function contractorsLookup(contractorsByInvoice) {
  */
 export function payableInvoicesByContractor(invoices, contractorsByInvoice, payments) {
   const lookup = contractorsLookup(contractorsByInvoice)
+  const paidIds = paidEntryIdsFrom(payments) // una vez: se reusa entre todas las facturas
   const out = []
   for (const inv of invoices ?? []) {
     if (inv?.status !== 'Invoiced') continue
-    const completion = invoiceCompletion(lookup(inv.id), payments)
+    const completion = completionFromPaidIds(lookup(inv.id), paidIds)
     const pending = completion.contractors.filter((c) => !c.paid)
     if (pending.length === 0) continue
     out.push({ invoice: inv, ...completion, pending })
   }
-  return out.sort(
-    (a, b) =>
-      (a.invoice.invoiceDate || '').localeCompare(b.invoice.invoiceDate || '') ||
-      String(a.invoice.id).localeCompare(String(b.invoice.id)),
-  )
+  return out.sort((a, b) => {
+    // Sin fecha → centinela que ordena DESPUÉS de cualquier fecha ISO real, para caer
+    // al fondo del worklist en vez de encabezarlo como si fuera la más vieja. Desempate
+    // por id con orden numérico ('2' antes de '10').
+    const da = a.invoice.invoiceDate || '9999-12-31'
+    const db = b.invoice.invoiceDate || '9999-12-31'
+    return (
+      da.localeCompare(db) ||
+      String(a.invoice.id).localeCompare(String(b.invoice.id), undefined, { numeric: true })
+    )
+  })
 }

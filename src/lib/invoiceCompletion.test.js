@@ -159,6 +159,39 @@ test('payableInvoicesByContractor: acepta contractorsByInvoice como objeto plano
   assert.equal(row.pending.length, 1)
 })
 
+test('payableInvoicesByContractor: Map keyed por number con invoice.id string → matchea igual', () => {
+  const invoices = [invoice('5', 'Invoiced', '2026-08-10')] // id string
+  const byInv = new Map([[5, [contractor('Ana', [1], 4)]]]) // Map keyed por number
+  const [row] = payableInvoicesByContractor(invoices, byInv, [])
+  assert.equal(row.pending.length, 1)
+})
+
+test('payableInvoicesByContractor: factura sin fecha va al FONDO, no como la más vieja', () => {
+  const invoices = [
+    invoice('sinfecha', 'Invoiced', null),
+    invoice('vieja', 'Invoiced', '2026-08-01'),
+  ]
+  const byInv = new Map([
+    ['sinfecha', [contractor('Ana', [1], 4)]],
+    ['vieja', [contractor('Bob', [2], 3)]],
+  ])
+  const out = payableInvoicesByContractor(invoices, byInv, [])
+  assert.deepEqual(out.map((r) => r.invoice.id), ['vieja', 'sinfecha'])
+})
+
+test('payableInvoicesByContractor: desempate por id es numérico (2 antes de 10)', () => {
+  const invoices = [
+    invoice(10, 'Invoiced', '2026-08-10'),
+    invoice(2, 'Invoiced', '2026-08-10'),
+  ]
+  const byInv = new Map([
+    [10, [contractor('Ana', [1], 4)]],
+    [2, [contractor('Bob', [2], 3)]],
+  ])
+  const out = payableInvoicesByContractor(invoices, byInv, [])
+  assert.deepEqual(out.map((r) => r.invoice.id), [2, 10])
+})
+
 test('payableInvoicesByContractor: entradas nulas → []', () => {
   assert.deepEqual(payableInvoicesByContractor(undefined, undefined, undefined), [])
 })
