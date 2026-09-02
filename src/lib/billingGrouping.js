@@ -115,8 +115,9 @@ function groupWeeks(entries) {
  * Proyectos de un cliente ASIGNADO, cada uno con sus semanas (dom→sáb). El proyecto
  * es la unidad facturable: de un cliente cuelgan sus proyectos y de cada proyecto sus
  * semanas → filas. Ordena por horas pendientes desc, desempata por nombre. Las horas
- * sin proyecto caen en un grupo '' (queda al fondo por tener, típicamente, menos horas
- * o por el desempate por nombre).
+ * sin proyecto caen en un grupo '' que se ordena como cualquier otro (por horas; en
+ * empate el '' va primero por localeCompare), se muestra con label '—' y NO tiene un
+ * lugar fijo: si domina en horas, puede quedar arriba.
  */
 function groupProjectsWithWeeks(entries) {
   const byProject = new Map()
