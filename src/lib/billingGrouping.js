@@ -112,6 +112,29 @@ function groupWeeks(entries) {
 }
 
 /**
+ * Proyectos de un cliente ASIGNADO, cada uno con sus semanas (dom→sáb). El proyecto
+ * es la unidad facturable: de un cliente cuelgan sus proyectos y de cada proyecto sus
+ * semanas → filas. Ordena por horas pendientes desc, desempata por nombre. Las horas
+ * sin proyecto caen en un grupo '' (queda al fondo por tener, típicamente, menos horas
+ * o por el desempate por nombre).
+ */
+function groupProjectsWithWeeks(entries) {
+  const byProject = new Map()
+  for (const entry of entries) {
+    const project = entry.project ?? ''
+    if (!byProject.has(project)) byProject.set(project, [])
+    byProject.get(project).push(entry)
+  }
+  return [...byProject.entries()]
+    .map(([project, projectEntries]) => ({
+      project,
+      hours: sumHours(projectEntries),
+      weeks: groupWeeks(projectEntries),
+    }))
+    .sort((a, b) => b.hours - a.hours || a.project.localeCompare(b.project, 'es'))
+}
+
+/**
  * Proyectos del bucket "Sin cliente", cada uno con su motivo de no-resolución y
  * ordenados por horas desc. El motivo suele ser propiedad del proyecto (todas sus
  * horas comparten motivo), pero dos proyectos de Zoho homónimos pueden caer en el
@@ -157,9 +180,10 @@ function groupProjectsWithReason(entries) {
  *   - billingStatusOf: estado de la factura de una hora (Invoiced/Collected/Paid),
  *     para taggear `row.billStatus` (lo usan badge/drawer/export).
  * @returns {Array<object>} clientes; "Sin cliente" (isUnassigned) primero, el
- *   resto por horas desc. Los asignados traen `weeks` (cada fila con `invoiced` y
- *   `billStatus`); el bucket sin cliente trae `projects` (con motivo) y es siempre
- *   de horas PENDIENTES (una facturada sin cliente no va ahí: ya está facturada).
+ *   resto por horas desc. Los asignados traen `projects` (cada uno con sus `weeks`,
+ *   y cada fila con `invoiced` y `billStatus`); el bucket sin cliente trae `projects`
+ *   (con motivo y `entries`, sin weeks) y es siempre de horas PENDIENTES (una
+ *   facturada sin cliente no va ahí: ya está facturada).
  */
 export function groupBillToClient(
   entries = [],
@@ -196,7 +220,7 @@ export function groupBillToClient(
     if (client === '') {
       groups.push({ client: '', isUnassigned: true, hours, projects: groupProjectsWithReason(clientEntries) })
     } else {
-      groups.push({ client, isUnassigned: false, hours, weeks: groupWeeks(clientEntries) })
+      groups.push({ client, isUnassigned: false, hours, projects: groupProjectsWithWeeks(clientEntries) })
     }
   }
 

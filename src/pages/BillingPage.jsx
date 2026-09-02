@@ -21,14 +21,19 @@ import { ALLOCATION_LABELS } from '../lib/allocations'
 // Un proyecto se identifica por cliente + nombre, no por nombre solo.
 const sowKey = (client, projectName) => `${client ?? ''}||${projectName ?? ''}`
 
-// Clave de una semana dentro de un cliente (para colapsar/expandir) y de una fila
-// dentro de esa semana (para seleccionar/facturar). Una sola definición: el id de
-// selección y la clave del índice tienen que salir de la MISMA función o divergen
-// en silencio y los checkboxes dejan de matchear. week.weekId ya incluye el año
-// (semana domingo→sábado, ver billingGrouping), así que dos semanas homónimas de
-// años distintos no colapsan en una.
-const weekId = (client, week) => `${client}||${week.weekId}`
-const rowId = (client, week, row) => `${weekId(client, week)}||${row.key}`
+// Claves anidadas cliente → proyecto → semana → fila (para colapsar/expandir y
+// seleccionar/facturar). Una sola definición: el id de selección y la clave del
+// índice salen de la MISMA función o divergen en silencio y los checkboxes dejan de
+// matchear. Los prefijos ANIDAN (projectId ⊂ weekId ⊂ rowId) para que al colapsar un
+// proyecto/semana se puedan sacar sus filas de la selección con startsWith.
+//
+// El proyecto va SÍ o SÍ en la clave: dos proyectos del mismo cliente pueden tener
+// horas en la misma semana calendario (mismo week.weekId), y sin el proyecto sus
+// semanas/filas colisionarían (se pisaría la selección y el colapso). week.weekId ya
+// incluye el año (semana domingo→sábado, ver billingGrouping).
+const projectId = (client, project) => `${client}||${project.project}`
+const weekId = (client, project, week) => `${projectId(client, project)}||${week.weekId}`
+const rowId = (client, project, week, row) => `${weekId(client, project, week)}||${row.key}`
 
 // Por qué una hora quedó "sin cliente" (motivo que expone clientResolver).
 const REASON_LABEL = {
@@ -144,6 +149,10 @@ export function BillingPage() {
   // abierta). Es un ref, no estado: sembrar no debe re-renderizar, y así un reload
   // no vuelve a aplicar el default sobre lo que el usuario ya abrió/cerró.
   const seededWeeksRef = useRef(null)
+  // Colapso del nivel proyecto (mismo modelo absoluto que openWeeks): un proyecto
+  // sólo cambia por toggleProject (que poda su selección) o por el seed inicial.
+  const [openProjects, setOpenProjects] = useState(() => new Set())
+  const seededProjectsRef = useRef(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [notice, setNotice] = useState('')
   // Tab activa de Billing (bill_to_client | overage | sp_internal | unknown).
@@ -474,45 +483,64 @@ export function BillingPage() {
     const map = new Map()
     for (const group of clientGroups) {
       if (group.isUnassigned) continue
-      for (const week of group.weeks) {
-        for (const row of week.rows) {
-          // Las filas facturadas (C9, filtro invoiced/all) son read-only: no entran
-          // al índice de selección ni pueden re-facturarse.
-          if (row.invoiced) continue
-          const id = rowId(group.client, week, row)
-          map.set(id, { ...row, rowId: id, client: group.client, week: week.week })
+      for (const project of group.projects) {
+        for (const week of project.weeks) {
+          for (const row of week.rows) {
+            // Las filas facturadas (C9, filtro invoiced/all) son read-only: no entran
+            // al índice de selección ni pueden re-facturarse.
+            if (row.invoiced) continue
+            const id = rowId(group.client, project, week, row)
+            map.set(id, {
+              ...row,
+              rowId: id,
+              client: group.client,
+              project: project.project,
+              week: week.week,
+            })
+          }
         }
       }
     }
     return map
   }, [clientGroups])
 
-  // Siembra el default de colapso: la semana más reciente de cada cliente (i===0)
-  // arranca abierta; el resto colapsadas. Sólo se siembra una semana la PRIMERA
-  // vez que aparece (seededWeeksRef), así un reload no pisa lo que el usuario
-  // abrió/cerró a mano.
+  // Siembra el default de colapso. Proyecto: el primero de cada cliente (i===0, el de
+  // más horas) arranca abierto; el resto colapsados. Semana: la más reciente (i===0)
+  // de CADA proyecto arranca abierta, así al expandir un proyecto se ve su última
+  // semana. Cada id se siembra la PRIMERA vez que aparece (refs), así un reload no
+  // pisa lo que el usuario abrió/cerró a mano.
+  //
+  // La lectura/mutación de los refs va en el CUERPO del efecto, no en el updater:
+  // bajo StrictMode el updater se invoca dos veces con el mismo `prev`, y si sembrara
+  // ahí, la 2da pasada vería el id ya sembrado y no abriría nada.
   useEffect(() => {
     if (!seededWeeksRef.current) seededWeeksRef.current = new Set()
-    const seeded = seededWeeksRef.current
-    // La lectura/mutación del ref va en el CUERPO del efecto, no en el updater:
-    // bajo StrictMode el updater se invoca dos veces con el mismo `prev`, y si
-    // sembrara ahí, la 2da pasada vería el wid ya sembrado y no abriría la semana.
-    const toOpen = []
+    if (!seededProjectsRef.current) seededProjectsRef.current = new Set()
+    const seededWeeks = seededWeeksRef.current
+    const seededProjects = seededProjectsRef.current
+    const weeksToOpen = []
+    const projectsToOpen = []
     for (const group of clientGroups) {
       if (group.isUnassigned) continue
-      group.weeks.forEach((week, i) => {
-        const wid = weekId(group.client, week)
-        if (seeded.has(wid)) return
-        seeded.add(wid)
-        if (i === 0) toOpen.push(wid)
+      group.projects.forEach((project, pi) => {
+        const pid = projectId(group.client, project)
+        if (!seededProjects.has(pid)) {
+          seededProjects.add(pid)
+          if (pi === 0) projectsToOpen.push(pid)
+        }
+        project.weeks.forEach((week, wi) => {
+          const wid = weekId(group.client, project, week)
+          if (seededWeeks.has(wid)) return
+          seededWeeks.add(wid)
+          if (wi === 0) weeksToOpen.push(wid)
+        })
       })
     }
-    if (toOpen.length) {
-      setOpenWeeks((prev) => {
-        const next = new Set(prev)
-        for (const wid of toOpen) next.add(wid)
-        return next
-      })
+    if (projectsToOpen.length) {
+      setOpenProjects((prev) => new Set([...prev, ...projectsToOpen]))
+    }
+    if (weeksToOpen.length) {
+      setOpenWeeks((prev) => new Set([...prev, ...weeksToOpen]))
     }
   }, [clientGroups])
 
@@ -573,6 +601,22 @@ export function BillingPage() {
     }
   }
 
+  // Colapso del proyecto (mismo modelo que toggleWeek). Al colapsar se podan de la
+  // selección TODAS las filas del proyecto (prefijo pid ⊂ rowId): si quedaran
+  // seleccionadas pero ocultas, se podrían facturar horas que ya no se ven.
+  function toggleProject(pid) {
+    const isOpen = openProjects.has(pid)
+    setOpenProjects((prev) => {
+      const next = new Set(prev)
+      if (next.has(pid)) next.delete(pid)
+      else next.add(pid)
+      return next
+    })
+    if (isOpen) {
+      setSelectedKeys((prev) => new Set([...prev].filter((k) => !k.startsWith(`${pid}||`))))
+    }
+  }
+
   // Agrega o quita un conjunto de ids de la selección (base de los select-all).
   function applySelection(ids, remove) {
     setSelectedKeys((prev) => {
@@ -591,14 +635,15 @@ export function BillingPage() {
     applySelection(weekRowIds, allSelected)
   }
 
-  // "Select all" de TODO un cliente (todas sus semanas). Para no romper el
-  // invariante "seleccionado ⊆ visible" (una fila seleccionada pero en una semana
-  // colapsada se podría facturar sin verse), al seleccionar se ABREN todas las
-  // semanas del cliente. Al deseleccionar sólo se quitan sus filas (las semanas
-  // pueden quedar abiertas). Cruzar proveedores no rompe nada: el paso de emisión
-  // exige un solo proveedor y guía la selección.
-  function toggleClientSelection(clientRowIds, clientWeekIds, allSelected) {
+  // "Select all" de TODO un cliente (todos sus proyectos y semanas). Para no romper
+  // el invariante "seleccionado ⊆ visible" (una fila seleccionada pero en un proyecto
+  // o semana colapsada se podría facturar sin verse), al seleccionar se ABREN todos
+  // los proyectos y semanas del cliente. Al deseleccionar sólo se quitan sus filas
+  // (los proyectos/semanas pueden quedar abiertos). Cruzar proveedores no rompe nada:
+  // el paso de emisión exige un solo proveedor y guía la selección.
+  function toggleClientSelection(clientRowIds, clientProjectIds, clientWeekIds, allSelected) {
     if (!allSelected) {
+      setOpenProjects((prev) => new Set([...prev, ...clientProjectIds]))
       setOpenWeeks((prev) => new Set([...prev, ...clientWeekIds]))
     }
     applySelection(clientRowIds, allSelected)
@@ -643,20 +688,22 @@ export function BillingPage() {
           })
         }
       } else {
-        for (const week of group.weeks) {
-          for (const row of week.rows) {
-            rows.push({
-              provider: row.user,
-              client: group.client,
-              week: week.week,
-              project: row.project,
-              task: row.task,
-              date: row.date ? formatDate(row.date) : '',
-              reason: '',
-              hours: row.hours,
-              entries: row.entries.length,
-              status: row.billStatus,
-            })
+        for (const project of group.projects) {
+          for (const week of project.weeks) {
+            for (const row of week.rows) {
+              rows.push({
+                provider: row.user,
+                client: group.client,
+                week: week.week,
+                project: row.project,
+                task: row.task,
+                date: row.date ? formatDate(row.date) : '',
+                reason: '',
+                hours: row.hours,
+                entries: row.entries.length,
+                status: row.billStatus,
+              })
+            }
           }
         }
       }
@@ -1096,14 +1143,22 @@ export function BillingPage() {
                         <div className="bill-client__id">
                         {canCreate &&
                           (() => {
-                            // Todas las filas seleccionables del cliente (todas sus
-                            // semanas) + los ids de esas semanas, para el select-all
-                            // por cliente que las abre y selecciona de una.
-                            const clientWeekIds = group.weeks.map((w) => weekId(group.client, w))
-                            const clientRowIds = group.weeks.flatMap((w) =>
-                              w.rows
-                                .filter((r) => !r.invoiced)
-                                .map((r) => rowId(group.client, w, r)),
+                            // Todas las filas seleccionables del cliente (todos sus
+                            // proyectos y semanas) + los ids de esos proyectos y
+                            // semanas, para el select-all por cliente que los abre y
+                            // selecciona de una.
+                            const clientProjectIds = group.projects.map((p) =>
+                              projectId(group.client, p),
+                            )
+                            const clientWeekIds = group.projects.flatMap((p) =>
+                              p.weeks.map((w) => weekId(group.client, p, w)),
+                            )
+                            const clientRowIds = group.projects.flatMap((p) =>
+                              p.weeks.flatMap((w) =>
+                                w.rows
+                                  .filter((r) => !r.invoiced)
+                                  .map((r) => rowId(group.client, p, w, r)),
+                              ),
                             )
                             if (clientRowIds.length === 0) return null
                             const allSel = clientRowIds.every((k) => selectedKeys.has(k))
@@ -1114,7 +1169,12 @@ export function BillingPage() {
                                   !allSel && clientRowIds.some((k) => selectedKeys.has(k))
                                 }
                                 onChange={() =>
-                                  toggleClientSelection(clientRowIds, clientWeekIds, allSel)
+                                  toggleClientSelection(
+                                    clientRowIds,
+                                    clientProjectIds,
+                                    clientWeekIds,
+                                    allSel,
+                                  )
                                 }
                                 ariaLabel={`Select all billable rows for ${group.client}`}
                               />
@@ -1124,165 +1184,193 @@ export function BillingPage() {
                         </div>
                         <span className="bill-client__hours">{formatHours(group.hours)} h</span>
                       </header>
-                      {group.weeks.map((week) => {
-                        const wid = weekId(group.client, week)
-                        // Estado absoluto: abierta sólo si está en openWeeks (el
-                        // seed abrió la más reciente de cada cliente).
-                        const open = openWeeks.has(wid)
-                        // Sólo las filas pendientes son seleccionables (las
-                        // facturadas van read-only con el filtro invoiced/all).
-                        const weekRowIds = week.rows
-                          .filter((row) => !row.invoiced)
-                          .map((row) => rowId(group.client, week, row))
-                        const allWeekSelected =
-                          weekRowIds.length > 0 && weekRowIds.every((k) => selectedKeys.has(k))
+                      {group.projects.map((project) => {
+                        const pid = projectId(group.client, project)
+                        // El proyecto es la unidad facturable: nivel colapsable entre
+                        // cliente y semana. Estado absoluto (openProjects), igual que
+                        // las semanas; el seed abre el primero de cada cliente.
+                        const projectOpen = openProjects.has(pid)
                         return (
-                          <div className="bill-week" key={wid}>
+                          <div className="bill-project" key={pid}>
                             <button
                               type="button"
-                              className="bill-week__toggle"
-                              onClick={() => toggleWeek(wid)}
-                              aria-expanded={open}
+                              className="bill-project__toggle"
+                              onClick={() => toggleProject(pid)}
+                              aria-expanded={projectOpen}
                             >
-                              <span className="bill-week__chev" aria-hidden="true">
-                                {open ? '▾' : '▸'}
+                              <span className="bill-project__chev" aria-hidden="true">
+                                {projectOpen ? '▾' : '▸'}
                               </span>
-                              <span className="bill-week__label">{week.week}</span>
-                              <span className="bill-week__hours">
-                                {formatHours(week.hours)} h · {week.rows.length}{' '}
-                                {week.rows.length === 1 ? 'row' : 'rows'}
+                              <span className="bill-project__label">
+                                {project.project || '—'}
+                              </span>
+                              <span className="bill-project__hours">
+                                {formatHours(project.hours)} h
                               </span>
                             </button>
-                            {open && (
-                              <div className="table-wrap table-wrap--scroll">
-                                <table className="table proj-table">
-                                  <thead>
-                                    <tr>
-                                      {canCreate && weekRowIds.length > 0 && (
-                                        <th scope="col" style={{ width: 34 }}>
-                                          <Checkbox
-                                            checked={allWeekSelected}
-                                            indeterminate={
-                                              !allWeekSelected &&
-                                              weekRowIds.some((k) => selectedKeys.has(k))
-                                            }
-                                            onChange={() =>
-                                              toggleWeekSelection(weekRowIds, allWeekSelected)
-                                            }
-                                            ariaLabel={`Select all rows in ${week.week}`}
-                                          />
-                                        </th>
-                                      )}
-                                      <th scope="col">Provider</th>
-                                      <th scope="col">Project · task</th>
-                                      <th scope="col">Date</th>
-                                      <th scope="col" className="col-num">Hours</th>
-                                      <th scope="col">Status</th>
-                                      <th scope="col" style={{ width: 40 }}>
-                                        <span className="sr-only">Detail</span>
-                                      </th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {week.rows.map((row) => {
-                                      const id = rowId(group.client, week, row)
-                                      const sow =
-                                        sowByProject.byClientAndName.get(
-                                          sowKey(group.client, row.project),
-                                        ) ?? sowByProject.byName.get(row.project)
-                                      // Fila seleccionable sólo si es pendiente; las facturadas
-                                      // (filtro invoiced/all) van read-only. row.billStatus
-                                      // (resuelto en la capa de grouping) lo usan el badge, el
-                                      // drawer y el export.
-                                      const selectable = canCreate && !row.invoiced
-                                      return (
-                                        <tr
-                                          key={id}
-                                          // Sin billing.create (o fila facturada) no togglea (no
-                                          // hay onClick): row-static evita el cursor de
-                                          // "clickeable" que da .proj-table.
-                                          className={
-                                            !selectable
-                                              ? 'row-static'
-                                              : selectedKeys.has(id)
-                                                ? 'is-selected'
-                                                : undefined
-                                          }
-                                          onClick={
-                                            selectable
-                                              ? (e) => {
-                                                  // No robar el click cuando el usuario está
-                                                  // seleccionando texto DENTRO de esta fila
-                                                  // (drag-select); una selección vieja en otra
-                                                  // parte de la página no debe anular el toggle.
-                                                  const sel = window.getSelection?.()
-                                                  if (
-                                                    sel &&
-                                                    !sel.isCollapsed &&
-                                                    e.currentTarget.contains(sel.anchorNode)
-                                                  )
-                                                    return
-                                                  toggleGroup(id)
-                                                }
-                                              : undefined
-                                          }
-                                        >
-                                          {canCreate && weekRowIds.length > 0 && (
-                                            // La columna del checkbox existe si la semana tiene
-                                            // filas seleccionables; una fila facturada deja la
-                                            // celda vacía para no desalinear las columnas.
-                                            // stopPropagation: el checkbox ya togglea por su
-                                            // onChange; sin esto el click burbujea al <tr>.
-                                            <td onClick={(e) => e.stopPropagation()}>
-                                              {selectable && (
-                                                <Checkbox
-                                                  checked={selectedKeys.has(id)}
-                                                  onChange={() => toggleGroup(id)}
-                                                  ariaLabel={`Select ${row.user} · ${row.project}`}
-                                                />
+                            {projectOpen &&
+                              project.weeks.map((week) => {
+                                const wid = weekId(group.client, project, week)
+                                // Estado absoluto: abierta sólo si está en openWeeks (el
+                                // seed abrió la más reciente de cada proyecto).
+                                const open = openWeeks.has(wid)
+                                // Sólo las filas pendientes son seleccionables (las
+                                // facturadas van read-only con el filtro invoiced/all).
+                                const weekRowIds = week.rows
+                                  .filter((row) => !row.invoiced)
+                                  .map((row) => rowId(group.client, project, week, row))
+                                const allWeekSelected =
+                                  weekRowIds.length > 0 && weekRowIds.every((k) => selectedKeys.has(k))
+                                return (
+                                  <div className="bill-week" key={wid}>
+                                    <button
+                                      type="button"
+                                      className="bill-week__toggle"
+                                      onClick={() => toggleWeek(wid)}
+                                      aria-expanded={open}
+                                    >
+                                      <span className="bill-week__chev" aria-hidden="true">
+                                        {open ? '▾' : '▸'}
+                                      </span>
+                                      <span className="bill-week__label">{week.week}</span>
+                                      <span className="bill-week__hours">
+                                        {formatHours(week.hours)} h · {week.rows.length}{' '}
+                                        {week.rows.length === 1 ? 'row' : 'rows'}
+                                      </span>
+                                    </button>
+                                    {open && (
+                                      <div className="table-wrap table-wrap--scroll">
+                                        <table className="table proj-table">
+                                          <thead>
+                                            <tr>
+                                              {canCreate && weekRowIds.length > 0 && (
+                                                <th scope="col" style={{ width: 34 }}>
+                                                  <Checkbox
+                                                    checked={allWeekSelected}
+                                                    indeterminate={
+                                                      !allWeekSelected &&
+                                                      weekRowIds.some((k) => selectedKeys.has(k))
+                                                    }
+                                                    onChange={() =>
+                                                      toggleWeekSelection(weekRowIds, allWeekSelected)
+                                                    }
+                                                    ariaLabel={`Select all rows in ${week.week}`}
+                                                  />
+                                                </th>
                                               )}
-                                            </td>
-                                          )}
-                                          <td className="cell-strong">
-                                            <span className="cell-user">
-                                              <Avatar name={row.user} size="sm" />
-                                              {row.user}
-                                            </span>
-                                          </td>
-                                          <td>
-                                            {row.project || '—'}
-                                            {(row.task || sow) && (
-                                              <div className="cell-soft">
-                                                {row.task}
-                                                {row.task && sow && ' · '}
-                                                {sow}
-                                              </div>
-                                            )}
-                                          </td>
-                                          <td className="cell-mono">
-                                            {row.date ? formatDate(row.date) : '—'}
-                                          </td>
-                                          <td className="col-num cell-mono">
-                                            {formatHours(row.hours)}
-                                          </td>
-                                          <td>
-                                            {row.invoiced ? (
-                                              <BillingBadge status={row.billStatus} />
-                                            ) : (
-                                              <span className="badge badge--tobill">to bill</span>
-                                            )}
-                                          </td>
-                                          <DetailButtonCell
-                                            label={`View detail for ${row.user} · ${row.project}`}
-                                            onClick={() => openRowDetail(row)}
-                                          />
-                                        </tr>
-                                      )
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
+                                              <th scope="col">Provider</th>
+                                              <th scope="col">Project · task</th>
+                                              <th scope="col">Date</th>
+                                              <th scope="col" className="col-num">Hours</th>
+                                              <th scope="col">Status</th>
+                                              <th scope="col" style={{ width: 40 }}>
+                                                <span className="sr-only">Detail</span>
+                                              </th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {week.rows.map((row) => {
+                                              const id = rowId(group.client, project, week, row)
+                                              const sow =
+                                                sowByProject.byClientAndName.get(
+                                                  sowKey(group.client, row.project),
+                                                ) ?? sowByProject.byName.get(row.project)
+                                              // Fila seleccionable sólo si es pendiente; las facturadas
+                                              // (filtro invoiced/all) van read-only. row.billStatus
+                                              // (resuelto en la capa de grouping) lo usan el badge, el
+                                              // drawer y el export.
+                                              const selectable = canCreate && !row.invoiced
+                                              return (
+                                                <tr
+                                                  key={id}
+                                                  // Sin billing.create (o fila facturada) no togglea (no
+                                                  // hay onClick): row-static evita el cursor de
+                                                  // "clickeable" que da .proj-table.
+                                                  className={
+                                                    !selectable
+                                                      ? 'row-static'
+                                                      : selectedKeys.has(id)
+                                                        ? 'is-selected'
+                                                        : undefined
+                                                  }
+                                                  onClick={
+                                                    selectable
+                                                      ? (e) => {
+                                                          // No robar el click cuando el usuario está
+                                                          // seleccionando texto DENTRO de esta fila
+                                                          // (drag-select); una selección vieja en otra
+                                                          // parte de la página no debe anular el toggle.
+                                                          const sel = window.getSelection?.()
+                                                          if (
+                                                            sel &&
+                                                            !sel.isCollapsed &&
+                                                            e.currentTarget.contains(sel.anchorNode)
+                                                          )
+                                                            return
+                                                          toggleGroup(id)
+                                                        }
+                                                      : undefined
+                                                  }
+                                                >
+                                                  {canCreate && weekRowIds.length > 0 && (
+                                                    // La columna del checkbox existe si la semana tiene
+                                                    // filas seleccionables; una fila facturada deja la
+                                                    // celda vacía para no desalinear las columnas.
+                                                    // stopPropagation: el checkbox ya togglea por su
+                                                    // onChange; sin esto el click burbujea al <tr>.
+                                                    <td onClick={(e) => e.stopPropagation()}>
+                                                      {selectable && (
+                                                        <Checkbox
+                                                          checked={selectedKeys.has(id)}
+                                                          onChange={() => toggleGroup(id)}
+                                                          ariaLabel={`Select ${row.user} · ${row.project}`}
+                                                        />
+                                                      )}
+                                                    </td>
+                                                  )}
+                                                  <td className="cell-strong">
+                                                    <span className="cell-user">
+                                                      <Avatar name={row.user} size="sm" />
+                                                      {row.user}
+                                                    </span>
+                                                  </td>
+                                                  <td>
+                                                    {row.project || '—'}
+                                                    {(row.task || sow) && (
+                                                      <div className="cell-soft">
+                                                        {row.task}
+                                                        {row.task && sow && ' · '}
+                                                        {sow}
+                                                      </div>
+                                                    )}
+                                                  </td>
+                                                  <td className="cell-mono">
+                                                    {row.date ? formatDate(row.date) : '—'}
+                                                  </td>
+                                                  <td className="col-num cell-mono">
+                                                    {formatHours(row.hours)}
+                                                  </td>
+                                                  <td>
+                                                    {row.invoiced ? (
+                                                      <BillingBadge status={row.billStatus} />
+                                                    ) : (
+                                                      <span className="badge badge--tobill">to bill</span>
+                                                    )}
+                                                  </td>
+                                                  <DetailButtonCell
+                                                    label={`View detail for ${row.user} · ${row.project}`}
+                                                    onClick={() => openRowDetail(row)}
+                                                  />
+                                                </tr>
+                                              )
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })}
                           </div>
                         )
                       })}
