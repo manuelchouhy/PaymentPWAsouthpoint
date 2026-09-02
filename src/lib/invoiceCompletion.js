@@ -91,12 +91,12 @@ function contractorsLookup(contractorsByInvoice) {
     // se prueban las tres formas (cruda, String, Number) para no perder el match.
     return (id) => {
       const num = Number(id)
-      return (
-        contractorsByInvoice.get(id) ??
-        contractorsByInvoice.get(String(id)) ??
-        (Number.isFinite(num) ? contractorsByInvoice.get(num) : undefined) ??
-        []
-      )
+      // Sólo se prueba la clave numérica si el id round-trip‑ea exacto: así un id
+      // string enorme (> 2^53) que Number() redondearía no matchea la clave de OTRA
+      // factura por pérdida de precisión.
+      const byNum =
+        Number.isFinite(num) && String(num) === String(id) ? contractorsByInvoice.get(num) : undefined
+      return contractorsByInvoice.get(id) ?? contractorsByInvoice.get(String(id)) ?? byNum ?? []
     }
   }
   // Objeto plano: sus claves ya son strings (obj[5] y obj['5'] son la misma), así que
@@ -141,9 +141,12 @@ export function payableInvoicesByContractor(invoices, contractorsByInvoice, paym
   return out.sort((a, b) => {
     // Sin fecha → centinela que ordena DESPUÉS de cualquier fecha ISO real, para caer
     // al fondo del worklist en vez de encabezarlo como si fuera la más vieja. Desempate
-    // por id con orden numérico ('2' antes de '10').
-    const da = a.invoice.invoiceDate || '9999-12-31'
-    const db = b.invoice.invoiceDate || '9999-12-31'
+    // por id con orden numérico ('2' antes de '10'). Se compara lexicográficamente
+    // asumiendo invoiceDate ISO zero-padded (YYYY-MM-DD), que es lo que devuelve la
+    // columna date de Postgres; se coerciona a String para no romper si llegara un
+    // Date/otro tipo (no ordenaría cronológico, pero no crashea la lista entera).
+    const da = String(a.invoice.invoiceDate || '9999-12-31')
+    const db = String(b.invoice.invoiceDate || '9999-12-31')
     return (
       da.localeCompare(db) ||
       String(a.invoice.id).localeCompare(String(b.invoice.id), undefined, { numeric: true })
