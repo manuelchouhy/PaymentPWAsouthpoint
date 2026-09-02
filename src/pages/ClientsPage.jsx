@@ -42,17 +42,33 @@ export function ClientsPage() {
     // MSA opcional: si no se subió archivo, el cliente se crea sin MSA (trabajo
     // interno, o alta previa a la firma) y no se registra versión en el historial.
     const msaUrl = msaFile ? await api.clients.uploadMsa(msaFile) : null
-    const created = await api.clients.create({ ...payload, msaUrl }, user?.email ?? null)
-    if (msaUrl) {
-      await api.clients.recordMsaVersion({ clientId: created.id, fileUrl: msaUrl, uploadedBy: user?.email ?? null })
+    let created
+    try {
+      created = await api.clients.create({ ...payload, msaUrl }, user?.email ?? null)
+    } catch (err) {
+      // El MSA ya se subió pero el create falló (alias colisionando, RLS…): lo
+      // limpiamos para no dejar el archivo huérfano en storage. removeMsa no lanza.
+      if (msaUrl) await api.clients.removeMsa(msaUrl)
+      throw err
     }
-    api.audit.log({
-      actorEmail: user?.email,
-      action: 'client.create',
-      resourceType: 'client',
-      resourceId: created.id,
-      after: { clientName: created.clientName },
-    })
+    if (msaUrl) {
+      // El cliente ya existe: registrar la versión del MSA es secundario, así que
+      // es best-effort — que falle acá no debe romper la UI ni invitar a recrear.
+      try {
+        await api.clients.recordMsaVersion({ clientId: created.id, fileUrl: msaUrl, uploadedBy: user?.email ?? null })
+      } catch (e) {
+        console.error('No se pudo registrar la versión del MSA:', e)
+      }
+    }
+    Promise.resolve(
+      api.audit.log({
+        actorEmail: user?.email,
+        action: 'client.create',
+        resourceType: 'client',
+        resourceId: created.id,
+        after: { clientName: created.clientName },
+      }),
+    ).catch((e) => console.error('No se pudo registrar el audit de client.create:', e))
     setClients((prev) => sortByName([...prev, created]))
     setFormOpen(false)
     setToast({ id: Date.now(), message: `Client created: ${created.clientName}` })
@@ -63,18 +79,33 @@ export function ClientsPage() {
     if (msaFile) {
       msaUrl = await api.clients.uploadMsa(msaFile)
     }
-    const updated = await api.clients.update(editing, { ...payload, msaUrl })
-    if (msaFile) {
-      await api.clients.recordMsaVersion({ clientId: updated.id, fileUrl: msaUrl, uploadedBy: user?.email ?? null })
+    let updated
+    try {
+      updated = await api.clients.update(editing, { ...payload, msaUrl })
+    } catch (err) {
+      // Si subimos un MSA nuevo y el update falló, lo limpiamos; el MSA anterior
+      // (editing.msaUrl) sigue en uso, así que no se toca. removeMsa no lanza.
+      if (msaFile) await api.clients.removeMsa(msaUrl)
+      throw err
     }
-    api.audit.log({
-      actorEmail: user?.email,
-      action: 'client.update',
-      resourceType: 'client',
-      resourceId: updated.id,
-      before: { clientName: editing.clientName },
-      after: { clientName: updated.clientName },
-    })
+    if (msaFile) {
+      // Best-effort: el update ya se guardó, la versión del MSA es secundaria.
+      try {
+        await api.clients.recordMsaVersion({ clientId: updated.id, fileUrl: msaUrl, uploadedBy: user?.email ?? null })
+      } catch (e) {
+        console.error('No se pudo registrar la versión del MSA:', e)
+      }
+    }
+    Promise.resolve(
+      api.audit.log({
+        actorEmail: user?.email,
+        action: 'client.update',
+        resourceType: 'client',
+        resourceId: updated.id,
+        before: { clientName: editing.clientName },
+        after: { clientName: updated.clientName },
+      }),
+    ).catch((e) => console.error('No se pudo registrar el audit de client.update:', e))
     setClients((prev) => sortByName(prev.map((c) => (c.id === updated.id ? updated : c))))
     setEditing(null)
     setToast({ id: Date.now(), message: `Client updated: ${updated.clientName}` })

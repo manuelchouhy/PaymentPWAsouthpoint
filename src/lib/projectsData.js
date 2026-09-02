@@ -466,6 +466,40 @@ export async function createProject(payload, createdBy) {
   return rowToProject(data)
 }
 
+// Canoniza objetos/arrays ordenando las claves de los objetos (el orden de los
+// arrays SÍ es significativo, no se toca) para COMPARAR contenido sin que un
+// reordenamiento de claves cuente como cambio.
+function canonicalize(v) {
+  if (v === null || typeof v !== 'object') return v
+  if (Array.isArray(v)) return v.map(canonicalize)
+  return Object.keys(v)
+    .sort()
+    .reduce((acc, k) => {
+      acc[k] = canonicalize(v[k])
+      return acc
+    }, {})
+}
+
+// Clave de comparación "¿cambió el campo?". null/undefined/''/[]/{} son todos
+// "sin valor" → misma clave (''), así null⇄[] no registra un cambio espurio. Los
+// objetos/arrays con contenido se canonizan (orden de claves indiferente).
+function historyKey(v) {
+  if (v == null || v === '') return ''
+  if (typeof v === 'object') {
+    const empty = Array.isArray(v) ? v.length === 0 : Object.keys(v).length === 0
+    return empty ? '' : JSON.stringify(canonicalize(v))
+  }
+  return String(v)
+}
+
+// Serializa un valor para GUARDAR/mostrar en el historial (columnas text). Los
+// jsonb (maintenanceSlaTiers) se guardan como JSON en su orden natural de claves
+// (legible), no canonizado; String() daría "[object Object]".
+function historyValue(v) {
+  if (v == null) return null
+  return typeof v === 'object' ? JSON.stringify(v) : String(v)
+}
+
 /**
  * Actualiza un proyecto y registra en project_history una fila por cada campo
  * que cambió (capturando changed_by).
@@ -479,9 +513,9 @@ export async function updateProject(current, updates, changedBy) {
   const changes = []
   for (const field of Object.keys(FIELD_TO_COLUMN)) {
     if (updates[field] === undefined) continue
-    const before = current[field] ?? ''
-    const after = updates[field] ?? ''
-    if (String(before) !== String(after)) {
+    // historyKey normaliza null/''/[]/{} a "sin valor" y canoniza objetos, así el
+    // diff no registra cambios espurios (reordenamiento de claves, null⇄[]).
+    if (historyKey(current[field]) !== historyKey(updates[field])) {
       changes.push({ field, before: current[field] ?? null, after: updates[field] ?? null })
     }
   }
@@ -502,8 +536,8 @@ export async function updateProject(current, updates, changedBy) {
     const log = changes.map((c, i) => ({
       id: `ph-demo-${Date.now()}-${i}`,
       fieldName: c.field,
-      oldValue: c.before,
-      newValue: c.after,
+      oldValue: historyValue(c.before),
+      newValue: historyValue(c.after),
       changedAt: new Date().toISOString(),
       changedBy: changedBy || null,
     }))
@@ -530,8 +564,8 @@ export async function updateProject(current, updates, changedBy) {
     const rows = changes.map((c) => ({
       project_id: current.id,
       field_name: c.field,
-      old_value: c.before == null ? null : String(c.before),
-      new_value: c.after == null ? null : String(c.after),
+      old_value: historyValue(c.before),
+      new_value: historyValue(c.after),
       changed_by: changedBy || null,
     }))
     const { error: histError } = await supabase.from('project_history').insert(rows)

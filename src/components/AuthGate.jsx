@@ -15,11 +15,20 @@ export function AuthGate({ children }) {
   useEffect(() => {
     let cancelled = false
 
-    api.auth.getSession().then((currentSession) => {
-      if (cancelled) return
-      setSession(currentSession)
-      setAuthStatus(currentSession ? 'authed' : 'anon')
-    })
+    api.auth.getSession()
+      .then((currentSession) => {
+        if (cancelled) return
+        setSession(currentSession)
+        setAuthStatus(currentSession ? 'authed' : 'anon')
+      })
+      .catch((err) => {
+        // Sin catch, un getSession() que rechaza dejaba authStatus en 'loading'
+        // para siempre (splash infinito). Caemos a 'anon' → LoginScreen, que deja
+        // reintentar el sign-in.
+        if (cancelled) return
+        console.error('No se pudo obtener la sesión:', err)
+        setAuthStatus('anon')
+      })
 
     const unsubscribe = api.auth.onAuthStateChange((nextSession) => {
       setSession(nextSession)

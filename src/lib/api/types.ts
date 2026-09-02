@@ -382,6 +382,9 @@ export interface ApiClient {
      *  (por client_id o por su alias de grupo). Necesita id y zohoGroupName. */
     deactivate(client: Pick<Client, 'id' | 'zohoGroupName'>): Promise<{ id: string | number }>
     uploadMsa(file: File): Promise<string>
+    /** Limpieza best-effort: borra un MSA recién subido cuyo create/update de
+     *  cliente falló, para no dejarlo huérfano en storage. Nunca lanza. */
+    removeMsa(path: string): Promise<void>
     getMsaUrl(msaUrl: string): Promise<string | null>
     recordMsaVersion(params: {
       clientId: string | number
