@@ -15,7 +15,7 @@ const COUNTED = ['Expired', 'Critical', 'Expiring Soon', 'Active']
  */
 export function SupplierContractsWidget() {
   const [contracts, setContracts] = useState([])
-  const [widestThreshold, setWidestThreshold] = useState(90)
+  const [widestThreshold, setWidestThreshold] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -29,7 +29,7 @@ export function SupplierContractsWidget() {
       .finally(() => !cancelled && setLoading(false))
     api.supplierContracts.getAlertSettings()
       .then((settings) => !cancelled && setWidestThreshold(settings?.threshold1Days ?? 90))
-      .catch(() => {})
+      .catch(() => !cancelled && setWidestThreshold(90))
     return () => {
       cancelled = true
     }
@@ -40,7 +40,10 @@ export function SupplierContractsWidget() {
     const st = displaySupplierStatus(c)
     if (st in counts) counts[st] += 1
   }
-  const priority = priorityAlertContracts(contracts, widestThreshold)
+  // El banner de priority espera a que el umbral guardado cargue (o falle a 90) para
+  // no mostrar un contrato "en alerta" con el default y luego esconderlo (flicker).
+  // Los contadores no esperan: dependen sólo de list().
+  const priority = widestThreshold == null ? [] : priorityAlertContracts(contracts, widestThreshold)
   const topDays = priority.length > 0 ? daysRemaining(priority[0].expirationDate) : null
 
   return (

@@ -25,6 +25,17 @@ const STATUS_COLORS = {
   Paid: '#10B981',
 }
 
+// Facturable pendiente = misma definición que Billing (billingGrouping.js:175):
+// allocation bill_to_client + Approved, y todavía sin factura. Fuente única para el
+// KPI Pending Hours, su sparkline y el bucket "Pending" del donut — deben coincidir.
+function isBillablePending(entry, invoiceByEntryId) {
+  return (
+    entry.status === 'Approved' &&
+    entry.allocation === 'bill_to_client' &&
+    !invoiceByEntryId.has(String(entry.id))
+  )
+}
+
 // Orden fijo del donut de allocation: sin clasificar primero, después las cuatro
 // categorías reales (null + los valores del CHECK 0034). El label sale del mapa
 // compartido ALLOCATION_LABELS para no divergir de Entries/Billing; null → "Unallocated".
@@ -207,17 +218,10 @@ export function DashboardPage() {
     const now = new Date()
     const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-    // Sólo horas facturables al cliente: allocation bill_to_client + Approved y
-    // todavía sin factura — misma definición que Billing (billingGrouping.js:175).
-    // Las Rejected/Pending y las overage/sp_internal/sin triagear no se facturan al
-    // cliente, así que no cuentan como "pendientes a facturar".
+    // Sólo horas facturables al cliente (ver isBillablePending): las Rejected/Pending
+    // y las overage/sp_internal/sin triagear no se facturan al cliente.
     const pendingHours = data.entries
-      .filter(
-        (e) =>
-          e.status === 'Approved' &&
-          e.allocation === 'bill_to_client' &&
-          !invoiceByEntryId.has(String(e.id)),
-      )
+      .filter((e) => isBillablePending(e, invoiceByEntryId))
       .reduce((sum, e) => sum + e.hours, 0)
 
     const invoicesThisMonth = data.invoices.filter((i) =>
@@ -243,12 +247,7 @@ export function DashboardPage() {
   // dominio de esa card (no repite el número de la card, da contexto de tendencia).
   const sparklines = useMemo(() => {
     if (!data) return null
-    const unbilled = data.entries.filter(
-      (e) =>
-        e.status === 'Approved' &&
-        e.allocation === 'bill_to_client' &&
-        !invoiceByEntryId.has(String(e.id)),
-    )
+    const unbilled = data.entries.filter((e) => isBillablePending(e, invoiceByEntryId))
     return {
       pendingHours: last7DaysSeries(unbilled, 'date', 'hours'),
       invoicesThisMonth: last7DaysSeries(data.invoices, 'invoiceDate'),
@@ -266,7 +265,7 @@ export function DashboardPage() {
       // es la fuente de verdad). Sin factura → sólo entra como "Pending" si es
       // facturable al cliente (Approved + bill_to_client), igual que Billing.
       if (inv) sums[inv.status] = (sums[inv.status] || 0) + e.hours
-      else if (e.status === 'Approved' && e.allocation === 'bill_to_client') sums.Pending += e.hours
+      else if (isBillablePending(e, invoiceByEntryId)) sums.Pending += e.hours
     }
     return Object.entries(sums)
       .filter(([, v]) => v > 0)
