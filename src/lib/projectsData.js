@@ -466,6 +466,15 @@ export async function createProject(payload, createdBy) {
   return rowToProject(data)
 }
 
+// Serializa un valor de campo para el historial. Los campos jsonb (p.ej.
+// maintenanceSlaTiers) son arrays/objetos: String() daría "[object Object]" y
+// perdería el contenido — y el diff nunca detectaría el cambio. Se usa tanto para
+// comparar (¿cambió?) como para escribir old_value/new_value (columnas text).
+function historyValue(v) {
+  if (v == null) return null
+  return typeof v === 'object' ? JSON.stringify(v) : String(v)
+}
+
 /**
  * Actualiza un proyecto y registra en project_history una fila por cada campo
  * que cambió (capturando changed_by).
@@ -479,9 +488,9 @@ export async function updateProject(current, updates, changedBy) {
   const changes = []
   for (const field of Object.keys(FIELD_TO_COLUMN)) {
     if (updates[field] === undefined) continue
-    const before = current[field] ?? ''
-    const after = updates[field] ?? ''
-    if (String(before) !== String(after)) {
+    // null/undefined se normalizan a '' para comparar (null y '' = "sin valor" =
+    // sin cambio); historyValue serializa arrays/objetos con JSON.
+    if (historyValue(current[field] ?? '') !== historyValue(updates[field] ?? '')) {
       changes.push({ field, before: current[field] ?? null, after: updates[field] ?? null })
     }
   }
@@ -502,8 +511,8 @@ export async function updateProject(current, updates, changedBy) {
     const log = changes.map((c, i) => ({
       id: `ph-demo-${Date.now()}-${i}`,
       fieldName: c.field,
-      oldValue: c.before,
-      newValue: c.after,
+      oldValue: historyValue(c.before),
+      newValue: historyValue(c.after),
       changedAt: new Date().toISOString(),
       changedBy: changedBy || null,
     }))
@@ -530,8 +539,8 @@ export async function updateProject(current, updates, changedBy) {
     const rows = changes.map((c) => ({
       project_id: current.id,
       field_name: c.field,
-      old_value: c.before == null ? null : String(c.before),
-      new_value: c.after == null ? null : String(c.after),
+      old_value: historyValue(c.before),
+      new_value: historyValue(c.after),
       changed_by: changedBy || null,
     }))
     const { error: histError } = await supabase.from('project_history').insert(rows)

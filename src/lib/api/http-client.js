@@ -101,6 +101,8 @@ export const httpApiClient = {
     deactivate: () => notImplemented('clients.deactivate'),
     // POST /api/clients/msa (multipart) → { path }
     uploadMsa: () => notImplemented('clients.uploadMsa'),
+    // DELETE /api/clients/msa?path=X → void (limpieza best-effort tras fallo)
+    removeMsa: () => notImplemented('clients.removeMsa'),
     // GET /api/clients/msa-url?path=X → string | null
     getMsaUrl: () => notImplemented('clients.getMsaUrl'),
     // POST /api/clients/:id/msa-version { fileUrl, uploadedBy } → void

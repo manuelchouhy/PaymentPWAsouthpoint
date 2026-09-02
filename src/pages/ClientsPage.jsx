@@ -42,7 +42,15 @@ export function ClientsPage() {
     // MSA opcional: si no se subió archivo, el cliente se crea sin MSA (trabajo
     // interno, o alta previa a la firma) y no se registra versión en el historial.
     const msaUrl = msaFile ? await api.clients.uploadMsa(msaFile) : null
-    const created = await api.clients.create({ ...payload, msaUrl }, user?.email ?? null)
+    let created
+    try {
+      created = await api.clients.create({ ...payload, msaUrl }, user?.email ?? null)
+    } catch (err) {
+      // El MSA ya se subió pero el create falló (alias colisionando, RLS…): lo
+      // limpiamos para no dejar el archivo huérfano en storage. removeMsa no lanza.
+      if (msaUrl) await api.clients.removeMsa(msaUrl)
+      throw err
+    }
     if (msaUrl) {
       await api.clients.recordMsaVersion({ clientId: created.id, fileUrl: msaUrl, uploadedBy: user?.email ?? null })
     }
@@ -63,7 +71,15 @@ export function ClientsPage() {
     if (msaFile) {
       msaUrl = await api.clients.uploadMsa(msaFile)
     }
-    const updated = await api.clients.update(editing, { ...payload, msaUrl })
+    let updated
+    try {
+      updated = await api.clients.update(editing, { ...payload, msaUrl })
+    } catch (err) {
+      // Si subimos un MSA nuevo y el update falló, lo limpiamos; el MSA anterior
+      // (editing.msaUrl) sigue en uso, así que no se toca. removeMsa no lanza.
+      if (msaFile && msaUrl !== editing.msaUrl) await api.clients.removeMsa(msaUrl)
+      throw err
+    }
     if (msaFile) {
       await api.clients.recordMsaVersion({ clientId: updated.id, fileUrl: msaUrl, uploadedBy: user?.email ?? null })
     }

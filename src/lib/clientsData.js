@@ -377,3 +377,14 @@ export async function getClientMsaUrl(msaUrl) {
   if (error) return null
   return data.signedUrl
 }
+
+/**
+ * Borra un MSA recién subido cuando el create/update del cliente falla después,
+ * para no dejar el archivo huérfano en storage (sin fila que lo referencie).
+ * Espejo de removeSowFiles: best-effort, nunca lanza.
+ */
+export async function removeClientMsa(path) {
+  if (!isSupabaseConfigured || !path) return
+  const { error } = await supabase.storage.from(BUCKET).remove([path])
+  if (error) console.warn('[clients] no se pudo limpiar el MSA subido tras el fallo —', error.message)
+}
