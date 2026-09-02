@@ -67,13 +67,15 @@ test('invoiceCompletion: entryIds coercionan a String (numérico vs string mezcl
   assert.equal(out.status, 'Paid')
 })
 
-test('invoiceCompletion: contractor sin entryIds → no se cuenta como pagado (dato anómalo)', () => {
+test('invoiceCompletion: contractor sin entryIds se EXCLUYE (no cuenta ni bloquea Paid)', () => {
+  // Una fila anómala sin entry_ids no debe impedir que la factura llegue a Paid cuando
+  // todo el trabajo real está pago. Se descarta de la lista y de los conteos.
   const contractors = [contractor('Ana', [], 0), contractor('Bob', [3], 5)]
   const out = invoiceCompletion(contractors, [payment([3])])
-  // Bob pagado; Ana sin horas no puede estar "pagada" (no hay nada que cubrir).
-  assert.equal(out.contractors.find((c) => c.contractor === 'Ana').paid, false)
-  assert.equal(out.status, 'partial')
+  assert.deepEqual(out.contractors.map((c) => c.contractor), ['Bob'])
+  assert.equal(out.totalCount, 1)
   assert.equal(out.paidCount, 1)
+  assert.equal(out.status, 'Paid')
 })
 
 test('invoiceCompletion: sin contractors → Invoiced, totales en cero (degenerado)', () => {
@@ -88,4 +90,11 @@ test('invoiceCompletion: entradas nulas no rompen', () => {
   const out = invoiceCompletion(undefined, undefined)
   assert.equal(out.status, 'Invoiced')
   assert.equal(out.totalCount, 0)
+})
+
+test('invoiceCompletion: un elemento null dentro de payments no rompe', () => {
+  const contractors = [contractor('Ana', [1, 2], 8)]
+  const out = invoiceCompletion(contractors, [null, payment([1, 2])])
+  assert.equal(out.status, 'Paid')
+  assert.equal(out.contractors[0].paid, true)
 })

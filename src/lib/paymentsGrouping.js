@@ -12,7 +12,9 @@
 export function paidEntryIdsFrom(payments) {
   const set = new Set()
   for (const p of payments ?? []) {
-    for (const id of p.entryIds ?? []) set.add(String(id))
+    // `p?.entryIds`: un elemento null/undefined en el array no debe romper (los
+    // llamadores pasan listas crudas de la base / mezcladas).
+    for (const id of p?.entryIds ?? []) set.add(String(id))
   }
   return set
 }

@@ -14,13 +14,18 @@
  * por algún pago — se reutiliza `paidEntryIdsFrom` (por entry_ids), la misma base del
  * anti doble-pago (trigger 0037). Se matchea por entry_ids, no por nombre: es lo que
  * congela la base y evita depender de la grafía del contractor.
+ *
+ * `payments` puede ser la lista COMPLETA de pagos del sistema, no hace falta pre-filtrar
+ * a esta factura: los entry_ids son únicos por hora (una hora pertenece a UNA factura),
+ * así que un pago de otra factura nunca cubre los entry_ids de ésta. Pasar sólo los de
+ * la factura también es válido (mismo resultado).
  */
 
 import { paidEntryIdsFrom } from './paymentsGrouping.js'
 
 /**
  * @param {Array<{contractor:string, entryIds:Array<string|number>, hours:number}>} contractors  invoice_contractors de la factura
- * @param {Array<{entryIds:Array<string|number>}>} payments  pagos (por contractor)
+ * @param {Array<{entryIds:Array<string|number>}>} payments  pagos (por contractor); puede ser la lista completa
  * @returns {{
  *   contractors: Array<{contractor:string, entryIds:Array, hours:number, paid:boolean}>,
  *   paidCount:number, totalCount:number, totalHours:number, paidHours:number,
@@ -29,13 +34,18 @@ import { paidEntryIdsFrom } from './paymentsGrouping.js'
  */
 export function invoiceCompletion(contractors, payments) {
   const paidIds = paidEntryIdsFrom(payments)
-  const rows = (contractors ?? []).map((c) => {
-    const entryIds = c?.entryIds ?? []
-    // Pagado = tiene horas Y todas están cubiertas. Un contractor sin entry_ids
-    // (dato anómalo) no puede estar "pagado": no hay nada que cubrir.
-    const paid = entryIds.length > 0 && entryIds.every((id) => paidIds.has(String(id)))
-    return { contractor: c?.contractor, entryIds, hours: Number(c?.hours) || 0, paid }
-  })
+  // Sólo filas facturables reales: con al menos un entry_id. Una fila sin entry_ids es
+  // un dato anómalo (el builder invoiceContractors.js nunca la crea) y se DESCARTA: no
+  // aporta horas y, si contara, una sola fila glitch dejaría la factura en 'partial'
+  // para siempre, sin poder llegar nunca a 'Paid' aunque todo el trabajo real esté pago.
+  const rows = (contractors ?? [])
+    .filter((c) => (c?.entryIds ?? []).length > 0)
+    .map((c) => {
+      const entryIds = c.entryIds
+      // Pagado = todas sus horas cubiertas por algún pago.
+      const paid = entryIds.every((id) => paidIds.has(String(id)))
+      return { contractor: c.contractor, entryIds, hours: Number(c.hours) || 0, paid }
+    })
 
   const totalCount = rows.length
   const paidCount = rows.filter((r) => r.paid).length
