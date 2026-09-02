@@ -60,13 +60,15 @@ export function ClientsPage() {
         console.error('No se pudo registrar la versión del MSA:', e)
       }
     }
-    api.audit.log({
-      actorEmail: user?.email,
-      action: 'client.create',
-      resourceType: 'client',
-      resourceId: created.id,
-      after: { clientName: created.clientName },
-    })
+    Promise.resolve(
+      api.audit.log({
+        actorEmail: user?.email,
+        action: 'client.create',
+        resourceType: 'client',
+        resourceId: created.id,
+        after: { clientName: created.clientName },
+      }),
+    ).catch((e) => console.error('No se pudo registrar el audit de client.create:', e))
     setClients((prev) => sortByName([...prev, created]))
     setFormOpen(false)
     setToast({ id: Date.now(), message: `Client created: ${created.clientName}` })
@@ -94,14 +96,16 @@ export function ClientsPage() {
         console.error('No se pudo registrar la versión del MSA:', e)
       }
     }
-    api.audit.log({
-      actorEmail: user?.email,
-      action: 'client.update',
-      resourceType: 'client',
-      resourceId: updated.id,
-      before: { clientName: editing.clientName },
-      after: { clientName: updated.clientName },
-    })
+    Promise.resolve(
+      api.audit.log({
+        actorEmail: user?.email,
+        action: 'client.update',
+        resourceType: 'client',
+        resourceId: updated.id,
+        before: { clientName: editing.clientName },
+        after: { clientName: updated.clientName },
+      }),
+    ).catch((e) => console.error('No se pudo registrar el audit de client.update:', e))
     setClients((prev) => sortByName(prev.map((c) => (c.id === updated.id ? updated : c))))
     setEditing(null)
     setToast({ id: Date.now(), message: `Client updated: ${updated.clientName}` })
