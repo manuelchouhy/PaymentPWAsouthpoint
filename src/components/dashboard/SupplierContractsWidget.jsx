@@ -20,20 +20,16 @@ export function SupplierContractsWidget() {
 
   useEffect(() => {
     let cancelled = false
-    // Mismo par que SupplierContractsPage: el umbral de "priority en alerta" sale
-    // de los ajustes guardados (threshold1Days), no del default fijo (90), para que
-    // widget y página coincidan en qué contratos están en alerta.
-    Promise.all([
-      api.supplierContracts.list(),
-      api.supplierContracts.getAlertSettings(),
-    ])
-      .then(([list, settings]) => {
-        if (cancelled) return
-        setContracts(list)
-        setWidestThreshold(settings?.threshold1Days ?? 90)
-      })
+    // Los contadores dependen sólo de list(). El umbral de "priority en alerta"
+    // (threshold1Days de los ajustes guardados, como SupplierContractsPage) se trae
+    // aparte y best-effort: si falla, cae al default 90 sin vaciar el widget.
+    api.supplierContracts.list()
+      .then((data) => !cancelled && setContracts(data))
       .catch(() => !cancelled && setContracts([]))
       .finally(() => !cancelled && setLoading(false))
+    api.supplierContracts.getAlertSettings()
+      .then((settings) => !cancelled && setWidestThreshold(settings?.threshold1Days ?? 90))
+      .catch(() => {})
     return () => {
       cancelled = true
     }

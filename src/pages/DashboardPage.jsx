@@ -207,10 +207,17 @@ export function DashboardPage() {
     const now = new Date()
     const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-    // Sólo horas facturables: Approved y todavía sin factura. Las Rejected /
-    // Pending (Zoho) no se facturan nunca, así que no cuentan como "pendientes".
+    // Sólo horas facturables al cliente: allocation bill_to_client + Approved y
+    // todavía sin factura — misma definición que Billing (billingGrouping.js:175).
+    // Las Rejected/Pending y las overage/sp_internal/sin triagear no se facturan al
+    // cliente, así que no cuentan como "pendientes a facturar".
     const pendingHours = data.entries
-      .filter((e) => e.status === 'Approved' && !invoiceByEntryId.has(String(e.id)))
+      .filter(
+        (e) =>
+          e.status === 'Approved' &&
+          e.allocation === 'bill_to_client' &&
+          !invoiceByEntryId.has(String(e.id)),
+      )
       .reduce((sum, e) => sum + e.hours, 0)
 
     const invoicesThisMonth = data.invoices.filter((i) =>
@@ -237,7 +244,10 @@ export function DashboardPage() {
   const sparklines = useMemo(() => {
     if (!data) return null
     const unbilled = data.entries.filter(
-      (e) => e.status === 'Approved' && !invoiceByEntryId.has(String(e.id)),
+      (e) =>
+        e.status === 'Approved' &&
+        e.allocation === 'bill_to_client' &&
+        !invoiceByEntryId.has(String(e.id)),
     )
     return {
       pendingHours: last7DaysSeries(unbilled, 'date', 'hours'),
@@ -252,10 +262,11 @@ export function DashboardPage() {
     const sums = { Pending: 0, Invoiced: 0, Collected: 0, Paid: 0 }
     for (const e of data.entries) {
       const inv = invoiceByEntryId.get(String(e.id))
-      // Facturada → cuenta bajo el estado de su factura. Sin factura → sólo entra
-      // como "Pending" si es Approved (facturable); Rejected/Pending no cuentan.
+      // Facturada → cuenta bajo el estado de su factura (una vez emitida, la factura
+      // es la fuente de verdad). Sin factura → sólo entra como "Pending" si es
+      // facturable al cliente (Approved + bill_to_client), igual que Billing.
       if (inv) sums[inv.status] = (sums[inv.status] || 0) + e.hours
-      else if (e.status === 'Approved') sums.Pending += e.hours
+      else if (e.status === 'Approved' && e.allocation === 'bill_to_client') sums.Pending += e.hours
     }
     return Object.entries(sums)
       .filter(([, v]) => v > 0)
