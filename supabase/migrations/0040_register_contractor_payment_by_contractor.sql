@@ -27,11 +27,14 @@
 
 begin;
 
--- 1) Plata nullable en payments (drop total en 0041). Un pago por-contractor no
---    carga monto/moneda/TC: sin esto, el INSERT del RPC violaría el NOT NULL (23502).
+-- 1) amount_paid nullable en payments (drop total en 0041). Un pago por-contractor no
+--    carga monto: sin esto, el INSERT del RPC violaría el NOT NULL (23502). Sólo se
+--    toca amount_paid: `currency` tiene DEFAULT 'USD' (el INSERT sin currency no viola
+--    nada) y además vive sólo en schema_completo.sql —no en migraciones—, así que un
+--    `alter column currency ...` fallaría con 42703 en una base construida sólo desde
+--    migraciones. `exchange_rate` es nullable de origen. Los tres se dropean en 0041.
 alter table public.payments
-  alter column amount_paid drop not null,
-  alter column currency    drop not null;
+  alter column amount_paid drop not null;
 
 -- 2) Fuera el "un pago por factura": ahora hay N pagos por factura (uno por contractor).
 --    El anti doble-pago por contractor lo da invoice_contractors.payment_id (abajo).
@@ -43,9 +46,12 @@ drop index if exists public.payments_invoice_id_unique;
 --    que ningún alta legítima lo viola.
 alter table public.invoice_contractors
   drop constraint if exists invoice_contractors_entry_ids_nonempty;
+-- cardinality() (NO array_length): array_length('{}',1) da NULL y un CHECK pasa en
+-- NULL, así que dejaría entrar la fila vacía que se quiere prohibir. cardinality('{}')
+-- da 0, y el CHECK sí la rechaza.
 alter table public.invoice_contractors
   add constraint invoice_contractors_entry_ids_nonempty
-  check (array_length(entry_ids, 1) >= 1) not valid;
+  check (cardinality(entry_ids) >= 1) not valid;
 
 -- 4) Pago por contractor. Se DROPEAN los overloads viejos (8 y 9 params, ver 0036) y
 --    se crea la nueva firma por invoice_contractor. SECURITY INVOKER + search_path
@@ -97,6 +103,11 @@ begin
   if v_status is null then
     raise exception 'invoice_not_found' using errcode = 'P0002';
   end if;
+  -- Sólo 'Invoiced' es pagable acá, a DIFERENCIA del RPC viejo (0036) que aceptaba
+  -- también 'Collected'. Es intencional: el modelo agrupado va Invoiced→Paid directo
+  -- (Collections no se usa; Billing va derecho a Payments), y el flip atómico de abajo
+  -- asume from_status='Invoiced'. Si en el futuro se reactivara Collections, habría que
+  -- generalizar el from_status del flip, no sólo ampliar este guard.
   if v_status <> 'Invoiced' then
     -- Ya Paid (todo pago) o estado no pagable. Carrera típica: dos usuarios pagando
     -- el último contractor a la vez → el segundo cae acá con error legible + recargar.

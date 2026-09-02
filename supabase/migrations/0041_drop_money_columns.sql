@@ -7,6 +7,12 @@
 --       - createInvoice viejo (single-contractor, BillModal de Time Entries) setea
 --         total_amount/currency → hay que migrarlo primero o su INSERT fallará.
 --       - paymentsData/invoicelessPaidRows leen amountPaid/currency → migrar la UI.
+--       - ⚠️ EDGE FUNCTIONS DEPLOYADAS (superficie aparte del frontend):
+--           supabase/functions/payment-alerts/index.ts   (select+uso de total_amount)
+--           supabase/functions/collection-alerts/index.ts (idem)
+--         Tras el drop, PostgREST devuelve "column invoices.total_amount does not
+--         exist" y esas funciones fallan (las alertas de vencimiento dejan de salir).
+--         Hay que redeployarlas SIN total_amount ANTES de aplicar esta migración.
 --   (3) backup / snapshot de invoices y payments (esto no se puede deshacer).
 --
 -- Columnas que se dropean:
@@ -47,8 +53,13 @@ alter table public.payments
 --    (no depende de las columnas dropeadas). Se agrega sp_invoice_number (identidad de
 --    la factura agrupada, que suele dejar supplier_invoice_number NULL) y paid_contractor
 --    (p.user_name), útil ahora que hay un pago por contractor.
---    NOTA (04d): con el pago por-contractor una factura tiene VARIOS pagos, así que el
---    join a payments emite una fila por pago (una por contractor pagado).
+--    ⚠️ NOTA (04d) — DOBLE-CONTEO: con el pago por-contractor una factura tiene VARIOS
+--    pagos, así que `left join payments` hace fan-out a N filas por time entry (una por
+--    contractor pagado). Las columnas de invoice y las de collections (collected_amount,
+--    collection_count, del subquery ca) se REPITEN en esas N filas: cualquier consumidor
+--    que SUME/CUENTE esas columnas por factura sobre trace_view las multiplicaría por N.
+--    Hoy Collections no se usa (bajo riesgo), pero si trace_view va a alimentar agregados
+--    hay que reestructurarla en 04d (separar el grano de pago del de factura/cobro).
 create or replace view public.trace_view
   with (security_invoker = true)
 as
