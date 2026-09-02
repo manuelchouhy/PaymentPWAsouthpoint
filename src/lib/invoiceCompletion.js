@@ -70,3 +70,47 @@ export function invoiceCompletion(contractors, payments) {
 
   return { contractors: rows, paidCount, totalCount, totalHours, paidHours, status }
 }
+
+// Getter contractors-de-una-factura que acepta tanto un Map como un objeto plano
+// (según cómo la capa de datos entregue invoice_contractors por factura). Prueba la
+// clave cruda y su String, porque invoice.id puede venir number o string.
+function contractorsLookup(contractorsByInvoice) {
+  if (contractorsByInvoice instanceof Map) {
+    return (id) => contractorsByInvoice.get(id) ?? contractorsByInvoice.get(String(id)) ?? []
+  }
+  const obj = contractorsByInvoice ?? {}
+  return (id) => obj[id] ?? obj[String(id)] ?? []
+}
+
+/**
+ * Facturas PAGABLES agrupadas con sus contractors pendientes (04b). Para el módulo
+ * Payments: cada factura `Invoiced` se expande a los contractors que todavía no se
+ * pagaron, con el progreso (X de N) y las horas, componiendo `invoiceCompletion`.
+ *
+ * Sólo entran las facturas con status `Invoiced` (las `Paid` ya están cerradas) y que
+ * tengan al menos un contractor pendiente: una factura `Invoiced` con TODOS sus
+ * contractors ya pagos es un estado transitorio (la RPC aún no flipeó el status a
+ * `Paid`) y no tiene nada que pagar, así que no aparece en la lista. Orden: la más
+ * vieja primero (worklist por antigüedad), desempate por id para orden estable.
+ *
+ * @param {Array<{id:string|number, status:string, invoiceDate?:string}>} invoices
+ * @param {Map<string|number, Array>|Record<string, Array>} contractorsByInvoice  invoice_contractors por id de factura
+ * @param {Array<{entryIds:Array<string|number>}>} payments  pagos (puede ser la lista completa)
+ * @returns {Array<{invoice:object, contractors:Array, pending:Array, paidCount:number, totalCount:number, totalHours:number, paidHours:number, status:string}>}
+ */
+export function payableInvoicesByContractor(invoices, contractorsByInvoice, payments) {
+  const lookup = contractorsLookup(contractorsByInvoice)
+  const out = []
+  for (const inv of invoices ?? []) {
+    if (inv?.status !== 'Invoiced') continue
+    const completion = invoiceCompletion(lookup(inv.id), payments)
+    const pending = completion.contractors.filter((c) => !c.paid)
+    if (pending.length === 0) continue
+    out.push({ invoice: inv, ...completion, pending })
+  }
+  return out.sort(
+    (a, b) =>
+      (a.invoice.invoiceDate || '').localeCompare(b.invoice.invoiceDate || '') ||
+      String(a.invoice.id).localeCompare(String(b.invoice.id)),
+  )
+}
