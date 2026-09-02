@@ -333,6 +333,15 @@ export interface ApiClient {
   invoices: {
     list(): Promise<Invoice[]>
     create(payload: Partial<Invoice>): Promise<{ ok: true; mode: string; invoice: Invoice }>
+    createGrouped(payload: {
+      spInvoiceNumber: string
+      project: string
+      client?: string | null
+      weekStart?: string | null
+      notes?: string
+      contractors: Array<{ contractor: string; entries: Array<{ id: string | number; hours: number }> }>
+      createdBy?: string | null
+    }): Promise<{ ok: true; mode: string; invoice: Invoice; contractors: unknown[] }>
     updateStatus(payload: {
       invoiceId: string | number
       fromStatus: string

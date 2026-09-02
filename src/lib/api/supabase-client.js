@@ -9,6 +9,7 @@ import { supabase, isSupabaseConfigured } from '../supabase'
 
 import {
   createInvoice,
+  createGroupedInvoice,
   getInvoices,
   getInvoiceStatusHistory,
   getSyncLog,
@@ -245,6 +246,7 @@ export const supabaseApiClient = {
   invoices: {
     list: getInvoices,
     create: createInvoice,
+    createGrouped: createGroupedInvoice,
     updateStatus: updateInvoiceStatus,
     getStatusHistory: getInvoiceStatusHistory,
   },

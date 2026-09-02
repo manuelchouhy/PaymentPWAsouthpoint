@@ -73,6 +73,10 @@ export const httpApiClient = {
     // POST /api/invoices { supplierInvoiceNumber, invoiceDate, totalAmount,
     //   currency, notes, userName, entryIds, createdBy } → { invoice }
     create: () => notImplemented('invoices.create'),
+    // POST /api/invoices/grouped { spInvoiceNumber, project, client, weekStart,
+    //   notes, contractors:[{contractor, entries:[{id,hours}]}], createdBy }
+    //   → { invoice, contractors }
+    createGrouped: () => notImplemented('invoices.createGrouped'),
     // PATCH /api/invoices/:id/status { fromStatus, toStatus, changedBy, note }
     //   → { invoice, historyEntry }
     updateStatus: () => notImplemented('invoices.updateStatus'),

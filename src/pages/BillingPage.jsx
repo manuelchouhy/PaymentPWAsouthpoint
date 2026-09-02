@@ -8,11 +8,18 @@ import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, sortedUnique, clientFilterOptions, OTHER_CLIENT } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
 import { groupBillToClient, groupReadonly } from '../lib/billingGrouping'
+import {
+  canBillSelection,
+  billBlockReason,
+  contractorsFromSelection,
+  remainingHoursByContractor,
+  weekStartFromSelection,
+} from '../lib/billingSelection'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { Checkbox } from '../components/Checkbox'
 import { ExportDropdown } from '../components/ExportDropdown'
-import { BillModal } from '../components/BillModal'
+import { GroupedBillModal } from '../components/GroupedBillModal'
 import { EntryDetailDrawer } from '../components/EntryDetailDrawer'
 import { BillingBadge } from '../components/BillingBadge'
 import { Avatar } from '../components/Avatar'
@@ -20,6 +27,25 @@ import { ALLOCATION_LABELS } from '../lib/allocations'
 
 // Un proyecto se identifica por cliente + nombre, no por nombre solo.
 const sowKey = (client, projectName) => `${client ?? ''}||${projectName ?? ''}`
+
+// Texto del aviso "no se puede emitir", según el motivo (billBlockReason). Se usa
+// TANTO en el <p> de error como en el title del botón, así no se contradicen.
+function billBlockMessage(reason, selectedRows) {
+  switch (reason) {
+    case 'multi-client':
+      return `An invoice covers a single client. Selected: ${sortedUnique(selectedRows.map((r) => r.client)).join(', ')}.`
+    case 'multi-project':
+      return `An invoice covers a single project of one client. Selected projects: ${sortedUnique(selectedRows.map((r) => r.project || '(no project)')).join(', ')}.`
+    case 'no-project':
+      return 'These hours have no project. Assign a project before billing them.'
+    case 'multi-week':
+      return 'An invoice covers a single week (Sun–Sat). Narrow the selection to one week.'
+    case 'no-week':
+      return 'These hours have no date to place them in a billing week.'
+    default:
+      return ''
+  }
+}
 
 // Claves anidadas cliente → proyecto → semana → fila (para colapsar/expandir y
 // seleccionar/facturar). Una sola definición: el id de selección y la clave del
@@ -549,23 +575,24 @@ export function BillingPage() {
   const selectedRows = [...selectedKeys].map((k) => billableRows.get(k)).filter(Boolean)
   const selectedEntries = selectedRows.flatMap((r) => r.entries)
   const selectedHours = selectedRows.reduce((sum, r) => sum + r.hours, 0)
-  const selectedProviders = sortedUnique(selectedRows.map((r) => r.user))
   const canCreate = can('billing.create')
-  const canBill = canCreate && selectedEntries.length > 0 && selectedProviders.length === 1
+  // Factura AGRUPADA multi-contractor (slice 03): se emite cuando la selección es de
+  // un solo cliente + un solo proyecto (varios contractors permitidos).
+  const canBill = canCreate && canBillSelection(selectedRows)
+  // Motivo por el que NO se puede emitir (para el aviso). Sólo con algo seleccionado
+  // (sin selección no hay nada que avisar). El mensaje se comparte entre el <p> de
+  // error y el title del botón para que no se contradigan.
+  const blockReason = selectedRows.length ? billBlockReason(selectedRows) : null
+  const blockMessage = blockReason ? billBlockMessage(blockReason, selectedRows) : null
 
-  // Horas del contractor que quedan pendientes en el cliente de la selección y NO
-  // entran en esta factura (C11). Sólo se calcula con el modal abierto (no en cada
-  // render) y sólo cuando la selección es de UN cliente: con varios, la resta
-  // cruzaría clientes y el número sería ambiguo (no se sabría de cuál son las
-  // horas restantes), así que en ese caso no se muestra aviso.
-  const remainingHoursForInvoice = (() => {
-    if (!modalOpen || !canBill) return 0
-    const selClients = new Set(selectedRows.map((r) => r.client))
-    if (selClients.size !== 1) return 0
-    const [client] = selClients
-    const pending = pendingByClientProvider.get(`${client}||${selectedProviders[0]}`) ?? 0
-    return Math.max(0, pending - selectedHours)
-  })()
+  // Contractors incluidos en la factura (para el modal): sólo se computa con el modal
+  // abierto (no en cada render de la grilla).
+  const selectedContractors = modalOpen ? contractorsFromSelection(selectedRows) : []
+
+  // Horas pendientes POR CONTRACTOR que quedan fuera de esta factura (C11). Sólo con
+  // el modal abierto y la selección facturable (un cliente); la lógica pura decide.
+  const remainingByContractor =
+    modalOpen && canBill ? remainingHoursByContractor(selectedRows, pendingByClientProvider) : []
 
   function toggleGroup(key) {
     setSelectedKeys((prev) => {
@@ -759,23 +786,19 @@ export function BillingPage() {
     })
   }
 
-  async function handleConfirmBill({
-    supplierInvoiceNumber,
-    invoiceDate,
-    currency,
-    totalAmount,
-    notes,
-  }) {
-    const entryIds = selectedEntries.map((e) => e.id)
-    const provider = selectedProviders[0]
-    const { invoice } = await api.invoices.create({
-      supplierInvoiceNumber,
-      invoiceDate,
-      currency,
-      totalAmount,
+  async function handleConfirmBill({ spInvoiceNumber, notes }) {
+    // Selección garantizada a un solo cliente + proyecto por canBill.
+    const [client] = new Set(selectedRows.map((r) => r.client))
+    const [project] = new Set(selectedRows.map((r) => r.project))
+    const contractors = contractorsFromSelection(selectedRows)
+    const entryCount = selectedEntries.length
+    const { invoice } = await api.invoices.createGrouped({
+      spInvoiceNumber,
+      project,
+      client,
+      weekStart: weekStartFromSelection(selectedRows),
       notes,
-      userName: provider,
-      entryIds,
+      contractors,
       createdBy: user?.email ?? null,
     })
     api.audit.log({
@@ -787,17 +810,18 @@ export function BillingPage() {
       resourceType: 'invoice',
       resourceId: invoice.id,
       after: {
-        supplierInvoiceNumber,
-        invoiceDate,
-        totalAmount,
-        userName: provider,
-        entryCount: entryIds.length,
+        spInvoiceNumber,
+        project,
+        client,
+        contractors: contractors.map((c) => c.contractor),
+        contractorCount: contractors.length,
+        entryCount,
         source: 'billing',
       },
     })
     setModalOpen(false)
     setNotice(
-      `Invoice ${supplierInvoiceNumber} issued for ${provider} — ${formatHours(selectedHours)} h.`,
+      `Invoice ${spInvoiceNumber} issued — ${contractors.length} contractor${contractors.length === 1 ? '' : 's'}, ${formatHours(selectedHours)} h.`,
     )
     // La factura saca esas filas de billableRows; sin limpiar la selección, la
     // barra de selección quedaría con ids muertos ("0.0 h · 0 entries").
@@ -1386,11 +1410,7 @@ export function BillingPage() {
                       className="btn btn--pay btn--sm"
                       onClick={() => setModalOpen(true)}
                       disabled={!canBill}
-                      title={
-                        selectedProviders.length > 1
-                          ? 'One invoice covers a single provider — narrow the selection'
-                          : undefined
-                      }
+                      title={blockMessage ?? undefined}
                     >
                       Send to billing
                     </button>
@@ -1405,11 +1425,7 @@ export function BillingPage() {
                 </div>
               )}
 
-              {selectedProviders.length > 1 && (
-                <p className="field__error">
-                  An invoice covers one provider only. Selected: {selectedProviders.join(', ')}.
-                </p>
-              )}
+              {blockMessage && <p className="field__error">{blockMessage}</p>}
                 </>
               )}
             </>
@@ -1439,11 +1455,11 @@ export function BillingPage() {
       )}
 
       {modalOpen && canBill && (
-        <BillModal
-          user={selectedProviders[0]}
+        <GroupedBillModal
+          contractors={selectedContractors}
           entries={selectedEntries}
           hours={selectedHours}
-          remainingHours={remainingHoursForInvoice}
+          remainingByContractor={remainingByContractor}
           onClose={() => setModalOpen(false)}
           onConfirm={handleConfirmBill}
         />

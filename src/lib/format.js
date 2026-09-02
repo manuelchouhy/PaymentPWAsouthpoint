@@ -96,6 +96,18 @@ export function sundayWeek(iso = '') {
 }
 
 /**
+ * Domingo (YYYY-MM-DD, UTC) que inicia la semana domingo–sábado de una fecha, o
+ * null si la fecha no es válida. Es la fecha que fija la unidad facturable
+ * (invoices.week_start). Reusa weekStartSunday para no duplicar la aritmética.
+ * @param {string} iso
+ * @returns {?string}
+ */
+export function weekStartISO(iso = '') {
+  const sunday = weekStartSunday(iso)
+  return sunday ? sunday.toISOString().slice(0, 10) : null
+}
+
+/**
  * Año de la semana domingo–sábado (el año del domingo que la inicia). Va junto a
  * sundayWeek para no fusionar la misma semana de años distintos (p. ej. W32 de
  * 2025 y de 2026).
