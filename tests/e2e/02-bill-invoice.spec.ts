@@ -1,23 +1,38 @@
 import { test, expect } from '@playwright/test'
-import { loginAsTestAdmin, billFirstPendingEntry, cleanupInvoice } from './helpers'
+import { loginAsTestAdmin, issueGroupedInvoice, contractorRow, cleanupTestInvoices } from './helpers'
 
-test('emitir factura (Bill) marca la entrada como Invoiced', async ({ page }) => {
+// Modelo AGRUPADO en horas (slices 03/04): una factura cubre un cliente + proyecto +
+// semana y agrupa a uno o varios contractors. Al emitir sólo se carga el SP invoice
+// number; el monto/fecha/supplier# de cada contractor se cargan al pagar (ver spec 04).
+test('emitir factura agrupada la deja Invoiced con sus contractors pendientes', async ({ page }) => {
+  // Emisión + navegaciones contra Supabase real: holgura sobre el default de 45s.
+  test.setTimeout(90_000)
   await loginAsTestAdmin(page)
 
-  const { invoiceId, invoiceNumber } = await billFirstPendingEntry(page)
-
+  let spNumber: string | undefined
   try {
-    await expect(page.getByRole('status')).toContainText('Invoice issued')
+    const issued = await issueGroupedInvoice(page)
+    spNumber = issued.spNumber
+    const { contractors } = issued
+    expect(contractors.length).toBeGreaterThan(0)
 
-    const row = page.locator('tr', { hasText: invoiceNumber })
-    await expect(row).toContainText('Invoiced')
+    // El aviso confirma la emisión con el conteo de contractors (filtrado por número:
+    // el reload posterior agrega un .state__hint transitorio de "Loading…").
+    await expect(page.locator('.state__hint').filter({ hasText: spNumber })).toBeVisible()
 
-    await row.click()
-    const drawer = page.locator('.drawer')
-    await expect(drawer.locator('#invoice-drawer-title')).toHaveText(invoiceNumber)
-    // Formato es-AR usa coma decimal (100,00) — solo verificamos el monto, no el separador.
-    await expect(drawer.locator('.drawer__amount')).toContainText('100')
+    // En Payments la factura aparece pagable (Invoiced), 0/N pagados, con una fila
+    // Pending por contractor.
+    await page.goto('/payments')
+    const group = page.locator('tbody.pay-invoice-group', { hasText: spNumber })
+    await expect(group).toBeVisible()
+    await expect(group.locator('.pay-invoice-head__row')).toContainText('Invoiced')
+    await expect(group.locator('.pay-invoice-head__row')).toContainText(
+      `0/${contractors.length} paid`,
+    )
+    for (const name of contractors) {
+      await expect(contractorRow(page, group, name)).toContainText('Pending')
+    }
   } finally {
-    await cleanupInvoice(page, invoiceId)
+    await cleanupTestInvoices(page)
   }
 })
