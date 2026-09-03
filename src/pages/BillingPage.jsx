@@ -3,7 +3,7 @@ import { useOutletContext, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowRight, Info } from 'lucide-react'
 import { api } from '../lib/api'
-import { formatDate, formatHours, weekStartISO } from '../lib/format'
+import { formatDate, formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, sortedUnique, clientFilterOptions, OTHER_CLIENT } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
@@ -505,23 +505,23 @@ export function BillingPage() {
     return { billableClientCount: clients.size, sinClienteHours: unassignedHours }
   }, [filtered, invoiceByEntryId])
 
-  // Horas pendientes de facturar por cliente+contractor, sobre TODAS las entries
-  // (NO las filtradas). El aviso del modal tiene que reflejar lo que realmente le
-  // queda al contractor en ese cliente, no lo que el filtro de Proyecto/fecha deja
-  // ver: si no, filtrar por un proyecto haría creer que no queda nada pendiente
-  // cuando el contractor sí tiene horas sin facturar en otro proyecto del cliente.
-  // Pendiente facturable por UNIDAD (cliente + proyecto + semana) y contractor: es
-  // la base del aviso "remaining" del modal, que debe medirse en la misma unidad
-  // que la factura (no en todo el cliente). Clave `client||project||weekStart||user`.
-  const pendingByUnitUser = useMemo(() => {
+  // Horas pendientes de facturar por cliente+proyecto+contractor, sobre TODAS las
+  // entries (NO las filtradas). El aviso del modal tiene que reflejar lo que realmente
+  // le queda al contractor en ese proyecto, no lo que el filtro de Proyecto/fecha deja
+  // ver: si no, filtrar por un proyecto haría creer que no queda nada pendiente cuando
+  // el contractor sí tiene horas sin facturar en otro proyecto del cliente.
+  // Una factura puede cubrir VARIAS semanas del mismo cliente+proyecto, así que el
+  // pendiente se agrega por cliente+proyecto+contractor (SIN semana) y se compara
+  // contra el total facturado. Clave `client||project||user` — debe coincidir con la
+  // que consume remainingHoursByContractor (billingSelection.js).
+  const pendingByContractor = useMemo(() => {
     const m = new Map()
     for (const e of entriesConCliente) {
       if (e.status !== 'Approved') continue
       if (e.allocation !== 'bill_to_client') continue
       if (!e.client) continue
       if (invoiceByEntryId.has(String(e.id))) continue
-      const ws = weekStartISO(e.date ?? '') ?? ''
-      const key = `${e.client}||${e.project ?? ''}||${ws}||${e.user}`
+      const key = `${e.client}||${e.project ?? ''}||${e.user}`
       m.set(key, (m.get(key) ?? 0) + (Number(e.hours) || 0))
     }
     return m
@@ -624,7 +624,7 @@ export function BillingPage() {
   // Horas pendientes POR CONTRACTOR que quedan fuera de esta factura (C11). Sólo con
   // el modal abierto y la selección facturable (un cliente); la lógica pura decide.
   const remainingByContractor =
-    modalOpen && canBill ? remainingHoursByContractor(selectedRows, pendingByUnitUser) : []
+    modalOpen && canBill ? remainingHoursByContractor(selectedRows, pendingByContractor) : []
 
   function toggleGroup(key) {
     setSelectedKeys((prev) => {
