@@ -48,6 +48,10 @@ test('formatInvoicePeriod: weekEnd malformado → degrada a semana única (no "W
   assert.equal(formatInvoicePeriod('2026-08-09', 'no-es-fecha'), 'WEEK 33 · 2026')
 })
 
+test('formatInvoicePeriod: rango invertido (weekEnd < weekStart) → semana única (defensivo)', () => {
+  assert.equal(formatInvoicePeriod('2026-08-23', '2026-08-09'), 'WEEK 35 · 2026')
+})
+
 test('formatInvoicePeriod: sin weekStart → cadena vacía', () => {
   assert.equal(formatInvoicePeriod('', null), '')
   assert.equal(formatInvoicePeriod(null, '2026-08-23'), '')

@@ -215,22 +215,23 @@ export function formatInvoicePeriod(weekStart, weekEnd = null, weekCount = null)
   if (wS == null) return ''
   const yS = sundayWeekYear(weekStart)
   const single = () => `WEEK ${wS} · ${yS}`
-  if (!weekEnd || weekEnd === weekStart) return single()
+  // weekEnd ausente, igual, o ANTERIOR a weekStart (dato invertido, defensivo) → una
+  // sola semana. Comparación lexicográfica de 'YYYY-MM-DD' = cronológica.
+  if (!weekEnd || weekEnd <= weekStart) return single()
   const wE = sundayWeek(weekEnd)
   if (wE == null) return single() // weekEnd malformado → degrada a semana única, no "WEEK 33 – null"
   const yE = sundayWeekYear(weekEnd)
   const range =
     yS === yE ? `WEEK ${wS} – ${wE} · ${yE}` : `WEEK ${wS} · ${yS} – WEEK ${wE} · ${yE}`
-  // Semanas que abarca el span (domingos inclusive): (fin - inicio)/7 + 1. El "(N weeks)"
-  // sólo aporta cuando faltan semanas del medio (weekCount < span) — en contiguo el rango
-  // ya es inequívoco. Se parsea en UTC con el mismo criterio que el resto del módulo
-  // (slice a YYYY-MM-DD + Date.UTC), no con Date.parse, para no mezclar zonas horarias.
-  const utcDay = (iso) => {
-    const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
-    return Date.UTC(y, m - 1, d)
-  }
-  const spanWeeks = Math.round((utcDay(weekEnd) - utcDay(weekStart)) / (7 * 86400000)) + 1
-  return weekCount && weekCount > 1 && weekCount < spanWeeks ? `${range} (${weekCount} weeks)` : range
+  // Semanas que abarca el span. El "(N weeks)" sólo aporta cuando faltan semanas del
+  // medio (weekCount < span, o sea NO contiguo) — en contiguo el rango ya es inequívoco.
+  // spanWeeks se deriva de los números de semana ya calculados (wE - wS + 1), no de un
+  // segundo parseo de fechas; sólo es fiable dentro del mismo año, así que en un cruce
+  // de año (raro) no se muestra el conteo.
+  const spanWeeks = yS === yE ? wE - wS + 1 : null
+  return weekCount && spanWeeks && weekCount > 1 && weekCount < spanWeeks
+    ? `${range} (${weekCount} weeks)`
+    : range
 }
 
 /**

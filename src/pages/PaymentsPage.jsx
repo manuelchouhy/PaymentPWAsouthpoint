@@ -383,7 +383,9 @@ export function PaymentsPage() {
         paidCount: completion.paidCount,
         totalCount: completion.totalCount,
         totalHours: completion.totalHours,
-        weekCount: invoiceWeekCount(inv.id),
+        // Período ya formateado (rango de semanas + "(N weeks)" si no contiguo). Cadena
+        // vacía si weekStart es inválido → el render cae a nada (no un "· " colgado).
+        period: formatInvoicePeriod(inv.weekStart, inv.weekEnd, invoiceWeekCount(inv.id)),
         dueDate,
         daysUntilDue,
         alertLevel,
@@ -863,9 +865,7 @@ export function PaymentsPage() {
                               )}
                               {r.inv.project || '—'}
                               {r.inv.client ? ` · ${r.inv.client}` : ''}
-                              {r.inv.weekStart
-                                ? ` · ${formatInvoicePeriod(r.inv.weekStart, r.inv.weekEnd, r.weekCount)}`
-                                : ''}
+                              {r.period ? ` · ${r.period}` : ''}
                             </span>
                             <span className="cell-soft">
                               {r.paidCount}/{r.totalCount} paid · {formatHours(r.totalHours)} h

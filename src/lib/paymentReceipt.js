@@ -62,7 +62,7 @@ export function downloadPaymentReceipt({ invoice, invoiceContractor, payment, we
       ['SP invoice', spNumber],
       ['Supplier invoice', supplierNumber],
       ['Project', invoice.project || '—'],
-      ['Period', invoice.weekStart ? formatInvoicePeriod(invoice.weekStart, invoice.weekEnd, weekCount) : '—'],
+      ['Period', formatInvoicePeriod(invoice.weekStart, invoice.weekEnd, weekCount) || '—'],
       ['Hours paid', `${formatHours(hours)} h`],
       ['Payment date', formatDate(payment.paymentDate) + (payment.backDated ? '  (back-dated)' : '')],
       ['Bank / method', payment.bankMethod || '—'],
