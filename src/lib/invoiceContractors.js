@@ -40,8 +40,12 @@ function normalizeEntries(entries, contractorName) {
  * Construye el payload de una factura agrupada a partir de la selección de la UI.
  *
  * Una factura puede cubrir VARIAS semanas del mismo cliente+proyecto: `weekStart` es
- * el domingo más temprano del período y `weekEnd` el más tardío. Con una sola semana
- * `weekEnd` puede omitirse (queda null) o ser igual a `weekStart`.
+ * el domingo de la PRIMERA semana del período y `weekEnd` el domingo de la ÚLTIMA
+ * (ambos son domingos que IDENTIFICAN la semana — week-identifiers, no el último día
+ * calendario; el período real termina el sábado de esa última semana). Simétrico con
+ * `week_start`; el display formatea el rango como etiqueta de semana (WEEK N · año),
+ * no como fecha suelta. Con una sola semana `weekEnd` puede omitirse (queda null) o
+ * ser igual a `weekStart`.
  *
  * @param {{
  *   spInvoiceNumber: string,

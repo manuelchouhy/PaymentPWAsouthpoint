@@ -141,9 +141,12 @@ export function remainingHoursByContractor(selectedRows, pendingByContractor) {
 }
 
 /**
- * Span de semanas (domingos ISO) que abarca la selección: { start: domingo más
- * temprano, end: domingo más tardío }. Una factura puede cubrir VARIAS semanas del
- * mismo cliente+proyecto (contiguas o no), así que el período se guarda como rango
+ * Span de semanas (domingos ISO) que abarca la selección: { start: domingo de la
+ * primera semana, end: domingo de la última }. AMBOS extremos son domingos que
+ * IDENTIFICAN la semana (week-identifiers, mismo criterio que weekStart en todo el
+ * dominio — ver CONTEXT.md), NO el último día calendario del período (ése sería el
+ * sábado de la última semana). Una factura puede cubrir VARIAS semanas del mismo
+ * cliente+proyecto (contiguas o no), así que el período se guarda como rango
  * (invoices.week_start = start, invoices.week_end = end). Con una sola semana
  * start === end. Devuelve null si alguna hora no tiene fecha resoluble ('' en el
  * set): sin fecha no se puede ubicar en ninguna semana ni acotar el rango.
