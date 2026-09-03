@@ -37,6 +37,22 @@ test('arma invoice + filas por contractor con horas y entry_ids', () => {
   assert.deepEqual(bob.entry_ids, [3])
 })
 
+test('factura multi-semana: guarda week_end (rango del período)', () => {
+  const { invoice } = buildGroupedInvoicePayload({
+    ...base(),
+    weekStart: '2026-08-02',
+    weekEnd: '2026-08-09',
+  })
+  assert.equal(invoice.week_start, '2026-08-02')
+  assert.equal(invoice.week_end, '2026-08-09')
+})
+
+test('factura de una sola semana: sin weekEnd → week_end null', () => {
+  const { invoice } = buildGroupedInvoicePayload(base()) // base() no trae weekEnd
+  assert.equal(invoice.week_start, '2026-08-09')
+  assert.equal(invoice.week_end, null)
+})
+
 test('entry_ids no numéricos se descartan (bigint[] en Supabase)', () => {
   const { invoice, contractorRows } = buildGroupedInvoicePayload({
     ...base(),

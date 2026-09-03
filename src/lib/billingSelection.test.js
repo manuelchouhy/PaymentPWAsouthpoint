@@ -6,6 +6,7 @@ import {
   contractorsFromSelection,
   remainingHoursByContractor,
   weekStartFromSelection,
+  weekSpanFromSelection,
   projectsForContractWarnings,
 } from './billingSelection.js'
 
@@ -62,10 +63,24 @@ test('sin proyecto (bucket "—") no se factura: canBill false + reason no-proje
   assert.equal(billBlockReason(mixed), 'multi-project')
 })
 
-test('cruzar semanas no se factura: canBill false + reason multi-week', () => {
+test('cruzar semanas (mismo cliente+proyecto) SÍ se factura: una factura cubre el rango', () => {
   const sel = [row({ id: 1, date: '2026-08-12' }), row({ id: 2, date: '2026-08-05' })]
-  assert.equal(canBillSelection(sel), false)
-  assert.equal(billBlockReason(sel), 'multi-week')
+  assert.equal(canBillSelection(sel), true)
+  assert.equal(billBlockReason(sel), null)
+})
+
+test('semanas NO contiguas (mismo cliente+proyecto) también se facturan', () => {
+  // Semana del 08-02 (date 08-05) y del 08-16 (date 08-19), salteando la del 08-09.
+  const sel = [row({ id: 1, date: '2026-08-05' }), row({ id: 2, date: '2026-08-19' })]
+  assert.equal(canBillSelection(sel), true)
+  assert.equal(billBlockReason(sel), null)
+})
+
+test('cruzar semanas PERO cruzando cliente/proyecto sigue bloqueado (no lo habilita multi-semana)', () => {
+  const multiClient = [row({ id: 1, date: '2026-08-12', client: 'HSS' }), row({ id: 2, date: '2026-08-05', client: 'ACME' })]
+  assert.equal(billBlockReason(multiClient), 'multi-client')
+  const multiProject = [row({ id: 1, date: '2026-08-12', project: 'P1' }), row({ id: 2, date: '2026-08-05', project: 'P2' })]
+  assert.equal(billBlockReason(multiProject), 'multi-project')
 })
 
 test('sin fecha resoluble: canBill false + reason no-week (no queda sin explicación)', () => {
@@ -111,16 +126,22 @@ test('contractorsFromSelection: orden por horas y estructura de entries', () => 
   assert.deepEqual(ana.entries.map((e) => e.id), [1, 2])
 })
 
-test('remainingHoursByContractor: pendiente por unidad (cliente+proyecto+semana) por contractor', () => {
-  // Filas de HSS / P1 / semana del 2026-08-09 (date 2026-08-12).
-  const sel = [row({ id: 1, user: 'Ana', hours: 4 }), row({ id: 2, user: 'Bob', hours: 3 })]
+test('remainingHoursByContractor: pendiente por cliente+proyecto+contractor, sumando todas las semanas de la factura', () => {
+  // Ana factura 4h en la semana del 08-09 (date 08-12) y 2h en la del 08-02 (date
+  // 08-05): mismo cliente+proyecto, dos semanas. El pendiente se mide por
+  // cliente+proyecto+contractor (sin semana) y se compara contra el total facturado.
+  const sel = [
+    row({ id: 1, user: 'Ana', hours: 4, date: '2026-08-12' }),
+    row({ id: 2, user: 'Ana', hours: 2, date: '2026-08-05' }),
+    row({ id: 3, user: 'Bob', hours: 3, date: '2026-08-12' }),
+  ]
   const pending = new Map([
-    ['HSS||P1||2026-08-09||Ana', 10], // Ana: 10 pendientes en la unidad, factura 4 → 6
-    ['HSS||P1||2026-08-09||Bob', 3], //  Bob: 3 pendientes, factura 3 → 0 (no aparece)
-    ['HSS||P2||2026-08-09||Ana', 5], //  otra unidad (P2): NO cuenta para esta factura
+    ['HSS||P1||Ana', 10], // Ana: 10 pendientes; factura 6 (4+2) → 4
+    ['HSS||P1||Bob', 3], //  Bob: 3 pendientes, factura 3 → 0 (no aparece)
+    ['HSS||P2||Ana', 5], //  otro proyecto: NO cuenta para esta factura
   ])
   const out = remainingHoursByContractor(sel, pending)
-  assert.deepEqual(out, [{ contractor: 'Ana', remaining: 6 }])
+  assert.deepEqual(out, [{ contractor: 'Ana', remaining: 4 }])
 })
 
 test('remainingHoursByContractor: multi-cliente → []', () => {
@@ -128,11 +149,25 @@ test('remainingHoursByContractor: multi-cliente → []', () => {
   assert.deepEqual(remainingHoursByContractor(sel, new Map()), [])
 })
 
-test('weekStartFromSelection: una sola semana → domingo ISO; varias → null', () => {
+test('weekStartFromSelection: devuelve el domingo más temprano (start del span); sin fecha → null', () => {
   const oneWeek = [row({ id: 1, date: '2026-08-12' }), row({ id: 2, date: '2026-08-09' })]
   assert.equal(weekStartFromSelection(oneWeek), '2026-08-09')
+  // Multi-semana: ya NO es null — es el domingo más temprano (inicio del período).
   const twoWeeks = [row({ id: 1, date: '2026-08-12' }), row({ id: 2, date: '2026-08-05' })]
-  assert.equal(weekStartFromSelection(twoWeeks), null)
+  assert.equal(weekStartFromSelection(twoWeeks), '2026-08-02')
+  const noDate = [{ user: 'Ana', client: 'HSS', project: 'P1', hours: 1, entries: [{ id: 1, hours: 1, date: '' }] }]
+  assert.equal(weekStartFromSelection(noDate), null)
+})
+
+test('weekSpanFromSelection: una semana → start===end; varias → {min,max}; sin fecha → null', () => {
+  const oneWeek = [row({ id: 1, date: '2026-08-12' }), row({ id: 2, date: '2026-08-09' })]
+  assert.deepEqual(weekSpanFromSelection(oneWeek), { start: '2026-08-09', end: '2026-08-09' })
+  // Semanas del 2026-08-02 (date 08-05) y 2026-08-09 (date 08-12): span abarca ambas.
+  const twoWeeks = [row({ id: 1, date: '2026-08-12' }), row({ id: 2, date: '2026-08-05' })]
+  assert.deepEqual(weekSpanFromSelection(twoWeeks), { start: '2026-08-02', end: '2026-08-09' })
+  // Una hora sin fecha resoluble → null (no se puede ubicar en el rango).
+  const noDate = [{ user: 'Ana', client: 'HSS', project: 'P1', hours: 1, entries: [{ id: 1, hours: 1, date: '' }] }]
+  assert.equal(weekSpanFromSelection(noDate), null)
 })
 
 // Resolver de juguete: mapea projects.client crudo/alias → cliente maestro, para

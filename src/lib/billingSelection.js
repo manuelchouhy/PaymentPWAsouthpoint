@@ -41,9 +41,9 @@ export function selectionWeekStarts(selectedRows) {
 
 /**
  * ¿La selección se puede emitir como UNA factura agrupada? La unidad facturable es
- * UN cliente + UN proyecto + UNA semana (dom→sáb); varios contractors permitidos.
- * Requiere que cliente y proyecto sean no vacíos (una hora sin proyecto no se
- * factura) y que todas las horas caigan en la misma semana.
+ * UN cliente + UN proyecto + una o VARIAS semanas (dom→sáb, contiguas o no); varios
+ * contractors permitidos. Requiere que cliente y proyecto sean no vacíos (una hora
+ * sin proyecto no se factura) y que todas las horas tengan una semana resoluble.
  */
 export function canBillSelection(selectedRows) {
   const rows = selectedRows ?? []
@@ -55,7 +55,9 @@ export function canBillSelection(selectedRows) {
   // agrupado (contractorsFromSelection la ignora) pero sus horas contarían en los
   // totales mostrados → mismatch. Se bloquea la emisión.
   if (rows.some((r) => (r?.user ?? '') === '')) return false
-  return weekStartFromSelection(rows) !== null
+  // Todas las horas deben caer en una semana resoluble (null sólo si alguna no tiene
+  // fecha). Multi-semana está permitido: el span se convierte en el rango de la factura.
+  return weekSpanFromSelection(rows) !== null
 }
 
 /**
@@ -63,8 +65,9 @@ export function canBillSelection(selectedRows) {
  * TODOS los casos en que canBillSelection es false con algo seleccionado, así el
  * botón deshabilitado siempre tiene una explicación. Orden de precedencia: cruza
  * cliente, cruza proyecto, sin cliente, sin proyecto, sin contractor, sin fecha
- * (semana no resoluble), cruza semana. Con la selección vacía devuelve null.
- * @returns {'multi-client'|'multi-project'|'no-client'|'no-project'|'no-contractor'|'multi-week'|'no-week'|null}
+ * (semana no resoluble). Cruzar semanas NO es un motivo de bloqueo (multi-semana
+ * permitido). Con la selección vacía devuelve null.
+ * @returns {'multi-client'|'multi-project'|'no-client'|'no-project'|'no-contractor'|'no-week'|null}
  */
 export function billBlockReason(selectedRows) {
   const rows = selectedRows ?? []
@@ -76,10 +79,13 @@ export function billBlockReason(selectedRows) {
   if ([...projects][0] === '') return 'no-project'
   if (rows.some((r) => (r?.user ?? '') === '')) return 'no-contractor'
   const weeks = selectionWeekStarts(rows)
-  // Sin fecha resoluble tiene precedencia sobre multi-week: si alguna hora no tiene
-  // fecha, el problema es esa hora (no "cruza semanas"), aunque el resto sí resuelva.
+  // Una hora sin fecha resoluble no se puede ubicar en ninguna semana ni acotar el
+  // rango de la factura → bloquea.
   if (weeks.has('')) return 'no-week'
-  if (weeks.size > 1) return 'multi-week'
+  // Cruzar semanas YA NO bloquea: una factura puede cubrir varias semanas (contiguas
+  // o no) del mismo cliente+proyecto; el período se guarda como rango
+  // week_start..week_end (ver weekSpanFromSelection). Siguen bloqueando multi-client
+  // y multi-project, chequeados arriba.
   return null
 }
 
@@ -112,22 +118,22 @@ export function contractorsFromSelection(selectedRows) {
 
 /**
  * Horas pendientes de cada contractor que NO entran en esta factura (aviso C11).
- * La factura es UN cliente + UN proyecto + UNA semana, así que el pendiente se mide
- * en ESA misma unidad (no en todo el cliente): si no, reportaría como "omitidas"
- * horas de otros proyectos/semanas que NO se pueden facturar acá.
- * @param {Map<string,number>} pendingByUnitUser clave `${client}||${project}||${weekStart}||${user}`
+ * La factura es UN cliente + UN proyecto que puede cubrir VARIAS semanas, así que el
+ * pendiente se mide por cliente+proyecto+contractor (sumando todas las semanas) y se
+ * compara contra el total facturado del contractor. Medirlo por semana reportaría
+ * como "omitidas" horas de otras semanas que esta misma factura SÍ incluye.
+ * @param {Map<string,number>} pendingByContractor clave `${client}||${project}||${user}`
  * @returns {Array<{contractor:string, remaining:number}>}
  */
-export function remainingHoursByContractor(selectedRows, pendingByUnitUser) {
+export function remainingHoursByContractor(selectedRows, pendingByContractor) {
   const { clients, projects } = selectionScope(selectedRows)
   if (clients.size !== 1 || projects.size !== 1) return []
   const client = [...clients][0]
   const project = [...projects][0]
-  const weekStart = weekStartFromSelection(selectedRows)
-  if (client === '' || project === '' || weekStart == null) return []
+  if (client === '' || project === '') return []
   const out = []
   for (const c of contractorsFromSelection(selectedRows)) {
-    const pending = pendingByUnitUser?.get(`${client}||${project}||${weekStart}||${c.contractor}`) ?? 0
+    const pending = pendingByContractor?.get(`${client}||${project}||${c.contractor}`) ?? 0
     const remaining = Math.max(0, pending - c.hours)
     if (remaining > 0) out.push({ contractor: c.contractor, remaining })
   }
@@ -135,16 +141,29 @@ export function remainingHoursByContractor(selectedRows, pendingByUnitUser) {
 }
 
 /**
- * week_start (domingo ISO) de la selección: si todas las horas caen en la misma
- * semana domingo–sábado, esa; si la selección cruza semanas, null (el modelo tiene
- * un solo week_start y la unidad facturable es cliente+proyecto, no la semana).
+ * Span de semanas (domingos ISO) que abarca la selección: { start: domingo más
+ * temprano, end: domingo más tardío }. Una factura puede cubrir VARIAS semanas del
+ * mismo cliente+proyecto (contiguas o no), así que el período se guarda como rango
+ * (invoices.week_start = start, invoices.week_end = end). Con una sola semana
+ * start === end. Devuelve null si alguna hora no tiene fecha resoluble ('' en el
+ * set): sin fecha no se puede ubicar en ninguna semana ni acotar el rango.
+ * @returns {?{ start: string, end: string }}
+ */
+export function weekSpanFromSelection(selectedRows) {
+  const starts = selectionWeekStarts(selectedRows)
+  if (starts.size === 0 || starts.has('')) return null
+  const sorted = [...starts].sort() // domingos ISO 'YYYY-MM-DD' → orden lexicográfico = cronológico
+  return { start: sorted[0], end: sorted[sorted.length - 1] }
+}
+
+/**
+ * week_start (domingo ISO) de la selección: el domingo más temprano del span
+ * (weekSpanFromSelection). null si alguna hora no tiene fecha resoluble. Se conserva
+ * como conveniencia para los llamadores que sólo necesitan el inicio del período.
  * @returns {?string}
  */
 export function weekStartFromSelection(selectedRows) {
-  const starts = selectionWeekStarts(selectedRows)
-  if (starts.size !== 1) return null
-  const [only] = starts
-  return only === '' ? null : only
+  return weekSpanFromSelection(selectedRows)?.start ?? null
 }
 
 /**

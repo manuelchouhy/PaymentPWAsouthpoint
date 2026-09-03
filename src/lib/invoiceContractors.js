@@ -39,16 +39,21 @@ function normalizeEntries(entries, contractorName) {
 /**
  * Construye el payload de una factura agrupada a partir de la selección de la UI.
  *
+ * Una factura puede cubrir VARIAS semanas del mismo cliente+proyecto: `weekStart` es
+ * el domingo más temprano del período y `weekEnd` el más tardío. Con una sola semana
+ * `weekEnd` puede omitirse (queda null) o ser igual a `weekStart`.
+ *
  * @param {{
  *   spInvoiceNumber: string,
  *   project: string,
  *   client?: string,
  *   weekStart?: string,
+ *   weekEnd?: string,
  *   notes?: string,
  *   contractors: Array<{ contractor: string, entries: Array<{ id: string|number, hours: number }> }>,
  * }} selection
  * @returns {{
- *   invoice: { sp_invoice_number:string, project:string, client:?string, week_start:?string, notes:?string, status:'Invoiced', entry_ids:number[] },
+ *   invoice: { sp_invoice_number:string, project:string, client:?string, week_start:?string, week_end:?string, notes:?string, status:'Invoiced', entry_ids:number[] },
  *   contractorRows: Array<{ contractor:string, entry_ids:number[], hours:number }>,
  * }}
  * @throws {Error} con mensaje legible ante selección inválida.
@@ -58,6 +63,7 @@ export function buildGroupedInvoicePayload({
   project,
   client,
   weekStart,
+  weekEnd,
   notes,
   contractors,
 } = {}) {
@@ -109,6 +115,7 @@ export function buildGroupedInvoicePayload({
     project: proj,
     client: (client ?? '').trim() || null,
     week_start: weekStart || null,
+    week_end: weekEnd || null,
     notes: (notes ?? '').trim() || null,
     status: 'Invoiced',
     entry_ids: entryIdsUnion,
