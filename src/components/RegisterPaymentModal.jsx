@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Banknote, X } from 'lucide-react'
 import { BANK_METHODS } from '../lib/paymentsData'
-import { CURRENCIES, getCurrencySymbol } from '../lib/currenciesData'
 import { useScrollLock } from '../lib/useScrollLock'
 
 function todayISO() {
@@ -12,37 +11,35 @@ function todayISO() {
   return `${now.getFullYear()}-${mm}-${dd}`
 }
 
-function fmtAmount(value) {
-  return Number(value || 0).toLocaleString('es-AR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
-
 /**
- * Modal "Register Payment" (FR-10). Pago al contractor. Sirve para dos casos:
- *  - por factura: se pasa `invoice` (el resumen y el monto salen de la factura).
- *  - overage (sin factura): se pasan `summaryName`/`summaryMeta`/`summaryFigure` y
- *    `defaultAmount=''` (el monto lo tipea el usuario), + `footerNote` propio.
+ * Modal "Register Payment" (FR-10), modelo en HORAS (slice 04d/05). Pago al contractor,
+ * sin monto ni moneda. Sirve para dos casos:
+ *  - Pago de un contractor bajo una factura agrupada: `requireSupplierNumber` →
+ *    exige el supplier invoice number (contractor → SouthPoint). El resumen (nombre,
+ *    factura, horas) lo pasa el llamador vía summaryName/summaryMeta/summaryFigure.
+ *  - Overage / sp_internal (sin factura): sin supplier#. Se pasan summary* + el
+ *    picker de horas en `extraContent` + un `footerNote` propio.
+ *
+ * onConfirm recibe: { supplierInvoiceNumber?, paymentDate, transferReference,
+ * bankMethod, notes }. El supplierInvoiceNumber sólo va cuando requireSupplierNumber.
  *
  * @param {{
- *   invoice?: object,
- *   currency?: string,
+ *   requireSupplierNumber?: boolean,
  *   title?: string,
+ *   submitLabel?: string,
+ *   extraContent?: import('react').ReactNode,
+ *   extraValid?: boolean,
  *   summaryName?: string,
  *   summaryMeta?: string,
  *   summaryFigure?: string,
  *   summaryFigureLabel?: string,
- *   defaultAmount?: string,
  *   footerNote?: import('react').ReactNode,
  *   onClose: () => void,
  *   onConfirm: (data) => Promise<void>,
  * }} props
  */
 export function RegisterPaymentModal({
-  invoice,
-  currency = 'USD',
-  currencyEditable = false,
+  requireSupplierNumber = false,
   extraContent,
   extraValid = true,
   title = 'Register Payment',
@@ -51,24 +48,14 @@ export function RegisterPaymentModal({
   summaryMeta,
   summaryFigure,
   summaryFigureLabel,
-  defaultAmount,
   footerNote,
   onClose,
   onConfirm,
 }) {
-  // Moneda: fija (viene de la factura) o editable (overage, sin factura → la elige
-  // el usuario, D7). Cuando no es USD aparece el campo de tipo de cambio (abajo).
-  const [cur, setCur] = useState(currency)
-  const sym = getCurrencySymbol(cur)
-  const needsExchangeRate = cur !== 'USD'
-
-  const [amount, setAmount] = useState(
-    defaultAmount != null ? defaultAmount : invoice ? String(invoice.totalAmount) : '',
-  )
+  const [supplierNumber, setSupplierNumber] = useState('')
   const [paymentDate, setPaymentDate] = useState(todayISO)
   const [transferReference, setTransferReference] = useState('')
   const [bankMethod, setBankMethod] = useState(BANK_METHODS[0])
-  const [exchangeRate, setExchangeRate] = useState('')
   const [notes, setNotes] = useState('')
   const [touched, setTouched] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -79,22 +66,22 @@ export function RegisterPaymentModal({
   const today = todayISO()
   const isBackDated = useMemo(() => paymentDate < today, [paymentDate, today])
 
-  const amountNum = Number(amount)
-  const amountValid = amount !== '' && Number.isFinite(amountNum) && amountNum > 0
+  const supplierValid = !requireSupplierNumber || supplierNumber.trim().length > 0
   const dateValid = Boolean(paymentDate)
   const noteOk = !isBackDated || notes.trim().length > 0
-  const rateNum = Number(exchangeRate)
-  const rateValid = !needsExchangeRate || (exchangeRate !== '' && Number.isFinite(rateNum) && rateNum > 0)
   // extraValid: gancho para validez adicional del llamador (p. ej. overage exige
   // ≥1 hora seleccionada). Default true → no afecta el caso por factura.
-  const valid = amountValid && dateValid && noteOk && rateValid && extraValid
+  const valid = supplierValid && dateValid && noteOk && extraValid
 
   useScrollLock()
 
   useEffect(() => {
     firstRef.current?.focus()
-    firstRef.current?.select()
-  }, [])
+    // select() sólo aplica a inputs de texto (el supplier# del pago por-contractor).
+    // En el caso overage/sp_internal firstRef apunta al input type=date, donde select()
+    // es inválido (no-op o InvalidStateError en algún Chromium) → se omite.
+    if (requireSupplierNumber) firstRef.current?.select()
+  }, [requireSupplierNumber])
 
   useEffect(() => {
     function onKeyDown(e) {
@@ -112,21 +99,18 @@ export function RegisterPaymentModal({
     setSubmitting(true)
     try {
       await onConfirm({
-        amountPaid: amountNum,
+        // El supplier# sólo se manda cuando el caso lo pide (pago por factura). En
+        // overage/sp_internal queda undefined (la capa de datos no lo usa).
+        supplierInvoiceNumber: requireSupplierNumber ? supplierNumber.trim() : undefined,
         paymentDate,
-        currency: cur,
         transferReference: transferReference.trim(),
         bankMethod,
         notes: notes.trim(),
-        exchangeRate: needsExchangeRate ? rateNum : null,
       })
     } catch (error) {
       setSubmitting(false)
-      setSubmitError(
-        error?.code === 'not_collected'
-          ? 'The invoice must be Invoiced or Collected before registering a payment.'
-          : error?.message ?? 'Could not register the payment.',
-      )
+      // El mensaje ya viene legible de la capa de datos (carreras, validación).
+      setSubmitError(error?.message ?? 'Could not register the payment.')
     }
   }
 
@@ -165,17 +149,13 @@ export function RegisterPaymentModal({
 
         <div className="modal__summary">
           <div className="modal__summary-id">
-            <span className="modal__summary-user">{summaryName ?? invoice?.userName}</span>
-            <span className="modal__summary-meta">
-              {summaryMeta ?? `${invoice?.supplierInvoiceNumber} · ${invoice?.status ?? ''}`}
-            </span>
+            <span className="modal__summary-user">{summaryName}</span>
+            <span className="modal__summary-meta">{summaryMeta}</span>
           </div>
           <div className="modal__summary-hours">
-            <span className="modal__summary-hours-value">
-              {summaryFigure ?? `${sym}${fmtAmount(invoice?.totalAmount)}`}
-            </span>
+            <span className="modal__summary-hours-value">{summaryFigure}</span>
             <span className="modal__summary-hours-label">
-              {summaryFigureLabel ?? `Amount ${cur !== 'USD' ? `(${cur})` : ''}`}
+              {summaryFigureLabel ?? 'Hours to pay'}
             </span>
           </div>
         </div>
@@ -183,53 +163,35 @@ export function RegisterPaymentModal({
         {extraContent}
 
         <form className="modal__form" onSubmit={handleSubmit} noValidate>
-          {currencyEditable && (
+          {requireSupplierNumber && (
             <div className="field">
-              <label className="field__label" htmlFor="pay-currency">Currency</label>
-              <select
-                id="pay-currency"
-                className="field__input"
-                value={cur}
-                onChange={(e) => {
-                  // Al cambiar de moneda, el tipo de cambio tipeado ya no aplica:
-                  // se limpia para forzar reingresarlo (evita guardar una tasa de
-                  // otra moneda). El monto también queda en otra magnitud, se avisa.
-                  setCur(e.target.value)
-                  setExchangeRate('')
-                }}
-              >
-                {CURRENCIES.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.code} · {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          <div className="modal__form-row">
-            <div className="field">
-              <label className="field__label" htmlFor="pay-amount">
-                Amount paid<span className="field__req">required</span>
+              <label className="field__label" htmlFor="pay-supplier">
+                Supplier invoice number<span className="field__req">required</span>
               </label>
               <input
-                id="pay-amount"
+                id="pay-supplier"
                 ref={firstRef}
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
-                className={`field__input${touched && !amountValid ? ' field__input--error' : ''}`}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                onInvalid={(e) => e.preventDefault()}
+                type="text"
+                className={`field__input${touched && !supplierValid ? ' field__input--error' : ''}`}
+                value={supplierNumber}
+                onChange={(e) => setSupplierNumber(e.target.value)}
+                placeholder="e.g. SUP-2026-0142"
+                autoComplete="off"
               />
+              {touched && !supplierValid && (
+                <span className="field__error">Enter the contractor’s invoice number.</span>
+              )}
             </div>
+          )}
+
+          <div className="modal__form-row">
             <div className="field">
               <label className="field__label" htmlFor="pay-date">
                 Payment date<span className="field__req">required</span>
               </label>
               <input
                 id="pay-date"
+                ref={requireSupplierNumber ? undefined : firstRef}
                 type="date"
                 max={today}
                 className={`field__input${touched && !dateValid ? ' field__input--error' : ''}`}
@@ -237,9 +199,6 @@ export function RegisterPaymentModal({
                 onChange={(e) => setPaymentDate(e.target.value)}
               />
             </div>
-          </div>
-
-          <div className="modal__form-row">
             <div className="field">
               <label className="field__label" htmlFor="pay-bank">Bank / method</label>
               <select
@@ -253,46 +212,22 @@ export function RegisterPaymentModal({
                 ))}
               </select>
             </div>
-            <div className="field">
-              <label className="field__label" htmlFor="pay-ref">
-                Transfer reference<span className="field__opt">recommended</span>
-              </label>
-              <input
-                id="pay-ref"
-                type="text"
-                className="field__input"
-                value={transferReference}
-                onChange={(e) => setTransferReference(e.target.value)}
-                placeholder="e.g. TRX-99821"
-                autoComplete="off"
-              />
-            </div>
           </div>
 
-          {needsExchangeRate && (
-            <div className="field">
-              <label className="field__label" htmlFor="pay-rate">
-                Exchange rate ({cur} → USD)
-                <span className="field__req">required</span>
-              </label>
-              <input
-                id="pay-rate"
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.000001"
-                className={`field__input${touched && !rateValid ? ' field__input--error' : ''}`}
-                value={exchangeRate}
-                onChange={(e) => setExchangeRate(e.target.value)}
-                onInvalid={(e) => e.preventDefault()}
-                placeholder="e.g. 0.000025"
-                aria-invalid={touched && !rateValid}
-              />
-              {touched && !rateValid && (
-                <span className="field__error">Enter the exchange rate to USD.</span>
-              )}
-            </div>
-          )}
+          <div className="field">
+            <label className="field__label" htmlFor="pay-ref">
+              Transfer reference<span className="field__opt">recommended</span>
+            </label>
+            <input
+              id="pay-ref"
+              type="text"
+              className="field__input"
+              value={transferReference}
+              onChange={(e) => setTransferReference(e.target.value)}
+              placeholder="e.g. TRX-99821"
+              autoComplete="off"
+            />
+          </div>
 
           <div className="field">
             <label className="field__label" htmlFor="pay-notes">
@@ -321,7 +256,10 @@ export function RegisterPaymentModal({
           <p className="modal__note">
             <Banknote size={14} aria-hidden="true" />
             {footerNote ?? (
-              <>On confirmation, the invoice will move to <strong>Paid</strong>.</>
+              <>
+                Registers this contractor’s payment. The invoice moves to{' '}
+                <strong>Paid</strong> once every contractor is paid.
+              </>
             )}
             {isBackDated && ' This payment will be marked as back-dated.'}
           </p>

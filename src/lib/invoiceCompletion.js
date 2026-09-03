@@ -10,10 +10,12 @@
  * el estado real `Paid` lo decide la RPC en la base (esta derivación es para MOSTRAR
  * el progreso y decidir qué contractors ofrecer a pago, no para escribir el status).
  *
- * Un contractor se considera PAGADO cuando TODAS sus horas (entry_ids) están cubiertas
- * por algún pago — se reutiliza `paidEntryIdsFrom` (por entry_ids), la misma base del
- * anti doble-pago (trigger 0037). Se matchea por entry_ids, no por nombre: es lo que
- * congela la base y evita depender de la grafía del contractor.
+ * Un contractor se considera PAGADO cuando su fila tiene `paymentId` (lo setea la RPC
+ * register_contractor_payment al pagar; el pago por factura lleva entry_ids NULL, así que
+ * este link es la única señal en ese caso) O cuando TODAS sus horas (entry_ids) están
+ * cubiertas por algún pago — se reutiliza `paidEntryIdsFrom` (por entry_ids), la misma
+ * base del anti doble-pago (trigger 0037). El match por entry_ids no depende de la grafía
+ * del contractor; el `paymentId` cubre el caso del pago por factura (sin entry_ids).
  *
  * `payments` puede ser la lista COMPLETA de pagos del sistema, no hace falta pre-filtrar
  * a esta factura: los entry_ids son únicos por hora (una hora pertenece a UNA factura),
@@ -62,9 +64,16 @@ function completionFromPaidIds(contractors, paidIds) {
     .filter((c) => (c?.entryIds ?? []).length > 0)
     .map((c) => {
       const entryIds = c.entryIds
-      // Pagado = todas sus horas cubiertas por algún pago.
-      const paid = entryIds.every((id) => paidIds.has(String(id)))
-      return { contractor: c.contractor, entryIds, hours: Number(c.hours) || 0, paid }
+      // Pagado si: la fila tiene payment_id (lo setea la RPC register_contractor_payment;
+      // el pago POR FACTURA lleva entry_ids NULL, así que NO se detecta por cobertura de
+      // horas — sólo por este link) O todas sus horas están cubiertas por algún pago (caso
+      // overage/demo, donde el pago sí trae los entry_ids). Backward-compatible: si la fila
+      // no trae paymentId (undefined), cae al chequeo por entry_ids como antes.
+      const paid = c.paymentId != null || entryIds.every((id) => paidIds.has(String(id)))
+      // Se PRESERVAN los campos originales (id, supplierInvoiceNumber, paymentId,
+      // paymentDate) además de `paid`, para que la UI pueda pagar/mostrar cada fila sin
+      // re-buscar la fila invoice_contractors original.
+      return { ...c, entryIds, hours: Number(c.hours) || 0, paid }
     })
 
   const totalCount = rows.length

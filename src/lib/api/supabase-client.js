@@ -11,6 +11,7 @@ import {
   createInvoice,
   createGroupedInvoice,
   getInvoices,
+  getInvoiceContractors,
   getInvoiceStatusHistory,
   getSyncLog,
   getSyncStatus,
@@ -245,6 +246,7 @@ export const supabaseApiClient = {
 
   invoices: {
     list: getInvoices,
+    listContractors: getInvoiceContractors,
     create: createInvoice,
     createGrouped: createGroupedInvoice,
     updateStatus: updateInvoiceStatus,

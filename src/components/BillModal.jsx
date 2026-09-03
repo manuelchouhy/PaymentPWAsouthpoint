@@ -1,24 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { AlertTriangle, FileText, X } from 'lucide-react'
 import { Avatar } from './Avatar'
 import { formatHours } from '../lib/format'
-import { CURRENCIES, getCurrencySymbol } from '../lib/currenciesData'
 import { contractStatus, daysRemaining } from '../lib/projectsData'
 import { api } from '../lib/api'
 import { useScrollLock } from '../lib/useScrollLock'
 
-// Fecha de hoy en formato ISO YYYY-MM-DD (para el default del date picker).
-function todayISO() {
-  const now = new Date()
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const dd = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${mm}-${dd}`
-}
-
 /**
- * Modal "Emitir factura" (FR-05). Reemplaza al modal de pago: en lugar de
- * registrar invoice + transaction juntos, EMITE una factura (status Invoiced).
+ * Modal "Emitir factura" (FR-05), modelo en HORAS (slice 04d). Emite una factura
+ * single-contractor (status Invoiced) sin monto/moneda: sólo el SP invoice number y
+ * notas. Las horas salen de las entries seleccionadas. Se unifica al camino agrupado
+ * (una fila invoice_contractors), así la factura es pagable en Payments.
  *
  * @param {{
  *   user: string,
@@ -26,14 +19,11 @@ function todayISO() {
  *   hours: number,
  *   remainingHours?: number,
  *   onClose: () => void,
- *   onConfirm: (data: { supplierInvoiceNumber: string, invoiceDate: string, totalAmount: number, notes: string }) => Promise<void>,
+ *   onConfirm: (data: { supplierInvoiceNumber: string, notes: string }) => Promise<void>,
  * }} props
  */
 export function BillModal({ user, entries, hours, remainingHours = 0, onClose, onConfirm }) {
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('')
-  const [invoiceDate, setInvoiceDate] = useState(todayISO)
-  const [currency, setCurrency] = useState('USD')
-  const [totalAmount, setTotalAmount] = useState('')
   const [notes, setNotes] = useState('')
   const [touched, setTouched] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -44,15 +34,7 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
   const firstFieldRef = useRef(null)
 
   const invoiceValid = supplierInvoiceNumber.trim().length > 0
-  const dateValid = Boolean(invoiceDate)
-  const amountNumber = Number(totalAmount)
-  const amountValid = totalAmount !== '' && Number.isFinite(amountNumber) && amountNumber > 0
-  const formValid = invoiceValid && dateValid && amountValid
-
-  const estimatedLabel = useMemo(
-    () => (amountValid ? `${getCurrencySymbol(currency)}${amountNumber.toFixed(2)}` : '—'),
-    [amountValid, amountNumber, currency],
-  )
+  const formValid = invoiceValid
 
   useScrollLock()
 
@@ -123,9 +105,6 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
     try {
       await onConfirm({
         supplierInvoiceNumber: supplierInvoiceNumber.trim(),
-        invoiceDate,
-        currency,
-        totalAmount: amountNumber,
         notes: notes.trim(),
       })
     } catch (error) {
@@ -181,8 +160,6 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
             <span className="modal__summary-meta">
               {entries.length}{' '}
               {entries.length === 1 ? 'entry selected' : 'entries selected'}
-              {' · '}
-              amount {estimatedLabel}
             </span>
           </div>
           <div className="modal__summary-hours">
@@ -226,7 +203,7 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
         <form className="modal__form" onSubmit={handleSubmit} noValidate>
           <div className="field">
             <label className="field__label" htmlFor="supplier-invoice-number">
-              SouthPointLabs invoice number
+              SP invoice number
               <span className="field__req">required</span>
             </label>
             <input
@@ -244,74 +221,10 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
             />
             {touched && !invoiceValid && (
               <span className="field__error">
-                Please enter the SouthPointLabs invoice number.
+                Please enter the SP invoice number.
               </span>
             )}
           </div>
-
-          <div className="modal__form-row">
-            <div className="field">
-              <label className="field__label" htmlFor="invoice-date">
-                Invoice date
-                <span className="field__req">required</span>
-              </label>
-              <input
-                id="invoice-date"
-                type="date"
-                className={`field__input${
-                  touched && !dateValid ? ' field__input--error' : ''
-                }`}
-                value={invoiceDate}
-                onChange={(event) => setInvoiceDate(event.target.value)}
-                aria-invalid={touched && !dateValid}
-              />
-            </div>
-
-            <div className="field">
-              <label className="field__label" htmlFor="bill-currency">Currency</label>
-              <select
-                id="bill-currency"
-                className="field__input"
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-              >
-                {CURRENCIES.map((c) => (
-                  <option key={c.code} value={c.code}>{c.code} – {c.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="field">
-              <label className="field__label" htmlFor="total-amount">
-                Total amount
-                <span className="field__req">required</span>
-              </label>
-              <input
-                id="total-amount"
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
-                className={`field__input${
-                  touched && !amountValid ? ' field__input--error' : ''
-                }`}
-                value={totalAmount}
-                onChange={(event) => setTotalAmount(event.target.value)}
-                // Sin esto, el navegador muestra su propio globo de validación
-                // nativo (en el idioma del SO/navegador, ej. español, aunque
-                // la UI esté en inglés) — la validación real es la nuestra,
-                // mostrada más abajo vía field__error.
-                onInvalid={(event) => event.preventDefault()}
-                placeholder="0.00"
-                aria-invalid={touched && !amountValid}
-              />
-            </div>
-          </div>
-          {touched && !amountValid && (
-            <span className="field__error">
-              Please enter a valid amount greater than zero.
-            </span>
-          )}
 
           <div className="field">
             <label className="field__label" htmlFor="invoice-notes">

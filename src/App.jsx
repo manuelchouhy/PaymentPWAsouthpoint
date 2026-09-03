@@ -391,25 +391,20 @@ export default function App() {
     }
   }
 
-  async function handleConfirmBill({
-    supplierInvoiceNumber,
-    invoiceDate,
-    currency,
-    totalAmount,
-    notes,
-  }) {
+  async function handleConfirmBill({ supplierInvoiceNumber, notes }) {
     const billedCount = selectedEntries.length
     const billedUser = selectedUsers[0]
     const billedHoursFmt = formatHours(selectedHours)
     const billedIds = selectedEntries.map((entry) => entry.id)
 
+    // Modelo en HORAS (slice 04d): factura single-contractor unificada al camino
+    // agrupado. Proyecto/cliente se toman de la primera entry seleccionada.
     const { invoice } = await api.invoices.create({
       supplierInvoiceNumber,
-      invoiceDate,
-      currency,
-      totalAmount,
       notes,
       userName: billedUser,
+      project: selectedEntries[0]?.project ?? null,
+      client: selectedEntries[0]?.client ?? null,
       entryIds: billedIds,
       createdBy: user?.email ?? null,
     })
@@ -420,7 +415,7 @@ export default function App() {
       action: 'invoice.create',
       resourceType: 'invoice',
       resourceId: invoice.id,
-      after: { supplierInvoiceNumber, invoiceDate, totalAmount, userName: billedUser, entryCount: billedIds.length },
+      after: { supplierInvoiceNumber, hours: selectedHours, userName: billedUser, entryCount: billedIds.length },
     })
     // Sumar la factura al estado local → las filas facturadas se marcan en vivo.
     setInvoices((prev) => [invoice, ...prev])

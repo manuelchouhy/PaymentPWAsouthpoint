@@ -1,13 +1,15 @@
 /**
- * Capa de datos del módulo Payments al contractor (FR-10).
- * Un payment se vincula a una invoice pagable: 'Invoiced' o 'Collected' (flujo
- * Billing → Payments; Collections no es parte del flujo por ahora).
+ * Capa de datos del módulo Payments al contractor (FR-10), modelo AGRUPADO en HORAS
+ * (slice 04d). Una factura `Invoiced` agrupa a varios contractors (invoice_contractors);
+ * se le paga a CADA UNO por separado bajo la misma factura, y la factura pasa a `Paid`
+ * recién cuando todos están pagados. Sin plata: el pago se mide en horas (entry_ids).
  *
  * @typedef {Object} ContractorPayment
  * @property {string|number} id
  * @property {string|number} invoiceId
- * @property {number} amountPaid
- * @property {string} paymentDate          ISO YYYY-MM-DD
+ * @property {Array<string>} entryIds     horas cubiertas (overage/sp_internal); NULL→[] bajo factura
+ * @property {?string} userName           contractor pagado
+ * @property {string} paymentDate         ISO YYYY-MM-DD
  * @property {?string} transferReference
  * @property {?string} bankMethod
  * @property {?string} notes
@@ -17,8 +19,8 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabase'
-import { updateInvoiceStatus } from './data'
 import { paidEntryIdsFrom } from './paymentsGrouping'
+import { markDemoInvoiceContractorPaid } from './data'
 
 export const BANK_METHODS = ['BBVA', 'Itaú', 'Santander', 'Other']
 
@@ -107,8 +109,10 @@ const MOCK_PAYMENTS = [
   {
     id: 'pay-1',
     invoiceId: 'inv-mock-2',
-    amountPaid: 800,
+    entryIds: [],
+    userName: null,
     paymentDate: '2026-05-25',
+    supplierInvoiceNumber: 'SUP-4471',
     transferReference: 'TRX-77120',
     bankMethod: 'Itaú',
     notes: null,
@@ -124,13 +128,14 @@ function rowToPayment(row) {
   return {
     id: row.id,
     invoiceId: row.invoice_id,
-    // Pago de overage: horas que cubre (entry_ids) y a quién se le pagó (user_name).
-    // Para pagos por factura quedan vacíos (el contractor sale de la factura).
+    // Horas que cubre el pago (entry_ids) y a quién se le pagó (user_name). En un pago
+    // por-contractor bajo factura, entry_ids queda NULL (las horas viven en
+    // invoices.entry_ids / invoice_contractors); en overage/sp_internal trae las horas.
     entryIds: (row.entry_ids ?? []).map(String),
     userName: row.user_name ?? null,
-    amountPaid: Number(row.amount_paid),
-    currency: row.currency ?? 'USD',
-    exchangeRate: row.exchange_rate != null ? Number(row.exchange_rate) : null,
+    // El supplier invoice number (contractor → SouthPoint) NO vive en payments: se
+    // guarda en la fila invoice_contractors del pago (0040). La UI lo toma de ahí.
+    // Modelo en HORAS: sin amount_paid/currency/exchange_rate (se dropean en 0041).
     paymentDate: row.payment_date,
     transferReference: row.transfer_reference ?? null,
     bankMethod: row.bank_method ?? null,
@@ -141,9 +146,10 @@ function rowToPayment(row) {
   }
 }
 
-// Columnas de un pago (se agregan entry_ids/user_name de los pagos de overage).
+// Columnas de un pago. Sin plata (amount_paid/currency/exchange_rate): el modelo es en
+// horas. El supplier# vive en invoice_contractors, no acá.
 const PAYMENT_COLUMNS =
-  'id, invoice_id, entry_ids, user_name, amount_paid, currency, exchange_rate, payment_date, transfer_reference, bank_method, notes, back_dated, created_at, created_by'
+  'id, invoice_id, entry_ids, user_name, payment_date, transfer_reference, bank_method, notes, back_dated, created_at, created_by'
 
 /** @returns {Promise<ContractorPayment[]>} */
 export async function getPayments() {
@@ -175,33 +181,41 @@ export async function getPaymentByInvoice(invoiceId) {
 }
 
 /**
- * Registra un pago al contractor. VALIDACIÓN DURA: la invoice debe estar en
- * 'Invoiced' o 'Collected' (flujo Billing → Payments: una factura emitida en
- * Billing se paga directo, Collections no es parte del flujo por ahora). Al
- * confirmar, avanza la invoice a 'Paid' (+ historial) desde su estado actual.
+ * Registra el pago de UN contractor bajo una factura agrupada (modelo 04d, en horas).
+ * Cada contractor de la factura se paga por separado: se carga su supplier invoice
+ * number + fecha (+ operativos) y la RPC `register_contractor_payment` (0040) inserta
+ * el pago, enlaza la fila `invoice_contractors` y avanza la factura a `Paid` de forma
+ * ATÓMICA sólo cuando TODOS sus contractors están pagados. Sin monto/moneda.
  *
- * @param {{ id, status, totalAmount }} invoice
- * @param {{ amountPaid:number, paymentDate:string, transferReference?:string, bankMethod?:string, notes?:string }} payload
+ * Manejo de CARRERA: si la fila ya fue pagada, o la factura ya no está `Invoiced`
+ * (otro usuario pagó al último contractor primero), la RPC tira un error legible y acá
+ * se mapea a un `code` estable ('already_paid' / 'not_payable' / 'stale') para que la
+ * UI muestre el aviso y ofrezca recargar.
+ *
+ * @param {{ id:string|number, invoiceId:string|number, contractor:string, entryIds:Array<string|number>, hours:number }} invoiceContractor
+ *   la fila `invoice_contractors` a pagar (viene de getInvoiceContractors).
+ * @param {{ supplierInvoiceNumber:string, paymentDate:string, transferReference?:string, bankMethod?:string, notes?:string }} payload
  * @param {?string} createdBy
  * @returns {Promise<{ payment: ContractorPayment }>}
  */
-export async function createPayment(invoice, payload, createdBy) {
-  if (invoice.status !== 'Invoiced' && invoice.status !== 'Collected') {
-    const err = new Error('Invoice must be Invoiced or Collected before payment')
-    err.code = 'not_collected'
+export async function createPayment(invoiceContractor, payload, createdBy) {
+  const supplier = (payload.supplierInvoiceNumber ?? '').trim()
+  if (!supplier) {
+    const err = new Error('Supplier invoice number is required.')
+    err.code = 'validation'
     throw err
   }
-
   const backDated = payload.paymentDate < todayISO()
 
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 300))
+    // Demo: el pago cubre las horas del contractor (entry_ids de su fila). El avance a
+    // Paid lo decide la UI recomputando invoiceCompletion sobre los pagos locales.
     const payment = {
       id: `pay-demo-${Date.now()}`,
-      invoiceId: invoice.id,
-      amountPaid: Number(payload.amountPaid),
-      currency: invoice.currency ?? 'USD',
-      exchangeRate: payload.exchangeRate ?? null,
+      invoiceId: invoiceContractor.invoiceId,
+      entryIds: (invoiceContractor.entryIds ?? []).map(String),
+      userName: invoiceContractor.contractor,
       paymentDate: payload.paymentDate,
       transferReference: payload.transferReference || null,
       bankMethod: payload.bankMethod || null,
@@ -211,44 +225,56 @@ export async function createPayment(invoice, payload, createdBy) {
       createdBy: createdBy || null,
     }
     demoPayments = [payment, ...demoPayments]
-    await updateInvoiceStatus({
-      invoiceId: invoice.id,
-      fromStatus: invoice.status,
-      toStatus: 'Paid',
-      changedBy: createdBy ?? null,
-      note: 'Contractor payment registered',
+    // Persistir el pago en el store demo de invoice_contractors (supplier# + fecha +
+    // link), como haría la RPC en prod, para que sobreviva a una recarga de Payments.
+    markDemoInvoiceContractorPaid(invoiceContractor.id, {
+      paymentId: payment.id,
+      supplierInvoiceNumber: supplier,
+      paymentDate: payload.paymentDate,
     })
     return { payment }
   }
 
-  // Registro ATÓMICO en el servidor (función register_contractor_payment):
-  // valida que la factura esté en 'Invoiced' o 'Collected' (migración 0036),
-  // inserta el pago, avanza la factura a 'Paid' y registra el historial, todo en
-  // una sola transacción. El índice único payments_invoice_id_unique impide un
-  // segundo pago para la misma factura.
+  // Registro ATÓMICO en el servidor (register_contractor_payment, 0040): inserta el
+  // pago del contractor, completa su fila invoice_contractors (supplier# + fecha +
+  // payment_id) y flipea la factura a Paid sólo si NINGUNA fila hija queda sin pagar.
   const { data, error } = await supabase.rpc('register_contractor_payment', {
-    p_invoice_id: invoice.id,
-    p_amount_paid: Number(payload.amountPaid),
+    p_invoice_contractor_id: invoiceContractor.id,
+    p_supplier_invoice_number: supplier,
     p_payment_date: payload.paymentDate,
     p_transfer_reference: payload.transferReference || null,
     p_bank_method: payload.bankMethod || null,
     p_notes: payload.notes || null,
     p_back_dated: backDated,
     p_created_by: createdBy || null,
-    p_exchange_rate: payload.exchangeRate ?? null,
   })
   if (error) {
-    if (error.code === '23505') {
-      const err = new Error('A payment is already registered for this invoice.')
-      err.code = 'duplicate'
+    const msg = error.message ?? ''
+    // Carreras y estados: se mapean por el texto de la excepción de la RPC (0040), no
+    // por SQLSTATE genérico, para dar un aviso claro + opción de recargar.
+    if (msg.includes('contractor_already_paid')) {
+      const err = new Error('This contractor was already paid. Refresh to see the latest status.')
+      err.code = 'already_paid'
       throw err
     }
-    if (error.message?.includes('not_collected')) {
-      const err = new Error('Invoice must be Invoiced or Collected before payment')
-      err.code = 'not_collected'
+    if (msg.includes('invoice_not_payable')) {
+      const err = new Error(
+        'This invoice is no longer payable (its status changed). Refresh and try again.',
+      )
+      err.code = 'not_payable'
       throw err
     }
-    throw new Error(error.message)
+    if (msg.includes('invoice_contractor_not_found') || msg.includes('invoice_not_found')) {
+      const err = new Error('This invoice or contractor no longer exists. Refresh the page.')
+      err.code = 'stale'
+      throw err
+    }
+    if (msg.includes('supplier invoice number is required')) {
+      const err = new Error('Supplier invoice number is required.')
+      err.code = 'validation'
+      throw err
+    }
+    throw new Error(msg)
   }
 
   const row = Array.isArray(data) ? data[0] : data
@@ -267,7 +293,10 @@ export async function createPayment(invoice, payload, createdBy) {
  * SQLSTATE propio 'OV001' si algún entry_id ya está cubierto; acá se traduce a un
  * error 'overlap' legible. En demo se replica el chequeo (best-effort, sólo pagos).
  *
- * @param {{ userName:string, entryIds:Array<string|number>, amountPaid:number, paymentDate:string, transferReference?:string, bankMethod?:string, notes?:string, exchangeRate?:?number, currency?:string }} payload
+ * Modelo en HORAS (slice 05): el pago overage/sp_internal queda definido por su
+ * contractor + entry_ids (horas), sin monto/moneda.
+ *
+ * @param {{ userName:string, entryIds:Array<string|number>, paymentDate:string, transferReference?:string, bankMethod?:string, notes?:string }} payload
  * @param {?string} createdBy
  * @returns {Promise<{ payment: ContractorPayment }>}
  */
@@ -298,9 +327,6 @@ export async function createOveragePayment(payload, createdBy) {
       invoiceId: null,
       entryIds: entryIds.map(String),
       userName: payload.userName,
-      amountPaid: Number(payload.amountPaid),
-      currency: payload.currency ?? 'USD',
-      exchangeRate: payload.exchangeRate ?? null,
       paymentDate: payload.paymentDate,
       transferReference: payload.transferReference || null,
       bankMethod: payload.bankMethod || null,
@@ -319,9 +345,6 @@ export async function createOveragePayment(payload, createdBy) {
       invoice_id: null,
       entry_ids: entryIds,
       user_name: payload.userName,
-      amount_paid: Number(payload.amountPaid),
-      currency: payload.currency ?? 'USD',
-      exchange_rate: payload.exchangeRate ?? null,
       payment_date: payload.paymentDate,
       transfer_reference: payload.transferReference || null,
       bank_method: payload.bankMethod || null,

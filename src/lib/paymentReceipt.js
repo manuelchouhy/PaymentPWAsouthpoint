@@ -1,33 +1,29 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { formatDate, formatDateTime } from './format'
-import { getCurrencySymbol } from './currenciesData'
-
-function fmtAmount(value) {
-  return Number(value || 0).toLocaleString('es-AR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
+import { formatDate, formatDateTime, formatHours } from './format'
 
 /**
- * Genera y descarga un PDF de comprobante de pago al contractor (FR-10).
+ * Genera y descarga un PDF de comprobante de pago al contractor (FR-10), modelo en
+ * HORAS (slice 04d): un pago cubre a UN contractor bajo una factura agrupada. Sin
+ * monto/moneda: el detalle es en horas.
  *
- * @param {{ invoice: object, payment: object, generatedBy?: string }} data
+ * @param {{
+ *   invoice: object,                 // factura agrupada (spInvoiceNumber, project, client, weekStart)
+ *   invoiceContractor?: object,      // fila del contractor pagado (contractor, hours, supplierInvoiceNumber)
+ *   payment: object,                 // el pago (paymentDate, bankMethod, transferReference, notes, backDated)
+ *   generatedBy?: string,
+ * }} data
  */
-export function downloadPaymentReceipt({ invoice, payment, generatedBy }) {
+export function downloadPaymentReceipt({ invoice, invoiceContractor, payment, generatedBy }) {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
   const accent = [124, 58, 237] // violeta
 
-  // Moneda del pago (no siempre USD): símbolo para los montos y, si no es USD, el
-  // tipo de cambio con el que se convierte a USD.
-  const currency = payment.currency || 'USD'
-  const sym = getCurrencySymbol(currency)
-  // Sólo se imprime la conversión a USD si el tipo de cambio es un número > 0
-  // (dato válido); un 0 o valor no finito daría "$ 0.00"/"NaN" engañosos.
-  const rate = Number(payment.exchangeRate)
-  const hasRate = currency !== 'USD' && Number.isFinite(rate) && rate > 0
+  const ic = invoiceContractor ?? {}
+  const contractor = ic.contractor ?? payment.userName ?? '—'
+  const spNumber = invoice.spInvoiceNumber ?? invoice.supplierInvoiceNumber ?? '—'
+  const supplierNumber = ic.supplierInvoiceNumber ?? '—'
+  const hours = Number(ic.hours) || 0
 
   // --- Header ---
   doc.setFillColor(10, 10, 10)
@@ -49,9 +45,9 @@ export function downloadPaymentReceipt({ invoice, payment, generatedBy }) {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(10)
   doc.setTextColor(110, 110, 115)
-  doc.text(`Invoice ${invoice.supplierInvoiceNumber}`, 40, 134)
+  doc.text(`SP invoice ${spNumber}`, 40, 134)
 
-  // --- Tabla de detalle ---
+  // --- Tabla de detalle (en horas, sin plata) ---
   autoTable(doc, {
     startY: 156,
     theme: 'plain',
@@ -61,16 +57,12 @@ export function downloadPaymentReceipt({ invoice, payment, generatedBy }) {
       1: { textColor: [20, 20, 20] },
     },
     body: [
-      ['Contractor', invoice.userName],
-      ['Supplier invoice', invoice.supplierInvoiceNumber],
-      ['Invoice date', formatDate(invoice.invoiceDate)],
-      ['Amount paid', `${sym} ${fmtAmount(payment.amountPaid)} ${currency}`],
-      ...(hasRate
-        ? [
-            ['Exchange rate', `${rate} (${currency} → USD)`],
-            ['Amount paid (USD)', `$ ${fmtAmount(Number(payment.amountPaid) * rate)}`],
-          ]
-        : []),
+      ['Contractor', contractor],
+      ['SP invoice', spNumber],
+      ['Supplier invoice', supplierNumber],
+      ['Project', invoice.project || '—'],
+      ['Week', invoice.weekStart ? formatDate(invoice.weekStart) : '—'],
+      ['Hours paid', `${formatHours(hours)} h`],
       ['Payment date', formatDate(payment.paymentDate) + (payment.backDated ? '  (back-dated)' : '')],
       ['Bank / method', payment.bankMethod || '—'],
       ['Transfer reference', payment.transferReference || '—'],
@@ -78,14 +70,14 @@ export function downloadPaymentReceipt({ invoice, payment, generatedBy }) {
     ],
   })
 
-  // --- Monto destacado ---
+  // --- Total en horas ---
   const afterTable = doc.lastAutoTable.finalY + 24
   doc.setDrawColor(230, 230, 232)
   doc.line(40, afterTable, pageW - 40, afterTable)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(13)
   doc.setTextColor(accent[0], accent[1], accent[2])
-  doc.text(`TOTAL PAID:  ${sym} ${fmtAmount(payment.amountPaid)} ${currency}`, 40, afterTable + 28)
+  doc.text(`TOTAL PAID:  ${formatHours(hours)} h`, 40, afterTable + 28)
 
   // --- Footer ---
   doc.setFont('helvetica', 'normal')
@@ -97,6 +89,7 @@ export function downloadPaymentReceipt({ invoice, payment, generatedBy }) {
     doc.internal.pageSize.getHeight() - 40,
   )
 
-  const safeNum = String(invoice.supplierInvoiceNumber).replace(/[^\w-]/g, '_')
-  doc.save(`recibo-pago-${safeNum}.pdf`)
+  const safeNum = String(spNumber).replace(/[^\w-]/g, '_')
+  const safeName = String(contractor).replace(/[^\w-]/g, '_')
+  doc.save(`recibo-pago-${safeNum}-${safeName}.pdf`)
 }

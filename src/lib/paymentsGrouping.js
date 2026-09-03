@@ -93,13 +93,13 @@ export function invoicelessPaidRows(payments = [], entries = []) {
     allocById.set(String(e.id), e.allocation)
     hoursById.set(String(e.id), Number(e.hours) || 0)
   }
+  // Modelo en HORAS (slice 05): sin amountPaid/currency. El pago invoice-less se
+  // muestra por sus horas (suma de las entries cubiertas) y su fecha.
   const toRow = (p) => ({
     id: p.id,
     user: p.userName,
     hours: (p.entryIds ?? []).reduce((sum, id) => sum + (hoursById.get(String(id)) || 0), 0),
     entryCount: p.entryIds?.length ?? 0,
-    amountPaid: p.amountPaid,
-    currency: p.currency || 'USD',
     paymentDate: p.paymentDate,
   })
   const byDateDesc = (a, b) => (b.paymentDate || '').localeCompare(a.paymentDate || '')

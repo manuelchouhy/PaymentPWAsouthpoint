@@ -120,13 +120,17 @@ export function EntriesCards({
                   <div className="card__payment-row">
                     <span className="card__payment-label">Invoice</span>
                     <span className="card__payment-value">
-                      {invoice.supplierInvoiceNumber}
+                      {invoice.spInvoiceNumber ?? invoice.supplierInvoiceNumber ?? '—'}
                     </span>
                   </div>
                   <div className="card__payment-row">
-                    <span className="card__payment-label">Date</span>
+                    <span className="card__payment-label">Issued</span>
                     <span className="card__payment-value">
-                      {formatDate(invoice.invoiceDate)}
+                      {invoice.invoiceDate
+                        ? formatDate(invoice.invoiceDate)
+                        : invoice.createdAt
+                          ? formatDate(String(invoice.createdAt).slice(0, 10))
+                          : '—'}
                     </span>
                   </div>
                 </div>

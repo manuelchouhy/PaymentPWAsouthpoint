@@ -53,15 +53,20 @@ Deno.serve(async (req) => {
     const recipients: string[] = settings.email_recipients ?? [];
 
     // Facturas todavía no cobradas (status 'Invoiced'; Collected/Paid ya están).
+    // Modelo AGRUPADO en horas (slice 04d): sin monto/moneda ni user_name único. Base
+    // de fecha: invoice_date si existe, si no created_at (las agrupadas no cargan
+    // invoice_date). (Collections está fuera de uso; se deja el source money-free.)
     const { data: invoices, error } = await supabase
       .from("invoices")
-      .select("id, supplier_invoice_number, user_name, total_amount, invoice_date, payment_terms_days")
+      .select("id, sp_invoice_number, supplier_invoice_number, invoice_date, created_at, payment_terms_days")
       .eq("status", "Invoiced");
     if (error) return json({ ok: false, error: error.message }, 200);
 
     const affected: any[] = [];
     for (const inv of invoices ?? []) {
-      const days = daysSince(inv.invoice_date);
+      const issue = inv.invoice_date ?? (inv.created_at ? String(inv.created_at).slice(0, 10) : null);
+      if (!issue) continue;
+      const days = daysSince(issue);
       const terms = inv.payment_terms_days ?? 30;
       let level: "warning" | "overdue" | null = null;
       if (days > terms) level = "overdue";
@@ -69,9 +74,7 @@ Deno.serve(async (req) => {
       if (!level) continue;
       affected.push({
         level,
-        invoice: inv.supplier_invoice_number,
-        contractor: inv.user_name,
-        amount: Number(inv.total_amount),
+        invoice: inv.sp_invoice_number ?? inv.supplier_invoice_number ?? `#${inv.id}`,
         days,
         terms,
       });
@@ -86,7 +89,7 @@ Deno.serve(async (req) => {
         .sort((a, b) => b.days - a.days)
         .map(
           (a) =>
-            `- [${a.level.toUpperCase()}] ${a.invoice} · ${a.contractor} · $${a.amount.toFixed(2)} · ${a.days} días (plazo ${a.terms})`,
+            `- [${a.level.toUpperCase()}] ${a.invoice} · ${a.days} días (plazo ${a.terms})`,
         );
       const body = [
         `Facturas que necesitan atención: ${affected.length} (${overdue} overdue, ${warning} warning).`,

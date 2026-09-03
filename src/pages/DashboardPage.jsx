@@ -224,8 +224,12 @@ export function DashboardPage() {
       .filter((e) => isBillablePending(e, invoiceByEntryId))
       .reduce((sum, e) => sum + e.hours, 0)
 
+    // Las facturas agrupadas (modelo en horas) no cargan invoice_date; se usa la fecha
+    // de emisión (created_at) como fecha de la factura para el KPI/sparkline.
+    const issuedDateOf = (i) =>
+      i.invoiceDate ?? (i.createdAt ? String(i.createdAt).slice(0, 10) : '')
     const invoicesThisMonth = data.invoices.filter((i) =>
-      (i.invoiceDate ?? '').startsWith(thisMonth),
+      issuedDateOf(i).startsWith(thisMonth),
     ).length
 
     const collectionsPending = data.invoices.filter((i) => i.status === 'Invoiced').length
@@ -250,7 +254,14 @@ export function DashboardPage() {
     const unbilled = data.entries.filter((e) => isBillablePending(e, invoiceByEntryId))
     return {
       pendingHours: last7DaysSeries(unbilled, 'date', 'hours'),
-      invoicesThisMonth: last7DaysSeries(data.invoices, 'invoiceDate'),
+      // issuedDate = invoice_date o, si falta (facturas agrupadas), la fecha de creación.
+      invoicesThisMonth: last7DaysSeries(
+        data.invoices.map((i) => ({
+          ...i,
+          issuedDate: i.invoiceDate ?? (i.createdAt ? String(i.createdAt).slice(0, 10) : null),
+        })),
+        'issuedDate',
+      ),
       collectionsPending: last7DaysSeries(data.collections, 'collectionDate'),
       paymentsDueThisWeek: last7DaysSeries(data.payments, 'paymentDate'),
     }

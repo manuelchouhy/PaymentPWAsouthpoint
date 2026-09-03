@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { formatDate, formatDateTime } from './format'
+import { formatDate, formatDateTime, formatHours } from './format'
 
 function fmtAmount(value) {
   return Number(value || 0).toLocaleString('es-AR', {
@@ -66,8 +66,9 @@ export function downloadTracePdf({ trace, collections = [], generatedBy }) {
       'Invoiced',
       formatDate(trace.invoiceDate),
       [
-        `Invoice: ${trace.supplierInvoiceNumber}`,
-        `Amount: $${fmtAmount(trace.invoiceAmount)}`,
+        trace.spInvoiceNumber ? `SP invoice: ${trace.spInvoiceNumber}` : null,
+        trace.invoiceContractor ? `Contractor: ${trace.invoiceContractor}` : null,
+        trace.contractorHours != null ? `${formatHours(trace.contractorHours)} h` : null,
         trace.invoicedBy ? `By: ${trace.invoicedBy}` : null,
       ]
         .filter(Boolean)
@@ -95,7 +96,7 @@ export function downloadTracePdf({ trace, collections = [], generatedBy }) {
       'Paid to Contractor',
       formatDate(trace.paymentDate),
       [
-        `$${fmtAmount(trace.amountPaid)}`,
+        trace.supplierInvoiceNumber ? `Supplier invoice: ${trace.supplierInvoiceNumber}` : null,
         trace.bankMethod ? `Method: ${trace.bankMethod}` : null,
         trace.transferReference ? `Ref: ${trace.transferReference}` : null,
         trace.paidBy ? `By: ${trace.paidBy}` : null,

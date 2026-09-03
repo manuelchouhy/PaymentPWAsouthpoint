@@ -61,17 +61,22 @@ Deno.serve(async (req) => {
     const recipients: string[] = settings.email_recipients ?? [];
 
     // Invoices Invoiced (pendientes de pago al contractor; al pagar pasan a Paid).
+    // Modelo AGRUPADO en horas (slice 04d): la factura ya no lleva monto/moneda ni un
+    // único contractor (user_name). El deadline sigue por factura; se identifica por el
+    // SP invoice number. La fecha base es invoice_date si existe, si no created_at (las
+    // facturas agrupadas no cargan invoice_date).
     const { data: invoices, error } = await supabase
       .from("invoices")
-      .select("id, supplier_invoice_number, user_name, total_amount, invoice_date, payment_terms_days")
+      .select("id, sp_invoice_number, supplier_invoice_number, invoice_date, created_at, payment_terms_days")
       .eq("status", "Invoiced");
     if (error) return json({ ok: false, error: error.message }, 200);
 
     const affected: any[] = [];
     for (const inv of invoices ?? []) {
-      // Sin fecha de factura no hay deadline calculable → se omite.
-      if (!inv.invoice_date) continue;
-      const dueDate = addDaysISO(inv.invoice_date, inv.payment_terms_days ?? 30);
+      const issue = inv.invoice_date ?? (inv.created_at ? String(inv.created_at).slice(0, 10) : null);
+      // Sin fecha base no hay deadline calculable → se omite.
+      if (!issue) continue;
+      const dueDate = addDaysISO(issue, inv.payment_terms_days ?? 30);
       const days = daysUntil(dueDate);
       let level: "warning" | "overdue" | null = null;
       if (days < 0) level = "overdue";
@@ -79,9 +84,10 @@ Deno.serve(async (req) => {
       if (!level) continue;
       affected.push({
         level,
-        invoice: inv.supplier_invoice_number,
-        contractor: inv.user_name,
-        amount: Number(inv.total_amount),
+        // sp_invoice_number es el número de la factura agrupada; para filas legacy que
+        // sólo tengan supplier_invoice_number se cae a ése, y a `#id` si faltan ambos,
+        // para no imprimir "null" en la alerta.
+        invoice: inv.sp_invoice_number ?? inv.supplier_invoice_number ?? `#${inv.id}`,
         days,
         dueDate,
       });
@@ -96,7 +102,7 @@ Deno.serve(async (req) => {
         .sort((a, b) => a.days - b.days)
         .map(
           (a) =>
-            `- [${a.level.toUpperCase()}] ${a.invoice} · ${a.contractor} · $${a.amount.toFixed(2)} · ` +
+            `- [${a.level.toUpperCase()}] ${a.invoice} · ` +
             (a.days < 0 ? `${Math.abs(a.days)} días vencido` : `vence en ${a.days} días`),
         );
       const body = [

@@ -67,6 +67,22 @@ test('invoiceCompletion: entryIds coercionan a String (numérico vs string mezcl
   assert.equal(out.status, 'Paid')
 })
 
+test('invoiceCompletion: paymentId marca al contractor pagado aunque el pago no traiga entry_ids', () => {
+  // El pago POR FACTURA lleva entry_ids NULL/[], así que la cobertura por horas NO lo
+  // detecta; el link payment_id de la fila invoice_contractors sí. Se preserva en la salida.
+  const contractors = [
+    { contractor: 'Ana', entryIds: [1, 2], hours: 8, paymentId: 'pay-9', supplierInvoiceNumber: 'SUP-1' },
+    { contractor: 'Bob', entryIds: [3], hours: 5 },
+  ]
+  const out = invoiceCompletion(contractors, []) // sin pagos con entry_ids
+  const ana = out.contractors.find((c) => c.contractor === 'Ana')
+  assert.equal(ana.paid, true)
+  assert.equal(ana.supplierInvoiceNumber, 'SUP-1') // campos originales preservados
+  assert.equal(out.contractors.find((c) => c.contractor === 'Bob').paid, false)
+  assert.equal(out.status, 'partial')
+  assert.equal(out.paidCount, 1)
+})
+
 test('invoiceCompletion: contractor sin entryIds se EXCLUYE (no cuenta ni bloquea Paid)', () => {
   // Una fila anómala sin entry_ids no debe impedir que la factura llegue a Paid cuando
   // todo el trabajo real está pago. Se descarta de la lista y de los conteos.

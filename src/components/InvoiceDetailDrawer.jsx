@@ -10,12 +10,6 @@ import { useScrollLock } from '../lib/useScrollLock'
 
 const ENTRY_SCROLL_THRESHOLD = 20
 
-function formatAmount(value) {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return '—'
-  return n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
 /**
  * Drawer lateral con el detalle de una factura (FR-06). Se abre al clickear una
  * fila con Billing Status != Pending. Permite avanzar el estado
@@ -31,7 +25,7 @@ function formatAmount(value) {
 export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus }) {
   const [history, setHistory] = useState([])
   const [loadingHistory, setLoadingHistory] = useState(true)
-  const [payment, setPayment] = useState(null)
+  const [contractors, setContractors] = useState([])
   const [changing, setChanging] = useState(false)
   const [error, setError] = useState('')
   const drawerRef = useRef(null)
@@ -55,10 +49,12 @@ export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus 
       .finally(() => {
         if (!cancelled) setLoadingHistory(false)
       })
-    // Pago al contractor (si la factura ya está Paid).
-    api.payments.getByInvoice(invoice.id)
-      .then((p) => !cancelled && setPayment(p))
-      .catch(() => !cancelled && setPayment(null))
+    // Contractors de la factura (modelo agrupado): cada uno con sus horas y, si ya se
+    // pagó, su supplier invoice number + fecha. Una factura tiene N pagos (uno por
+    // contractor), así que se listan TODOS, no un único pago.
+    api.invoices.listContractors([invoice.id])
+      .then((rows) => !cancelled && setContractors(rows))
+      .catch(() => !cancelled && setContractors([]))
     return () => {
       cancelled = true
     }
@@ -129,7 +125,7 @@ export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus 
           <div>
             <span className="drawer__kicker">Invoice</span>
             <h2 className="drawer__title" id="invoice-drawer-title">
-              {invoice.supplierInvoiceNumber}
+              {invoice.spInvoiceNumber ?? invoice.supplierInvoiceNumber ?? '—'}
             </h2>
           </div>
           <button
@@ -152,17 +148,19 @@ export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus 
         </div>
 
         <dl className="drawer__facts">
-          <div className="drawer__fact">
-            <dt>Invoice date</dt>
-            <dd>{formatDate(invoice.invoiceDate)}</dd>
-          </div>
-          <div className="drawer__fact">
-            <dt>Total amount</dt>
-            <dd className="drawer__amount">${formatAmount(invoice.totalAmount)}</dd>
-          </div>
+          {invoice.project && (
+            <div className="drawer__fact">
+              <dt>Project</dt>
+              <dd>{invoice.project}</dd>
+            </div>
+          )}
           <div className="drawer__fact">
             <dt>Hours</dt>
             <dd>{formatHours(totalHours)} h</dd>
+          </div>
+          <div className="drawer__fact">
+            <dt>Issued</dt>
+            <dd>{invoice.createdAt ? formatDate(String(invoice.createdAt).slice(0, 10)) : '—'}</dd>
           </div>
           <div className="drawer__fact">
             <dt>Issued by</dt>
@@ -201,30 +199,30 @@ export function InvoiceDetailDrawer({ invoice, entries, onClose, onChangeStatus 
           </div>
         </div>
 
-        {payment && (
+        {contractors.length > 0 && (
           <div className="drawer__section">
-            <span className="drawer__section-label">Contractor payment</span>
-            <dl className="drawer__facts">
-              <div className="drawer__fact">
-                <dt>Amount paid</dt>
-                <dd className="drawer__amount">${formatAmount(payment.amountPaid)}</dd>
-              </div>
-              <div className="drawer__fact">
-                <dt>Payment date</dt>
-                <dd>
-                  {formatDate(payment.paymentDate)}
-                  {payment.backDated ? ' (back-dated)' : ''}
-                </dd>
-              </div>
-              <div className="drawer__fact">
-                <dt>Bank / method</dt>
-                <dd>{payment.bankMethod || '—'}</dd>
-              </div>
-              <div className="drawer__fact">
-                <dt>Reference</dt>
-                <dd>{payment.transferReference || '—'}</dd>
-              </div>
-            </dl>
+            <span className="drawer__section-label">
+              Contractors · {contractors.filter((c) => c.paymentId != null).length}/
+              {contractors.length} paid
+            </span>
+            <div className="drawer__entries">
+              {contractors.map((c) => (
+                <div key={c.id} className="drawer__entry">
+                  <span className="drawer__entry-task" title={c.contractor}>
+                    {c.contractor}
+                    {c.paymentId != null && c.supplierInvoiceNumber
+                      ? ` · ${c.supplierInvoiceNumber}`
+                      : ''}
+                  </span>
+                  <span className="drawer__entry-date">
+                    {c.paymentId != null
+                      ? `Paid${c.paymentDate ? ` ${formatDate(c.paymentDate)}` : ''}`
+                      : 'Pending'}
+                  </span>
+                  <span className="drawer__entry-hours">{formatHours(c.hours)} h</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
