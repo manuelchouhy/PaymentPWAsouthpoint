@@ -201,7 +201,7 @@ export function formatDateTime(iso = '') {
  *     semanas realmente facturadas `weekCount` son MENOS que las que abarca el span)
  *     se agrega "(N weeks)" para aclarar que faltan semanas del medio. En un rango
  *     contiguo el "WEEK a – b" ya dice cuántas son, así que no se agrega ruido.
- *     Cruce de año (raro): "WEEK a · Yа – WEEK b · Yb".
+ *     Cruce de año (raro): "WEEK a · Ya – WEEK b · Yb".
  * Ambos extremos son domingos que identifican la semana (ver sundayWeek). Cadena
  * vacía si no hay `weekStart` (o es inválido); si `weekEnd` es inválido, degrada a la
  * forma de una sola semana.
@@ -223,8 +223,13 @@ export function formatInvoicePeriod(weekStart, weekEnd = null, weekCount = null)
     yS === yE ? `WEEK ${wS} – ${wE} · ${yE}` : `WEEK ${wS} · ${yS} – WEEK ${wE} · ${yE}`
   // Semanas que abarca el span (domingos inclusive): (fin - inicio)/7 + 1. El "(N weeks)"
   // sólo aporta cuando faltan semanas del medio (weekCount < span) — en contiguo el rango
-  // ya es inequívoco.
-  const spanWeeks = Math.round((Date.parse(weekEnd) - Date.parse(weekStart)) / (7 * 86400000)) + 1
+  // ya es inequívoco. Se parsea en UTC con el mismo criterio que el resto del módulo
+  // (slice a YYYY-MM-DD + Date.UTC), no con Date.parse, para no mezclar zonas horarias.
+  const utcDay = (iso) => {
+    const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
+    return Date.UTC(y, m - 1, d)
+  }
+  const spanWeeks = Math.round((utcDay(weekEnd) - utcDay(weekStart)) / (7 * 86400000)) + 1
   return weekCount && weekCount > 1 && weekCount < spanWeeks ? `${range} (${weekCount} weeks)` : range
 }
 

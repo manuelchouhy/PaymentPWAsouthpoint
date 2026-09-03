@@ -321,16 +321,23 @@ export function PaymentsPage() {
   // Semanas realmente facturadas por una factura: las horas de todos sus contractors
   // → fechas → semanas distintas. 1 en una factura de una sola semana. Se usa para el
   // "(N weeks)" del período (grilla y receipt), así que vive en un solo lugar.
-  // Depende de que las horas estén en el `entries` cargado (un entry_id ausente se
-  // ignora → sub-conteo). Es la MISMA asunción que el resto de Payments basado en
-  // entries (overage/sp_internal): getTimeEntries no pagina, así que si algún día se
-  // superan las ~1000 filas hay que paginarlo para toda la página, no sólo acá.
-  const invoiceWeekCount = (invoiceId) =>
-    distinctWeekCount(
-      (contractorsByInvoice.get(invoiceId) ?? []).flatMap((c) =>
-        (c.entryIds ?? []).map((id) => entryDateById.get(String(id))),
-      ),
-    )
+  //
+  // Devuelve null si ALGÚN entry_id de la factura no está en el `entries` cargado: sin
+  // los datos completos no afirmamos un conteo, porque un sub-conteo haría que
+  // formatInvoicePeriod marque como "no contiguo" (y agregue un "(N weeks)" erróneo) a
+  // una factura que en realidad sí lo es. Con null, el período degrada al rango pelado
+  // (seguro). getTimeEntries no pagina (cap ~1000, misma asunción que overage/
+  // sp_internal en esta página); si algún día se supera, se pagina para toda la página.
+  const invoiceWeekCount = (invoiceId) => {
+    const ids = (contractorsByInvoice.get(invoiceId) ?? []).flatMap((c) => c.entryIds ?? [])
+    const dates = []
+    for (const id of ids) {
+      const date = entryDateById.get(String(id))
+      if (date === undefined) return null // datos incompletos → sin conteo afirmable
+      dates.push(date)
+    }
+    return distinctWeekCount(dates)
+  }
 
   const warningBefore = alertSettings?.warningDaysBeforeDue ?? 3
   const ALERT_RANK = { overdue: 0, warning: 1, on_time: 2 }
