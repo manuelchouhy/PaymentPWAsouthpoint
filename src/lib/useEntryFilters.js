@@ -1,12 +1,16 @@
 import { useCallback, useMemo, useState } from 'react'
-import { sundayWeek } from './format.js'
+import { sundayWeek, weekStartISO } from './format.js'
 
 /**
  * Estado y lógica de filtrado de la grilla (FR-03), centralizado en un solo
  * lugar. Maneja multi-selects (Contractor, Client, Project, Payment Status),
- * rango de fechas y número de semana (domingo–sábado, ver sundayWeek: 1..54).
- * El filtro de semana compara sólo el número, no el año (limitación conocida:
- * si el dataset abarca varios años, la semana N matchea en todos).
+ * rango de fechas y dos filtros de semana (domingo–sábado, ver sundayWeek: 1..54):
+ *   - `week`: número de semana year-blind (input "W35" de Payments) — compara sólo
+ *     el número, no el año (limitación conocida: la semana N matchea en todos los
+ *     años del dataset).
+ *   - `weekStart`: semana física exacta, year-aware (navegador de Entries) — matchea
+ *     el domingo que la inicia, así distingue W35/2025 de W35/2026.
+ * Ver el término "Week" en CONTEXT.md.
  *
  * El filtro se aplica ENCIMA de los datos crudos; la tab (FR-04) y la regla de
  * "un proveedor por pago" se resuelven aparte en App.
@@ -27,7 +31,13 @@ const EMPTY_FILTERS = {
   allocations: [], // 'unallocated' | 'bill_to_client' | 'overage' | 'sp_internal' | 'unknown'
   dateFrom: '',
   dateTo: '',
+  // Número de semana (year-blind): lo usa el filtro numérico "W35" de Payments.
+  // Matchea sólo el número de sundayWeek, ignorando el año (limitación conocida).
   week: '',
+  // Semana física exacta (year-aware): domingo (YYYY-MM-DD) que la inicia. Lo usa
+  // el navegador de semana de Entries. A diferencia de `week`, distingue W35/2025
+  // de W35/2026. Ver el término "Week" en CONTEXT.md.
+  weekStart: '',
 }
 
 // Centinela del filtro para las horas sin clasificar (allocation === null).
@@ -95,7 +105,8 @@ export function useEntryFilters(initial) {
       filters.allocations.length > 0 ||
       Boolean(filters.dateFrom) ||
       Boolean(filters.dateTo) ||
-      Boolean(filters.week),
+      Boolean(filters.week) ||
+      Boolean(filters.weekStart),
     [filters],
   )
 
@@ -151,11 +162,12 @@ export const clientFilterOptions = (clients, hasOther) => {
  * no tendría cómo destildarlos y quedaría trabado en cero.
  *
  * ALCANCE de la garantía: lo que no puede dar cero es la combinación de dos
- * dimensiones de lista entre sí. Semana y rango de fechas no son listas, así
- * que sí pueden vaciarlas todas — con week = 53 sin horas cargadas, los tres
- * dropdowns quedan en "No options" y la grilla en cero. Es información honesta
- * ("no hay nada esa semana") y se sale cambiando la semana o con Clear, pero no
- * es un caso que el cruce prevenga.
+ * dimensiones de lista entre sí. Los filtros de semana (`week` numérico y
+ * `weekStart` year-aware) y el rango de fechas no son listas, así que sí pueden
+ * vaciarlas todas — con una semana sin horas cargadas los tres dropdowns quedan en
+ * "No options" y la grilla en cero. Es información honesta ("no hay nada esa
+ * semana") y se sale cambiando la semana o con Clear, pero no es un caso que el
+ * cruce prevenga.
  *
  * @param {import('./data').TimeEntry[]} entries
  * @param {typeof EMPTY_FILTERS} filters
@@ -240,6 +252,14 @@ export function applyEntryFilters(entries, filters, invoiceByEntryId, masterClie
     }
     if (week !== null && !Number.isNaN(week)) {
       if (sundayWeek(entry.date) !== week) return false
+    }
+    // Semana física exacta (navegador de Entries): matchea por el domingo que
+    // inicia la semana de la entry, así distingue la misma semana de años
+    // distintos — a diferencia del filtro `week` de arriba, year-blind. Una entry
+    // sin fecha válida tiene weekStartISO null, que nunca iguala un domingo, así
+    // que un filtro activo la oculta (coherente con el resto de los filtros).
+    if (filters.weekStart) {
+      if (weekStartISO(entry.date) !== filters.weekStart) return false
     }
     return true
   })

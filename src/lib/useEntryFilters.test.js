@@ -20,6 +20,7 @@ const base = {
   dateFrom: '',
   dateTo: '',
   week: '',
+  weekStart: '',
 }
 const entries = [
   { id: 1, allocation: null }, // sin clasificar
@@ -141,4 +142,36 @@ test('buildFilterOptions con maestro: opciones de Cliente = maestro presente + O
 test('buildFilterOptions sin maestro (compat): opciones = valores crudos del cliente', () => {
   const opts = buildFilterOptions(clientEntries, base, new Map())
   assert.deepEqual(opts.clients, ['Acme Corp', 'Health Systems', 'Northwind'])
+})
+
+// --- Filtro de semana year-aware (weekStart, navegador de Entries) -----------
+// weekStart guarda el domingo (YYYY-MM-DD) que inicia la semana física elegida.
+// La semana del 2026-08-23 (dom) va hasta el 2026-08-29 (sáb).
+const weekEntries = [
+  { id: 1, date: '2026-08-23' }, // domingo: inicio de la semana
+  { id: 2, date: '2026-08-29' }, // sábado: misma semana
+  { id: 3, date: '2026-08-30' }, // domingo siguiente: otra semana
+  { id: 4, date: '2025-08-24' }, // domingo, pero de 2025: mismo esquema, otro año
+  { id: 5, date: '' }, // sin fecha válida
+]
+
+test('weekStart → sólo la semana física exacta (año incluido)', () => {
+  const r = applyEntryFilters(weekEntries, { ...base, weekStart: '2026-08-23' }, new Map())
+  assert.deepEqual(ids(r), [1, 2])
+})
+
+test('weekStart es year-aware: no arrastra la misma semana de otro año', () => {
+  // 2025-08-24 arranca su propia semana; nunca cae bajo weekStart de 2026.
+  const r = applyEntryFilters(weekEntries, { ...base, weekStart: '2025-08-24' }, new Map())
+  assert.deepEqual(ids(r), [4])
+})
+
+test('weekStart vacío → no filtra por semana', () => {
+  const r = applyEntryFilters(weekEntries, { ...base, weekStart: '' }, new Map())
+  assert.deepEqual(ids(r), [1, 2, 3, 4, 5])
+})
+
+test('weekStart activo oculta las entries sin fecha válida', () => {
+  const r = applyEntryFilters(weekEntries, { ...base, weekStart: '2026-08-30' }, new Map())
+  assert.deepEqual(ids(r), [3]) // la id 5 (sin fecha) queda afuera
 })

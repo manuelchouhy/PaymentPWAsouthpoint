@@ -23,6 +23,23 @@ _Avoid_: usar "Pending" para referirse a horas "to bill" (son cosas distintas).
 Horas por encima de lo contratado (allocation `overage`); se pagan al contractor,
 no se facturan al cliente.
 
+**Week**:
+La semana física de facturación, **domingo → sábado**, identificada por el domingo
+que la inicia (`weekStart`) y numerada por ese domingo (`sundayWeek`, 1..54, tipo
+Excel WEEKNUM). Una semana pertenece al **año de su domingo**, así que se rotula
+siempre con el año (`WEEK - 35 · 2026`) para no fusionar la misma semana de años
+distintos.
+_Avoid_: la semana ISO (lunes–domingo); referirse a una semana por su número sin
+el año.
+
+**Filtro de semana**:
+Dos filtros con el mismo rótulo "Week" pero distinta semántica, a propósito:
+- **Navegador de semana** (Entries): filtra por la **Week física exacta** (mismo
+  `weekStart`, año incluido). Es el canónico.
+- **Filtro numérico "W35"** (Payments): atajo **year-blind** sobre el número de
+  `sundayWeek` — W35/2025 y W35/2026 caen juntas. Limitación conocida y aceptada
+  en Payments; no es el comportamiento del navegador.
+
 ### Diseño
 
 **Mockup** (`.scratch/pantallas-nuevas-mockup.html`):
