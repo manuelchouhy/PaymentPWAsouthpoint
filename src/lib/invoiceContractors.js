@@ -44,8 +44,9 @@ function normalizeEntries(entries, contractorName) {
  * (ambos son domingos que IDENTIFICAN la semana — week-identifiers, no el último día
  * calendario; el período real termina el sábado de esa última semana). Simétrico con
  * `week_start`; el display formatea el rango como etiqueta de semana (WEEK N · año),
- * no como fecha suelta. Con una sola semana `weekEnd` puede omitirse (queda null) o
- * ser igual a `weekStart`.
+ * no como fecha suelta. Con una sola semana el resultado `week_end` queda null —se
+ * omita `weekEnd` o venga igual a `weekStart`—, de modo que `week_end is not null`
+ * marca inequívocamente una factura multi-semana.
  *
  * @param {{
  *   spInvoiceNumber: string,
@@ -119,7 +120,11 @@ export function buildGroupedInvoicePayload({
     project: proj,
     client: (client ?? '').trim() || null,
     week_start: weekStart || null,
-    week_end: weekEnd || null,
+    // week_end es null para una factura de UNA sola semana (weekEnd ausente o igual a
+    // weekStart): así "week_end is not null" es el marcador inequívoco de multi-semana
+    // (coincide con el comment de la columna en la migración 0044). Sólo se guarda
+    // cuando el rango abarca más de una semana.
+    week_end: weekEnd && weekEnd !== weekStart ? weekEnd : null,
     notes: (notes ?? '').trim() || null,
     status: 'Invoiced',
     entry_ids: entryIdsUnion,

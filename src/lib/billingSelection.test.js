@@ -5,7 +5,6 @@ import {
   billBlockReason,
   contractorsFromSelection,
   remainingHoursByContractor,
-  weekStartFromSelection,
   weekSpanFromSelection,
   projectsForContractWarnings,
 } from './billingSelection.js'
@@ -147,16 +146,6 @@ test('remainingHoursByContractor: pendiente por cliente+proyecto+contractor, sum
 test('remainingHoursByContractor: multi-cliente → []', () => {
   const sel = [row({ id: 1, client: 'HSS' }), row({ id: 2, client: 'ACME' })]
   assert.deepEqual(remainingHoursByContractor(sel, new Map()), [])
-})
-
-test('weekStartFromSelection: devuelve el domingo más temprano (start del span); sin fecha → null', () => {
-  const oneWeek = [row({ id: 1, date: '2026-08-12' }), row({ id: 2, date: '2026-08-09' })]
-  assert.equal(weekStartFromSelection(oneWeek), '2026-08-09')
-  // Multi-semana: ya NO es null — es el domingo más temprano (inicio del período).
-  const twoWeeks = [row({ id: 1, date: '2026-08-12' }), row({ id: 2, date: '2026-08-05' })]
-  assert.equal(weekStartFromSelection(twoWeeks), '2026-08-02')
-  const noDate = [{ user: 'Ana', client: 'HSS', project: 'P1', hours: 1, entries: [{ id: 1, hours: 1, date: '' }] }]
-  assert.equal(weekStartFromSelection(noDate), null)
 })
 
 test('weekSpanFromSelection: una semana → start===end; varias → {min,max}; sin fecha → null', () => {

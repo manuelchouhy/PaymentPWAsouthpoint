@@ -44,8 +44,6 @@ function billBlockMessage(reason, selectedRows) {
       return 'These hours have no project. Assign a project before billing them.'
     case 'no-contractor':
       return 'Some selected hours have no contractor.'
-    case 'multi-week':
-      return 'An invoice covers a single week (Sun–Sat). Narrow the selection to one week.'
     case 'no-week':
       return 'These hours have no date to place them in a billing week.'
     default:

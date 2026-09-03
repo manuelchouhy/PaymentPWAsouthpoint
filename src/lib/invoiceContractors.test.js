@@ -53,6 +53,16 @@ test('factura de una sola semana: sin weekEnd → week_end null', () => {
   assert.equal(invoice.week_end, null)
 })
 
+test('factura de una sola semana: weekEnd === weekStart → week_end null (marcador de multi-semana inequívoco)', () => {
+  const { invoice } = buildGroupedInvoicePayload({
+    ...base(),
+    weekStart: '2026-08-09',
+    weekEnd: '2026-08-09',
+  })
+  assert.equal(invoice.week_start, '2026-08-09')
+  assert.equal(invoice.week_end, null)
+})
+
 test('entry_ids no numéricos se descartan (bigint[] en Supabase)', () => {
   const { invoice, contractorRows } = buildGroupedInvoicePayload({
     ...base(),

@@ -651,7 +651,7 @@ export async function getInvoices() {
     .from('invoices')
     // Sin total_amount/currency: el modelo es en horas (se dropean en 0041).
     .select(
-      'id, supplier_invoice_number, sp_invoice_number, project, client, week_start, week_end, invoice_date, notes, user_name, entry_ids, status, payment_terms_days, created_at, created_by',
+      'id, supplier_invoice_number, sp_invoice_number, project, client, week_start, invoice_date, notes, user_name, entry_ids, status, payment_terms_days, created_at, created_by',
     )
     .order('created_at', { ascending: false })
 

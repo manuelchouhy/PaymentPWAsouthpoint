@@ -160,16 +160,6 @@ export function weekSpanFromSelection(selectedRows) {
 }
 
 /**
- * week_start (domingo ISO) de la selección: el domingo más temprano del span
- * (weekSpanFromSelection). null si alguna hora no tiene fecha resoluble. Se conserva
- * como conveniencia para los llamadores que sólo necesitan el inicio del período.
- * @returns {?string}
- */
-export function weekStartFromSelection(selectedRows) {
-  return weekSpanFromSelection(selectedRows)?.start ?? null
-}
-
-/**
  * Proyectos de `projects` que corresponden a la selección para el AVISO DE CONTRATO
  * del modal agrupado. La unión se hace, en orden de preferencia:
  *
