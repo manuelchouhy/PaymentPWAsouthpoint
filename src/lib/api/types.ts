@@ -76,19 +76,36 @@ export interface TimeEntry {
 
 export type BillingStatus = 'Pending' | 'Invoiced' | 'Collected' | 'Paid'
 
+// Modelo AGRUPADO en horas (slice 04d): la factura cubre 1 cliente + 1 proyecto + 1
+// semana y agrupa N contractors (ver InvoiceContractor). Sin monto/moneda.
 export interface Invoice {
   id: string | number
-  supplierInvoiceNumber: string
-  invoiceDate: string
-  totalAmount: number
-  currency: string
+  spInvoiceNumber: string | null       // SP invoice number (SouthPoint → cliente)
+  supplierInvoiceNumber: string | null // legacy single-contractor (null en agrupadas)
+  project: string | null
+  client: string | null
+  weekStart: string | null
+  invoiceDate: string | null
   notes: string | null
-  userName: string
+  userName: string | null              // legacy; null en el modelo agrupado
   entryIds: Array<string | number>
   status: 'Invoiced' | 'Collected' | 'Paid'
   paymentTermsDays: number
   createdAt: string
   createdBy: string | null
+}
+
+// Una fila por contractor de una factura agrupada. Sus horas (entry_ids) y, al pagar,
+// su supplier invoice number + fecha + payment_id.
+export interface InvoiceContractor {
+  id: string | number
+  invoiceId: string | number
+  contractor: string
+  entryIds: Array<string | number>
+  hours: number
+  supplierInvoiceNumber: string | null
+  paymentDate: string | null
+  paymentId: string | number | null
 }
 
 export interface InvoiceStatusHistoryEntry {
@@ -126,14 +143,16 @@ export interface Collection {
   createdBy: string | null
 }
 
+// Modelo en horas (slice 04d/05): un pago cubre a UN contractor (bajo factura, o
+// invoice-less overage/sp_internal). Sin monto/moneda.
 export interface Payment {
   id: string | number
-  invoiceId: string | number
-  amountPaid: number
+  invoiceId: string | number | null
+  entryIds: Array<string | number>    // horas cubiertas (overage/sp_internal); [] bajo factura
+  userName: string | null             // contractor pagado
   paymentDate: string
   bankMethod: string
   transferReference: string
-  exchangeRate: number | null
   notes: string
   backDated: boolean
   createdAt: string
@@ -332,7 +351,26 @@ export interface ApiClient {
 
   invoices: {
     list(): Promise<Invoice[]>
-    create(payload: Partial<Invoice>): Promise<{ ok: true; mode: string; invoice: Invoice }>
+    // Filas invoice_contractors (todas, o de un set de ids de factura).
+    listContractors(invoiceIds?: Array<string | number>): Promise<InvoiceContractor[]>
+    create(payload: {
+      supplierInvoiceNumber: string
+      notes?: string
+      userName: string
+      project?: string | null
+      client?: string | null
+      entryIds: Array<string | number>
+      createdBy?: string | null
+    }): Promise<{ ok: true; mode: string; invoice: Invoice }>
+    createGrouped(payload: {
+      spInvoiceNumber: string
+      project: string
+      client?: string | null
+      weekStart?: string | null
+      notes?: string
+      contractors: Array<{ contractor: string; entries: Array<{ id: string | number; hours: number }> }>
+      createdBy?: string | null
+    }): Promise<{ ok: true; mode: string; invoice: Invoice; contractors: unknown[] }>
     updateStatus(payload: {
       invoiceId: string | number
       fromStatus: string
@@ -364,9 +402,28 @@ export interface ApiClient {
   payments: {
     list(): Promise<Payment[]>
     getByInvoice(invoiceId: string | number): Promise<Payment | null>
+    // Pago POR CONTRACTOR: recibe la fila invoice_contractors + los datos del pago
+    // (supplier invoice number, fecha, operativos). Sin monto/moneda (en horas).
     create(
-      invoice: Invoice,
-      payload: Partial<Payment>,
+      invoiceContractor: InvoiceContractor,
+      payload: {
+        supplierInvoiceNumber: string
+        paymentDate: string
+        transferReference?: string
+        bankMethod?: string
+        notes?: string
+      },
+      createdBy?: string | null,
+    ): Promise<{ payment: Payment }>
+    createOverage(
+      payload: {
+        userName: string
+        entryIds: Array<string | number>
+        paymentDate: string
+        transferReference?: string
+        bankMethod?: string
+        notes?: string
+      },
       createdBy?: string | null,
     ): Promise<{ payment: Payment }>
     getAlertSettings(): Promise<Record<string, unknown>>

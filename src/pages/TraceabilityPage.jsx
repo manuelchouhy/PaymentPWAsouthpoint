@@ -373,8 +373,9 @@ function Timeline({ trace, collections }) {
       date: isInvoiced ? formatDate(trace.invoiceDate) : null,
       details: isInvoiced
         ? [
-            `Invoice: ${trace.supplierInvoiceNumber}`,
-            `Amount: $${fmtAmount(trace.invoiceAmount)}`,
+            trace.spInvoiceNumber ? `SP invoice: ${trace.spInvoiceNumber}` : null,
+            trace.invoiceContractor ? `Contractor: ${trace.invoiceContractor}` : null,
+            trace.contractorHours != null ? `${formatHours(trace.contractorHours)} h` : null,
             trace.invoicedBy ? `By: ${trace.invoicedBy}` : null,
           ].filter(Boolean)
         : [],
@@ -399,7 +400,7 @@ function Timeline({ trace, collections }) {
       date: isPaid ? formatDate(trace.paymentDate) : null,
       details: isPaid
         ? [
-            `$${fmtAmount(trace.amountPaid)}`,
+            trace.supplierInvoiceNumber ? `Supplier invoice: ${trace.supplierInvoiceNumber}` : null,
             trace.bankMethod ? `Method: ${trace.bankMethod}` : null,
             trace.transferReference ? `Ref: ${trace.transferReference}` : null,
             trace.paidBy ? `By: ${trace.paidBy}` : null,

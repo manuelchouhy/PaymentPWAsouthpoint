@@ -124,7 +124,7 @@ export function EntriesTable({
                 }}
                 title={
                   isInvoiced
-                    ? `View invoice ${invoice.supplierInvoiceNumber}`
+                    ? `View invoice ${invoice.spInvoiceNumber ?? invoice.supplierInvoiceNumber ?? ''}`
                     : undefined
                 }
               >
@@ -194,9 +194,9 @@ export function EntriesTable({
                 </td>
                 <td
                   className="col-invoice cell-mono"
-                  title={invoice?.supplierInvoiceNumber ?? undefined}
+                  title={invoice?.spInvoiceNumber ?? invoice?.supplierInvoiceNumber ?? undefined}
                 >
-                  {invoice?.supplierInvoiceNumber ?? '—'}
+                  {invoice?.spInvoiceNumber ?? invoice?.supplierInvoiceNumber ?? '—'}
                 </td>
               </motion.tr>
             )

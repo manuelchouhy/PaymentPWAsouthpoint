@@ -73,31 +73,33 @@ test('invoicelessPaidRows separa pagos de overage y de sp_internal', () => {
     { id: 2, allocation: 'overage', hours: 3 },
   ]
   const payments = [
-    { id: 'p1', invoiceId: null, entryIds: [1], userName: 'Ana', amountPaid: 400, currency: 'USD', paymentDate: '2026-08-20' },
-    { id: 'p2', invoiceId: null, entryIds: [2], userName: 'Bob', amountPaid: 300, currency: 'USD', paymentDate: '2026-08-21' },
-    { id: 'p3', invoiceId: 99, entryIds: [], userName: null, amountPaid: 999, paymentDate: '2026-08-22' }, // pago por factura: no cuenta
+    { id: 'p1', invoiceId: null, entryIds: [1], userName: 'Ana', paymentDate: '2026-08-20' },
+    { id: 'p2', invoiceId: null, entryIds: [2], userName: 'Bob', paymentDate: '2026-08-21' },
+    { id: 'p3', invoiceId: 99, entryIds: [], userName: null, paymentDate: '2026-08-22' }, // pago por factura: no cuenta
   ]
   const { overage, spInternal } = invoicelessPaidRows(payments, entries)
   assert.equal(spInternal.length, 1)
   assert.equal(spInternal[0].id, 'p1')
   assert.equal(spInternal[0].user, 'Ana')
   assert.equal(spInternal[0].hours, 4)
-  assert.equal(spInternal[0].amountPaid, 400)
+  // Modelo en horas (slice 05): no hay amountPaid/currency.
+  assert.equal(spInternal[0].amountPaid, undefined)
+  assert.equal(spInternal[0].currency, undefined)
   assert.equal(overage.length, 1)
   assert.equal(overage[0].id, 'p2')
   assert.equal(overage[0].hours, 3)
 })
 
-test('invoicelessPaidRows ordena cada bucket por fecha desc y aplica currency por defecto', () => {
+test('invoicelessPaidRows ordena cada bucket por fecha desc (en horas, sin plata)', () => {
   const entries = [
     { id: 1, allocation: 'sp_internal', hours: 1 },
     { id: 2, allocation: 'sp_internal', hours: 1 },
   ]
   const payments = [
-    { id: 'a', invoiceId: null, entryIds: [1], userName: 'Ana', amountPaid: 100, paymentDate: '2026-08-10' },
-    { id: 'b', invoiceId: null, entryIds: [2], userName: 'Ana', amountPaid: 100, paymentDate: '2026-08-25' },
+    { id: 'a', invoiceId: null, entryIds: [1], userName: 'Ana', paymentDate: '2026-08-10' },
+    { id: 'b', invoiceId: null, entryIds: [2], userName: 'Ana', paymentDate: '2026-08-25' },
   ]
   const { spInternal } = invoicelessPaidRows(payments, entries)
   assert.deepEqual(spInternal.map((r) => r.id), ['b', 'a']) // más reciente arriba
-  assert.equal(spInternal[0].currency, 'USD') // fallback cuando el pago no trae moneda
+  assert.equal(spInternal[0].hours, 1)
 })

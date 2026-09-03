@@ -14,9 +14,14 @@ function rowToTrace(row) {
     zohoStatus: row.zoho_status,
     syncedAt: row.synced_at,
     invoiceId: row.invoice_id,
-    supplierInvoiceNumber: row.supplier_invoice_number,
+    // Modelo agrupado en HORAS (slice 04d): SP invoice number (SouthPoint→cliente) +
+    // el supplier invoice number POR-CONTRACTOR de la hora (invoice_contractors). Sin
+    // monto/moneda (trace_view ya no los expone).
+    spInvoiceNumber: row.sp_invoice_number ?? null,
+    supplierInvoiceNumber: row.supplier_invoice_number ?? null,
+    invoiceContractor: row.invoice_contractor ?? null,
+    contractorHours: row.contractor_hours != null ? Number(row.contractor_hours) : null,
     invoiceDate: row.invoice_date,
-    invoiceAmount: row.invoice_amount != null ? Number(row.invoice_amount) : null,
     invoiceStatus: row.invoice_status,
     paymentTermsDays: row.payment_terms_days,
     invoicedAt: row.invoiced_at,
@@ -25,7 +30,6 @@ function rowToTrace(row) {
     lastCollectionDate: row.last_collection_date,
     collectionCount: Number(row.collection_count || 0),
     paymentId: row.payment_id,
-    amountPaid: row.amount_paid != null ? Number(row.amount_paid) : null,
     paymentDate: row.payment_date,
     transferReference: row.transfer_reference,
     bankMethod: row.bank_method,
@@ -61,6 +65,7 @@ export async function searchTrace({ search, contractor, project, dateFrom, dateT
         (r.userName ?? '').toLowerCase().includes(q) ||
         (r.project ?? '').toLowerCase().includes(q) ||
         (r.client ?? '').toLowerCase().includes(q) ||
+        (r.spInvoiceNumber ?? '').toLowerCase().includes(q) ||
         (r.supplierInvoiceNumber ?? '').toLowerCase().includes(q) ||
         (r.zohoLogId ?? '').toLowerCase().includes(q),
     )

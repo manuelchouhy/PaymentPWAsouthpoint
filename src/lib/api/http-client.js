@@ -70,9 +70,15 @@ export const httpApiClient = {
   invoices: {
     // GET /api/invoices → Invoice[]
     list: () => notImplemented('invoices.list'),
-    // POST /api/invoices { supplierInvoiceNumber, invoiceDate, totalAmount,
-    //   currency, notes, userName, entryIds, createdBy } → { invoice }
+    // GET /api/invoices/contractors → InvoiceContractor[]
+    listContractors: () => notImplemented('invoices.listContractors'),
+    // POST /api/invoices { supplierInvoiceNumber, notes, userName, project, client,
+    //   entryIds, createdBy } → { invoice }  (single-contractor, en horas)
     create: () => notImplemented('invoices.create'),
+    // POST /api/invoices/grouped { spInvoiceNumber, project, client, weekStart,
+    //   notes, contractors:[{contractor, entries:[{id,hours}]}], createdBy }
+    //   → { invoice, contractors }
+    createGrouped: () => notImplemented('invoices.createGrouped'),
     // PATCH /api/invoices/:id/status { fromStatus, toStatus, changedBy, note }
     //   → { invoice, historyEntry }
     updateStatus: () => notImplemented('invoices.updateStatus'),
@@ -153,10 +159,11 @@ export const httpApiClient = {
     list: () => notImplemented('payments.list'),
     // GET /api/payments/by-invoice/:invoiceId → Payment | null
     getByInvoice: () => notImplemented('payments.getByInvoice'),
-    // POST /api/payments/register { invoiceId, amountPaid, paymentDate,
-    //   bankMethod, transferReference, exchangeRate, notes } → { payment }
+    // POST /api/payments/register (por contractor) { invoiceContractorId,
+    //   supplierInvoiceNumber, paymentDate, bankMethod, transferReference, notes }
+    //   → { payment }  (en horas; la factura pasa a Paid con el último contractor)
     create: () => notImplemented('payments.create'),
-    // POST /api/payments/overage { userName, entryIds, amountPaid, ... } → { payment }
+    // POST /api/payments/overage { userName, entryIds, paymentDate, ... } → { payment }
     createOverage: () => notImplemented('payments.createOverage'),
     // GET /api/payments/alert-settings
     getAlertSettings: () => notImplemented('payments.getAlertSettings'),

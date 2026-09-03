@@ -1,12 +1,22 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { sundayWeek, sundayWeekYear, formatWeek } from './format.js'
+import { sundayWeek, sundayWeekYear, formatWeek, weekStartISO } from './format.js'
 
 // Las semanas de facturación van de DOMINGO a SÁBADO (no ISO lunes–domingo).
 // En agosto 2026: Aug 1 = sábado, Aug 2 = domingo, Aug 8 = sábado, Aug 9 = domingo.
 
 test('el domingo abre una semana nueva; el sábado previo es otra', () => {
   assert.notEqual(sundayWeek('2026-08-09'), sundayWeek('2026-08-08'))
+})
+
+test('weekStartISO: el domingo de la semana dom–sáb de una fecha', () => {
+  // Aug 9 (dom) → Aug 15 (sáb) es una semana; su domingo es 2026-08-09.
+  assert.equal(weekStartISO('2026-08-12'), '2026-08-09')
+  assert.equal(weekStartISO('2026-08-09'), '2026-08-09')
+  assert.equal(weekStartISO('2026-08-15'), '2026-08-09')
+  // El sábado previo (Aug 8) cae en la semana anterior.
+  assert.equal(weekStartISO('2026-08-08'), '2026-08-02')
+  assert.equal(weekStartISO(''), null)
 })
 
 test('de domingo a sábado caen en la misma semana', () => {

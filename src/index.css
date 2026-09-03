@@ -2385,6 +2385,40 @@ th.col-pop { text-align: center; }
   margin-top: 5px;
 }
 
+/* Lista de contractors incluidos en una factura agrupada (slice 03). */
+.modal__contractors {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.modal__contractor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2, var(--surface));
+}
+
+.modal__contractor-name {
+  flex: 1;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.modal__contractor-hours {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted, var(--text-faint));
+}
+
 /* Selector de horas de overage a pagar (D6): lista con checkbox por hora. */
 .overage-picker {
   margin-top: 12px;

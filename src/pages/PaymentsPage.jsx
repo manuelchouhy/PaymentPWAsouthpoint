@@ -3,7 +3,12 @@ import { Link, useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, BellRing, Download } from 'lucide-react'
 import { paymentAlertLevel } from '../lib/paymentsData'
-import { pendingToPayByContractor, invoicelessPaidRows } from '../lib/paymentsGrouping'
+import {
+  pendingToPayByContractor,
+  invoicelessPaidRows,
+  paidEntryIdsFrom,
+} from '../lib/paymentsGrouping'
+import { invoiceCompletion } from '../lib/invoiceCompletion'
 import { api } from '../lib/api'
 import { downloadPaymentReceipt } from '../lib/paymentReceipt'
 import { formatDate, formatHours } from '../lib/format'
@@ -12,14 +17,7 @@ import { RegisterPaymentModal } from '../components/RegisterPaymentModal'
 import { Toast } from '../components/Toast'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { exportGrid } from '../lib/exportGrid'
-import { getCurrencySymbol } from '../lib/currenciesData'
 
-function fmtAmount(value) {
-  return Number(value || 0).toLocaleString('es-AR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
 function addDaysISO(iso, days) {
   const [y, m, d] = iso.split('-').map(Number)
   return new Date(Date.UTC(y, m - 1, d) + days * 86400000).toISOString().slice(0, 10)
@@ -32,19 +30,23 @@ function daysUntil(iso) {
   return Math.round((target - today) / 86400000)
 }
 
-// Estados de factura PAGABLES al contractor. El flujo es Billing → Payments (sin
-// paso de Collections): una factura emitida (Invoiced) se paga directo y al pagarla
-// pasa a Paid. 'Collected' quedó fuera del flujo: no se lista acá (su vencimiento
-// dependía de la fecha de cobro, que ya no se computa; el edge payment-alerts y el
-// frontend calculan todo desde la fecha de factura). Una sola fuente para el
-// listado, KPIs, filtros, resaltado y el botón de pago — así no se desincronizan.
-const PAYABLE_STATUSES = ['Invoiced']
-const isPayable = (status) => PAYABLE_STATUSES.includes(status)
+// Fecha de emisión de la factura para calcular el vencimiento del pago. Las facturas
+// AGRUPADAS no cargan invoice_date (el modelo es en horas): se usa la fecha de creación.
+// OPEN ITEM: confirmar con negocio la semántica de "payment due" de la factura agrupada
+// (¿desde created_at, desde week_start?). Hoy: invoice_date si existe, si no created_at.
+function issueDateOf(inv) {
+  if (inv.invoiceDate) return inv.invoiceDate
+  if (inv.createdAt) return String(inv.createdAt).slice(0, 10)
+  return null
+}
+
+// Estados de factura PAGABLES al contractor. Flujo Billing → Payments (sin Collections):
+// una factura emitida (Invoiced) se paga contractor por contractor; cuando TODOS están
+// pagados pasa a Paid. Ver payableInvoicesByContractor / register_contractor_payment.
+const isPayable = (status) => status === 'Invoiced'
 
 // Allocations que se pagan al contractor SIN factura al cliente (invoice-less):
-// overage y sp_internal. Mismo mecanismo de pago; sólo cambia la etiqueta. `low`
-// va en el copy en minúscula ("Register overage payment"), `cap` como título de
-// bloque/toast ("SP internal paid").
+// overage y sp_internal. Mismo mecanismo de pago; sólo cambia la etiqueta.
 const PAY_LABELS = {
   overage: { low: 'overage', cap: 'Overage' },
   sp_internal: { low: 'SP internal', cap: 'SP internal' },
@@ -53,18 +55,17 @@ const PAY_LABELS = {
 export function PaymentsPage() {
   const { user, profile, can } = useOutletContext()
   const [invoices, setInvoices] = useState([])
+  const [invoiceContractors, setInvoiceContractors] = useState([])
   const [payments, setPayments] = useState([])
   const [alertSettings, setAlertSettings] = useState(null)
   const [status, setStatus] = useState('loading')
   const [showPaid, setShowPaid] = useState(false)
   const [alertFilter, setAlertFilter] = useState(null) // null|'overdue'|'dueThisWeek'
-  const [modalInvoice, setModalInvoice] = useState(null)
-  // Contractor cuyo pago invoice-less (overage o sp_internal) se está por
-  // registrar (null = modal cerrado). Lleva su `allocation` para el copy y el
-  // audit; el mecanismo de pago es idéntico para ambos.
+  // Contractor de una factura agrupada que se está por pagar: { invoice, ic } (ic = fila
+  // invoice_contractors). null = modal cerrado.
+  const [payTargetContractor, setPayTargetContractor] = useState(null)
+  // Contractor cuyo pago invoice-less (overage o sp_internal) se está por registrar.
   const [payTarget, setPayTarget] = useState(null)
-  // Horas seleccionadas para pagar (D6): por defecto todas las del contractor;
-  // el usuario puede destildar para pagar sólo algunas.
   const [paySelectedIds, setPaySelectedIds] = useState(() => new Set())
   const [entries, setEntries] = useState([])
   const [toast, setToast] = useState(null)
@@ -73,12 +74,14 @@ export function PaymentsPage() {
     setStatus('loading')
     Promise.all([
       api.invoices.list(),
+      api.invoices.listContractors(),
       api.payments.list(),
       api.payments.getAlertSettings(),
       api.timeEntries.list(),
     ])
-      .then(([inv, pay, settings, entryRows]) => {
+      .then(([inv, ic, pay, settings, entryRows]) => {
         setInvoices(inv)
+        setInvoiceContractors(ic)
         setPayments(pay)
         setAlertSettings(settings)
         setEntries(entryRows)
@@ -95,16 +98,60 @@ export function PaymentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const paymentByInvoice = useMemo(() => {
+  // invoice_contractors agrupados por factura (para expandir cada factura a sus
+  // contractors pendientes de pago).
+  const contractorsByInvoice = useMemo(() => {
     const map = new Map()
-    for (const p of payments) if (!map.has(p.invoiceId)) map.set(p.invoiceId, p)
+    for (const ic of invoiceContractors) {
+      const arr = map.get(ic.invoiceId) ?? []
+      arr.push(ic)
+      map.set(ic.invoiceId, arr)
+    }
     return map
-  }, [payments])
+  }, [invoiceContractors])
 
-  // Horas invoice-less pendientes de pago, por contractor. Overage y sp_internal
-  // se le pagan directo al contractor sin factura al cliente (misma lógica; ver
-  // pendingToPayByContractor). sp_internal se ruteó a Payments igual que overage:
-  // saltea Billing porque no se factura al cliente, pero es un pago a alguien.
+  const warningBefore = alertSettings?.warningDaysBeforeDue ?? 3
+  const ALERT_RANK = { overdue: 0, warning: 1, on_time: 2 }
+
+  // Una fila por factura, expandida a sus contractors vía el módulo puro (y testeado)
+  // `invoiceCompletion`: deriva paid/paidCount/totalCount/totalHours en horas (una fila
+  // pagada por payment_id o por cobertura de entry_ids; una fila sin entry_ids se
+  // descarta). Una factura Invoiced con todos sus contractors ya pagos (estado
+  // transitorio antes de que la RPC flipee a Paid) no tiene pendientes → se oculta.
+  const invoiceRows = useMemo(() => {
+    const rows = []
+    for (const inv of invoices) {
+      if (!(isPayable(inv.status) || (showPaid && inv.status === 'Paid'))) continue
+      const completion = invoiceCompletion(contractorsByInvoice.get(inv.id) ?? [], payments)
+      const pending = completion.contractors.filter((c) => !c.paid)
+      // Invoiced sin filas o sin pendientes = transitorio (todos pagos, RPC aún no
+      // flipeó): ocultar (mismo criterio que payableInvoicesByContractor).
+      if (isPayable(inv.status) && (completion.totalCount === 0 || pending.length === 0)) continue
+
+      const issue = issueDateOf(inv)
+      const dueDate =
+        inv.status !== 'Paid' && issue ? addDaysISO(issue, inv.paymentTermsDays ?? 30) : null
+      const daysUntilDue = dueDate ? daysUntil(dueDate) : null
+      const alertLevel =
+        inv.status === 'Paid' || !dueDate
+          ? 'on_time'
+          : paymentAlertLevel(daysUntilDue, warningBefore)
+      rows.push({
+        inv,
+        contractors: completion.contractors,
+        pending,
+        paidCount: completion.paidCount,
+        totalCount: completion.totalCount,
+        totalHours: completion.totalHours,
+        dueDate,
+        daysUntilDue,
+        alertLevel,
+      })
+    }
+    return rows
+  }, [invoices, contractorsByInvoice, payments, showPaid, warningBefore])
+
+  // Horas invoice-less pendientes de pago, por contractor (overage / sp_internal).
   const overagePending = useMemo(
     () => pendingToPayByContractor(entries, payments, invoices, 'overage'),
     [entries, payments, invoices],
@@ -114,102 +161,120 @@ export function PaymentsPage() {
     [entries, payments, invoices],
   )
 
-  // Pagos invoice-less YA hechos (read-only), separados por allocation para
-  // dejar rastro auditable de qué se pagó por qué (si no, desaparecerían de la
-  // pantalla al salir del pendiente). Ver invoicelessPaidRows.
+  // Pagos invoice-less YA hechos (read-only), separados por allocation.
   const { overage: overagePaid, spInternal: spInternalPaid } = useMemo(
     () => invoicelessPaidRows(payments, entries),
     [payments, entries],
   )
 
-  const warningBefore = alertSettings?.warningDaysBeforeDue ?? 3
-  const ALERT_RANK = { overdue: 0, warning: 1, on_time: 2 }
-
-  const allRows = useMemo(
-    () =>
-      invoices
-        // Flujo Billing → Payments (sin Collections): una factura emitida en Billing
-        // (Invoiced) es pagable directo. Se listan las pagables y las Paid con el
-        // toggle. Ver createPayment / migración 0036.
-        .filter((inv) => isPayable(inv.status) || (showPaid && inv.status === 'Paid'))
-        .map((inv) => {
-          // Vencimiento del pago al contractor: el plazo (paymentTermsDays) corre
-          // desde la FECHA DE FACTURA (ya no hay paso de cobro). Aplica a las
-          // pagables (no Paid) que tengan fecha de factura; el guard evita
-          // addDaysISO sobre null si faltara.
-          const dueBase = inv.status !== 'Paid' ? inv.invoiceDate ?? null : null
-          const dueDate = dueBase ? addDaysISO(dueBase, inv.paymentTermsDays ?? 30) : null
-          const daysUntilDue = dueDate ? daysUntil(dueDate) : null
-          const alertLevel =
-            inv.status === 'Paid' || !dueDate
-              ? 'on_time'
-              : paymentAlertLevel(daysUntilDue, warningBefore)
-          return {
-            inv,
-            dueDate,
-            daysUntilDue,
-            alertLevel,
-            payment: paymentByInvoice.get(inv.id) ?? null,
-          }
-        }),
-    [invoices, showPaid, paymentByInvoice, warningBefore],
-  )
-
-  // KPIs sobre las facturas pendientes de pago (pagables; ver allRows / isPayable).
+  // KPIs sobre las facturas pendientes de pago. Total pendiente en HORAS (suma de las
+  // horas de los contractors todavía sin pagar en las facturas pagables).
   const kpis = useMemo(() => {
     let overdue = 0
     let dueThisWeek = 0
-    let totalDue = 0
-    for (const r of allRows) {
+    let pendingHours = 0
+    for (const r of invoiceRows) {
       if (!isPayable(r.inv.status)) continue
-      totalDue += r.inv.totalAmount
-      // Vencido / esta-semana sólo cuentan las que tienen deadline (fecha de
-      // factura + plazo); una sin fecha de factura no "vence".
+      pendingHours += r.contractors.reduce(
+        (s, ic) => s + (ic.paid ? 0 : Number(ic.hours) || 0),
+        0,
+      )
       if (r.dueDate) {
         if (r.alertLevel === 'overdue') overdue += 1
         if (r.daysUntilDue >= 0 && r.daysUntilDue <= 7) dueThisWeek += 1
       }
     }
-    return { overdue, dueThisWeek, totalDue }
-  }, [allRows])
+    return { overdue, dueThisWeek, pendingHours }
+  }, [invoiceRows])
 
   const rows = useMemo(() => {
-    const filtered = allRows.filter((r) => {
+    const filtered = invoiceRows.filter((r) => {
       if (alertFilter === 'overdue') return r.alertLevel === 'overdue'
       if (alertFilter === 'dueThisWeek')
-        // r.dueDate guard: sin él, daysUntilDue null pasaría (null>=0 es true en JS).
         return Boolean(r.dueDate) && r.daysUntilDue >= 0 && r.daysUntilDue <= 7
       return true
     })
-    // Orden: vencidos arriba, después warning, después por fecha de vencimiento.
-    // dueDate puede ser null (Invoiced/Paid sin deadline): se ordenan al final
-    // (coalesce a una fecha alta) para no romper el localeCompare.
+    // Pagables primero (Invoiced antes que Paid); dentro, vencidos arriba y luego por
+    // fecha de vencimiento. Las Paid (sin deadline) caen al final.
     return filtered.sort(
       (a, b) =>
+        Number(a.inv.status === 'Paid') - Number(b.inv.status === 'Paid') ||
         ALERT_RANK[a.alertLevel] - ALERT_RANK[b.alertLevel] ||
         (a.dueDate ?? '9999-12-31').localeCompare(b.dueDate ?? '9999-12-31'),
     )
-  }, [allRows, alertFilter])
+  }, [invoiceRows, alertFilter])
 
-  async function handleRegister(payload) {
-    const { inv } = modalInvoice
-    const { payment } = await api.payments.create(inv, payload, user?.email ?? null)
-    setPayments((prev) => [payment, ...prev])
-    setInvoices((prev) => prev.map((i) => (i.id === inv.id ? { ...i, status: 'Paid' } : i)))
-    api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'payment.create', resourceType: 'payment', resourceId: payment.id, after: { invoiceId: inv.id, invoiceNumber: inv.supplierInvoiceNumber, amountPaid: payload.amountPaid, paymentDate: payload.paymentDate } })
-    setModalInvoice(null)
-    setToast({
-      id: Date.now(),
-      message: `${inv.supplierInvoiceNumber} pagada a ${inv.userName} → Paid`,
-    })
+  // Pago de UN contractor de una factura agrupada. Al completar el último, la factura
+  // pasa a Paid. Maneja carreras (already_paid / not_payable / stale) recargando.
+  async function handlePayContractor(payload) {
+    const { invoice: inv, ic } = payTargetContractor
+    try {
+      const { payment } = await api.payments.create(ic, payload, user?.email ?? null)
+      // Marca la fila del contractor como pagada localmente (payment_id + supplier#).
+      const nextContractors = (contractorsByInvoice.get(inv.id) ?? []).map((row) =>
+        row.id === ic.id
+          ? {
+              ...row,
+              paymentId: payment.id,
+              supplierInvoiceNumber: payload.supplierInvoiceNumber ?? row.supplierInvoiceNumber,
+              paymentDate: payload.paymentDate,
+            }
+          : row,
+      )
+      setInvoiceContractors((prev) =>
+        prev.map((row) => {
+          const hit = nextContractors.find((n) => n.id === row.id)
+          return hit ?? row
+        }),
+      )
+      setPayments((prev) => [payment, ...prev])
+      // Si con este pago quedaron todas las filas pagas, la RPC ya flipeó la factura a
+      // Paid: reflejarlo en el estado local.
+      const nextPaidIds = paidEntryIdsFrom([payment, ...payments])
+      const allPaid = nextContractors
+        .filter((row) => (row.entryIds?.length ?? 0) > 0)
+        .every(
+          (row) =>
+            row.paymentId != null ||
+            (row.entryIds ?? []).every((id) => nextPaidIds.has(String(id))),
+        )
+      if (allPaid) {
+        setInvoices((prev) =>
+          prev.map((i) => (i.id === inv.id ? { ...i, status: 'Paid' } : i)),
+        )
+      }
+      api.audit.log({
+        actorEmail: user?.email,
+        actorRole: profile?.roles?.[0] ?? null,
+        action: 'payment.create',
+        resourceType: 'payment',
+        resourceId: payment.id,
+        after: {
+          invoiceId: inv.id,
+          spInvoiceNumber: inv.spInvoiceNumber,
+          contractor: ic.contractor,
+          supplierInvoiceNumber: payload.supplierInvoiceNumber,
+          hours: ic.hours,
+          paymentDate: payload.paymentDate,
+        },
+      })
+      setPayTargetContractor(null)
+      setToast({
+        id: Date.now(),
+        message: `${ic.contractor} paid — ${formatHours(ic.hours)} h${
+          allPaid ? ` · ${inv.spInvoiceNumber ?? 'invoice'} → Paid` : ''
+        }`,
+      })
+    } catch (error) {
+      // Carrera / estado obsoleto: cerrar, avisar y recargar para ver el estado real.
+      setPayTargetContractor(null)
+      setToast({ id: Date.now(), tone: 'error', message: error?.message ?? 'Could not register the payment.' })
+      load()
+    }
   }
 
   // Pago invoice-less (overage o sp_internal): cubre las horas SELECCIONADAS del
-  // contractor (D6 — por defecto todas, pero se pueden pagar sólo algunas). No
-  // hay factura al cliente; las horas cubiertas quedan congeladas y salen del
-  // pendiente. El allocation sólo cambia el copy/audit — el pago es idéntico
-  // (createOverage inserta un pago sin invoice con entryIds+userName). payload
-  // trae también la moneda (D7).
+  // contractor. Sin factura y sin monto (en horas).
   async function handleRegisterPayment(payload) {
     const { allocation, user: contractor } = payTarget
     const selected = payTarget.entries.filter((e) => paySelectedIds.has(String(e.id)))
@@ -230,8 +295,7 @@ export function PaymentsPage() {
         allocation,
         userName: contractor,
         entryCount: entryIds.length,
-        amountPaid: payload.amountPaid,
-        currency: payload.currency,
+        hours,
         paymentDate: payload.paymentDate,
       },
     })
@@ -243,50 +307,57 @@ export function PaymentsPage() {
     })
   }
 
-  function handleDownload(row) {
-    const payment = row.payment ?? paymentByInvoice.get(row.inv.id)
+  function handleDownload(inv, ic) {
+    const payment =
+      payments.find((p) => p.id === ic.paymentId) ??
+      payments.find(
+        (p) => p.invoiceId === inv.id && p.userName === ic.contractor,
+      )
     if (!payment) {
-      setToast({ id: Date.now(), tone: 'error', message: 'Payment record not found for this invoice.' })
+      setToast({ id: Date.now(), tone: 'error', message: 'Payment record not found for this contractor.' })
       return
     }
-    downloadPaymentReceipt({ invoice: row.inv, payment, generatedBy: user?.email ?? null })
+    downloadPaymentReceipt({
+      invoice: inv,
+      invoiceContractor: ic,
+      payment,
+      generatedBy: user?.email ?? null,
+    })
   }
 
   function handleExport(format) {
     const cols = [
+      { header: 'SP Invoice #', key: 'spInvoice' },
+      { header: 'Project', key: 'project' },
+      { header: 'Client', key: 'client' },
       { header: 'Contractor', key: 'contractor' },
-      { header: 'Invoice #', key: 'invoiceNumber' },
-      { header: 'Currency', key: 'currency' },
-      { header: 'Amount Due', key: 'totalAmount' },
+      { header: 'Supplier Invoice #', key: 'supplierInvoice' },
+      { header: 'Hours', key: 'hours' },
+      { header: 'Contractor Status', key: 'contractorStatus' },
+      { header: 'Invoice Status', key: 'invoiceStatus' },
       { header: 'Payment Due', key: 'dueDate' },
-      { header: 'Days Until Due', key: 'daysUntilDue' },
-      { header: 'Alert', key: 'alertLevel' },
-      { header: 'Status', key: 'status' },
       { header: 'Payment Date', key: 'paymentDate' },
-      { header: 'Transfer Ref', key: 'transferReference' },
-      { header: 'Exchange Rate', key: 'exchangeRate' },
     ]
-    const exportRows = rows.map((r) => ({
-      contractor: r.inv.userName,
-      invoiceNumber: r.inv.supplierInvoiceNumber,
-      currency: r.inv.currency ?? 'USD',
-      totalAmount: r.inv.totalAmount,
-      // Coalesce a '' (no null): una celda vacía en el export es más limpia que un
-      // null literal cuando la factura no tiene fecha de vencimiento.
-      dueDate: r.dueDate ?? '',
-      daysUntilDue: r.daysUntilDue ?? '',
-      alertLevel: r.alertLevel,
-      status: r.inv.status,
-      paymentDate: r.payment?.paymentDate ?? '',
-      transferReference: r.payment?.transferReference ?? '',
-      exchangeRate: r.payment?.exchangeRate ?? '',
-    }))
+    // Una fila por contractor de cada factura (grano del pago).
+    const exportRows = rows.flatMap((r) =>
+      r.contractors.map((ic) => ({
+        spInvoice: r.inv.spInvoiceNumber ?? '',
+        project: r.inv.project ?? '',
+        client: r.inv.client ?? '',
+        contractor: ic.contractor,
+        supplierInvoice: ic.supplierInvoiceNumber ?? '',
+        hours: Number(ic.hours) || 0,
+        contractorStatus: ic.paid ? 'Paid' : 'Pending',
+        invoiceStatus: r.inv.status,
+        dueDate: r.dueDate ?? '',
+        paymentDate: ic.paymentDate ?? '',
+      })),
+    )
     exportGrid({ rows: exportRows, columns: cols, title: 'Payments', gridName: 'payments', format, generatedBy: user?.email ?? '' })
   }
 
   // Bloque "a pagar" de un allocation invoice-less (overage / sp_internal): horas
-  // aprobadas y sin pagar por contractor. Overage y sp_internal comparten diseño;
-  // sólo cambian la etiqueta y el allocation que dispara el modal de pago.
+  // aprobadas y sin pagar por contractor.
   function renderToPay(allocation, pending) {
     const label = PAY_LABELS[allocation]
     return (
@@ -321,7 +392,6 @@ export function PaymentsPage() {
                           className="btn btn--pay btn--row"
                           onClick={() => {
                             setPayTarget({ ...group, allocation })
-                            // Arranca con todas las horas seleccionadas (D6).
                             setPaySelectedIds(new Set(group.entryIds.map(String)))
                           }}
                         >
@@ -339,16 +409,15 @@ export function PaymentsPage() {
     )
   }
 
-  // Bloque "ya pagado" (read-only) de un allocation invoice-less: deja rastro
-  // auditable de lo pagado, que si no desaparecería al salir del pendiente.
-  function renderPaid(allocation, rows) {
-    if (rows.length === 0) return null
+  // Bloque "ya pagado" (read-only) de un allocation invoice-less, en horas.
+  function renderPaid(allocation, paidRows) {
+    if (paidRows.length === 0) return null
     const label = PAY_LABELS[allocation]
     return (
       <section className="pay-overage">
         <div className="toolbar">
           <span className="toolbar__count">
-            {label.cap} paid · {rows.length} {rows.length === 1 ? 'payment' : 'payments'}
+            {label.cap} paid · {paidRows.length} {paidRows.length === 1 ? 'payment' : 'payments'}
           </span>
         </div>
         <div className="table-wrap table-wrap--scroll">
@@ -357,21 +426,16 @@ export function PaymentsPage() {
               <tr>
                 <th scope="col">Contractor</th>
                 <th scope="col" className="col-num">Hours</th>
-                <th scope="col" className="col-num">Amount</th>
                 <th scope="col">Paid on</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {paidRows.map((row) => (
                 <tr key={row.id} className="row-static">
                   <td className="cell-strong">{row.user || '—'}</td>
                   <td className="col-num cell-mono">
                     {formatHours(row.hours)} h
                     <span className="cell-soft"> · {row.entryCount}</span>
-                  </td>
-                  <td className="col-num cell-mono">
-                    {getCurrencySymbol(row.currency)}
-                    {fmtAmount(row.amountPaid)} {row.currency}
                   </td>
                   <td className="cell-mono">{formatDate(row.paymentDate)}</td>
                 </tr>
@@ -397,10 +461,10 @@ export function PaymentsPage() {
         </div>
         <h1 className="masthead__title">Payments</h1>
         <p className="masthead__sub">
-          Contractor payment for invoices ready to pay — issued in Billing
-          (Invoiced); once paid, they move to Paid. Overage and SP internal hours
-          are paid here too — per contractor, without an invoice — and freeze once
-          paid.
+          Pay each contractor of an issued invoice separately — load their supplier
+          invoice number and date. The invoice moves to Paid once every contractor is
+          paid. Overage and SP internal hours are paid here too — per contractor,
+          without an invoice — and freeze once paid. All in hours.
         </p>
       </motion.header>
 
@@ -439,8 +503,8 @@ export function PaymentsPage() {
                 <span className="proj-kpi__label">Due this week</span>
               </button>
               <div className="proj-kpi proj-kpi--total">
-                <span className="proj-kpi__count">${fmtAmount(kpis.totalDue)}</span>
-                <span className="proj-kpi__label">Total amount due</span>
+                <span className="proj-kpi__count">{formatHours(kpis.pendingHours)} h</span>
+                <span className="proj-kpi__label">Hours pending</span>
               </div>
             </div>
             {can('settings.view') && (
@@ -476,84 +540,90 @@ export function PaymentsPage() {
                 <thead>
                   <tr>
                     <th scope="col">Contractor</th>
-                    <th scope="col">Invoice #</th>
-                    <th scope="col" className="col-num">Amount Due</th>
-                    <th scope="col">Payment Due</th>
-                    <th scope="col" className="col-num">Days Until Due</th>
-                    <th scope="col">Alert</th>
+                    <th scope="col">Supplier Invoice #</th>
+                    <th scope="col" className="col-num">Hours</th>
                     <th scope="col">Status</th>
                     <th scope="col" />
                   </tr>
                 </thead>
-                <tbody>
-                  {rows.map((r, index) => {
-                    // Pagable = emitida o cobrada (flujo Billing → Payments). El
-                    // resaltado de vencimiento, el badge de alerta y el botón de
-                    // pago aplican a ambas; sólo Paid queda fuera.
-                    const payable = isPayable(r.inv.status)
-                    const overdue = payable && r.alertLevel === 'overdue'
-                    const warning = payable && r.alertLevel === 'warning'
-                    const rowClass = overdue
-                      ? 'row--overdue-high'
-                      : warning
-                        ? 'row--overdue-mid'
-                        : ''
-                    return (
-                      <motion.tr
-                        key={r.inv.id}
-                        className={rowClass}
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: Math.min(index * 0.02, 0.3) }}
-                      >
-                        <td>{r.inv.userName}</td>
-                        <td className="cell-mono">{r.inv.supplierInvoiceNumber}</td>
-                        <td className="col-num cell-mono">{getCurrencySymbol(r.inv.currency)}{fmtAmount(r.inv.totalAmount)}</td>
-                        <td className="cell-mono">{r.dueDate ? formatDate(r.dueDate) : '—'}</td>
-                        <td className={`col-num cell-mono${overdue ? ' proj-days--overdue' : ''}`}>
-                          {r.daysUntilDue == null ? '—' : r.daysUntilDue}
+                {rows.map((r) => {
+                  const payable = isPayable(r.inv.status)
+                  const overdue = payable && r.alertLevel === 'overdue'
+                  const warning = payable && r.alertLevel === 'warning'
+                  return (
+                    <tbody key={r.inv.id} className="pay-invoice-group">
+                      <tr className="pay-invoice-head">
+                        <td colSpan={5}>
+                          <div className="pay-invoice-head__row">
+                            <span className="cell-strong cell-mono">
+                              {r.inv.spInvoiceNumber ?? '—'}
+                            </span>
+                            <span className="cell-soft">
+                              {r.inv.project || '—'}
+                              {r.inv.client ? ` · ${r.inv.client}` : ''}
+                              {r.inv.weekStart ? ` · week ${formatDate(r.inv.weekStart)}` : ''}
+                            </span>
+                            <span className="cell-soft">
+                              {r.paidCount}/{r.totalCount} paid · {formatHours(r.totalHours)} h
+                            </span>
+                            <BillingBadge status={r.inv.status} />
+                            {r.dueDate && (
+                              <span
+                                className={`cell-soft${overdue ? ' proj-days--overdue' : ''}`}
+                              >
+                                due {formatDate(r.dueDate)}
+                                {overdue ? (
+                                  <span className="badge badge--expired"> Overdue</span>
+                                ) : warning ? (
+                                  <span className="badge badge--critical"> Warning</span>
+                                ) : null}
+                              </span>
+                            )}
+                          </div>
                         </td>
-                        <td>
-                          {overdue ? (
-                            <span className="badge badge--expired">Overdue</span>
-                          ) : warning ? (
-                            <span className="badge badge--critical">Warning</span>
-                          ) : (
-                            <span className="cell-pop-empty">—</span>
-                          )}
-                        </td>
-                        <td><BillingBadge status={r.inv.status} /></td>
-                        <td>
-                          {payable && can('payments.create') ? (
-                            <button
-                              type="button"
-                              className="btn btn--pay btn--row"
-                              onClick={() => setModalInvoice(r)}
-                            >
-                              Register Payment
-                            </button>
-                          ) : r.inv.status === 'Paid' ? (
-                            <button
-                              type="button"
-                              className="btn btn--ghost btn--row"
-                              onClick={() => handleDownload(r)}
-                            >
-                              <Download size={14} aria-hidden="true" />
-                              Receipt
-                            </button>
-                          ) : null}
-                        </td>
-                      </motion.tr>
-                    )
-                  })}
-                </tbody>
+                      </tr>
+                      {r.contractors.map((ic) => (
+                        <tr key={ic.id} className={ic.paid ? 'row-static' : ''}>
+                          <td>{ic.contractor}</td>
+                          <td className="cell-mono">{ic.supplierInvoiceNumber ?? '—'}</td>
+                          <td className="col-num cell-mono">{formatHours(ic.hours)} h</td>
+                          <td>
+                            {ic.paid ? (
+                              <span className="badge badge--ok">Paid</span>
+                            ) : (
+                              <span className="cell-pop-empty">Pending</span>
+                            )}
+                          </td>
+                          <td>
+                            {!ic.paid && payable && can('payments.create') ? (
+                              <button
+                                type="button"
+                                className="btn btn--pay btn--row"
+                                onClick={() => setPayTargetContractor({ invoice: r.inv, ic })}
+                              >
+                                Register Payment
+                              </button>
+                            ) : ic.paid ? (
+                              <button
+                                type="button"
+                                className="btn btn--ghost btn--row"
+                                onClick={() => handleDownload(r.inv, ic)}
+                              >
+                                <Download size={14} aria-hidden="true" />
+                                Receipt
+                              </button>
+                            ) : null}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  )
+                })}
               </table>
             </div>
           )}
 
-          {/* Horas invoice-less a pagar (sin factura al cliente): overage y
-              sp_internal, cada una en su bloque. sp_internal saltea Billing pero
-              es un pago a alguien, por eso vive acá igual que overage. */}
+          {/* Horas invoice-less a pagar (sin factura al cliente): overage y sp_internal. */}
           {renderToPay('overage', overagePending)}
           {renderToPay('sp_internal', spInternalPending)}
 
@@ -564,13 +634,26 @@ export function PaymentsPage() {
       )}
 
       <AnimatePresence>
-        {modalInvoice && (
+        {payTargetContractor && (
           <RegisterPaymentModal
-            key={`pay-${modalInvoice.inv.id}`}
-            invoice={modalInvoice.inv}
-            currency={modalInvoice.inv.currency ?? 'USD'}
-            onClose={() => setModalInvoice(null)}
-            onConfirm={handleRegister}
+            key={`payc-${payTargetContractor.ic.id}`}
+            requireSupplierNumber
+            title="Register contractor payment"
+            submitLabel="Register payment"
+            summaryName={payTargetContractor.ic.contractor}
+            summaryMeta={`${payTargetContractor.invoice.spInvoiceNumber ?? 'Invoice'} · ${
+              payTargetContractor.invoice.project ?? '—'
+            }`}
+            summaryFigure={`${formatHours(payTargetContractor.ic.hours)} h`}
+            summaryFigureLabel="Hours to pay"
+            footerNote={
+              <>
+                Registers this contractor’s payment. The invoice moves to{' '}
+                <strong>Paid</strong> once every contractor is paid.
+              </>
+            }
+            onClose={() => setPayTargetContractor(null)}
+            onConfirm={handlePayContractor}
           />
         )}
       </AnimatePresence>
@@ -596,7 +679,6 @@ export function PaymentsPage() {
                 key={`${payTarget.allocation}-${payTarget.user}`}
                 title={`Register ${label.low} payment`}
                 submitLabel={`Register ${label.low} payment`}
-                currencyEditable
                 extraValid={selected.length > 0}
                 summaryName={payTarget.user}
                 summaryMeta={`${label.cap} · ${selected.length} of ${payTarget.entries.length} ${
@@ -604,7 +686,6 @@ export function PaymentsPage() {
                 }`}
                 summaryFigure={`${formatHours(selHours)} h`}
                 summaryFigureLabel={`${label.cap} hours (selected)`}
-                defaultAmount=""
                 extraContent={
                   <div className="overage-picker">
                     <span className="overage-picker__title">Hours to pay</span>

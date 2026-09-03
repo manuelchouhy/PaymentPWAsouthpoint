@@ -9,7 +9,9 @@ import { supabase, isSupabaseConfigured } from '../supabase'
 
 import {
   createInvoice,
+  createGroupedInvoice,
   getInvoices,
+  getInvoiceContractors,
   getInvoiceStatusHistory,
   getSyncLog,
   getSyncStatus,
@@ -163,10 +165,53 @@ async function testLogin() {
 async function testCleanupInvoiceChain(invoiceId) {
   requireTestMode('cleanupInvoiceChain')
   if (!isSupabaseConfigured || !invoiceId) return
-  await supabase.from('payments').delete().eq('invoice_id', invoiceId)
-  await supabase.from('collections').delete().eq('invoice_id', invoiceId)
-  await supabase.from('invoice_status_history').delete().eq('invoice_id', invoiceId)
-  await supabase.from('invoices').delete().eq('id', invoiceId)
+  // Orden dictado por las FKs a invoices:
+  //  - invoice_contractors.payment_id → payments(id) es NON-cascade. Aunque
+  //    invoice_contractors.invoice_id SÍ cascadea, ese cascade recién corre al borrar la
+  //    factura (último paso), demasiado tarde: hay que borrar las filas hijas ACÁ, antes
+  //    que los pagos, o el delete de payments viola esa FK. Por eso el delete explícito.
+  //  - payments.invoice_id es NON-cascade → hay que borrar los pagos explícitamente.
+  //  - collections / invoice_status_history son ON DELETE CASCADE desde invoices, así que
+  //    el delete de la factura los limpia (el cascade ignora la RLS de esas hijas). NO se
+  //    borran acá aparte: sus policies de delete de test siguen keyeadas en supplier#
+  //    (0015), que en el modelo agrupado es NULL → un delete explícito sería no-op y daría
+  //    falsa cobertura. El cascade es la vía real para esas dos.
+  // Se loguea el error de cada delete: si una policy de test no alcanza (p. ej. 0043 sin
+  // aplicar en ese entorno), el delete devuelve error sin tirar y dejaría residuo en la DB
+  // real — sin este log, ese leak (justo el que 0043 previene) pasaría inadvertido.
+  const del = async (table, col, val) => {
+    const { error } = await supabase.from(table).delete().eq(col, val)
+    if (error) console.error(`[api.test] cleanupInvoiceChain: delete ${table} falló:`, error)
+  }
+  await del('invoice_contractors', 'invoice_id', invoiceId)
+  await del('payments', 'invoice_id', invoiceId)
+  await del('invoices', 'id', invoiceId)
+}
+
+// Borra facturas de prueba y sus dependencias. Id-free: el flujo agrupado no expone el
+// id al test, así que el cleanup se hace por número. Con `spNumber` scopea a ESA factura
+// (SP o supplier# exacto) — así un test no pisa la factura de otro en vuelo. Sin él,
+// barre todas las PW-TEST-% (red de seguridad). Usado en el finally de los specs e2e.
+async function testCleanupTestInvoices() {
+  requireTestMode('cleanupTestInvoices')
+  if (!isSupabaseConfigured) return
+  // Barre TODAS las PW-TEST-% (LIKE con literal fijo, sin interpolar nada del caller).
+  // Sweep global a propósito: así reclama también residuo de una corrida anterior que
+  // falló antes de limpiar. Es seguro porque Playwright corre con workers:1 /
+  // fullyParallel:false (los tests comparten esta misma DB — ver playwright.config.ts):
+  // no hay otra corrida en vuelo cuyas facturas se puedan pisar. Si algún día se habilita
+  // paralelismo, esto debe pasar a limpieza por id de factura de la corrida.
+  const { data, error } = await supabase
+    .from('invoices')
+    .select('id')
+    .or('sp_invoice_number.like.PW-TEST-%,supplier_invoice_number.like.PW-TEST-%')
+  if (error) {
+    // Cleanup best-effort, pero un fallo silencioso dejaría residuo en la DB real:
+    // se avisa para que no pase inadvertido en el output del test.
+    console.error('[api.test] cleanupTestInvoices: no se pudieron listar facturas de test:', error)
+    return
+  }
+  for (const row of data ?? []) await testCleanupInvoiceChain(row.id)
 }
 
 async function getSession() {
@@ -235,6 +280,7 @@ export const supabaseApiClient = {
   test: {
     login: testLogin,
     cleanupInvoiceChain: testCleanupInvoiceChain,
+    cleanupTestInvoices: testCleanupTestInvoices,
   },
 
   timeEntries: {
@@ -244,7 +290,9 @@ export const supabaseApiClient = {
 
   invoices: {
     list: getInvoices,
+    listContractors: getInvoiceContractors,
     create: createInvoice,
+    createGrouped: createGroupedInvoice,
     updateStatus: updateInvoiceStatus,
     getStatusHistory: getInvoiceStatusHistory,
   },

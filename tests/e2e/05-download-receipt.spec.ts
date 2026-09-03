@@ -1,35 +1,8 @@
-import { test, expect } from '@playwright/test'
-import {
-  loginAsTestAdmin,
-  billFirstPendingEntry,
-  collectInvoice,
-  payInvoice,
-  cleanupInvoice,
-} from './helpers'
+import { test } from '@playwright/test'
 
-test('descargar el PDF de comprobante de una factura Paid', async ({ page }) => {
-  // 90s: encadena bill + collect + pay (cada uno un round-trip real a
-  // Supabase) antes de siquiera llegar a descargar el PDF — el default de
-  // 45s queda muy justo para las 3 mutaciones reales seguidas.
-  test.setTimeout(90_000)
-  await loginAsTestAdmin(page)
-
-  const { invoiceId, invoiceNumber } = await billFirstPendingEntry(page)
-
-  try {
-    await collectInvoice(page, invoiceNumber)
-    await payInvoice(page, invoiceNumber)
-
-    const row = page.locator('tr', { hasText: invoiceNumber })
-    await expect(row).toBeVisible()
-
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      row.getByRole('button', { name: 'Receipt' }).click(),
-    ])
-
-    expect(download.suggestedFilename()).toMatch(/^recibo-pago-.*\.pdf$/)
-  } finally {
-    await cleanupInvoice(page, invoiceId)
-  }
-})
+// El recibo pasó a ser POR CONTRACTOR (modelo agrupado en horas). La descarga y el
+// nombre del PDF (/^recibo-pago-.*\.pdf$/) ya los verifica el spec 04 end-to-end
+// (pagar todos los contractors → click en Receipt → download). Este archivo queda como
+// skip para no duplicar esa cobertura; el flujo single-contractor viejo con Collections
+// ya no existe.
+test.skip('descargar el recibo de pago (cubierto end-to-end por el spec 04)', () => {})

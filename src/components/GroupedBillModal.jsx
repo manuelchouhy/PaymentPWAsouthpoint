@@ -1,40 +1,57 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { AlertTriangle, FileText, X } from 'lucide-react'
 import { Avatar } from './Avatar'
 import { formatHours } from '../lib/format'
 import { contractStatus, daysRemaining } from '../lib/projectsData'
-import { api } from '../lib/api'
+import { projectsForContractWarnings } from '../lib/billingSelection'
 import { useScrollLock } from '../lib/useScrollLock'
 
 /**
- * Modal "Emitir factura" (FR-05), modelo en HORAS (slice 04d). Emite una factura
- * single-contractor (status Invoiced) sin monto/moneda: sólo el SP invoice number y
- * notas. Las horas salen de las entries seleccionadas. Se unifica al camino agrupado
- * (una fila invoice_contractors), así la factura es pagable en Payments.
+ * Modal "Emitir factura AGRUPADA" (slice 03, página Billing). Una sola factura
+ * cubre a VARIOS contractors del mismo cliente + proyecto + semana, medida en
+ * HORAS. Al emitir se carga SÓLO el SP invoice number (el número de SouthPoint al
+ * cliente) + notes; el monto, la fecha, la moneda y el supplier# de cada contractor
+ * se cargan al PAGAR (Payments).
+ *
+ * Es un componente aparte del BillModal single-contractor (que sigue usando la
+ * página Time Entries): no comparten API para no acoplar los dos flujos.
  *
  * @param {{
- *   user: string,
+ *   contractors: Array<{ contractor: string, entries: Array<{id:any,hours:number}>, hours: number }>,
+ *   client?: ?string,
  *   entries: import('../lib/data').TimeEntry[],
  *   hours: number,
- *   remainingHours?: number,
+ *   projects?: Array<object>,
+ *   resolveClient?: ?((project: object) => { client: string|null }),
+ *   remainingByContractor?: Array<{ contractor: string, remaining: number }>,
  *   onClose: () => void,
- *   onConfirm: (data: { supplierInvoiceNumber: string, notes: string }) => Promise<void>,
+ *   onConfirm: (data: { spInvoiceNumber: string, notes: string }) => Promise<void>,
  * }} props
  */
-export function BillModal({ user, entries, hours, remainingHours = 0, onClose, onConfirm }) {
-  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('')
+export function GroupedBillModal({
+  contractors = [],
+  client = null,
+  entries = [],
+  hours,
+  projects = [],
+  resolveClient = null,
+  remainingByContractor = [],
+  onClose,
+  onConfirm,
+}) {
+  const [spInvoiceNumber, setSpInvoiceNumber] = useState('')
   const [notes, setNotes] = useState('')
   const [touched, setTouched] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
-  const [contractWarnings, setContractWarnings] = useState([])
 
   const dialogRef = useRef(null)
   const firstFieldRef = useRef(null)
 
-  const invoiceValid = supplierInvoiceNumber.trim().length > 0
-  const formValid = invoiceValid
+  const invoiceValid = spInvoiceNumber.trim().length > 0
+  // Umbral 0.05: por debajo, formatHours redondea a "0.0" y no vale la pena avisar.
+  const shownRemaining = remainingByContractor.filter((r) => r.remaining >= 0.05)
 
   useScrollLock()
 
@@ -42,30 +59,57 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
     firstFieldRef.current?.focus()
   }, [])
 
+  // Clave de los proyectos de la selección: cadena barata que se recomputa cada
+  // render (no se memoiza porque `entries` es un array nuevo cada vez, así que un
+  // useMemo([entries]) no cachearía nada). Su VALOR sí es estable si la selección de
+  // proyectos no cambió, y es lo que gatea el useMemo caro de contractWarnings abajo:
+  // ahí está el ahorro real, no en calcular esta cadena. Id por proyecto, o nombre si
+  // la hora no trae id.
+  const selectionProjectKey = [
+    ...new Set(entries.map((e) => (e.zohoProjectId ? `#${e.zohoProjectId}` : e.project)).filter(Boolean)),
+  ]
+    .sort()
+    .join('|')
+
+  // Avisos de contrato (Expired/Critical/Expiring Soon) de los proyectos de la
+  // selección. Los proyectos ya vienen del padre (BillingPage los cargó para la
+  // grilla) → sin fetch acá. La unión hora→proyecto la hace projectsForContractWarnings
+  // por zohoProjectId (o por nombre + cliente maestro para horas legacy sin id), así el
+  // aviso es el del proyecto EXACTO facturado y no el de un homónimo/otro cliente. Ver
+  // billingSelection.js. selectionProjectKey es el dep estable; se lee `entries` dentro.
+  const contractWarnings = useMemo(() => {
+    if (!selectionProjectKey) return []
+    const warnings = []
+    for (const p of projectsForContractWarnings(projects, entries, client, resolveClient)) {
+      const days = daysRemaining(p.contractExpirationDate)
+      const status = contractStatus(days)
+      if (status === 'Expired' || status === 'Critical' || status === 'Expiring Soon') {
+        warnings.push({
+          id: p.id,
+          projectName: p.projectName,
+          contractNumber: p.contractNumber,
+          days,
+          status,
+        })
+      }
+    }
+    return warnings
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `entries` cambia de
+    // identidad cada render; selectionProjectKey es su proxy estable (encapsula los
+    // proyectos, lo único que afecta a los avisos).
+  }, [selectionProjectKey, projects, client, resolveClient])
+
+  // Traza si hay selección pero no llegaron proyectos: sin este aviso, el usuario
+  // podría facturar creyendo que no había avisos de contrato cuando en realidad no se
+  // pudieron computar (BillingPage no logra cargar projects y queda []). Reemplaza el
+  // console.warn del fetch que este componente hacía antes de recibir projects del padre.
   useEffect(() => {
-    const names = new Set(entries.map((e) => e.project).filter(Boolean))
-    if (names.size === 0) return
-    api.projects.list()
-      .then((all) => {
-        const warnings = []
-        for (const p of all) {
-          if (!names.has(p.projectName)) continue
-          const days = daysRemaining(p.contractExpirationDate)
-          const status = contractStatus(days)
-          if (status === 'Expired' || status === 'Critical' || status === 'Expiring Soon') {
-            warnings.push({
-              id: p.id,
-              projectName: p.projectName,
-              contractNumber: p.contractNumber,
-              days,
-              status,
-            })
-          }
-        }
-        setContractWarnings(warnings)
-      })
-      .catch(() => {})
-  }, [entries])
+    if (selectionProjectKey && projects.length === 0) {
+      console.warn(
+        '[GroupedBillModal] sin proyectos cargados: no se pudieron verificar vencimientos de contrato de la selección',
+      )
+    }
+  }, [selectionProjectKey, projects.length])
 
   useEffect(() => {
     function onKeyDown(event) {
@@ -96,7 +140,7 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
   async function handleSubmit(event) {
     event.preventDefault()
     setTouched(true)
-    if (!formValid || submitting) {
+    if (!invoiceValid || submitting) {
       if (!invoiceValid) firstFieldRef.current?.focus()
       return
     }
@@ -104,14 +148,12 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
     setSubmitting(true)
     try {
       await onConfirm({
-        supplierInvoiceNumber: supplierInvoiceNumber.trim(),
+        spInvoiceNumber: spInvoiceNumber.trim(),
         notes: notes.trim(),
       })
     } catch (error) {
       setSubmitting(false)
-      setSubmitError(
-        error?.message ?? 'Could not issue the invoice. Please try again.',
-      )
+      setSubmitError(error?.message ?? 'Could not issue the invoice. Please try again.')
     }
   }
 
@@ -128,7 +170,7 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
         className="modal modal--wide"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="bill-modal-title"
+        aria-labelledby="grouped-bill-modal-title"
         ref={dialogRef}
         onClick={(event) => event.stopPropagation()}
         initial={{ opacity: 0, scale: 0.98 }}
@@ -139,7 +181,7 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
         <div className="modal__head">
           <div>
             <span className="modal__kicker">Contractor billing</span>
-            <h2 className="modal__title" id="bill-modal-title">
+            <h2 className="modal__title" id="grouped-bill-modal-title">
               Issue invoice
             </h2>
           </div>
@@ -154,9 +196,10 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
         </div>
 
         <div className="modal__summary">
-          <Avatar name={user} size="md" />
           <div className="modal__summary-id">
-            <span className="modal__summary-user">{user}</span>
+            <span className="modal__summary-user">
+              {contractors.length} contractor{contractors.length === 1 ? '' : 's'}
+            </span>
             <span className="modal__summary-meta">
               {entries.length}{' '}
               {entries.length === 1 ? 'entry selected' : 'entries selected'}
@@ -168,14 +211,30 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
           </div>
         </div>
 
-        {/* Umbral 0.05: por debajo, formatHours redondea a "0.0" — sin epsilon,
-            un residuo float al seleccionar todo mostraría "0.0 more...". */}
-        {remainingHours >= 0.05 && (
-          <p className="modal__note" role="status">
+        {/* Contractors incluidos en esta factura, con sus horas. */}
+        <ul className="modal__contractors">
+          {contractors.map((c) => (
+            <li key={c.contractor} className="modal__contractor">
+              <Avatar name={c.contractor} size="sm" />
+              <span className="modal__contractor-name">{c.contractor}</span>
+              <span className="modal__contractor-hours">{formatHours(c.hours)} h</span>
+            </li>
+          ))}
+        </ul>
+
+        {/* Horas pendientes por contractor que quedan fuera de esta factura.
+            Umbral 0.05: por debajo, formatHours redondea a "0.0". */}
+        {shownRemaining.length > 0 && (
+          <div className="modal__note" role="status">
             <AlertTriangle size={14} aria-hidden="true" />
-            {formatHours(remainingHours)} more pending hours of {user} are not
-            included in this invoice.
-          </p>
+            <span>
+              Not included in this invoice:{' '}
+              {shownRemaining
+                .map((r) => `${formatHours(r.remaining)} h of ${r.contractor}`)
+                .join(', ')}
+              .
+            </span>
+          </div>
         )}
 
         {contractWarnings.length > 0 && (
@@ -202,37 +261,37 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
 
         <form className="modal__form" onSubmit={handleSubmit} noValidate>
           <div className="field">
-            <label className="field__label" htmlFor="supplier-invoice-number">
-              SP invoice number
+            <label className="field__label" htmlFor="sp-invoice-number">
+              SouthPointLabs invoice number
               <span className="field__req">required</span>
             </label>
             <input
-              id="supplier-invoice-number"
+              id="sp-invoice-number"
               ref={firstFieldRef}
               className={`field__input${
                 touched && !invoiceValid ? ' field__input--error' : ''
               }`}
-              value={supplierInvoiceNumber}
-              onChange={(event) => setSupplierInvoiceNumber(event.target.value)}
+              value={spInvoiceNumber}
+              onChange={(event) => setSpInvoiceNumber(event.target.value)}
               onBlur={() => setTouched(true)}
-              placeholder="Ej. FA-0001-00012345"
+              placeholder="Ej. SP-2026-0001"
               autoComplete="off"
               aria-invalid={touched && !invoiceValid}
             />
             {touched && !invoiceValid && (
               <span className="field__error">
-                Please enter the SP invoice number.
+                Please enter the SouthPointLabs invoice number.
               </span>
             )}
           </div>
 
           <div className="field">
-            <label className="field__label" htmlFor="invoice-notes">
+            <label className="field__label" htmlFor="grouped-invoice-notes">
               Notes
               <span className="field__opt">optional</span>
             </label>
             <textarea
-              id="invoice-notes"
+              id="grouped-invoice-notes"
               className="field__input field__textarea"
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
@@ -243,8 +302,11 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
 
           <p className="modal__note">
             <FileText size={14} aria-hidden="true" />
-            The invoice is issued with status <strong>Invoiced</strong>. Collection and
-            contractor payment are subsequent steps.
+            <span>
+              The invoice is issued with status <strong>Invoiced</strong>. Each
+              contractor&apos;s supplier invoice number, amount and date are loaded when
+              paying them in Payments.
+            </span>
           </p>
 
           {submitError && (
@@ -265,8 +327,8 @@ export function BillModal({ user, entries, hours, remainingHours = 0, onClose, o
             <motion.button
               type="submit"
               className="btn btn--pay"
-              disabled={!formValid || submitting}
-              whileTap={formValid && !submitting ? { scale: 0.97 } : undefined}
+              disabled={!invoiceValid || submitting}
+              whileTap={invoiceValid && !submitting ? { scale: 0.97 } : undefined}
             >
               {submitting ? (
                 <span className="spinner" aria-hidden="true" />

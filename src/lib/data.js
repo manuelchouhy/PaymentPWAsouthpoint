@@ -278,6 +278,22 @@ const MOCK_INVOICES = [
   },
 ]
 
+// Demo (sin Supabase): filas `invoice_contractors` de las facturas mock. Sin esto,
+// getInvoiceContractors devolvería [] y Payments ocultaría toda factura Invoiced (que
+// se expande a sus contractors). Una fila por factura (single-contractor); las Paid ya
+// vienen con payment_id para mostrarse pagas. Se completa al emitir en demo.
+const mockEntryHours = new Map(MOCK_TIME_ENTRIES.map((e) => [e.id, Number(e.hours) || 0]))
+let demoInvoiceContractors = MOCK_INVOICES.map((inv) => ({
+  id: `${inv.id}-c1`,
+  invoiceId: inv.id,
+  contractor: inv.userName,
+  entryIds: [...inv.entryIds],
+  hours: inv.entryIds.reduce((s, id) => s + (mockEntryHours.get(id) || 0), 0),
+  supplierInvoiceNumber: inv.status === 'Paid' ? 'SUP-DEMO-0001' : null,
+  paymentDate: inv.status === 'Paid' ? inv.invoiceDate : null,
+  paymentId: inv.status === 'Paid' ? 'pay-1' : null,
+}))
+
 /** @type {Array<{id:string,ranAt:string,status:string,recordsCount:?number,errorMessage:?string}>} */
 const MOCK_SYNC_LOG = [
   { id: 'sl-1', ranAt: new Date(Date.now() - 7 * 60 * 1000).toISOString(), status: 'OK', recordsCount: 12, errorMessage: null },
@@ -355,10 +371,17 @@ function rowToInvoice(row) {
     client: row.client ?? null,
     weekStart: row.week_start ?? null,
     invoiceDate: row.invoice_date,
-    totalAmount: Number(row.total_amount),
-    currency: row.currency ?? 'USD',
+    // Modelo en HORAS (slice 04d/05): la factura ya no lleva monto/moneda. El total
+    // se deriva de las horas de sus `invoice_contractors`. Las columnas total_amount/
+    // currency se dropean en la migración 0041; acá ya no se leen. Se dejan explícitos
+    // en `null` (no ausentes) para que la página Collections —fuera de uso y a
+    // decomisionar junto con 0041; ver open items— degrade a 0 en vez de romper con NaN.
+    totalAmount: null,
+    currency: null,
     notes: row.notes ?? null,
-    userName: row.user_name,
+    // Legacy single-contractor: la columna user_name no se dropea (0039 sólo la relaja
+    // a nullable); en el modelo agrupado viene NULL (el contractor vive en la hija).
+    userName: row.user_name ?? null,
     entryIds: Array.isArray(row.entry_ids) ? row.entry_ids : [],
     status: row.status ?? 'Invoiced',
     paymentTermsDays: row.payment_terms_days ?? 30,
@@ -623,8 +646,9 @@ export async function getInvoices() {
 
   const { data, error } = await supabase
     .from('invoices')
+    // Sin total_amount/currency: el modelo es en horas (se dropean en 0041).
     .select(
-      'id, supplier_invoice_number, sp_invoice_number, project, client, week_start, invoice_date, total_amount, currency, notes, user_name, entry_ids, status, payment_terms_days, created_at, created_by',
+      'id, supplier_invoice_number, sp_invoice_number, project, client, week_start, invoice_date, notes, user_name, entry_ids, status, payment_terms_days, created_at, created_by',
     )
     .order('created_at', { ascending: false })
 
@@ -633,15 +657,92 @@ export async function getInvoices() {
 }
 
 /**
- * Emite una factura (INSERT en `invoices`). En modo demo resuelve sin escribir
- * pero devuelve un objeto Invoice local listo para sumarse al estado de la UI.
+ * Filas `invoice_contractors` de TODAS las facturas (o de un set de ids). El módulo
+ * Payments las usa para expandir cada factura `Invoiced` a sus contractors y decidir
+ * a quién le falta pagar (payableInvoicesByContractor). Devuelve el shape camelCase de
+ * la UI (rowToInvoiceContractor). En modo demo no hay tabla hija → [].
+ * @param {Array<string|number>=} invoiceIds  opcional, para acotar a ciertas facturas
+ * @returns {Promise<object[]>}
+ */
+const INVOICE_CONTRACTOR_COLUMNS =
+  'id, invoice_id, contractor, entry_ids, hours, supplier_invoice_number, payment_date, payment_id'
+
+export async function getInvoiceContractors(invoiceIds) {
+  if (!isSupabaseConfigured) {
+    await new Promise((resolve) => setTimeout(resolve, 120))
+    if (Array.isArray(invoiceIds)) {
+      const wanted = new Set(invoiceIds.map(String))
+      return demoInvoiceContractors
+        .filter((c) => wanted.has(String(c.invoiceId)))
+        .map((c) => ({ ...c, entryIds: [...c.entryIds] }))
+    }
+    return demoInvoiceContractors.map((c) => ({ ...c, entryIds: [...c.entryIds] }))
+  }
+  // Si se pasan ids, se acota con `.in()` en tandas (misma razón que getFrozenEntryIds:
+  // una URI con cientos de ids da 414). Sin ids, trae todas (la tabla es chica).
+  if (Array.isArray(invoiceIds)) {
+    const numericIds = invoiceIds.map(Number).filter((n) => Number.isFinite(n))
+    if (numericIds.length === 0) return []
+    const out = []
+    for (const chunk of chunkIds(numericIds)) {
+      const { data, error } = await supabase
+        .from('invoice_contractors')
+        .select(INVOICE_CONTRACTOR_COLUMNS)
+        .in('invoice_id', chunk)
+        .order('id', { ascending: true })
+      if (error) throw new Error(error.message)
+      for (const row of data) out.push(rowToInvoiceContractor(row))
+    }
+    return out
+  }
+  const { data, error } = await supabase
+    .from('invoice_contractors')
+    .select(INVOICE_CONTRACTOR_COLUMNS)
+    .order('id', { ascending: true })
+  if (error) throw new Error(error.message)
+  return data.map(rowToInvoiceContractor)
+}
+
+/**
+ * Demo (sin Supabase): marca una fila invoice_contractors como pagada, para que el
+ * supplier invoice number + fecha + link al pago PERSISTAN entre recargas de Payments
+ * (getInvoiceContractors relee el store). En prod lo hace la RPC en la base; acá es el
+ * equivalente in-memory. La llama paymentsData.createPayment en su rama demo.
+ */
+export function markDemoInvoiceContractorPaid(invoiceContractorId, { paymentId, supplierInvoiceNumber, paymentDate }) {
+  demoInvoiceContractors = demoInvoiceContractors.map((c) =>
+    c.id === invoiceContractorId
+      ? {
+          ...c,
+          paymentId: paymentId ?? c.paymentId,
+          supplierInvoiceNumber: supplierInvoiceNumber ?? c.supplierInvoiceNumber,
+          paymentDate: paymentDate ?? c.paymentDate,
+        }
+      : c,
+  )
+}
+
+/**
+ * Emite una factura single-contractor desde la vista legacy de Time Entries.
+ *
+ * Modelo en HORAS (slice 04d): se unifica al camino AGRUPADO — una factura de un solo
+ * contractor es el caso degenerado de la factura multi-contractor. Se emite vía la RPC
+ * `create_grouped_invoice` (0039) con UNA fila `invoice_contractors` (el contractor =
+ * userName, entry_ids = las horas seleccionadas). Así la factura ES pagable en Payments
+ * (que expande cada factura a sus invoice_contractors) y no arrastra monto/moneda.
+ * El número cargado se guarda como SP invoice number (SouthPoint → cliente); el supplier#
+ * del contractor se carga al pagar. Las horas las DERIVA la RPC de time_entries.
+ *
+ * OPEN ITEM: en /time-entries la selección puede cruzar proyectos/semanas (la vista no lo
+ * restringe como /billing). Acá se toma el proyecto/cliente de la primera entry; para
+ * emisión agrupada estricta por proyecto+semana usar /billing (GroupedBillModal).
  *
  * @param {{
- *   supplierInvoiceNumber: string,
- *   invoiceDate: string,
- *   totalAmount: number,
+ *   supplierInvoiceNumber: string,   // se guarda como SP invoice number
  *   notes?: string,
  *   userName: string,
+ *   project?: string,
+ *   client?: string,
  *   entryIds: Array<string|number>,
  *   createdBy?: string,
  * }} payload
@@ -649,70 +750,85 @@ export async function getInvoices() {
  */
 export async function createInvoice({
   supplierInvoiceNumber,
-  invoiceDate,
-  totalAmount,
-  currency = 'USD',
   notes,
   userName,
+  project = null,
+  client = null,
   entryIds,
   createdBy,
 }) {
-  if (!isSupabaseConfigured) {
-    await new Promise((resolve) => setTimeout(resolve, 350))
-    const invoice = {
-      id: `inv-demo-${Date.now()}`,
-      supplierInvoiceNumber,
-      invoiceDate,
-      totalAmount: Number(totalAmount),
-      currency,
-      notes: notes || null,
-      userName,
-      entryIds: [...entryIds],
-      status: 'Invoiced',
-      createdAt: new Date().toISOString(),
-      createdBy: createdBy || null,
-    }
-    return { ok: true, mode: 'demo', invoice }
-  }
-
-  // No hay constraint único en supplier_invoice_number todavía (hay duplicados
-  // históricos que requieren revisión manual antes de poder agregarlo), así que
-  // se valida acá para bloquear NUEVOS duplicados sin tocar los existentes.
-  const { data: existing, error: existingError } = await supabase
-    .from('invoices')
-    .select('id')
-    .eq('supplier_invoice_number', supplierInvoiceNumber)
-    .limit(1)
-  if (existingError) throw new Error(existingError.message)
-  if (existing.length > 0) {
-    const err = new Error('That supplier invoice number already exists. Please use a different one.')
-    err.code = 'duplicate'
-    throw err
-  }
-
   // entry_ids en Supabase es bigint[]; filtramos cualquier id no-numérico.
   const numericIds = entryIds
     .map((id) => (typeof id === 'number' ? id : Number(id)))
     .filter((id) => Number.isFinite(id))
 
-  const { data, error } = await supabase
-    .from('invoices')
-    .insert({
-      supplier_invoice_number: supplierInvoiceNumber,
-      invoice_date: invoiceDate,
-      total_amount: Number(totalAmount),
-      currency,
+  if (!isSupabaseConfigured) {
+    await new Promise((resolve) => setTimeout(resolve, 350))
+    // Sufijo aleatorio además del timestamp: dos emisiones en el mismo ms no colisionan
+    // de id (claves de React / atribución en el store demo de invoice_contractors).
+    const uniq = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const id = `inv-demo-${uniq}`
+    const invoiceRow = {
+      id,
+      supplier_invoice_number: null,
+      sp_invoice_number: supplierInvoiceNumber,
+      project,
+      client,
+      week_start: null,
+      invoice_date: null,
       notes: notes || null,
       user_name: userName,
-      entry_ids: numericIds,
+      entry_ids: [...numericIds],
       status: 'Invoiced',
+      payment_terms_days: 30,
+      created_at: new Date().toISOString(),
       created_by: createdBy || null,
-    })
-    .select()
-    .single()
+    }
+    // Fila invoice_contractors demo (single-contractor) → la factura es pagable en
+    // Payments sin Supabase. hours se estima desde MOCK_TIME_ENTRIES cuando existan.
+    demoInvoiceContractors = [
+      ...demoInvoiceContractors,
+      {
+        id: `invc-demo-${uniq}`,
+        invoiceId: id,
+        contractor: userName,
+        entryIds: [...numericIds],
+        hours: numericIds.reduce((s, eid) => s + (mockEntryHours.get(eid) || 0), 0),
+        supplierInvoiceNumber: null,
+        paymentDate: null,
+        paymentId: null,
+      },
+    ]
+    return { ok: true, mode: 'demo', invoice: rowToInvoice(invoiceRow) }
+  }
 
-  if (error) throw new Error(error.message)
-  return { ok: true, mode: 'supabase', invoice: rowToInvoice(data) }
+  // Emisión ATÓMICA agrupada con UN contractor (misma RPC que createGroupedInvoice). La
+  // RPC valida la unicidad del SP number, deriva las horas y crea la fila hija.
+  const { data, error } = await supabase.rpc('create_grouped_invoice', {
+    p_sp_invoice_number: supplierInvoiceNumber,
+    p_project: project,
+    p_client: client,
+    p_week_start: null,
+    p_notes: notes || null,
+    p_created_by: createdBy || null,
+    p_contractors: [{ contractor: userName, entry_ids: numericIds }],
+  })
+  if (error) {
+    if (error.code === '23505' || /already exists/i.test(error.message ?? '')) {
+      const err = new Error('That invoice number already exists. Please use a different one.')
+      err.code = 'duplicate'
+      throw err
+    }
+    if (error.code === 'OV001') {
+      const err = new Error(
+        'One or more of these hours are already covered by another invoice or payment. Refresh and try again.',
+      )
+      err.code = 'overlap'
+      throw err
+    }
+    throw new Error(error.message)
+  }
+  return { ok: true, mode: 'supabase', invoice: rowToInvoice(data.invoice) }
 }
 
 /**
@@ -741,7 +857,8 @@ export async function createGroupedInvoice({ createdBy, ...selection }) {
 
   if (!isSupabaseConfigured) {
     await new Promise((resolve) => setTimeout(resolve, 350))
-    const id = `inv-demo-${Date.now()}`
+    // Sufijo aleatorio + timestamp: dos emisiones en el mismo ms no colisionan de id.
+    const id = `inv-demo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     // Se arma una fila sintética (snake_case) y se pasa por rowToInvoice —la misma
     // normalización que la rama Supabase— para que demo y prod no puedan diverger
     // en el shape aunque rowToInvoice cambie. La factura agrupada es "sin plata".
@@ -763,21 +880,20 @@ export async function createGroupedInvoice({ createdBy, ...selection }) {
       created_at: new Date().toISOString(),
       created_by: createdBy || null,
     }
-    return {
-      ok: true,
-      mode: 'demo',
-      invoice: rowToInvoice(invoiceRow),
-      contractors: contractorRows.map((r, i) => ({
-        id: `invc-demo-${Date.now()}-${i}`,
-        invoiceId: id,
-        contractor: r.contractor,
-        entryIds: [...r.entry_ids],
-        hours: r.hours,
-        supplierInvoiceNumber: null,
-        paymentDate: null,
-        paymentId: null,
-      })),
-    }
+    const contractors = contractorRows.map((r, i) => ({
+      // Basado en el id (ya único) de la factura → sin colisión entre emisiones.
+      id: `${id}-c${i}`,
+      invoiceId: id,
+      contractor: r.contractor,
+      entryIds: [...r.entry_ids],
+      hours: r.hours,
+      supplierInvoiceNumber: null,
+      paymentDate: null,
+      paymentId: null,
+    }))
+    // Persistir en el store demo para que Payments las liste como pagables.
+    demoInvoiceContractors = [...demoInvoiceContractors, ...contractors]
+    return { ok: true, mode: 'demo', invoice: rowToInvoice(invoiceRow), contractors }
   }
 
   // Emisión ATÓMICA en el servidor (create_grouped_invoice, migración 0039):
