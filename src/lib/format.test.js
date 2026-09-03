@@ -8,6 +8,8 @@ import {
   weekEndISO,
   shiftWeekISO,
   formatUsDate,
+  formatInvoicePeriod,
+  distinctWeekCount,
 } from './format.js'
 
 // Las semanas de facturación van de DOMINGO a SÁBADO (no ISO lunes–domingo).
@@ -15,6 +17,38 @@ import {
 
 test('el domingo abre una semana nueva; el sábado previo es otra', () => {
   assert.notEqual(sundayWeek('2026-08-09'), sundayWeek('2026-08-08'))
+})
+
+// --- Período de factura (rango de semanas, feature multi-semana) --------------
+// 2026-08-09 = WEEK 33; 2026-08-23 = WEEK 35 (domingos, mismo año).
+
+test('formatInvoicePeriod: una sola semana (weekEnd null) → "WEEK N · año"', () => {
+  assert.equal(formatInvoicePeriod('2026-08-09', null), 'WEEK 33 · 2026')
+})
+
+test('formatInvoicePeriod: weekEnd igual a weekStart también es semana única', () => {
+  assert.equal(formatInvoicePeriod('2026-08-09', '2026-08-09'), 'WEEK 33 · 2026')
+})
+
+test('formatInvoicePeriod: rango (mismo año) → "WEEK a – b · año"', () => {
+  assert.equal(formatInvoicePeriod('2026-08-09', '2026-08-23'), 'WEEK 33 – 35 · 2026')
+})
+
+test('formatInvoicePeriod: rango con conteo → agrega "(N weeks)" (desambigua no contiguas)', () => {
+  assert.equal(formatInvoicePeriod('2026-08-09', '2026-08-23', 2), 'WEEK 33 – 35 · 2026 (2 weeks)')
+})
+
+test('formatInvoicePeriod: sin weekStart → cadena vacía', () => {
+  assert.equal(formatInvoicePeriod('', null), '')
+  assert.equal(formatInvoicePeriod(null, '2026-08-23'), '')
+})
+
+test('distinctWeekCount: cuenta semanas domingo–sábado DISTINTAS entre fechas de horas', () => {
+  // 08-12 y 08-10 caen en la semana del 08-09; 08-19 en la del 08-16 → 2 semanas.
+  assert.equal(distinctWeekCount(['2026-08-12', '2026-08-10', '2026-08-19']), 2)
+  // Fechas inválidas/vacías no cuentan.
+  assert.equal(distinctWeekCount(['2026-08-12', '', null]), 1)
+  assert.equal(distinctWeekCount([]), 0)
 })
 
 test('weekStartISO: el domingo de la semana dom–sáb de una fecha', () => {

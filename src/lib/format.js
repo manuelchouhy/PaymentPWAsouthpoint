@@ -194,6 +194,49 @@ export function formatDateTime(iso = '') {
 }
 
 /**
+ * Período de una factura como etiqueta de semana(s). Una factura puede cubrir una o
+ * VARIAS semanas del mismo cliente+proyecto (feature multi-semana, migración 0044):
+ *   - una sola semana (`weekEnd` null o igual a `weekStart`) → "WEEK 33 · 2026".
+ *   - un rango → "WEEK 33 – 35 · 2026"; si `weekCount` > 1 se agrega "(N weeks)" para
+ *     desambiguar selecciones NO contiguas (donde el span leería como más semanas de
+ *     las realmente facturadas). Cruce de año (raro): "WEEK a · Yа – WEEK b · Yb".
+ * Ambos extremos son domingos que identifican la semana (ver sundayWeek). Cadena
+ * vacía si no hay `weekStart` (o es inválido).
+ * @param {?string} weekStart domingo ISO de la primera semana
+ * @param {?string} [weekEnd] domingo ISO de la última (null = una sola semana)
+ * @param {?number} [weekCount] cantidad de semanas realmente facturadas (opcional)
+ * @returns {string}
+ */
+export function formatInvoicePeriod(weekStart, weekEnd = null, weekCount = null) {
+  const wS = sundayWeek(weekStart ?? '')
+  if (wS == null) return ''
+  const yS = sundayWeekYear(weekStart)
+  if (!weekEnd || weekEnd === weekStart) return `WEEK ${wS} · ${yS}`
+  const wE = sundayWeek(weekEnd)
+  const yE = sundayWeekYear(weekEnd)
+  const range =
+    yS === yE ? `WEEK ${wS} – ${wE} · ${yE}` : `WEEK ${wS} · ${yS} – WEEK ${wE} · ${yE}`
+  return weekCount && weekCount > 1 ? `${range} (${weekCount} weeks)` : range
+}
+
+/**
+ * Cantidad de semanas domingo–sábado DISTINTAS que abarca un conjunto de fechas (las
+ * de las horas de una factura). Sirve para el "(N weeks)" del período: cuenta las
+ * semanas realmente facturadas, no el ancho del span (que en selecciones no contiguas
+ * sería mayor). Fechas vacías/inválidas se ignoran.
+ * @param {Array<?string>} isoDates
+ * @returns {number}
+ */
+export function distinctWeekCount(isoDates = []) {
+  const weeks = new Set()
+  for (const d of isoDates) {
+    const ws = weekStartISO(d ?? '')
+    if (ws) weeks.add(ws)
+  }
+  return weeks.size
+}
+
+/**
  * Nombre de archivo legible a partir de un path de Storage. Los paths
  * llevan un prefijo de timestamp para evitar colisiones (ver
  * uploadClientMsa/uploadSowFile) y a veces una carpeta demo/ — ambos se pelan

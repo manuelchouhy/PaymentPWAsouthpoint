@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { formatDate, formatDateTime, formatHours } from './format'
+import { formatDate, formatDateTime, formatHours, formatInvoicePeriod } from './format'
 
 /**
  * Genera y descarga un PDF de comprobante de pago al contractor (FR-10), modelo en
@@ -8,13 +8,14 @@ import { formatDate, formatDateTime, formatHours } from './format'
  * monto/moneda: el detalle es en horas.
  *
  * @param {{
- *   invoice: object,                 // factura agrupada (spInvoiceNumber, project, client, weekStart)
+ *   invoice: object,                 // factura agrupada (spInvoiceNumber, project, client, weekStart, weekEnd)
  *   invoiceContractor?: object,      // fila del contractor pagado (contractor, hours, supplierInvoiceNumber)
  *   payment: object,                 // el pago (paymentDate, bankMethod, transferReference, notes, backDated)
+ *   weekCount?: number,              // semanas realmente facturadas (para el rango multi-semana)
  *   generatedBy?: string,
  * }} data
  */
-export function downloadPaymentReceipt({ invoice, invoiceContractor, payment, generatedBy }) {
+export function downloadPaymentReceipt({ invoice, invoiceContractor, payment, weekCount, generatedBy }) {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
   const accent = [124, 58, 237] // violeta
@@ -61,7 +62,7 @@ export function downloadPaymentReceipt({ invoice, invoiceContractor, payment, ge
       ['SP invoice', spNumber],
       ['Supplier invoice', supplierNumber],
       ['Project', invoice.project || '—'],
-      ['Week', invoice.weekStart ? formatDate(invoice.weekStart) : '—'],
+      ['Period', invoice.weekStart ? formatInvoicePeriod(invoice.weekStart, invoice.weekEnd, weekCount) : '—'],
       ['Hours paid', `${formatHours(hours)} h`],
       ['Payment date', formatDate(payment.paymentDate) + (payment.backDated ? '  (back-dated)' : '')],
       ['Bank / method', payment.bankMethod || '—'],

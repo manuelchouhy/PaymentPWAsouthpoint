@@ -13,7 +13,14 @@ import { invoiceCompletion } from '../lib/invoiceCompletion'
 import { buildProjectIndex, deriveEntriesClient } from '../lib/entryClient'
 import { api } from '../lib/api'
 import { downloadPaymentReceipt } from '../lib/paymentReceipt'
-import { formatDate, formatHours, formatWeek, sundayWeekYear } from '../lib/format'
+import {
+  formatDate,
+  formatHours,
+  formatWeek,
+  sundayWeekYear,
+  formatInvoicePeriod,
+  distinctWeekCount,
+} from '../lib/format'
 import { BillingBadge } from '../components/BillingBadge'
 import { RegisterPaymentModal } from '../components/RegisterPaymentModal'
 import { Toast } from '../components/Toast'
@@ -303,6 +310,24 @@ export function PaymentsPage() {
       return next
     })
 
+  // Fecha de cada hora por id (para contar las semanas realmente facturadas de cada
+  // factura multi-semana: sus entry_ids → fechas → semanas domingo–sábado distintas).
+  const entryDateById = useMemo(() => {
+    const m = new Map()
+    for (const e of entries) m.set(String(e.id), e.date)
+    return m
+  }, [entries])
+
+  // Semanas realmente facturadas por una factura: las horas de todos sus contractors
+  // → fechas → semanas distintas. 1 en una factura de una sola semana. Se usa para el
+  // "(N weeks)" del período (grilla y receipt), así que vive en un solo lugar.
+  const invoiceWeekCount = (invoiceId) =>
+    distinctWeekCount(
+      (contractorsByInvoice.get(invoiceId) ?? []).flatMap((c) =>
+        (c.entryIds ?? []).map((id) => entryDateById.get(String(id))),
+      ),
+    )
+
   const warningBefore = alertSettings?.warningDaysBeforeDue ?? 3
   const ALERT_RANK = { overdue: 0, warning: 1, on_time: 2 }
 
@@ -347,13 +372,14 @@ export function PaymentsPage() {
         paidCount: completion.paidCount,
         totalCount: completion.totalCount,
         totalHours: completion.totalHours,
+        weekCount: invoiceWeekCount(inv.id),
         dueDate,
         daysUntilDue,
         alertLevel,
       })
     }
     return rows
-  }, [invoices, contractorsByInvoice, payments, showPaid, warningBefore, entryById])
+  }, [invoices, contractorsByInvoice, payments, showPaid, warningBefore, entryById, entryDateById])
 
   // Horas invoice-less pendientes de pago, por contractor (overage / sp_internal).
   // El meta condensado (proyecto/cliente/semana) de cada grupo se computa acá, una vez,
@@ -534,6 +560,7 @@ export function PaymentsPage() {
       invoice: inv,
       invoiceContractor: ic,
       payment,
+      weekCount: invoiceWeekCount(inv.id),
       generatedBy: user?.email ?? null,
     })
   }
@@ -825,7 +852,9 @@ export function PaymentsPage() {
                               )}
                               {r.inv.project || '—'}
                               {r.inv.client ? ` · ${r.inv.client}` : ''}
-                              {r.inv.weekStart ? ` · week ${formatDate(r.inv.weekStart)}` : ''}
+                              {r.inv.weekStart
+                                ? ` · ${formatInvoicePeriod(r.inv.weekStart, r.inv.weekEnd, r.weekCount)}`
+                                : ''}
                             </span>
                             <span className="cell-soft">
                               {r.paidCount}/{r.totalCount} paid · {formatHours(r.totalHours)} h
