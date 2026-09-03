@@ -14,7 +14,7 @@ import {
   billBlockReason,
   contractorsFromSelection,
   remainingHoursByContractor,
-  weekStartFromSelection,
+  weekSpanFromSelection,
   selectionScope,
 } from '../lib/billingSelection'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
@@ -835,11 +835,15 @@ export function BillingPage() {
     const [project] = projects
     const contractors = selectedContractors
     const entryCount = selectedEntries.length
+    // Rango de semanas del período (canBill garantiza que resuelve): la factura puede
+    // cubrir varias semanas del mismo cliente+proyecto. start===end en una sola semana.
+    const span = weekSpanFromSelection(selectedRows)
     const { invoice } = await api.invoices.createGrouped({
       spInvoiceNumber,
       project,
       client,
-      weekStart: weekStartFromSelection(selectedRows),
+      weekStart: span?.start ?? null,
+      weekEnd: span?.end ?? null,
       notes,
       contractors,
       createdBy: user?.email ?? null,

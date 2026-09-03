@@ -85,6 +85,7 @@ export interface Invoice {
   project: string | null
   client: string | null
   weekStart: string | null
+  weekEnd: string | null // fin del rango multi-semana (migración 0044); null = una semana
   invoiceDate: string | null
   notes: string | null
   userName: string | null              // legacy; null en el modelo agrupado
@@ -367,6 +368,7 @@ export interface ApiClient {
       project: string
       client?: string | null
       weekStart?: string | null
+      weekEnd?: string | null
       notes?: string
       contractors: Array<{ contractor: string; entries: Array<{ id: string | number; hours: number }> }>
       createdBy?: string | null

@@ -370,6 +370,9 @@ function rowToInvoice(row) {
     project: row.project ?? null,
     client: row.client ?? null,
     weekStart: row.week_start ?? null,
+    // Fin del rango multi-semana (migración 0044): domingo de la última semana del
+    // período. null = factura de una sola semana (o legacy sin la columna).
+    weekEnd: row.week_end ?? null,
     invoiceDate: row.invoice_date,
     // Modelo en HORAS (slice 04d/05): la factura ya no lleva monto/moneda. El total
     // se deriva de las horas de sus `invoice_contractors`. Las columnas total_amount/
@@ -648,7 +651,7 @@ export async function getInvoices() {
     .from('invoices')
     // Sin total_amount/currency: el modelo es en horas (se dropean en 0041).
     .select(
-      'id, supplier_invoice_number, sp_invoice_number, project, client, week_start, invoice_date, notes, user_name, entry_ids, status, payment_terms_days, created_at, created_by',
+      'id, supplier_invoice_number, sp_invoice_number, project, client, week_start, week_end, invoice_date, notes, user_name, entry_ids, status, payment_terms_days, created_at, created_by',
     )
     .order('created_at', { ascending: false })
 
@@ -775,6 +778,7 @@ export async function createInvoice({
       project,
       client,
       week_start: null,
+      week_end: null,
       invoice_date: null,
       notes: notes || null,
       user_name: userName,
@@ -809,6 +813,7 @@ export async function createInvoice({
     p_project: project,
     p_client: client,
     p_week_start: null,
+    p_week_end: null, // factura single-contractor: siempre una sola semana (o sin semana)
     p_notes: notes || null,
     p_created_by: createdBy || null,
     p_contractors: [{ contractor: userName, entry_ids: numericIds }],
@@ -832,11 +837,12 @@ export async function createInvoice({
 }
 
 /**
- * Emite una factura AGRUPADA multi-contractor (modelo migración 0039): una sola
- * factura cubre UN cliente + UN proyecto + UNA semana y agrupa a varios
- * contractors. Inserta la fila `invoices` (SP invoice number + unidad facturable
- * + status `Invoiced`, sin plata) y N filas hijas `invoice_contractors`
- * (contractor + entry_ids + horas). Medida en HORAS: no toca monto/moneda.
+ * Emite una factura AGRUPADA multi-contractor (modelo migración 0039 + 0044): una
+ * sola factura cubre UN cliente + UN proyecto y una o VARIAS semanas (rango
+ * week_start..week_end, contiguas o no), agrupando a varios contractors. Inserta la
+ * fila `invoices` (SP invoice number + unidad facturable + rango de semanas + status
+ * `Invoiced`, sin plata) y N filas hijas `invoice_contractors` (contractor +
+ * entry_ids + horas). Medida en HORAS: no toca monto/moneda.
  *
  * La construcción y validación del payload viven en el módulo puro
  * `invoiceContractors.js` (testeable con node --test); acá va sólo el I/O.
@@ -846,6 +852,7 @@ export async function createInvoice({
  *   project: string,
  *   client?: string,
  *   weekStart?: string,
+ *   weekEnd?: string,
  *   notes?: string,
  *   contractors: Array<{ contractor: string, entries: Array<{ id: string|number, hours: number }> }>,
  *   createdBy?: string,
@@ -869,6 +876,7 @@ export async function createGroupedInvoice({ createdBy, ...selection }) {
       project: invoice.project,
       client: invoice.client,
       week_start: invoice.week_start,
+      week_end: invoice.week_end,
       invoice_date: null,
       total_amount: null,
       currency: 'USD',
@@ -910,6 +918,7 @@ export async function createGroupedInvoice({ createdBy, ...selection }) {
     p_project: invoice.project,
     p_client: invoice.client,
     p_week_start: invoice.week_start,
+    p_week_end: invoice.week_end, // fin del rango multi-semana (migración 0044); null = una semana
     p_notes: invoice.notes,
     p_created_by: createdBy || null,
     p_contractors: contractorRows,
