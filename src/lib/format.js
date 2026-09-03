@@ -120,6 +120,56 @@ export function sundayWeekYear(iso = '') {
 }
 
 /**
+ * Sábado (YYYY-MM-DD, UTC) que cierra la semana domingo–sábado de una fecha, o
+ * null si la fecha no es válida. Es el domingo de inicio + 6 días. Lo usa el
+ * navegador de semana para mostrar el rango completo "dom → sáb". Reusa
+ * weekStartSunday para partir del mismo domingo que el resto de la aritmética.
+ * @param {string} iso
+ * @returns {?string}
+ */
+export function weekEndISO(iso = '') {
+  const sunday = weekStartSunday(iso)
+  if (!sunday) return null
+  sunday.setUTCDate(sunday.getUTCDate() + 6)
+  return sunday.toISOString().slice(0, 10)
+}
+
+/**
+ * Desplaza una fecha N semanas (positivo = adelante, negativo = atrás) y la
+ * devuelve como YYYY-MM-DD (UTC), o null si no es válida. Si `iso` es el domingo
+ * que inicia una semana, el resultado es el domingo de la semana N pasos más
+ * allá — es lo que usan las flechas ‹ › del navegador de semana. Se parsea en
+ * UTC para no correrse por zona horaria.
+ * @param {string} iso
+ * @param {number} weeks
+ * @returns {?string}
+ */
+export function shiftWeekISO(iso = '', weeks = 0) {
+  const [year, month, day] = iso.split('-').map(Number)
+  if (!year || !month || !day) return null
+  const date = new Date(Date.UTC(year, month - 1, day))
+  date.setUTCDate(date.getUTCDate() + weeks * 7)
+  return date.toISOString().slice(0, 10)
+}
+
+/**
+ * Fecha ISO (YYYY-MM-DD) formateada como "MM-DD-YYYY" (08-23-2026), el formato
+ * del rango del navegador de semana. Cadena vacía si la fecha no es válida.
+ * @param {string} iso
+ * @returns {string}
+ */
+export function formatUsDate(iso = '') {
+  // Guard explícito de null/vacío: el default `iso = ''` sólo cubre undefined, y
+  // esta función recibe el resultado de weekEndISO(), que devuelve null si la
+  // fecha es inválida. Sin esto, null.split(...) rompería el render en vez de
+  // devolver '' como promete el contrato.
+  if (!iso) return ''
+  const [year, month, day] = iso.split('-').map(Number)
+  if (!year || !month || !day) return ''
+  return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}-${year}`
+}
+
+/**
  * Semana formateada para la grilla: "W23" (o "—" si no hay fecha válida). Semanas
  * de domingo a sábado (ver sundayWeek).
  * @param {string} iso

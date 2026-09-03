@@ -1,6 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { sundayWeek, sundayWeekYear, formatWeek, weekStartISO } from './format.js'
+import {
+  sundayWeek,
+  sundayWeekYear,
+  formatWeek,
+  weekStartISO,
+  weekEndISO,
+  shiftWeekISO,
+  formatUsDate,
+} from './format.js'
 
 // Las semanas de facturación van de DOMINGO a SÁBADO (no ISO lunes–domingo).
 // En agosto 2026: Aug 1 = sábado, Aug 2 = domingo, Aug 8 = sábado, Aug 9 = domingo.
@@ -51,4 +59,38 @@ test('fecha inválida → null / —', () => {
   assert.equal(sundayWeek(''), null)
   assert.equal(sundayWeekYear('nope'), null)
   assert.equal(formatWeek(''), '—')
+})
+
+// --- Helpers del navegador de semana -----------------------------------------
+// La semana del domingo 2026-08-23 va de 2026-08-23 (dom) a 2026-08-29 (sáb) y es
+// la W35 · 2026 (coincide con el mockup del navegador).
+
+test('weekEndISO: el sábado que cierra la semana (domingo + 6)', () => {
+  assert.equal(weekEndISO('2026-08-23'), '2026-08-29') // desde el domingo
+  assert.equal(weekEndISO('2026-08-26'), '2026-08-29') // desde un día intermedio
+  assert.equal(weekEndISO('2026-08-29'), '2026-08-29') // desde el propio sábado
+  assert.equal(weekEndISO(''), null)
+})
+
+test('shiftWeekISO: ‹ › desplazan de a semanas exactas', () => {
+  assert.equal(shiftWeekISO('2026-08-23', 1), '2026-08-30') // semana siguiente
+  assert.equal(shiftWeekISO('2026-08-23', -1), '2026-08-16') // semana anterior
+  assert.equal(shiftWeekISO('2026-08-23', 0), '2026-08-23')
+  // Cruza el fin de mes/año sin corrimiento de zona horaria.
+  assert.equal(shiftWeekISO('2025-12-28', 1), '2026-01-04')
+  assert.equal(shiftWeekISO('nope', 1), null)
+})
+
+test('formatUsDate: MM-DD-YYYY como el rango del navegador', () => {
+  assert.equal(formatUsDate('2026-08-23'), '08-23-2026')
+  assert.equal(formatUsDate('2026-01-05'), '01-05-2026')
+  assert.equal(formatUsDate(''), '')
+  // null (lo que devuelve weekEndISO ante una fecha inválida) no debe romper:
+  // el navegador hace formatUsDate(weekEndISO(value)) al renderizar el rango.
+  assert.equal(formatUsDate(null), '')
+})
+
+test('el número de semana del mockup: WEEK - 35 · 2026', () => {
+  assert.equal(sundayWeek('2026-08-23'), 35)
+  assert.equal(sundayWeekYear('2026-08-23'), 2026)
 })

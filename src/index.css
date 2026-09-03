@@ -551,6 +551,84 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 }
 .filterfield__input--affixed { padding-left: 26px; }
 
+/* Navegador de semana (Entries): flechas ‹ ›, calendario y rango físico en una
+   sola pastilla de 38px, alineada con el alto del resto de los filtros. */
+.weeknav {
+  position: relative; /* ancla el popup del date-picker nativo dentro del control */
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 38px;
+  padding: 0 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r);
+}
+.weeknav__arrow,
+.weeknav__cal,
+.weeknav__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  width: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.weeknav__arrow:hover,
+.weeknav__cal:hover,
+.weeknav__clear:hover {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.weeknav__cal { color: var(--accent); }
+.weeknav__clear { width: 24px; }
+.weeknav__clear:hover { color: var(--text); background: var(--surface); }
+.weeknav :is(.weeknav__arrow, .weeknav__cal, .weeknav__clear):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.weeknav__range {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 0 8px;
+  white-space: nowrap;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--text);
+}
+.weeknav__dates { font-variant-numeric: tabular-nums; }
+.weeknav__wk {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .02em;
+  color: var(--accent);
+}
+
+/* Date-picker nativo oculto que dispara el botón de calendario. No usa
+   display:none (rompería showPicker) ni ocupa lugar en el layout. */
+.weeknav__date-input {
+  position: absolute;
+  left: 34px; /* bajo el botón de calendario (2º control) para anclar ahí el popup */
+  top: 100%;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  opacity: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  pointer-events: none;
+}
+
 .filterbar__clear { height: 38px; }
 .filterbar__clear:disabled { opacity: .45; cursor: default; }
 

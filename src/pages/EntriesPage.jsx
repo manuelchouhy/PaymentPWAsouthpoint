@@ -10,7 +10,7 @@ import { isEntryFrozen, entryFrozenReason } from '../lib/entryFreeze'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { exportGrid } from '../lib/exportGrid'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
-import { WeekField } from '../components/WeekField'
+import { WeekNavigator } from '../components/WeekNavigator'
 import { Checkbox } from '../components/Checkbox'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { StatusBadge } from '../components/StatusBadge'
@@ -531,7 +531,10 @@ export function EntriesPage() {
                 onToggle={(v) => toggleValue('allocations', v)}
                 getLabel={allocationLabel}
               />
-              <WeekField value={filters.week} onChange={(v) => setField('week', v)} />
+              {/* Navegador de semana year-aware: filtra por la semana física
+                  exacta (filters.weekStart), a diferencia del input numérico
+                  year-blind que usa Payments. Ver término "Week" en CONTEXT.md. */}
+              <WeekNavigator value={filters.weekStart} onChange={(v) => setField('weekStart', v)} />
               {isActive && (
                 <button type="button" className="btn btn--ghost filterbar__clear" onClick={clear}>
                   Clear
