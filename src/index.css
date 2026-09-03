@@ -4211,7 +4211,7 @@ th.col-pop { text-align: center; }
 .proj-table {
   table-layout: auto;
   /* Sin min-width fijo. Había un min-width: 1320px pensado para la grilla de
-     Projects (13 columnas), pero .proj-table la usan 16 tablas y varias tienen
+     Projects (14 columnas), pero .proj-table la usan 16 tablas y varias tienen
      3 o 4: en Capacity las dos tablas se estiraban a 1320px cada una dentro de
      columnas de 680, con "Status" midiendo 477px, y la de Demand by SOW
      quedaba fuera de pantalla.
@@ -4233,6 +4233,20 @@ th.col-pop { text-align: center; }
 .proj-table--fit { width: 100%; }
 .proj-table--fit th,
 .proj-table--fit td { white-space: normal; }
+/* Padding horizontal reducido SOLO en la grilla de Projects (14 columnas). El
+   default (.table thead th / .table tbody td) es 11px/lado; × 14 col × 2 sumaba
+   ~308px y hacía que la tabla (min-content ~1538px) desbordara su contenedor y
+   cortara la columna Status. A 6px las 14 columnas entran sin scroll en anchos
+   amplios; en pantallas angostas sigue cayendo al scroll horizontal de
+   .table-wrap--scroll (sin regresión). Se conserva el padding vertical.
+   Se usan `thead th` / `tbody td` para IGUALAR la especificidad de la base
+   (.table thead th / .table tbody td son (0,1,2); un `.proj-table--fit td`
+   suelto es (0,1,1) y perdería). Con especificidad igual, gana el orden de
+   aparición: este bloque debe quedar DESPUÉS de las reglas base .table (no las
+   muevas por encima o vuelve el padding de 11px). Scopeado a --fit: no afecta
+   las otras tablas .proj-table. */
+.proj-table--fit thead th { padding-left: 6px; padding-right: 6px; }
+.proj-table--fit tbody td { padding-left: 6px; padding-right: 6px; }
 /* Solo las celdas de datos monoespaciadas/numéricas se mantienen sin cortar
    (IDs, #s, fechas, horas, el badge de estado). Los encabezados sí pueden
    cortar en 2 líneas ("Base Budget Hours", "Cust. Manager"...) para ganar
