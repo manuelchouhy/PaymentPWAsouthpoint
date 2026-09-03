@@ -197,11 +197,14 @@ export function formatDateTime(iso = '') {
  * Período de una factura como etiqueta de semana(s). Una factura puede cubrir una o
  * VARIAS semanas del mismo cliente+proyecto (feature multi-semana, migración 0044):
  *   - una sola semana (`weekEnd` null o igual a `weekStart`) → "WEEK 33 · 2026".
- *   - un rango → "WEEK 33 – 35 · 2026"; si `weekCount` > 1 se agrega "(N weeks)" para
- *     desambiguar selecciones NO contiguas (donde el span leería como más semanas de
- *     las realmente facturadas). Cruce de año (raro): "WEEK a · Yа – WEEK b · Yb".
+ *   - un rango → "WEEK 33 – 35 · 2026". Sólo si el rango es NO contiguo (o sea, las
+ *     semanas realmente facturadas `weekCount` son MENOS que las que abarca el span)
+ *     se agrega "(N weeks)" para aclarar que faltan semanas del medio. En un rango
+ *     contiguo el "WEEK a – b" ya dice cuántas son, así que no se agrega ruido.
+ *     Cruce de año (raro): "WEEK a · Yа – WEEK b · Yb".
  * Ambos extremos son domingos que identifican la semana (ver sundayWeek). Cadena
- * vacía si no hay `weekStart` (o es inválido).
+ * vacía si no hay `weekStart` (o es inválido); si `weekEnd` es inválido, degrada a la
+ * forma de una sola semana.
  * @param {?string} weekStart domingo ISO de la primera semana
  * @param {?string} [weekEnd] domingo ISO de la última (null = una sola semana)
  * @param {?number} [weekCount] cantidad de semanas realmente facturadas (opcional)
@@ -211,12 +214,18 @@ export function formatInvoicePeriod(weekStart, weekEnd = null, weekCount = null)
   const wS = sundayWeek(weekStart ?? '')
   if (wS == null) return ''
   const yS = sundayWeekYear(weekStart)
-  if (!weekEnd || weekEnd === weekStart) return `WEEK ${wS} · ${yS}`
+  const single = () => `WEEK ${wS} · ${yS}`
+  if (!weekEnd || weekEnd === weekStart) return single()
   const wE = sundayWeek(weekEnd)
+  if (wE == null) return single() // weekEnd malformado → degrada a semana única, no "WEEK 33 – null"
   const yE = sundayWeekYear(weekEnd)
   const range =
     yS === yE ? `WEEK ${wS} – ${wE} · ${yE}` : `WEEK ${wS} · ${yS} – WEEK ${wE} · ${yE}`
-  return weekCount && weekCount > 1 ? `${range} (${weekCount} weeks)` : range
+  // Semanas que abarca el span (domingos inclusive): (fin - inicio)/7 + 1. El "(N weeks)"
+  // sólo aporta cuando faltan semanas del medio (weekCount < span) — en contiguo el rango
+  // ya es inequívoco.
+  const spanWeeks = Math.round((Date.parse(weekEnd) - Date.parse(weekStart)) / (7 * 86400000)) + 1
+  return weekCount && weekCount > 1 && weekCount < spanWeeks ? `${range} (${weekCount} weeks)` : range
 }
 
 /**

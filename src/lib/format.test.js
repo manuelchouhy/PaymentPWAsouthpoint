@@ -34,8 +34,18 @@ test('formatInvoicePeriod: rango (mismo año) → "WEEK a – b · año"', () =>
   assert.equal(formatInvoicePeriod('2026-08-09', '2026-08-23'), 'WEEK 33 – 35 · 2026')
 })
 
-test('formatInvoicePeriod: rango con conteo → agrega "(N weeks)" (desambigua no contiguas)', () => {
+test('formatInvoicePeriod: rango NO contiguo (weekCount < span) → agrega "(N weeks)"', () => {
+  // Span 33–35 = 3 semanas, pero sólo 2 facturadas (falta una del medio) → se aclara.
   assert.equal(formatInvoicePeriod('2026-08-09', '2026-08-23', 2), 'WEEK 33 – 35 · 2026 (2 weeks)')
+})
+
+test('formatInvoicePeriod: rango CONTIGUO (weekCount === span) → sin "(N weeks)" (sería ruido)', () => {
+  // Span 33–34 = 2 semanas, 2 facturadas: el rango ya lo dice, no se agrega el conteo.
+  assert.equal(formatInvoicePeriod('2026-08-09', '2026-08-16', 2), 'WEEK 33 – 34 · 2026')
+})
+
+test('formatInvoicePeriod: weekEnd malformado → degrada a semana única (no "WEEK 33 – null")', () => {
+  assert.equal(formatInvoicePeriod('2026-08-09', 'no-es-fecha'), 'WEEK 33 · 2026')
 })
 
 test('formatInvoicePeriod: sin weekStart → cadena vacía', () => {
