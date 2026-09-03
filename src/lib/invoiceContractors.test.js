@@ -63,6 +63,25 @@ test('factura de una sola semana: weekEnd === weekStart → week_end null (marca
   assert.equal(invoice.week_end, null)
 })
 
+test('week_end incoherente se degrada a null: rango invertido y end sin start', () => {
+  // Rango invertido (weekEnd anterior a weekStart): no se guarda como rango.
+  const reversed = buildGroupedInvoicePayload({
+    ...base(),
+    weekStart: '2026-08-09',
+    weekEnd: '2026-08-02',
+  }).invoice
+  assert.equal(reversed.week_start, '2026-08-09')
+  assert.equal(reversed.week_end, null)
+  // End sin start (weekStart ausente): week_start null y week_end null (no un end huérfano).
+  const noStart = buildGroupedInvoicePayload({
+    ...base(),
+    weekStart: undefined,
+    weekEnd: '2026-08-23',
+  }).invoice
+  assert.equal(noStart.week_start, null)
+  assert.equal(noStart.week_end, null)
+})
+
 test('entry_ids no numéricos se descartan (bigint[] en Supabase)', () => {
   const { invoice, contractorRows } = buildGroupedInvoicePayload({
     ...base(),

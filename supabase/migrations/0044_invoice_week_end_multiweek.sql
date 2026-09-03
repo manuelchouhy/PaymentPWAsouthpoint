@@ -27,6 +27,17 @@ comment on column public.invoices.week_end is
   'Domingo de la ÚLTIMA semana del período facturado (week-identifier, no el último '
   'día calendario). null = factura de una sola semana (week_start). Ver migración 0044.';
 
+-- Invariante de coherencia del rango, ENFORCED en la DB (no sólo en el builder JS):
+-- week_end sólo puede existir si hay week_start y es >= week_start. Protege contra
+-- llamadores directos del RPC (el guard de entry_ids/hours de 0039 no cubría el rango).
+-- Todas las filas existentes tienen week_end null → la constraint valida sin fallar.
+-- drop+add para que la migración sea reejecutable (idempotente).
+alter table public.invoices
+  drop constraint if exists invoices_week_end_coherent;
+alter table public.invoices
+  add constraint invoices_week_end_coherent
+  check (week_end is null or (week_start is not null and week_end >= week_start));
+
 -- 2) RPC create_grouped_invoice + p_week_end.
 --    Se DROPEA la firma anterior (7 args) y se re-crea con p_week_end al final,
 --    con DEFAULT null (backward-compat para llamadores que aún no lo mandan).
