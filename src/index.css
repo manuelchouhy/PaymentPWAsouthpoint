@@ -799,6 +799,19 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   padding-bottom: 9px;
 }
 
+/* --- Payments: cabecera de cada factura agrupada --------------------------- */
+/* Número · proyecto/cliente/semana · progreso · estado · vencimiento se rendean
+   como <span> consecutivos. Sin esta regla no hay separación entre ellos y el
+   texto queda pegado ("465456Forecasting", "2026 0/1 paid", "Invoiceddue …").
+   Flex con gap los separa; wrap deja que caiga a otra línea en anchos chicos. */
+.pay-invoice-head__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 4px;
+}
+
 /* --- Payments: sección de overage a pagar ---------------------------------- */
 .pay-overage {
   margin-top: 28px;
