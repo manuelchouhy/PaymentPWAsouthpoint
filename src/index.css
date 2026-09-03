@@ -3861,7 +3861,7 @@ th.col-pop { text-align: center; }
 }
 
 .sidebar {
-  width: 240px;
+  width: 300px;
   flex-shrink: 0;
   position: sticky;
   top: 0;
@@ -3883,29 +3883,31 @@ th.col-pop { text-align: center; }
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 20px max(20px, env(safe-area-inset-left)) 16px;
+  padding: 22px max(16px, env(safe-area-inset-left)) 18px;
   flex-shrink: 0;
 }
 
 .sidebar__logo {
-  height: 26px;
-  width: auto;
+  width: 100%;
+  height: auto;
+  display: block;
   user-select: none;
   -webkit-user-drag: none;
   /* No se aplica invert: invertía también el gradiente de marca del ícono y lo
-     volvía naranja en tema claro. La variante del SVG (texto blanco / texto
+     volvía naranja en tema claro. La variante del banner (texto blanco / texto
      oscuro, gradiente intacto) la elige Sidebar.jsx según el tema activo. */
 }
 
-/* Wordmark "DESK" al lado del logo. */
-.sidebar__wordmark {
-  font-family: var(--heading);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: .14em;
-  color: var(--text);
+/* Isotipo para el rail colapsado; oculto salvo en tablet (ver media query). */
+.sidebar__logo-mark {
+  display: none;
+  height: 30px;
+  width: auto;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
+/* Wordmark "DESK" al lado del logo. */
 .sidebar__nav {
   flex: 1;
   min-height: 0;
@@ -4065,7 +4067,8 @@ th.col-pop { text-align: center; }
 @media (max-width: 1023px) {
   .sidebar { width: 60px; }
   .sidebar__brand { padding: 20px 12px 16px; display: flex; justify-content: center; }
-  .sidebar__logo { height: 22px; }
+  .sidebar__logo { display: none; }
+  .sidebar__logo-mark { display: block; }
   .sidebar__link { justify-content: center; padding: 10px; }
   .sidebar__link::before { display: none; }
   .sidebar__label { display: none; }
@@ -4086,7 +4089,8 @@ th.col-pop { text-align: center; }
   }
   .sidebar.is-open { transform: translateX(0); }
   .sidebar__brand { justify-content: flex-start; padding: 20px max(20px, env(safe-area-inset-left)) 16px; }
-  .sidebar__logo { height: 26px; }
+  .sidebar__logo { display: block; width: 100%; height: auto; }
+  .sidebar__logo-mark { display: none; }
   .sidebar__link { justify-content: flex-start; padding: 9px 12px; }
   .sidebar__label { display: inline; }
   .sidebar__user { justify-content: flex-start; padding: 12px max(16px, env(safe-area-inset-left)); }

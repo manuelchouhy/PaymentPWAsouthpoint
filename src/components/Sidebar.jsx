@@ -99,22 +99,29 @@ export function Sidebar({ can, open, onNavigate, user, profile, onSignOut }) {
   // para intercalar el divisor entre ambos tramos.
   const activeItems = NAV_ITEMS.filter((item) => !item.disabled)
   const deferredItems = NAV_ITEMS.filter((item) => item.disabled)
-  // El SVG tiene dos partes: el texto (blanco/oscuro) y el ícono con gradiente
-  // de marca. Invertir la imagen entera —como se hacía antes— invertía también
-  // el gradiente y lo volvía naranja en tema claro. En su lugar hay dos variantes
-  // del SVG (texto blanco / texto oscuro, gradiente intacto) y se sirve solo la
-  // del tema activo, para no bajar los ~67 KB de la otra en cada carga.
+  // El banner ("southpoint desk") tiene el texto en un color plano y el ícono
+  // con gradiente de marca. Invertir la imagen entera invertiría también el
+  // gradiente, así que hay dos variantes del SVG (texto blanco para tema oscuro /
+  // texto #0A0A0A para tema claro, gradiente intacto) y se sirve solo la del tema
+  // activo, para no bajar la otra (~90 KB) en cada carga.
   const { theme } = useTheme()
-  const logoSrc = theme === 'dark' ? '/sp_techlabs_blanco.svg' : '/sp_techlabs_negro.svg'
+  const logoSrc = theme === 'dark' ? '/banner_desk_blanco.svg' : '/banner_desk_negro.svg'
   return (
     <aside className={`sidebar${open ? ' is-open' : ''}`}>
       <div className="sidebar__brand">
         <img
           src={logoSrc}
-          alt="Southpoint Tech Labs"
+          alt="Southpoint Desk"
           className="sidebar__logo"
         />
-        <span className="sidebar__wordmark">DESK</span>
+        {/* En el rail colapsado (tablet) el banner completo no entra en 60px;
+            se muestra solo el isotipo, que rinde en ambos temas. */}
+        <img
+          src="/favicon.svg"
+          alt=""
+          aria-hidden="true"
+          className="sidebar__logo-mark"
+        />
       </div>
       <nav className="sidebar__nav" aria-label="Sections">
         {activeItems.map((item) => (
