@@ -1803,7 +1803,6 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 /* Anchos de columna (table-layout: fixed). Suman ~1146px ≤ contenedor (1152). */
 .col-check   { width: 38px; }
 .col-user    { width: 158px; }
-.col-projnum { width: 92px; white-space: nowrap; }
 .col-project { width: 100px; }
 .col-client  { width: 96px; }
 .col-task    { width: 100px; }
@@ -1846,6 +1845,10 @@ th.col-pop { text-align: center; }
    horizontal. */
 .entries-table .col-task { max-width: 300px; }
 .entries-table .col-project { max-width: 170px; }
+/* Columna "Project #" (Entries + bucket "Sin cliente" de Billing). NO entra en el
+   presupuesto de anchos de la tabla fija de arriba: vive en tablas scrolleables
+   (.table-wrap--scroll / .proj-table), no en la de table-layout:fixed de 1152px. */
+.col-projnum { width: 92px; white-space: nowrap; }
 .entries-table .col-projnum { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Selección por fila: click en cualquier parte de una fila seleccionable la

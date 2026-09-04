@@ -82,21 +82,29 @@ export function PaymentsPage() {
       api.payments.list(),
       api.payments.getAlertSettings(),
       api.timeEntries.list(),
-      api.projects.list(),
     ])
-      .then(([inv, ic, pay, settings, entryRows, projectRows]) => {
+      .then(([inv, ic, pay, settings, entryRows]) => {
         setInvoices(inv)
         setInvoiceContractors(ic)
         setPayments(pay)
         setAlertSettings(settings)
         setEntries(entryRows)
-        setProjects(projectRows)
         setStatus('ready')
       })
       .catch((error) => {
         console.error('No se pudo cargar Payments:', error)
         setStatus('error')
       })
+    // Los proyectos son SÓLO para el número de proyecto (cosmético) del header de
+    // la factura. Van aparte del Promise.all core: si este fetch falla, el header
+    // muestra sólo el nombre y la página —con sus datos de pago— igual carga. Meterlo
+    // en el core haría que un fallo acá tumbara todo Payments por una columna.
+    api.projects
+      .list()
+      .then((projectRows) => setProjects(projectRows))
+      .catch((error) =>
+        console.warn('No se pudieron cargar los proyectos (número de proyecto en el header):', error),
+      )
   }
 
   useEffect(() => {
@@ -574,6 +582,7 @@ export function PaymentsPage() {
                   const payable = isPayable(r.inv.status)
                   const overdue = payable && r.alertLevel === 'overdue'
                   const warning = payable && r.alertLevel === 'warning'
+                  const projNum = projectNumberFor(r.inv.project)
                   return (
                     <tbody key={r.inv.id} className="pay-invoice-group">
                       <tr className="pay-invoice-head">
@@ -583,10 +592,8 @@ export function PaymentsPage() {
                               {r.inv.spInvoiceNumber ?? '—'}
                             </span>
                             <span className="cell-soft">
-                              {projectNumberFor(r.inv.project) && (
-                                <span className="pay-invoice-head__num cell-mono">
-                                  {projectNumberFor(r.inv.project)}
-                                </span>
+                              {projNum && (
+                                <span className="pay-invoice-head__num cell-mono">{projNum}</span>
                               )}
                               {r.inv.project || '—'}
                               {r.inv.client ? ` · ${r.inv.client}` : ''}

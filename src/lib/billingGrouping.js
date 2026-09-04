@@ -60,6 +60,10 @@ function groupRows(entries) {
       id: entry.id,
       user: entry.user ?? '',
       project: entry.project ?? '',
+      // Número de proyecto para el export (columna Project #). A nivel fila porque
+      // las tabs read-only (Overage/SP internal/X) agrupan por contractor/cliente,
+      // no por proyecto, así que no hay un grupo de proyecto de donde tomarlo.
+      projectNumber: entry.projectNumber ?? null,
       task: entry.task ?? '',
       date: entry.date ?? '',
       // invoiced: la hora ya está facturada (read-only en la grilla).
