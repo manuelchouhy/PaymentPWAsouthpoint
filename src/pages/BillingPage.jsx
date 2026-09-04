@@ -1143,6 +1143,37 @@ export function BillingPage() {
             </div>
           ) : (
             <>
+              {canCreate && selectedKeys.size > 0 && (
+                <div className="selbar-wrap">
+                  <div className="selbar selbar--active">
+                    <span className="selbar__count">
+                      Selected to bill: <b>{formatHours(selectedHours)} h</b> ·{' '}
+                      {selectedEntries.length} {selectedEntries.length === 1 ? 'entry' : 'entries'}
+                    </span>
+                    <div className="selbar__action">
+                      <button
+                        type="button"
+                        className="btn btn--pay btn--sm"
+                        onClick={() => setModalOpen(true)}
+                        disabled={!canBill}
+                        title={blockMessage ?? undefined}
+                      >
+                        Send to billing
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        onClick={() => setSelectedKeys(new Set())}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {blockMessage && <p className="field__error">{blockMessage}</p>}
+
               <div className="bill-clients">
                 {clientGroups.map((group) =>
                   group.isUnassigned ? (
@@ -1427,35 +1458,6 @@ export function BillingPage() {
                   ),
                 )}
               </div>
-
-              {canCreate && selectedKeys.size > 0 && (
-                <div className="selbar selbar--active">
-                  <span className="selbar__count">
-                    Selected to bill: <b>{formatHours(selectedHours)} h</b> ·{' '}
-                    {selectedEntries.length} {selectedEntries.length === 1 ? 'entry' : 'entries'}
-                  </span>
-                  <div className="selbar__action">
-                    <button
-                      type="button"
-                      className="btn btn--pay btn--sm"
-                      onClick={() => setModalOpen(true)}
-                      disabled={!canBill}
-                      title={blockMessage ?? undefined}
-                    >
-                      Send to billing
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--sm"
-                      onClick={() => setSelectedKeys(new Set())}
-                    >
-                      Clear
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {blockMessage && <p className="field__error">{blockMessage}</p>}
                 </>
               )}
             </>
