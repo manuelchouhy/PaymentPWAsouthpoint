@@ -921,7 +921,7 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--line);
   background: var(--surface-2);
 }
@@ -942,7 +942,7 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   align-items: baseline;
   gap: 10px;
   width: 100%;
-  padding: 10px 16px;
+  padding: 13px 16px;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -966,7 +966,7 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   align-items: baseline;
   gap: 10px;
   width: 100%;
-  padding: 11px 16px;
+  padding: 14px 16px;
   background: var(--surface-2);
   border: none;
   cursor: pointer;
@@ -980,6 +980,9 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .bill-project__label { font-weight: 650; }
 .bill-project__hours { color: var(--text-soft); font-family: var(--mono); font-size: 12px; }
 .bill-project .bill-week { padding-left: 12px; }
+/* Respiración vertical de la tabla anidada: que las filas no queden pegadas al
+   header de la semana ni al borde inferior de la tarjeta / a la siguiente semana. */
+.bill-week .table-wrap { margin: 4px 0 12px; }
 
 .toolbar__total {
   font-family: var(--mono);
@@ -4139,7 +4142,9 @@ th.col-pop { text-align: center; }
 .app-header__right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  /* Respiración del cluster rol · sync · tema · avatar: 12→16px para que los
+     cuatro controles se distingan sin quedar pegados uno al otro. */
+  gap: 16px;
   margin-left: auto;
   flex-shrink: 0;
 }
