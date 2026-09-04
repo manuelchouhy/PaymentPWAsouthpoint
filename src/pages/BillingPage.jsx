@@ -703,6 +703,7 @@ export function BillingPage() {
       { header: 'Provider', key: 'provider' },
       { header: 'Client', key: 'client' },
       { header: 'Week', key: 'week' },
+      { header: 'Project #', key: 'projectNumber' },
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
       { header: 'Date', key: 'date' },
@@ -725,6 +726,7 @@ export function BillingPage() {
             provider: '',
             client: 'Sin cliente',
             week: '—',
+            projectNumber: project.projectNumber ?? '',
             project: project.project,
             task: '',
             // Bucket "Sin cliente" agrega por proyecto (varios logs) → sin una
@@ -744,6 +746,7 @@ export function BillingPage() {
                 provider: row.user,
                 client: group.client,
                 week: week.week,
+                projectNumber: project.projectNumber ?? '',
                 project: row.project,
                 task: row.task,
                 date: row.date ? formatDate(row.date) : '',
@@ -1196,6 +1199,7 @@ export function BillingPage() {
                         <table className="table proj-table">
                           <thead>
                             <tr>
+                              <th scope="col" className="col-projnum">Project #</th>
                               <th scope="col">Project</th>
                               <th scope="col">Reason</th>
                               <th scope="col" className="col-num">Hours</th>
@@ -1208,6 +1212,7 @@ export function BillingPage() {
                               // nunca colisiona —el vacío queda "proj:" y ningún
                               // proyecto real puede tener ese nombre—.
                               <tr key={`proj:${project.project}`}>
+                                <td className="cell-mono col-projnum">{project.projectNumber || '—'}</td>
                                 <td className="cell-strong">{project.project || '—'}</td>
                                 <td className="cell-soft">{reasonLabel(project.reason)}</td>
                                 <td className="col-num cell-mono">{formatHours(project.hours)}</td>
@@ -1282,6 +1287,11 @@ export function BillingPage() {
                                 {projectOpen ? '▾' : '▸'}
                               </span>
                               <span className="bill-project__label">
+                                {project.projectNumber && (
+                                  <span className="bill-project__num cell-mono">
+                                    {project.projectNumber}
+                                  </span>
+                                )}
                                 {project.project || '—'}
                               </span>
                               <span className="bill-project__hours">

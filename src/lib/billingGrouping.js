@@ -21,6 +21,22 @@ import { sundayWeek, sundayWeekYear } from './format.js'
 const hoursOf = (entry) => Number(entry?.hours) || 0
 const sumHours = (entries) => entries.reduce((total, entry) => total + hoursOf(entry), 0)
 
+// Número de proyecto único de un grupo de horas (para el encabezado del grupo de
+// proyecto en Billing). Las horas se agrupan por NOMBRE de proyecto; casi siempre
+// todas comparten el mismo número, pero dos proyectos de Zoho homónimos pueden
+// caer en el mismo grupo con números distintos → se devuelve null (la UI muestra
+// sólo el nombre) en vez del número del primero, que sería engañoso. null también
+// si ninguna hora resolvió proyecto.
+const singleProjectNumber = (entries) => {
+  let num
+  for (const entry of entries) {
+    const n = entry?.projectNumber ?? null
+    if (num === undefined) num = n
+    else if (num !== n) return null
+  }
+  return num ?? null
+}
+
 /**
  * Filas de una semana: UNA FILA POR HORA (log individual), sin combinar. Antes se
  * fusionaban los logs de la misma terna proveedor·proyecto·task en una sola fila
@@ -129,6 +145,7 @@ function groupProjectsWithWeeks(entries) {
   return [...byProject.entries()]
     .map(([project, projectEntries]) => ({
       project,
+      projectNumber: singleProjectNumber(projectEntries),
       hours: sumHours(projectEntries),
       weeks: groupWeeks(projectEntries),
     }))
@@ -159,6 +176,7 @@ function groupProjectsWithReason(entries) {
   return [...byProject.values()]
     .map((group) => ({
       project: group.project,
+      projectNumber: singleProjectNumber(group.entries),
       reason: group.reason,
       hours: sumHours(group.entries),
       entries: group.entries,

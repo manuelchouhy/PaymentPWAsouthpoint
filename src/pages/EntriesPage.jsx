@@ -293,8 +293,9 @@ export function EntriesPage() {
 
   function handleExport(format) {
     const cols = [
+      { header: 'Project #', key: 'projectNumber' },
+      { header: 'Project Name', key: 'project' },
       { header: 'User', key: 'user' },
-      { header: 'Project', key: 'project' },
       { header: 'Client', key: 'client' },
       { header: 'Task', key: 'task' },
       { header: 'Date', key: 'date' },
@@ -309,6 +310,7 @@ export function EntriesPage() {
     // puesto espera el filtro entero, no las primeras 100 filas.
     const exportRows = visible.map((entry) => ({
       user: entry.user,
+      projectNumber: entry.projectNumber ?? '',
       project: entry.project ?? '',
       client: entry.client ?? '',
       task: entry.task ?? '',
@@ -624,8 +626,9 @@ export function EntriesPage() {
                           />
                         </th>
                       )}
+                      <th scope="col" className="col-projnum">Project #</th>
+                      <th scope="col" className="col-project">Project Name</th>
                       <th scope="col">User</th>
-                      <th scope="col" className="col-project">Project</th>
                       <th scope="col">Client</th>
                       <th scope="col" className="col-task">Task</th>
                       <th scope="col">Date</th>
@@ -696,12 +699,15 @@ export function EntriesPage() {
                               </span>
                             </td>
                           )}
-                          <td>{entry.user}</td>
+                          <td className="cell-mono col-projnum" title={entry.projectNumber || ''}>
+                            {entry.projectNumber || '—'}
+                          </td>
                           {/* title: al recortarse con ellipsis, el texto completo
                               queda disponible al pasar el mouse. */}
                           <td className="cell-strong col-project" title={entry.project || ''}>
                             {entry.project || '—'}
                           </td>
+                          <td>{entry.user}</td>
                           <td className="cell-soft">{entry.client || '—'}</td>
                           <td className="cell-soft col-task" title={entry.task || ''}>
                             {entry.task || '—'}

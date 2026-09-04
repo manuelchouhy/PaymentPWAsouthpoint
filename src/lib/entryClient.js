@@ -67,7 +67,9 @@ export function findProjectForEntry(entry, index) {
  * alias) y, sin canonicalizar, el mismo cliente salía dos veces en el filtro (uno
  * crudo de la hora, otro canónico del proyecto). Adjunta `clientReason` (null si
  * resolvió; 'group-unclaimed' | 'no-group' si no) para que Billing pueda explicar,
- * en el bucket "Sin cliente", por qué una hora quedó sin cliente.
+ * en el bucket "Sin cliente", por qué una hora quedó sin cliente. Adjunta
+ * también `projectNumber` (del proyecto unido, null si no matchea) para la
+ * columna "Project #" de las grillas de Entries y Billing.
  *
  * @param {Array<object>} entries
  * @param {Array<object>} projects
@@ -78,15 +80,21 @@ export function deriveEntriesClient(entries = [], projects = [], clients = []) {
   const index = buildProjectIndex(projects)
   const resolve = buildClientResolver(clients)
   return entries.map((entry) => {
+    // Se ubica el proyecto de la hora siempre (no sólo cuando falta el cliente):
+    // la columna "Project #" de las grillas necesita el número, que vive en el
+    // proyecto, no en la hora. Si la hora no matchea ningún proyecto —o el nombre
+    // es ambiguo— queda null y la grilla muestra "—". El valor propio de la entry
+    // gana si algún día Zoho lo manda.
+    const project = findProjectForEntry(entry, index)
+    const projectNumber = entry.projectNumber ?? project?.projectNumber ?? null
     if (entry.client) {
       // Canonicaliza el cliente propio de la hora contra la lista de clientes: si el
       // texto de Zoho nombra a un cliente cargado —con otra grafía o alias— colapsa a
       // su nombre canónico; si no matchea a nadie (o es ambiguo), se conserva tal cual.
       const canonical = resolve.canonicalizeName(entry.client)
-      return { ...entry, client: canonical || entry.client, clientReason: null }
+      return { ...entry, projectNumber, client: canonical || entry.client, clientReason: null }
     }
-    const project = findProjectForEntry(entry, index)
     const resolution = project ? resolve(project) : { client: null, reason: NO_GROUP }
-    return { ...entry, client: resolution.client ?? '', clientReason: resolution.reason ?? null }
+    return { ...entry, projectNumber, client: resolution.client ?? '', clientReason: resolution.reason ?? null }
   })
 }

@@ -595,9 +595,9 @@ export function ProjectsPage() {
               <table className="table proj-table proj-table--fit">
                 <thead>
                   <tr>
-                    <th scope="col">Client</th>
-                    <th scope="col">Project Name</th>
                     <th scope="col">Project #</th>
+                    <th scope="col">Project Name</th>
+                    <th scope="col">Client</th>
                     <th scope="col">Zoho Status</th>
                     <th scope="col">Customer</th>
                     <th scope="col" className="col-num">Base Budget Hours</th>
@@ -624,9 +624,9 @@ export function ProjectsPage() {
                         onClick={() => setDetail(p)}
                         title={`View ${p.projectName}`}
                       >
-                        <td>{p.resolvedClient || '—'}</td>
-                        <td className="cell-strong">{p.projectName}</td>
                         <td className="cell-mono">{p.projectNumber}</td>
+                        <td className="cell-strong">{p.projectName}</td>
+                        <td>{p.resolvedClient || '—'}</td>
                         <td>
                           {p.zohoStatus ? (
                             <span className="zoho-status">{p.zohoStatus}</span>

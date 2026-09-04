@@ -811,6 +811,9 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   column-gap: 12px;
   row-gap: 4px;
 }
+/* Número de proyecto delante del nombre en el encabezado de la factura agrupada:
+   mono y con un respiro a la derecha para separarlo del nombre. */
+.pay-invoice-head__num { margin-right: 8px; font-weight: 600; }
 
 /* --- Payments: sección de overage a pagar ---------------------------------- */
 .pay-overage {
@@ -978,6 +981,9 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .bill-project__toggle:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: -2px; }
 .bill-project__chev { color: var(--text-soft); font-size: 11px; width: 12px; }
 .bill-project__label { font-weight: 650; }
+/* Número de proyecto delante del nombre en el encabezado del grupo (Billing):
+   mono y atenuado para que el nombre siga siendo lo dominante. */
+.bill-project__num { color: var(--text-soft); font-family: var(--mono); font-size: 12px; font-weight: 600; margin-right: 8px; }
 .bill-project__hours { color: var(--text-soft); font-family: var(--mono); font-size: 12px; }
 .bill-project .bill-week { padding-left: 12px; }
 /* Respiración vertical de la tabla anidada: que las filas no queden pegadas al
@@ -1797,6 +1803,7 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 /* Anchos de columna (table-layout: fixed). Suman ~1146px ≤ contenedor (1152). */
 .col-check   { width: 38px; }
 .col-user    { width: 158px; }
+.col-projnum { width: 92px; white-space: nowrap; }
 .col-project { width: 100px; }
 .col-client  { width: 96px; }
 .col-task    { width: 100px; }
@@ -1839,6 +1846,7 @@ th.col-pop { text-align: center; }
    horizontal. */
 .entries-table .col-task { max-width: 300px; }
 .entries-table .col-project { max-width: 170px; }
+.entries-table .col-projnum { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Selección por fila: click en cualquier parte de una fila seleccionable la
    togglea. Las congeladas (ya facturadas) no son clickeables → cursor normal.

@@ -68,6 +68,10 @@ export function PaymentsPage() {
   const [payTarget, setPayTarget] = useState(null)
   const [paySelectedIds, setPaySelectedIds] = useState(() => new Set())
   const [entries, setEntries] = useState([])
+  // Proyectos: sólo para mapear el NOMBRE de proyecto de la factura a su número
+  // (columna "Project #" del encabezado). La factura guarda el proyecto como texto,
+  // así que el número se une por nombre — con el caveat de nombres homónimos (abajo).
+  const [projects, setProjects] = useState([])
   const [toast, setToast] = useState(null)
 
   function load() {
@@ -78,13 +82,15 @@ export function PaymentsPage() {
       api.payments.list(),
       api.payments.getAlertSettings(),
       api.timeEntries.list(),
+      api.projects.list(),
     ])
-      .then(([inv, ic, pay, settings, entryRows]) => {
+      .then(([inv, ic, pay, settings, entryRows, projectRows]) => {
         setInvoices(inv)
         setInvoiceContractors(ic)
         setPayments(pay)
         setAlertSettings(settings)
         setEntries(entryRows)
+        setProjects(projectRows)
         setStatus('ready')
       })
       .catch((error) => {
@@ -109,6 +115,22 @@ export function PaymentsPage() {
     }
     return map
   }, [invoiceContractors])
+
+  // Nombre de proyecto → número, para el encabezado de la factura. La factura sólo
+  // guarda el nombre; el número vive en el proyecto. Dos proyectos de Zoho homónimos
+  // con números distintos → null (se muestra sólo el nombre) en vez del número del
+  // primero, que sería engañoso. Mismo criterio de ambigüedad que Billing/Entries.
+  const projectNumberByName = useMemo(() => {
+    const map = new Map()
+    for (const p of projects) {
+      if (!p.projectName || !p.projectNumber) continue
+      const prior = map.get(p.projectName)
+      if (prior === undefined) map.set(p.projectName, p.projectNumber)
+      else if (prior !== p.projectNumber) map.set(p.projectName, null)
+    }
+    return map
+  }, [projects])
+  const projectNumberFor = (name) => (name ? projectNumberByName.get(name) ?? null : null)
 
   const warningBefore = alertSettings?.warningDaysBeforeDue ?? 3
   const ALERT_RANK = { overdue: 0, warning: 1, on_time: 2 }
@@ -328,6 +350,7 @@ export function PaymentsPage() {
   function handleExport(format) {
     const cols = [
       { header: 'SP Invoice #', key: 'spInvoice' },
+      { header: 'Project #', key: 'projectNumber' },
       { header: 'Project', key: 'project' },
       { header: 'Client', key: 'client' },
       { header: 'Contractor', key: 'contractor' },
@@ -342,6 +365,7 @@ export function PaymentsPage() {
     const exportRows = rows.flatMap((r) =>
       r.contractors.map((ic) => ({
         spInvoice: r.inv.spInvoiceNumber ?? '',
+        projectNumber: projectNumberFor(r.inv.project) ?? '',
         project: r.inv.project ?? '',
         client: r.inv.client ?? '',
         contractor: ic.contractor,
@@ -559,6 +583,11 @@ export function PaymentsPage() {
                               {r.inv.spInvoiceNumber ?? '—'}
                             </span>
                             <span className="cell-soft">
+                              {projectNumberFor(r.inv.project) && (
+                                <span className="pay-invoice-head__num cell-mono">
+                                  {projectNumberFor(r.inv.project)}
+                                </span>
+                              )}
                               {r.inv.project || '—'}
                               {r.inv.client ? ` · ${r.inv.client}` : ''}
                               {r.inv.weekStart ? ` · week ${formatDate(r.inv.weekStart)}` : ''}
