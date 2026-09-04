@@ -23,18 +23,20 @@ const sumHours = (entries) => entries.reduce((total, entry) => total + hoursOf(e
 
 // Número de proyecto único de un grupo de horas (para el encabezado del grupo de
 // proyecto en Billing). Las horas se agrupan por NOMBRE de proyecto; casi siempre
-// todas comparten el mismo número, pero dos proyectos de Zoho homónimos pueden
-// caer en el mismo grupo con números distintos → se devuelve null (la UI muestra
-// sólo el nombre) en vez del número del primero, que sería engañoso. null también
-// si ninguna hora resolvió proyecto.
+// todas comparten el mismo número. Las horas SIN número resuelto (proyecto no
+// encontrado por su id) se ignoran: no descartan el número válido que aportan las
+// demás del grupo. Sólo dos números REALMENTE distintos vuelven al grupo ambiguo
+// → null (la UI muestra sólo el nombre) en vez del número de una de ellas, que
+// sería engañoso. null también si ninguna hora del grupo resolvió número.
 const singleProjectNumber = (entries) => {
-  let num
+  let num = null
   for (const entry of entries) {
     const n = entry?.projectNumber ?? null
-    if (num === undefined) num = n
+    if (n == null) continue
+    if (num == null) num = n
     else if (num !== n) return null
   }
-  return num ?? null
+  return num
 }
 
 /**

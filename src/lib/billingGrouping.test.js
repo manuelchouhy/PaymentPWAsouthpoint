@@ -32,6 +32,28 @@ test('agrupa bill_to_client por cliente → proyecto → semana → filas', () =
   assert.equal(p2.weeks[0].hours, 3)
 })
 
+test('projectNumber del grupo: número único → se expone; una hora sin número no lo descarta', () => {
+  const entries = [
+    e({ id: 1, client: 'HSS', project: 'Alpha', date: '2026-08-14', projectNumber: 'PRJ-9' }),
+    // Misma name-group pero sin número resuelto (proyecto no encontrado por id):
+    // NO debe borrar el número válido que aporta la otra hora.
+    e({ id: 2, client: 'HSS', project: 'Alpha', date: '2026-08-13', projectNumber: null }),
+  ]
+  const [hss] = groupBillToClient(entries, {})
+  const alpha = hss.projects.find((p) => p.project === 'Alpha')
+  assert.equal(alpha.projectNumber, 'PRJ-9')
+})
+
+test('projectNumber del grupo: dos números REALMENTE distintos → ambiguo (null)', () => {
+  const entries = [
+    e({ id: 1, client: 'HSS', project: 'Alpha', date: '2026-08-14', projectNumber: 'PRJ-9' }),
+    e({ id: 2, client: 'HSS', project: 'Alpha', date: '2026-08-13', projectNumber: 'PRJ-8' }),
+  ]
+  const [hss] = groupBillToClient(entries, {})
+  const alpha = hss.projects.find((p) => p.project === 'Alpha')
+  assert.equal(alpha.projectNumber, null)
+})
+
 test('proyectos de un cliente ordenados por horas desc, desempate por nombre', () => {
   const entries = [
     e({ id: 1, client: 'HSS', project: 'Beta', date: '2026-08-14', hours: 5 }),
