@@ -799,6 +799,19 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   padding-bottom: 9px;
 }
 
+/* --- Payments: cabecera de cada factura agrupada --------------------------- */
+/* Número · proyecto/cliente/semana · progreso · estado · vencimiento se rendean
+   como <span> consecutivos. Sin esta regla no hay separación entre ellos y el
+   texto queda pegado ("465456Forecasting", "2026 0/1 paid", "Invoiceddue …").
+   Flex con gap los separa; wrap deja que caiga a otra línea en anchos chicos. */
+.pay-invoice-head__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 4px;
+}
+
 /* --- Payments: sección de overage a pagar ---------------------------------- */
 .pay-overage {
   margin-top: 28px;
@@ -908,7 +921,7 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--line);
   background: var(--surface-2);
 }
@@ -929,7 +942,7 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   align-items: baseline;
   gap: 10px;
   width: 100%;
-  padding: 10px 16px;
+  padding: 13px 16px;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -953,7 +966,7 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   align-items: baseline;
   gap: 10px;
   width: 100%;
-  padding: 11px 16px;
+  padding: 14px 16px;
   background: var(--surface-2);
   border: none;
   cursor: pointer;
@@ -967,6 +980,9 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .bill-project__label { font-weight: 650; }
 .bill-project__hours { color: var(--text-soft); font-family: var(--mono); font-size: 12px; }
 .bill-project .bill-week { padding-left: 12px; }
+/* Respiración vertical de la tabla anidada: que las filas no queden pegadas al
+   header de la semana ni al borde inferior de la tarjeta / a la siguiente semana. */
+.bill-week .table-wrap { margin: 4px 0 12px; }
 
 .toolbar__total {
   font-family: var(--mono);
@@ -4126,7 +4142,9 @@ th.col-pop { text-align: center; }
 .app-header__right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  /* Respiración del cluster rol · sync · tema · avatar: 12→16px para que los
+     cuatro controles se distingan sin quedar pegados uno al otro. */
+  gap: 16px;
   margin-left: auto;
   flex-shrink: 0;
 }
@@ -4198,7 +4216,7 @@ th.col-pop { text-align: center; }
 .proj-table {
   table-layout: auto;
   /* Sin min-width fijo. Había un min-width: 1320px pensado para la grilla de
-     Projects (13 columnas), pero .proj-table la usan 16 tablas y varias tienen
+     Projects (14 columnas), pero .proj-table la usan 16 tablas y varias tienen
      3 o 4: en Capacity las dos tablas se estiraban a 1320px cada una dentro de
      columnas de 680, con "Status" midiendo 477px, y la de Demand by SOW
      quedaba fuera de pantalla.
@@ -4220,6 +4238,20 @@ th.col-pop { text-align: center; }
 .proj-table--fit { width: 100%; }
 .proj-table--fit th,
 .proj-table--fit td { white-space: normal; }
+/* Padding horizontal reducido SOLO en la grilla de Projects (14 columnas). El
+   default (.table thead th / .table tbody td) es 11px/lado; × 14 col × 2 sumaba
+   ~308px y hacía que la tabla (min-content ~1538px) desbordara su contenedor y
+   cortara la columna Status. A 6px las 14 columnas entran sin scroll en anchos
+   amplios; en pantallas angostas sigue cayendo al scroll horizontal de
+   .table-wrap--scroll (sin regresión). Se conserva el padding vertical.
+   Se usan `thead th` / `tbody td` para IGUALAR la especificidad de la base
+   (.table thead th / .table tbody td son (0,1,2); un `.proj-table--fit td`
+   suelto es (0,1,1) y perdería). Con especificidad igual, gana el orden de
+   aparición: este bloque debe quedar DESPUÉS de las reglas base .table (no las
+   muevas por encima o vuelve el padding de 11px). Scopeado a --fit: no afecta
+   las otras tablas .proj-table. */
+.proj-table--fit thead th { padding-left: 6px; padding-right: 6px; }
+.proj-table--fit tbody td { padding-left: 6px; padding-right: 6px; }
 /* Solo las celdas de datos monoespaciadas/numéricas se mantienen sin cortar
    (IDs, #s, fechas, horas, el badge de estado). Los encabezados sí pueden
    cortar en 2 líneas ("Base Budget Hours", "Cust. Manager"...) para ganar
