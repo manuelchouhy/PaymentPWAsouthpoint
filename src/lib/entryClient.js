@@ -83,10 +83,9 @@ export function deriveEntriesClient(entries = [], projects = [], clients = []) {
     // Se ubica el proyecto de la hora siempre (no sólo cuando falta el cliente):
     // la columna "Project #" de las grillas necesita el número, que vive en el
     // proyecto, no en la hora. Si la hora no matchea ningún proyecto —o el nombre
-    // es ambiguo— queda null y la grilla muestra "—". El valor propio de la entry
-    // gana si algún día Zoho lo manda.
+    // es ambiguo— queda null y la grilla muestra "—".
     const project = findProjectForEntry(entry, index)
-    const projectNumber = entry.projectNumber ?? project?.projectNumber ?? null
+    const projectNumber = project?.projectNumber ?? null
     if (entry.client) {
       // Canonicaliza el cliente propio de la hora contra la lista de clientes: si el
       // texto de Zoho nombra a un cliente cargado —con otra grafía o alias— colapsa a

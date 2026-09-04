@@ -9,6 +9,7 @@ import {
   paidEntryIdsFrom,
 } from '../lib/paymentsGrouping'
 import { invoiceCompletion } from '../lib/invoiceCompletion'
+import { buildProjectIndex } from '../lib/entryClient'
 import { api } from '../lib/api'
 import { downloadPaymentReceipt } from '../lib/paymentReceipt'
 import { formatDate, formatHours } from '../lib/format'
@@ -124,21 +125,14 @@ export function PaymentsPage() {
     return map
   }, [invoiceContractors])
 
-  // Nombre de proyecto → número, para el encabezado de la factura. La factura sólo
-  // guarda el nombre; el número vive en el proyecto. Dos proyectos de Zoho homónimos
-  // con números distintos → null (se muestra sólo el nombre) en vez del número del
-  // primero, que sería engañoso. Mismo criterio de ambigüedad que Billing/Entries.
-  const projectNumberByName = useMemo(() => {
-    const map = new Map()
-    for (const p of projects) {
-      if (!p.projectName || !p.projectNumber) continue
-      const prior = map.get(p.projectName)
-      if (prior === undefined) map.set(p.projectName, p.projectNumber)
-      else if (prior !== p.projectNumber) map.set(p.projectName, null)
-    }
-    return map
-  }, [projects])
-  const projectNumberFor = (name) => (name ? projectNumberByName.get(name) ?? null : null)
+  // Número de proyecto de la factura desde su nombre (la factura sólo guarda el
+  // nombre; el número vive en el proyecto). Se reusa buildProjectIndex —el mismo
+  // índice que usan Entries/Billing vía deriveEntriesClient— para no duplicar la
+  // lógica ni divergir en la semántica de ambigüedad: nombre homónimo → null (se
+  // muestra sólo el nombre) en vez de un número que sería engañoso.
+  const projectIndex = useMemo(() => buildProjectIndex(projects), [projects])
+  const projectNumberFor = (name) =>
+    name ? projectIndex.byName.get(name)?.projectNumber ?? null : null
 
   const warningBefore = alertSettings?.warningDaysBeforeDue ?? 3
   const ALERT_RANK = { overdue: 0, warning: 1, on_time: 2 }

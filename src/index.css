@@ -1838,7 +1838,7 @@ th.col-pop { text-align: center; }
 }
 .cell-mono.col-invoice { letter-spacing: -.02em; }
 
-/* Entries: 11 columnas, y Task se llevaba 479px de 1507 porque el nowrap de
+/* Entries: 12 columnas (Project # incluida), y Task se llevaba 479px de 1507 porque el nowrap de
    .proj-table no deja cortar descripciones largas ("PJ Formulas Update: Update
    Dashboards & Reports"). Con un tope por columna, esas dos recortan con
    ellipsis —el texto completo queda en el title— y la tabla entra sin scroll
