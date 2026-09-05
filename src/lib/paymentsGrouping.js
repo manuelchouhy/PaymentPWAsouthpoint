@@ -82,24 +82,21 @@ export function pendingToPayByContractor(entries = [], payments = [], invoices =
  * contractor puede cruzar varios proyectos/clientes/semanas (sobre todo los
  * invoice-less), así que se devuelven listas de valores DISTINTOS —no un valor
  * único— y la UI decide cómo condensarlas ("2 projects", etc.). Del rango de
- * fechas (dateStart/dateEnd) la UI deriva el rango de semanas domingo–sábado.
- * Módulo puro: no formatea, sólo agrega.
- * @param {Array<{project?:string, client?:string, projectNumber?:(string|number), date?:string}>} entries
- * @returns {{projects:Array<string>, clients:Array<string>, projectNumbers:Array, dateStart:?string, dateEnd:?string}}
+ * fechas (dateStart/dateEnd) la UI deriva el rango de semanas domingo–sábado. El
+ * número de proyecto no se agrega acá: se muestra por hora en el desglose. Módulo
+ * puro: no formatea, sólo agrega.
+ * @param {Array<{project?:string, client?:string, date?:string}>} entries
+ * @returns {{projects:Array<string>, clients:Array<string>, dateStart:?string, dateEnd:?string}}
  */
 export function summarizeEntries(entries = []) {
   const projects = new Set()
   const clients = new Set()
-  const projectNumbers = new Set()
   let dateStart = null
   let dateEnd = null
   for (const entry of entries ?? []) {
     if (!entry) continue
     if (entry.project) projects.add(entry.project)
     if (entry.client) clients.add(entry.client)
-    // projectNumber puede ser 0 legítimo en teoría, pero '' (sin número) no es una
-    // opción válida y no debe contarse como un número distinto.
-    if (entry.projectNumber != null && entry.projectNumber !== '') projectNumbers.add(entry.projectNumber)
     const date = entry.date
     if (date) {
       if (!dateStart || date < dateStart) dateStart = date
@@ -109,7 +106,6 @@ export function summarizeEntries(entries = []) {
   return {
     projects: [...projects],
     clients: [...clients],
-    projectNumbers: [...projectNumbers],
     dateStart,
     dateEnd,
   }

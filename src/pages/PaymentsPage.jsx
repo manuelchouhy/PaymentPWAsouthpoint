@@ -13,7 +13,7 @@ import { invoiceCompletion } from '../lib/invoiceCompletion'
 import { buildProjectIndex, deriveEntriesClient } from '../lib/entryClient'
 import { api } from '../lib/api'
 import { downloadPaymentReceipt } from '../lib/paymentReceipt'
-import { formatDate, formatHours, formatWeek } from '../lib/format'
+import { formatDate, formatHours, formatWeek, sundayWeekYear } from '../lib/format'
 import { BillingBadge } from '../components/BillingBadge'
 import { RegisterPaymentModal } from '../components/RegisterPaymentModal'
 import { Toast } from '../components/Toast'
@@ -61,13 +61,22 @@ function formatWeekRange(dateStart, dateEnd) {
   if (!dateStart && !dateEnd) return null
   const start = formatWeek(dateStart)
   const end = formatWeek(dateEnd)
-  // formatWeek devuelve sólo "Wn" (sin año): dos fechas de la misma semana en años
-  // distintos colapsarían al mismo label y ocultarían que el pago cruza de año. Se
-  // desambigua con el año cuando el rango efectivamente cambia de año.
-  const yearStart = String(dateStart || dateEnd).slice(0, 4)
-  const yearEnd = String(dateEnd || dateStart).slice(0, 4)
+  // El año se compara por el AÑO DE LA SEMANA domingo–sábado (sundayWeekYear), no por
+  // el año calendario del string: una semana física que cruza el 31-dic pertenece al
+  // año de su domingo. Así dos fechas de la MISMA semana no se muestran como si
+  // cruzaran de año, y una que sí cambia de año-semana se desambigua con el año (y no
+  // se invierte el rango por comparar años calendario iguales de semanas distintas).
+  const yearStart = sundayWeekYear(dateStart ?? dateEnd)
+  const yearEnd = sundayWeekYear(dateEnd ?? dateStart)
   if (yearStart !== yearEnd) return `${start} ${yearStart}–${end} ${yearEnd}`
   return start === end ? start : `${start}–${end}`
+}
+
+// Id estable para la fila de detalle de una fila de pago, derivado de su clave de
+// expand. Se sanea (la clave lleva ':') para ser un id HTML válido que el botón
+// pueda referenciar por aria-controls.
+function detailIdFor(key) {
+  return `pay-detail-${String(key).replace(/[^a-zA-Z0-9_-]/g, '-')}`
 }
 
 // Meta condensada de una fila a partir del resumen agregado: proyecto (o "N
@@ -128,7 +137,7 @@ function EntryBreakdown({ entries }) {
 // (proyecto/cliente/semana). Se reusa en las tres tablas (pendientes de factura,
 // invoice-less pendientes e invoice-less pagadas) para no duplicar el afford ni la
 // redacción de accesibilidad.
-function PayExpandCell({ open, onToggle, name, meta }) {
+function PayExpandCell({ open, onToggle, name, meta, controls }) {
   return (
     <div className="pay-cell-lead">
       <button
@@ -136,6 +145,7 @@ function PayExpandCell({ open, onToggle, name, meta }) {
         className="pay-expand"
         onClick={onToggle}
         aria-expanded={open}
+        aria-controls={controls}
         aria-label={open ? 'Hide hour detail' : 'Show hour detail'}
       >
         {open ? (
@@ -294,7 +304,18 @@ export function PaymentsPage() {
     for (const inv of invoices) {
       if (!(isPayable(inv.status) || (showPaid && inv.status === 'Paid'))) continue
       const completion = invoiceCompletion(contractorsByInvoice.get(inv.id) ?? [], payments)
-      const pending = completion.contractors.filter((c) => !c.paid)
+      // Decora cada contractor una sola vez (acá, memoizado) con su desglose de horas
+      // y el rango de semanas: así el render no rejoinea/reagrega en cada toggle/toast.
+      const contractors = completion.contractors.map((ic) => {
+        const contractorEntries = entriesForIds(ic.entryIds)
+        const summary = summarizeEntries(contractorEntries)
+        return {
+          ...ic,
+          entries: contractorEntries,
+          weeks: formatWeekRange(summary.dateStart, summary.dateEnd),
+        }
+      })
+      const pending = contractors.filter((c) => !c.paid)
       // Invoiced sin filas o sin pendientes = transitorio (todos pagos, RPC aún no
       // flipeó): ocultar (mismo criterio que payableInvoicesByContractor).
       if (isPayable(inv.status) && (completion.totalCount === 0 || pending.length === 0)) continue
@@ -309,7 +330,7 @@ export function PaymentsPage() {
           : paymentAlertLevel(daysUntilDue, warningBefore)
       rows.push({
         inv,
-        contractors: completion.contractors,
+        contractors,
         pending,
         paidCount: completion.paidCount,
         totalCount: completion.totalCount,
@@ -320,23 +341,32 @@ export function PaymentsPage() {
       })
     }
     return rows
-  }, [invoices, contractorsByInvoice, payments, showPaid, warningBefore])
+  }, [invoices, contractorsByInvoice, payments, showPaid, warningBefore, entryById])
 
   // Horas invoice-less pendientes de pago, por contractor (overage / sp_internal).
+  // El meta condensado (proyecto/cliente/semana) de cada grupo se computa acá, una vez,
+  // no en el render: así toggle/toast/modal no re-agregan cada fila.
+  const withMeta = (group) => ({ ...group, meta: formatGroupMeta(summarizeEntries(group.entries)) })
   const overagePending = useMemo(
-    () => pendingToPayByContractor(enrichedEntries, payments, invoices, 'overage'),
+    () => pendingToPayByContractor(enrichedEntries, payments, invoices, 'overage').map(withMeta),
     [enrichedEntries, payments, invoices],
   )
   const spInternalPending = useMemo(
-    () => pendingToPayByContractor(enrichedEntries, payments, invoices, 'sp_internal'),
+    () => pendingToPayByContractor(enrichedEntries, payments, invoices, 'sp_internal').map(withMeta),
     [enrichedEntries, payments, invoices],
   )
 
-  // Pagos invoice-less YA hechos (read-only), separados por allocation.
-  const { overage: overagePaid, spInternal: spInternalPaid } = useMemo(
-    () => invoicelessPaidRows(payments, enrichedEntries),
-    [payments, enrichedEntries],
-  )
+  // Pagos invoice-less YA hechos (read-only), separados por allocation. Se decoran con
+  // su desglose de horas (join por entry_ids) y el meta, una vez, para no rejoinear en
+  // cada render.
+  const { overage: overagePaid, spInternal: spInternalPaid } = useMemo(() => {
+    const { overage, spInternal } = invoicelessPaidRows(payments, enrichedEntries)
+    const decorate = (row) => {
+      const rowEntries = entriesForIds(row.entryIds)
+      return { ...row, entries: rowEntries, meta: formatGroupMeta(summarizeEntries(rowEntries)) }
+    }
+    return { overage: overage.map(decorate), spInternal: spInternal.map(decorate) }
+  }, [payments, enrichedEntries, entryById])
 
   // KPIs sobre las facturas pendientes de pago. Total pendiente en HORAS (suma de las
   // horas de los contractors todavía sin pagar en las facturas pagables).
@@ -558,7 +588,7 @@ export function PaymentsPage() {
                 {pending.map((group) => {
                   const key = `${allocation}:${group.user}`
                   const open = isExpanded(key)
-                  const meta = formatGroupMeta(summarizeEntries(group.entries))
+                  const detailId = detailIdFor(key)
                   return (
                     <Fragment key={key}>
                       <tr>
@@ -567,7 +597,8 @@ export function PaymentsPage() {
                             open={open}
                             onToggle={() => toggleExpand(key)}
                             name={group.user || '—'}
-                            meta={meta}
+                            meta={group.meta}
+                            controls={detailId}
                           />
                         </td>
                         <td className="col-num cell-mono">{formatHours(group.hours)} h</td>
@@ -587,7 +618,7 @@ export function PaymentsPage() {
                         </td>
                       </tr>
                       {open && (
-                        <tr className="pay-detail-row">
+                        <tr id={detailId} className="pay-detail-row">
                           <td colSpan={3}>
                             <EntryBreakdown entries={group.entries} />
                           </td>
@@ -628,8 +659,7 @@ export function PaymentsPage() {
               {paidRows.map((row) => {
                 const key = `paid:${row.id}`
                 const open = isExpanded(key)
-                const rowEntries = entriesForIds(row.entryIds)
-                const meta = formatGroupMeta(summarizeEntries(rowEntries))
+                const detailId = detailIdFor(key)
                 return (
                   <Fragment key={row.id}>
                     <tr className="row-static">
@@ -638,7 +668,8 @@ export function PaymentsPage() {
                           open={open}
                           onToggle={() => toggleExpand(key)}
                           name={row.user || '—'}
-                          meta={meta}
+                          meta={row.meta}
+                          controls={detailId}
                         />
                       </td>
                       <td className="col-num cell-mono">
@@ -648,9 +679,9 @@ export function PaymentsPage() {
                       <td className="cell-mono">{formatDate(row.paymentDate)}</td>
                     </tr>
                     {open && (
-                      <tr className="pay-detail-row">
+                      <tr id={detailId} className="pay-detail-row">
                         <td colSpan={3}>
-                          <EntryBreakdown entries={rowEntries} />
+                          <EntryBreakdown entries={row.entries} />
                         </td>
                       </tr>
                     )}
@@ -806,12 +837,10 @@ export function PaymentsPage() {
                       {r.contractors.map((ic) => {
                         const key = `inv:${ic.id}`
                         const open = isExpanded(key)
-                        const icEntries = entriesForIds(ic.entryIds)
+                        const detailId = detailIdFor(key)
                         // Proyecto/cliente/semana ya están en el header del grupo; la
-                        // fila agrega el rango de semanas de ESTE contractor (subconjunto
-                        // de la factura) y el detalle por hora al expandir.
-                        const icSummary = summarizeEntries(icEntries)
-                        const weeks = formatWeekRange(icSummary.dateStart, icSummary.dateEnd)
+                        // fila agrega el rango de semanas de ESTE contractor (ic.weeks,
+                        // precomputado) y el detalle por hora (ic.entries) al expandir.
                         return (
                           <Fragment key={ic.id}>
                             <tr className={ic.paid ? 'row-static' : ''}>
@@ -820,7 +849,8 @@ export function PaymentsPage() {
                                   open={open}
                                   onToggle={() => toggleExpand(key)}
                                   name={ic.contractor}
-                                  meta={weeks}
+                                  meta={ic.weeks}
+                                  controls={detailId}
                                 />
                               </td>
                               <td className="cell-mono">{ic.supplierInvoiceNumber ?? '—'}</td>
@@ -854,9 +884,9 @@ export function PaymentsPage() {
                               </td>
                             </tr>
                             {open && (
-                              <tr className="pay-detail-row">
+                              <tr id={detailId} className="pay-detail-row">
                                 <td colSpan={5}>
-                                  <EntryBreakdown entries={icEntries} />
+                                  <EntryBreakdown entries={ic.entries} />
                                 </td>
                               </tr>
                             )}

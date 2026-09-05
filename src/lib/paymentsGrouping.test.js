@@ -131,15 +131,14 @@ test('invoicelessPaidRows expone entryIds para poder expandir el detalle', () =>
   assert.equal(spInternal[0].entryCount, 2)
 })
 
-test('summarizeEntries agrega proyectos/clientes distintos y el rango de fechas y semanas', () => {
+test('summarizeEntries agrega proyectos/clientes distintos y el rango de fechas', () => {
   const summary = summarizeEntries([
-    { project: 'P1', client: 'HSS', projectNumber: 'PRJ-1', date: '2026-08-10' }, // domingo W33
-    { project: 'P1', client: 'HSS', projectNumber: 'PRJ-1', date: '2026-08-14' },
-    { project: 'P2', client: 'Acme', projectNumber: 'PRJ-2', date: '2026-08-20' }, // W34
+    { project: 'P1', client: 'HSS', date: '2026-08-10' },
+    { project: 'P1', client: 'HSS', date: '2026-08-14' },
+    { project: 'P2', client: 'Acme', date: '2026-08-20' },
   ])
   assert.deepEqual(summary.projects, ['P1', 'P2'])
   assert.deepEqual(summary.clients, ['HSS', 'Acme'])
-  assert.deepEqual(summary.projectNumbers, ['PRJ-1', 'PRJ-2'])
   assert.equal(summary.dateStart, '2026-08-10')
   assert.equal(summary.dateEnd, '2026-08-20')
 })
@@ -148,7 +147,6 @@ test('summarizeEntries tolera lista vacía / campos faltantes sin romper', () =>
   const summary = summarizeEntries([{ hours: 1 }, null, { project: 'P1' }])
   assert.deepEqual(summary.projects, ['P1'])
   assert.deepEqual(summary.clients, [])
-  assert.deepEqual(summary.projectNumbers, [])
   assert.equal(summary.dateStart, null)
   assert.equal(summary.dateEnd, null)
 })
