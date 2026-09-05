@@ -129,18 +129,26 @@ export function ProjectsPage() {
     () => clientFilterOptions(clients, withClient.some((p) => !masterNames.has(p.resolvedClient))),
     [clients, withClient, masterNames],
   )
+  // Base para las opciones de los filtros derivados de proyectos (nombre, #, SOW,
+  // lead dev): debe salir del MISMO conjunto que muestra la grilla, para no ofrecer
+  // un valor de un proyecto oculto por status que filtraría a cero filas. Con "Show
+  // all statuses" cubre todos. (El filtro Client se arma del maestro, aparte.)
+  const optionProjects = useMemo(
+    () => (showAllStatuses ? projects : projects.filter(isActiveProject)),
+    [projects, showAllStatuses],
+  )
   const leadDevOptions = useMemo(
-    () => sortedUnique(projects.map((p) => p.leadDeveloper)),
-    [projects],
+    () => sortedUnique(optionProjects.map((p) => p.leadDeveloper)),
+    [optionProjects],
   )
   const projectNameOptions = useMemo(
-    () => sortedUnique(projects.map((p) => p.projectName)),
-    [projects],
+    () => sortedUnique(optionProjects.map((p) => p.projectName)),
+    [optionProjects],
   )
   // sortedUnique: dedup + orden natural (numeric) — 'PRJ-2' antes de 'PRJ-10'.
   const projectNumberOptions = useMemo(
-    () => sortedUnique(projects.map((p) => p.projectNumber)),
-    [projects],
+    () => sortedUnique(optionProjects.map((p) => p.projectNumber)),
+    [optionProjects],
   )
   // Los SOW de un proyecto viven en dos lugares: el sowNumber de proyecto y, si
   // tiene stages, un SOW por stage (stageSowNumbers, cargado en batch por
@@ -149,16 +157,17 @@ export function ProjectsPage() {
     () =>
       [
         ...new Set(
-          projects.flatMap((p) => projectSows(p)),
+          optionProjects.flatMap((p) => projectSows(p)),
         ),
       ].sort(),
-    [projects],
+    [optionProjects],
   )
 
-  // Las tarjetas de estado de contrato cuentan sobre la MISMA población que
-  // muestra la grilla por defecto: si se ocultan los no-activos, el número de la
-  // tarjeta y las filas que aparecen al clickearla deben coincidir. Con "Show all
-  // statuses" cuentan todos.
+  // Las tarjetas de estado de contrato cuentan sobre la misma POBLACIÓN por status
+  // que la grilla (sólo activos por defecto; todos con "Show all statuses"), para
+  // que el número no incluya proyectos que el filtro de status oculta. Los otros
+  // filtros (cliente, fechas, etc.) NO se reflejan en el conteo —igual que antes—,
+  // así que con esos activos la tarjeta puede mostrar más que las filas resultantes.
   const statusCounts = useMemo(
     () => countByStatus(showAllStatuses ? projects : projects.filter(isActiveProject)),
     [projects, showAllStatuses],
@@ -633,7 +642,11 @@ export function ProjectsPage() {
           </div>
 
           {visible.length === 0 ? (
-            <div className="empty">No projects to display.</div>
+            <div className="empty">
+              {!showAllStatuses && withClient.some((p) => !isActiveProject(p))
+                ? 'No active projects to display. Some are hidden by their status — turn on “Show all statuses” to see them.'
+                : 'No projects to display.'}
+            </div>
           ) : (
             <div className="table-wrap table-wrap--scroll">
               <table className="table proj-table proj-table--fit">
