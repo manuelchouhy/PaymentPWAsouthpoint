@@ -811,6 +811,9 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   column-gap: 12px;
   row-gap: 4px;
 }
+/* Número de proyecto delante del nombre en el encabezado de la factura agrupada:
+   mono y con un respiro a la derecha para separarlo del nombre. */
+.pay-invoice-head__num { margin-right: 8px; font-weight: 600; }
 
 /* --- Payments: sección de overage a pagar ---------------------------------- */
 .pay-overage {
@@ -978,6 +981,9 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .bill-project__toggle:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: -2px; }
 .bill-project__chev { color: var(--text-soft); font-size: 11px; width: 12px; }
 .bill-project__label { font-weight: 650; }
+/* Número de proyecto delante del nombre en el encabezado del grupo (Billing):
+   mono y atenuado para que el nombre siga siendo lo dominante. */
+.bill-project__num { color: var(--text-soft); font-family: var(--mono); font-size: 12px; font-weight: 600; margin-right: 8px; }
 .bill-project__hours { color: var(--text-soft); font-family: var(--mono); font-size: 12px; }
 .bill-project .bill-week { padding-left: 12px; }
 /* Respiración vertical de la tabla anidada: que las filas no queden pegadas al
@@ -1832,13 +1838,18 @@ th.col-pop { text-align: center; }
 }
 .cell-mono.col-invoice { letter-spacing: -.02em; }
 
-/* Entries: 11 columnas, y Task se llevaba 479px de 1507 porque el nowrap de
+/* Entries: 12 columnas (Project # incluida), y Task se llevaba 479px de 1507 porque el nowrap de
    .proj-table no deja cortar descripciones largas ("PJ Formulas Update: Update
    Dashboards & Reports"). Con un tope por columna, esas dos recortan con
    ellipsis —el texto completo queda en el title— y la tabla entra sin scroll
    horizontal. */
 .entries-table .col-task { max-width: 300px; }
 .entries-table .col-project { max-width: 170px; }
+/* Columna "Project #" (Entries + bucket "Sin cliente" de Billing). NO entra en el
+   presupuesto de anchos de la tabla fija de arriba: vive en tablas scrolleables
+   (.table-wrap--scroll / .proj-table), no en la de table-layout:fixed de 1152px. */
+.col-projnum { width: 92px; white-space: nowrap; }
+.entries-table .col-projnum { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Selección por fila: click en cualquier parte de una fila seleccionable la
    togglea. Las congeladas (ya facturadas) no son clickeables → cursor normal.

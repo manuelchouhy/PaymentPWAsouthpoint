@@ -11,7 +11,7 @@ import {
 import { projectSows, stageSows } from '../lib/projectSows'
 import { api } from '../lib/api'
 import { buildClientResolver } from '../lib/clientResolver'
-import { clientFilterKey, clientFilterOptions } from '../lib/useEntryFilters'
+import { clientFilterKey, clientFilterOptions, sortedUnique } from '../lib/useEntryFilters'
 import { formatDate, formatHours } from '../lib/format'
 import { ContractBadge } from '../components/ContractBadge'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
@@ -46,6 +46,7 @@ export function ProjectsPage() {
   const [filters, setFilters] = useState({
     clients: [],
     projectNames: [],
+    projectNumbers: [],
     sows: [],
     leadDevelopers: [],
     expFrom: '',
@@ -121,11 +122,16 @@ export function ProjectsPage() {
     [clients, withClient, masterNames],
   )
   const leadDevOptions = useMemo(
-    () => [...new Set(projects.map((p) => p.leadDeveloper).filter(Boolean))].sort(),
+    () => sortedUnique(projects.map((p) => p.leadDeveloper)),
     [projects],
   )
   const projectNameOptions = useMemo(
-    () => [...new Set(projects.map((p) => p.projectName).filter(Boolean))].sort(),
+    () => sortedUnique(projects.map((p) => p.projectName)),
+    [projects],
+  )
+  // sortedUnique: dedup + orden natural (numeric) — 'PRJ-2' antes de 'PRJ-10'.
+  const projectNumberOptions = useMemo(
+    () => sortedUnique(projects.map((p) => p.projectNumber)),
     [projects],
   )
   // Los SOW de un proyecto viven en dos lugares: el sowNumber de proyecto y, si
@@ -154,6 +160,8 @@ export function ProjectsPage() {
         }
       }
       if (filters.projectNames.length && !filters.projectNames.includes(p.projectName))
+        return false
+      if (filters.projectNumbers.length && !filters.projectNumbers.includes(p.projectNumber))
         return false
       if (filters.sows.length) {
         const sows = projectSows(p)
@@ -187,6 +195,7 @@ export function ProjectsPage() {
   const filtersActive =
     filters.clients.length ||
     filters.projectNames.length ||
+    filters.projectNumbers.length ||
     filters.sows.length ||
     filters.leadDevelopers.length ||
     filters.expFrom ||
@@ -523,6 +532,12 @@ export function ProjectsPage() {
                 onToggle={(v) => toggle('clients', v)}
               />
               <MultiSelectDropdown
+                label="Project #"
+                options={projectNumberOptions}
+                selected={filters.projectNumbers}
+                onToggle={(v) => toggle('projectNumbers', v)}
+              />
+              <MultiSelectDropdown
                 label="Project"
                 options={projectNameOptions}
                 selected={filters.projectNames}
@@ -568,6 +583,7 @@ export function ProjectsPage() {
                     setFilters({
                       clients: [],
                       projectNames: [],
+                      projectNumbers: [],
                       sows: [],
                       leadDevelopers: [],
                       expFrom: '',
@@ -595,9 +611,9 @@ export function ProjectsPage() {
               <table className="table proj-table proj-table--fit">
                 <thead>
                   <tr>
-                    <th scope="col">Client</th>
-                    <th scope="col">Project Name</th>
                     <th scope="col">Project #</th>
+                    <th scope="col">Project Name</th>
+                    <th scope="col">Client</th>
                     <th scope="col">Zoho Status</th>
                     <th scope="col">Customer</th>
                     <th scope="col" className="col-num">Base Budget Hours</th>
@@ -624,9 +640,9 @@ export function ProjectsPage() {
                         onClick={() => setDetail(p)}
                         title={`View ${p.projectName}`}
                       >
-                        <td>{p.resolvedClient || '—'}</td>
-                        <td className="cell-strong">{p.projectName}</td>
                         <td className="cell-mono">{p.projectNumber}</td>
+                        <td className="cell-strong">{p.projectName}</td>
+                        <td>{p.resolvedClient || '—'}</td>
                         <td>
                           {p.zohoStatus ? (
                             <span className="zoho-status">{p.zohoStatus}</span>

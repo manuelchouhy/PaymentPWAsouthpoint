@@ -8,11 +8,9 @@ import { exportGrid } from '../lib/exportGrid'
 import { effectiveBudgetHours } from '../lib/changeRequestsData'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
+import { sortedUnique } from '../lib/useEntryFilters'
 
 const UNASSIGNED = 'Without client'
-
-const sortedUnique = (values) =>
-  [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
 
 export function ClientSummaryPage() {
   const { user } = useOutletContext()

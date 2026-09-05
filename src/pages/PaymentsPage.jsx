@@ -9,6 +9,7 @@ import {
   paidEntryIdsFrom,
 } from '../lib/paymentsGrouping'
 import { invoiceCompletion } from '../lib/invoiceCompletion'
+import { buildProjectIndex } from '../lib/entryClient'
 import { api } from '../lib/api'
 import { downloadPaymentReceipt } from '../lib/paymentReceipt'
 import { formatDate, formatHours } from '../lib/format'
@@ -68,6 +69,10 @@ export function PaymentsPage() {
   const [payTarget, setPayTarget] = useState(null)
   const [paySelectedIds, setPaySelectedIds] = useState(() => new Set())
   const [entries, setEntries] = useState([])
+  // Proyectos: sólo para mapear el NOMBRE de proyecto de la factura a su número
+  // (columna "Project #" del encabezado). La factura guarda el proyecto como texto,
+  // así que el número se une por nombre — con el caveat de nombres homónimos (abajo).
+  const [projects, setProjects] = useState([])
   const [toast, setToast] = useState(null)
 
   function load() {
@@ -91,6 +96,16 @@ export function PaymentsPage() {
         console.error('No se pudo cargar Payments:', error)
         setStatus('error')
       })
+    // Los proyectos son SÓLO para el número de proyecto (cosmético) del header de
+    // la factura. Van aparte del Promise.all core: si este fetch falla, el header
+    // muestra sólo el nombre y la página —con sus datos de pago— igual carga. Meterlo
+    // en el core haría que un fallo acá tumbara todo Payments por una columna.
+    api.projects
+      .list()
+      .then((projectRows) => setProjects(projectRows))
+      .catch((error) =>
+        console.warn('No se pudieron cargar los proyectos (número de proyecto en el header):', error),
+      )
   }
 
   useEffect(() => {
@@ -109,6 +124,15 @@ export function PaymentsPage() {
     }
     return map
   }, [invoiceContractors])
+
+  // Número de proyecto de la factura desde su nombre (la factura sólo guarda el
+  // nombre; el número vive en el proyecto). Se reusa buildProjectIndex —el mismo
+  // índice que usan Entries/Billing vía deriveEntriesClient— para no duplicar la
+  // lógica ni divergir en la semántica de ambigüedad: nombre homónimo → null (se
+  // muestra sólo el nombre) en vez de un número que sería engañoso.
+  const projectIndex = useMemo(() => buildProjectIndex(projects), [projects])
+  const projectNumberFor = (name) =>
+    name ? projectIndex.byName.get(name)?.projectNumber ?? null : null
 
   const warningBefore = alertSettings?.warningDaysBeforeDue ?? 3
   const ALERT_RANK = { overdue: 0, warning: 1, on_time: 2 }
@@ -328,6 +352,7 @@ export function PaymentsPage() {
   function handleExport(format) {
     const cols = [
       { header: 'SP Invoice #', key: 'spInvoice' },
+      { header: 'Project #', key: 'projectNumber' },
       { header: 'Project', key: 'project' },
       { header: 'Client', key: 'client' },
       { header: 'Contractor', key: 'contractor' },
@@ -339,9 +364,11 @@ export function PaymentsPage() {
       { header: 'Payment Date', key: 'paymentDate' },
     ]
     // Una fila por contractor de cada factura (grano del pago).
-    const exportRows = rows.flatMap((r) =>
-      r.contractors.map((ic) => ({
+    const exportRows = rows.flatMap((r) => {
+      const projNum = projectNumberFor(r.inv.project) ?? ''
+      return r.contractors.map((ic) => ({
         spInvoice: r.inv.spInvoiceNumber ?? '',
+        projectNumber: projNum,
         project: r.inv.project ?? '',
         client: r.inv.client ?? '',
         contractor: ic.contractor,
@@ -351,8 +378,8 @@ export function PaymentsPage() {
         invoiceStatus: r.inv.status,
         dueDate: r.dueDate ?? '',
         paymentDate: ic.paymentDate ?? '',
-      })),
-    )
+      }))
+    })
     exportGrid({ rows: exportRows, columns: cols, title: 'Payments', gridName: 'payments', format, generatedBy: user?.email ?? '' })
   }
 
@@ -550,6 +577,7 @@ export function PaymentsPage() {
                   const payable = isPayable(r.inv.status)
                   const overdue = payable && r.alertLevel === 'overdue'
                   const warning = payable && r.alertLevel === 'warning'
+                  const projNum = projectNumberFor(r.inv.project)
                   return (
                     <tbody key={r.inv.id} className="pay-invoice-group">
                       <tr className="pay-invoice-head">
@@ -559,6 +587,9 @@ export function PaymentsPage() {
                               {r.inv.spInvoiceNumber ?? '—'}
                             </span>
                             <span className="cell-soft">
+                              {projNum && (
+                                <span className="pay-invoice-head__num cell-mono">{projNum}</span>
+                              )}
                               {r.inv.project || '—'}
                               {r.inv.client ? ` · ${r.inv.client}` : ''}
                               {r.inv.weekStart ? ` · week ${formatDate(r.inv.weekStart)}` : ''}

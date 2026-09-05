@@ -141,6 +141,11 @@ function ReadonlyRows({ rows, showProvider = true, onDetail }) {
                 </td>
               )}
               <td>
+                {row.projectNumber && (
+                  <span className="cell-mono cell-soft" style={{ marginRight: 6 }}>
+                    {row.projectNumber}
+                  </span>
+                )}
                 {row.project || '—'}
                 {row.task && <div className="cell-soft">{row.task}</div>}
               </td>
@@ -703,6 +708,7 @@ export function BillingPage() {
       { header: 'Provider', key: 'provider' },
       { header: 'Client', key: 'client' },
       { header: 'Week', key: 'week' },
+      { header: 'Project #', key: 'projectNumber' },
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
       { header: 'Date', key: 'date' },
@@ -725,6 +731,7 @@ export function BillingPage() {
             provider: '',
             client: 'Sin cliente',
             week: '—',
+            projectNumber: project.projectNumber ?? '',
             project: project.project,
             task: '',
             // Bucket "Sin cliente" agrega por proyecto (varios logs) → sin una
@@ -744,6 +751,10 @@ export function BillingPage() {
                 provider: row.user,
                 client: group.client,
                 week: week.week,
+                // Por fila (no el número agregado del grupo): en un grupo de nombres
+                // homónimos cada fila conserva su número individual, e iguala la
+                // granularidad del export read-only (handleExportReadonly).
+                projectNumber: row.projectNumber ?? '',
                 project: row.project,
                 task: row.task,
                 date: row.date ? formatDate(row.date) : '',
@@ -778,6 +789,7 @@ export function BillingPage() {
       { header: entityLabel === 'client' ? 'Client' : 'Contractor', key: 'entity' },
       ...(showProvider ? [{ header: 'Provider', key: 'provider' }] : []),
       { header: 'Week', key: 'week' },
+      { header: 'Project #', key: 'projectNumber' },
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
       { header: 'Date', key: 'date' },
@@ -790,6 +802,7 @@ export function BillingPage() {
         entity: group.entity || '—',
         ...(showProvider ? { provider: row.user || '' } : {}),
         week: week ? week.week : '—',
+        projectNumber: row.projectNumber ?? '',
         project: row.project || '',
         task: row.task || '',
         date: row.date ? formatDate(row.date) : '',
@@ -871,6 +884,7 @@ export function BillingPage() {
     const params = new URLSearchParams()
     filters.clients.forEach((c) => params.append('client', c))
     filters.projects.forEach((p) => params.append('project', p))
+    filters.projectNumbers.forEach((n) => params.append('projectNumber', n))
     filters.contractors.forEach((c) => params.append('contractor', c))
     params.append('allocation', allocation)
     return `/entries?${params.toString()}`
@@ -998,6 +1012,12 @@ export function BillingPage() {
                 options={clientOptions}
                 selected={filters.clients}
                 onToggle={(v) => toggleValue('clients', v)}
+              />
+              <MultiSelectDropdown
+                label="Project #"
+                options={options.projectNumbers}
+                selected={filters.projectNumbers}
+                onToggle={(v) => toggleValue('projectNumbers', v)}
               />
               <MultiSelectDropdown
                 label="Project"
@@ -1196,6 +1216,7 @@ export function BillingPage() {
                         <table className="table proj-table">
                           <thead>
                             <tr>
+                              <th scope="col" className="col-projnum">Project #</th>
                               <th scope="col">Project</th>
                               <th scope="col">Reason</th>
                               <th scope="col" className="col-num">Hours</th>
@@ -1208,6 +1229,7 @@ export function BillingPage() {
                               // nunca colisiona —el vacío queda "proj:" y ningún
                               // proyecto real puede tener ese nombre—.
                               <tr key={`proj:${project.project}`}>
+                                <td className="cell-mono col-projnum">{project.projectNumber || '—'}</td>
                                 <td className="cell-strong">{project.project || '—'}</td>
                                 <td className="cell-soft">{reasonLabel(project.reason)}</td>
                                 <td className="col-num cell-mono">{formatHours(project.hours)}</td>
@@ -1282,6 +1304,11 @@ export function BillingPage() {
                                 {projectOpen ? '▾' : '▸'}
                               </span>
                               <span className="bill-project__label">
+                                {project.projectNumber && (
+                                  <span className="bill-project__num cell-mono">
+                                    {project.projectNumber}
+                                  </span>
+                                )}
                                 {project.project || '—'}
                               </span>
                               <span className="bill-project__hours">

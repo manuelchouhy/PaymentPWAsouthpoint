@@ -13,6 +13,7 @@ const base = {
   contractors: [],
   clients: [],
   projects: [],
+  projectNumbers: [],
   tasks: [],
   billingStatuses: [],
   statuses: [],
@@ -60,6 +61,39 @@ test('selección puntual sigue funcionando y convive con ALLOCATED', () => {
     ids(applyEntryFilters(entries, { ...base, allocations: ['overage', ALLOCATED] }, new Map())),
     [2, 3, 4],
   )
+})
+
+// --- Filtro por NÚMERO de proyecto (independiente del de nombre) -------------
+const projNumEntries = [
+  { id: 1, project: 'Alpha', projectNumber: 'PRJ-1' },
+  { id: 2, project: 'Alpha', projectNumber: 'PRJ-1' },
+  { id: 3, project: 'Beta', projectNumber: 'PRJ-2' },
+  { id: 4, project: 'Gamma', projectNumber: null }, // sin número resuelto
+]
+
+test('projectNumbers → sólo las horas de ese número', () => {
+  const r = applyEntryFilters(projNumEntries, { ...base, projectNumbers: ['PRJ-1'] }, new Map())
+  assert.deepEqual(ids(r), [1, 2])
+})
+
+test('projectNumbers activo oculta las horas sin número resuelto', () => {
+  const r = applyEntryFilters(projNumEntries, { ...base, projectNumbers: ['PRJ-2'] }, new Map())
+  assert.deepEqual(ids(r), [3]) // la id 4 (projectNumber null) queda afuera
+})
+
+test('projectNumbers y projects (nombre) son filtros independientes que se cruzan (AND)', () => {
+  // Número PRJ-1 (ids 1,2) AND nombre Beta (id 3) → intersección vacía.
+  const r = applyEntryFilters(
+    projNumEntries,
+    { ...base, projectNumbers: ['PRJ-1'], projects: ['Beta'] },
+    new Map(),
+  )
+  assert.deepEqual(ids(r), [])
+})
+
+test('buildFilterOptions expone projectNumbers (falsy descartado)', () => {
+  const opts = buildFilterOptions(projNumEntries, base, new Map())
+  assert.deepEqual(opts.projectNumbers, ['PRJ-1', 'PRJ-2'])
 })
 
 // --- Filtro de Status de aprobación (Approved / Rejected / Pending) ----------

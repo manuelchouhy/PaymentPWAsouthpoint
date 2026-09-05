@@ -21,6 +21,24 @@ import { sundayWeek, sundayWeekYear } from './format.js'
 const hoursOf = (entry) => Number(entry?.hours) || 0
 const sumHours = (entries) => entries.reduce((total, entry) => total + hoursOf(entry), 0)
 
+// Número de proyecto único de un grupo de horas (para el encabezado del grupo de
+// proyecto en Billing). Las horas se agrupan por NOMBRE de proyecto; casi siempre
+// todas comparten el mismo número. Las horas SIN número resuelto (proyecto no
+// encontrado por su id) se ignoran: no descartan el número válido que aportan las
+// demás del grupo. Sólo dos números REALMENTE distintos vuelven al grupo ambiguo
+// → null (la UI muestra sólo el nombre) en vez del número de una de ellas, que
+// sería engañoso. null también si ninguna hora del grupo resolvió número.
+const singleProjectNumber = (entries) => {
+  let num = null
+  for (const entry of entries) {
+    const n = entry?.projectNumber ?? null
+    if (n == null) continue
+    if (num == null) num = n
+    else if (num !== n) return null
+  }
+  return num
+}
+
 /**
  * Filas de una semana: UNA FILA POR HORA (log individual), sin combinar. Antes se
  * fusionaban los logs de la misma terna proveedor·proyecto·task en una sola fila
@@ -44,6 +62,10 @@ function groupRows(entries) {
       id: entry.id,
       user: entry.user ?? '',
       project: entry.project ?? '',
+      // Número de proyecto para el export (columna Project #). A nivel fila porque
+      // las tabs read-only (Overage/SP internal/X) agrupan por contractor/cliente,
+      // no por proyecto, así que no hay un grupo de proyecto de donde tomarlo.
+      projectNumber: entry.projectNumber ?? null,
       task: entry.task ?? '',
       date: entry.date ?? '',
       // invoiced: la hora ya está facturada (read-only en la grilla).
@@ -129,6 +151,7 @@ function groupProjectsWithWeeks(entries) {
   return [...byProject.entries()]
     .map(([project, projectEntries]) => ({
       project,
+      projectNumber: singleProjectNumber(projectEntries),
       hours: sumHours(projectEntries),
       weeks: groupWeeks(projectEntries),
     }))
@@ -159,6 +182,7 @@ function groupProjectsWithReason(entries) {
   return [...byProject.values()]
     .map((group) => ({
       project: group.project,
+      projectNumber: singleProjectNumber(group.entries),
       reason: group.reason,
       hours: sumHours(group.entries),
       entries: group.entries,
