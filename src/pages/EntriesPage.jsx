@@ -128,6 +128,7 @@ export function EntriesPage() {
     // lista valores que existen en las entries.
     const clientParams = searchParams.getAll('client').filter(Boolean)
     const projectParams = searchParams.getAll('project').filter(Boolean)
+    const projectNumberParams = searchParams.getAll('projectNumber').filter(Boolean)
     // contractor: lo mandan las tabs de Billing junto con la allocation, para caer
     // en el MISMO set que muestra la tab (Billing filtra por contractor).
     const contractorParams = searchParams.getAll('contractor').filter(Boolean)
@@ -136,12 +137,19 @@ export function EntriesPage() {
     // (ALLOCATION_FILTER_OPTIONS, incluye UNALLOCATED y 'unknown'=X) para que no se
     // desincronice, por si la URL viene editada a mano.
     const allocParams = searchParams.getAll('allocation').filter((a) => ALLOCATION_FILTER_OPTIONS.includes(a))
-    if (!clientParams.length && !projectParams.length && !contractorParams.length && !allocParams.length) {
+    if (
+      !clientParams.length &&
+      !projectParams.length &&
+      !projectNumberParams.length &&
+      !contractorParams.length &&
+      !allocParams.length
+    ) {
       return undefined
     }
     return {
       clients: clientParams,
       projects: projectParams,
+      projectNumbers: projectNumberParams,
       contractors: contractorParams,
       allocations: allocParams,
     }

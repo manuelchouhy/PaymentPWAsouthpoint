@@ -131,8 +131,11 @@ const OPTION_DIMENSIONS = {
 // filtro de Cliente (Entries, Billing) arman su lista de opciones uniendo los
 // clientes derivados de las filas con el maestro, y necesitan el mismo criterio
 // de orden/deduplicación.
+// numeric:true → orden natural para valores con números embebidos ('PRJ-2' antes
+// de 'PRJ-10', 'Stage 2' antes de 'Stage 10'); en textos sin números se comporta
+// igual que antes.
 export const sortedUnique = (values) =>
-  [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
+  [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
 
 /**
  * Opciones del desplegable de Cliente: los nombres del maestro (los mismos que la
@@ -177,7 +180,7 @@ export const clientFilterOptions = (clients, hasOther) => {
  * @param {Map<string, {status: string}>} invoiceByEntryId
  * @param {Set<string>} [masterClients] si viene, la dimensión Cliente ofrece las
  *   mismas claves que matchea el filtro (nombre del maestro o centinela Others).
- * @returns {{contractors: string[], clients: string[], projects: string[], tasks: string[]}}
+ * @returns {{contractors: string[], clients: string[], projects: string[], projectNumbers: string[], tasks: string[]}}
  */
 export function buildFilterOptions(entries, filters, invoiceByEntryId, masterClients) {
   const options = {}

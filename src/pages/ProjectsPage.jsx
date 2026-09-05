@@ -11,7 +11,7 @@ import {
 import { projectSows, stageSows } from '../lib/projectSows'
 import { api } from '../lib/api'
 import { buildClientResolver } from '../lib/clientResolver'
-import { clientFilterKey, clientFilterOptions } from '../lib/useEntryFilters'
+import { clientFilterKey, clientFilterOptions, sortedUnique } from '../lib/useEntryFilters'
 import { formatDate, formatHours } from '../lib/format'
 import { ContractBadge } from '../components/ContractBadge'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
@@ -129,8 +129,9 @@ export function ProjectsPage() {
     () => [...new Set(projects.map((p) => p.projectName).filter(Boolean))].sort(),
     [projects],
   )
+  // sortedUnique: dedup + orden natural (numeric) — 'PRJ-2' antes de 'PRJ-10'.
   const projectNumberOptions = useMemo(
-    () => [...new Set(projects.map((p) => p.projectNumber).filter(Boolean))].sort(),
+    () => sortedUnique(projects.map((p) => p.projectNumber)),
     [projects],
   )
   // Los SOW de un proyecto viven en dos lugares: el sowNumber de proyecto y, si

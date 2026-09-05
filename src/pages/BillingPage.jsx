@@ -884,6 +884,7 @@ export function BillingPage() {
     const params = new URLSearchParams()
     filters.clients.forEach((c) => params.append('client', c))
     filters.projects.forEach((p) => params.append('project', p))
+    filters.projectNumbers.forEach((n) => params.append('projectNumber', n))
     filters.contractors.forEach((c) => params.append('contractor', c))
     params.append('allocation', allocation)
     return `/entries?${params.toString()}`
