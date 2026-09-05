@@ -61,6 +61,12 @@ function formatWeekRange(dateStart, dateEnd) {
   if (!dateStart && !dateEnd) return null
   const start = formatWeek(dateStart)
   const end = formatWeek(dateEnd)
+  // formatWeek devuelve sólo "Wn" (sin año): dos fechas de la misma semana en años
+  // distintos colapsarían al mismo label y ocultarían que el pago cruza de año. Se
+  // desambigua con el año cuando el rango efectivamente cambia de año.
+  const yearStart = String(dateStart || dateEnd).slice(0, 4)
+  const yearEnd = String(dateEnd || dateStart).slice(0, 4)
+  if (yearStart !== yearEnd) return `${start} ${yearStart}–${end} ${yearEnd}`
   return start === end ? start : `${start}–${end}`
 }
 
@@ -117,6 +123,35 @@ function EntryBreakdown({ entries }) {
   )
 }
 
+// Celda líder de una fila de pago: el botón chevron para expandir/colapsar el
+// detalle, el nombre (contractor) y, debajo, un meta condensado opcional
+// (proyecto/cliente/semana). Se reusa en las tres tablas (pendientes de factura,
+// invoice-less pendientes e invoice-less pagadas) para no duplicar el afford ni la
+// redacción de accesibilidad.
+function PayExpandCell({ open, onToggle, name, meta }) {
+  return (
+    <div className="pay-cell-lead">
+      <button
+        type="button"
+        className="pay-expand"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-label={open ? 'Hide hour detail' : 'Show hour detail'}
+      >
+        {open ? (
+          <ChevronDown size={15} aria-hidden="true" />
+        ) : (
+          <ChevronRight size={15} aria-hidden="true" />
+        )}
+      </button>
+      <span className="pay-cell-lead__text">
+        <span>{name}</span>
+        {meta && <span className="cell-soft pay-meta">{meta}</span>}
+      </span>
+    </div>
+  )
+}
+
 export function PaymentsPage() {
   const { user, profile, can } = useOutletContext()
   const [invoices, setInvoices] = useState([])
@@ -149,6 +184,10 @@ export function PaymentsPage() {
 
   function load() {
     setStatus('loading')
+    // Al recargar (montaje o tras una carrera de pago) se colapsan las filas: las
+    // claves de expand se derivan de los datos actuales, y conservar claves viejas
+    // podría auto-expandir una fila que reaparece con el mismo contractor.
+    setExpandedKeys(new Set())
     Promise.all([
       api.invoices.list(),
       api.invoices.listContractors(),
@@ -521,28 +560,15 @@ export function PaymentsPage() {
                   const open = isExpanded(key)
                   const meta = formatGroupMeta(summarizeEntries(group.entries))
                   return (
-                    <Fragment key={group.user || '—'}>
+                    <Fragment key={key}>
                       <tr>
                         <td className="cell-strong">
-                          <div className="pay-cell-lead">
-                            <button
-                              type="button"
-                              className="pay-expand"
-                              onClick={() => toggleExpand(key)}
-                              aria-expanded={open}
-                              aria-label={open ? 'Hide hour detail' : 'Show hour detail'}
-                            >
-                              {open ? (
-                                <ChevronDown size={15} aria-hidden="true" />
-                              ) : (
-                                <ChevronRight size={15} aria-hidden="true" />
-                              )}
-                            </button>
-                            <span className="pay-cell-lead__text">
-                              <span>{group.user || '—'}</span>
-                              {meta && <span className="cell-soft pay-meta">{meta}</span>}
-                            </span>
-                          </div>
+                          <PayExpandCell
+                            open={open}
+                            onToggle={() => toggleExpand(key)}
+                            name={group.user || '—'}
+                            meta={meta}
+                          />
                         </td>
                         <td className="col-num cell-mono">{formatHours(group.hours)} h</td>
                         <td>
@@ -608,25 +634,12 @@ export function PaymentsPage() {
                   <Fragment key={row.id}>
                     <tr className="row-static">
                       <td className="cell-strong">
-                        <div className="pay-cell-lead">
-                          <button
-                            type="button"
-                            className="pay-expand"
-                            onClick={() => toggleExpand(key)}
-                            aria-expanded={open}
-                            aria-label={open ? 'Hide hour detail' : 'Show hour detail'}
-                          >
-                            {open ? (
-                              <ChevronDown size={15} aria-hidden="true" />
-                            ) : (
-                              <ChevronRight size={15} aria-hidden="true" />
-                            )}
-                          </button>
-                          <span className="pay-cell-lead__text">
-                            <span>{row.user || '—'}</span>
-                            {meta && <span className="cell-soft pay-meta">{meta}</span>}
-                          </span>
-                        </div>
+                        <PayExpandCell
+                          open={open}
+                          onToggle={() => toggleExpand(key)}
+                          name={row.user || '—'}
+                          meta={meta}
+                        />
                       </td>
                       <td className="col-num cell-mono">
                         {formatHours(row.hours)} h
@@ -803,25 +816,12 @@ export function PaymentsPage() {
                           <Fragment key={ic.id}>
                             <tr className={ic.paid ? 'row-static' : ''}>
                               <td>
-                                <div className="pay-cell-lead">
-                                  <button
-                                    type="button"
-                                    className="pay-expand"
-                                    onClick={() => toggleExpand(key)}
-                                    aria-expanded={open}
-                                    aria-label={open ? 'Hide hour detail' : 'Show hour detail'}
-                                  >
-                                    {open ? (
-                                      <ChevronDown size={15} aria-hidden="true" />
-                                    ) : (
-                                      <ChevronRight size={15} aria-hidden="true" />
-                                    )}
-                                  </button>
-                                  <span className="pay-cell-lead__text">
-                                    <span>{ic.contractor}</span>
-                                    {weeks && <span className="cell-soft pay-meta">{weeks}</span>}
-                                  </span>
-                                </div>
+                                <PayExpandCell
+                                  open={open}
+                                  onToggle={() => toggleExpand(key)}
+                                  name={ic.contractor}
+                                  meta={weeks}
+                                />
                               </td>
                               <td className="cell-mono">{ic.supplierInvoiceNumber ?? '—'}</td>
                               <td className="col-num cell-mono">{formatHours(ic.hours)} h</td>

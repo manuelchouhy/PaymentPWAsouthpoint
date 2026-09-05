@@ -5,8 +5,6 @@
  * `node --test`, igual que billingGrouping.js.
  */
 
-import { weekStartISO, weekEndISO } from './format.js'
-
 // Ids de horas ya cubiertas por algún pago (por su entryIds). Vive acá —módulo
 // puro, sin import de Supabase— para poder usarse bajo `node --test`;
 // paymentsData.js lo re-exporta para el resto de la app (una sola fuente, sin
@@ -83,11 +81,11 @@ export function pendingToPayByContractor(entries = [], payments = [], invoices =
  * número(s) de proyecto y el rango de fechas/semanas que cubren. Un pago de un
  * contractor puede cruzar varios proyectos/clientes/semanas (sobre todo los
  * invoice-less), así que se devuelven listas de valores DISTINTOS —no un valor
- * único— y la UI decide cómo condensarlas ("2 projects", etc.). Las fechas se
- * resuelven a la semana domingo–sábado (weekStartISO/weekEndISO) para el rango
- * "Wxx". Módulo puro: no formatea, sólo agrega.
+ * único— y la UI decide cómo condensarlas ("2 projects", etc.). Del rango de
+ * fechas (dateStart/dateEnd) la UI deriva el rango de semanas domingo–sábado.
+ * Módulo puro: no formatea, sólo agrega.
  * @param {Array<{project?:string, client?:string, projectNumber?:(string|number), date?:string}>} entries
- * @returns {{projects:Array<string>, clients:Array<string>, projectNumbers:Array, dateStart:?string, dateEnd:?string, weekStart:?string, weekEnd:?string}}
+ * @returns {{projects:Array<string>, clients:Array<string>, projectNumbers:Array, dateStart:?string, dateEnd:?string}}
  */
 export function summarizeEntries(entries = []) {
   const projects = new Set()
@@ -114,8 +112,6 @@ export function summarizeEntries(entries = []) {
     projectNumbers: [...projectNumbers],
     dateStart,
     dateEnd,
-    weekStart: dateStart ? weekStartISO(dateStart) : null,
-    weekEnd: dateEnd ? weekEndISO(dateEnd) : null,
   }
 }
 

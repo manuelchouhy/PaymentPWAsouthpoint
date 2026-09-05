@@ -142,9 +142,6 @@ test('summarizeEntries agrega proyectos/clientes distintos y el rango de fechas 
   assert.deepEqual(summary.projectNumbers, ['PRJ-1', 'PRJ-2'])
   assert.equal(summary.dateStart, '2026-08-10')
   assert.equal(summary.dateEnd, '2026-08-20')
-  // Semana domingo–sábado: el domingo de la primera fecha y el sábado de la última.
-  assert.equal(summary.weekStart, '2026-08-09')
-  assert.equal(summary.weekEnd, '2026-08-22')
 })
 
 test('summarizeEntries tolera lista vacía / campos faltantes sin romper', () => {
@@ -153,5 +150,5 @@ test('summarizeEntries tolera lista vacía / campos faltantes sin romper', () =>
   assert.deepEqual(summary.clients, [])
   assert.deepEqual(summary.projectNumbers, [])
   assert.equal(summary.dateStart, null)
-  assert.equal(summary.weekStart, null)
+  assert.equal(summary.dateEnd, null)
 })
