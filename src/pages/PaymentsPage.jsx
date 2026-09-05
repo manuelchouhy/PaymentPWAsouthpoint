@@ -364,10 +364,11 @@ export function PaymentsPage() {
       { header: 'Payment Date', key: 'paymentDate' },
     ]
     // Una fila por contractor de cada factura (grano del pago).
-    const exportRows = rows.flatMap((r) =>
-      r.contractors.map((ic) => ({
+    const exportRows = rows.flatMap((r) => {
+      const projNum = projectNumberFor(r.inv.project) ?? ''
+      return r.contractors.map((ic) => ({
         spInvoice: r.inv.spInvoiceNumber ?? '',
-        projectNumber: projectNumberFor(r.inv.project) ?? '',
+        projectNumber: projNum,
         project: r.inv.project ?? '',
         client: r.inv.client ?? '',
         contractor: ic.contractor,
@@ -377,8 +378,8 @@ export function PaymentsPage() {
         invoiceStatus: r.inv.status,
         dueDate: r.dueDate ?? '',
         paymentDate: ic.paymentDate ?? '',
-      })),
-    )
+      }))
+    })
     exportGrid({ rows: exportRows, columns: cols, title: 'Payments', gridName: 'payments', format, generatedBy: user?.email ?? '' })
   }
 

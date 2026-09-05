@@ -746,7 +746,10 @@ export function BillingPage() {
                 provider: row.user,
                 client: group.client,
                 week: week.week,
-                projectNumber: project.projectNumber ?? '',
+                // Por fila (no el número agregado del grupo): en un grupo de nombres
+                // homónimos cada fila conserva su número individual, e iguala la
+                // granularidad del export read-only (handleExportReadonly).
+                projectNumber: row.projectNumber ?? '',
                 project: row.project,
                 task: row.task,
                 date: row.date ? formatDate(row.date) : '',
