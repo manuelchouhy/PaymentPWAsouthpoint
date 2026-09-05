@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { pendingToPayByContractor, invoicelessPaidRows } from './paymentsGrouping.js'
+import { pendingToPayByContractor, invoicelessPaidRows, summarizeEntries } from './paymentsGrouping.js'
 
 // Helper: una hora aprobada de un allocation dado — se sobreescribe lo que haga falta.
 const e = (o) => ({ status: 'Approved', allocation: 'sp_internal', hours: 1, user: 'Ana', ...o })
@@ -18,7 +18,11 @@ test('pendingToPayByContractor agrupa por contractor, suma horas y arma el desgl
   assert.equal(groups[0].hours, 6)
   assert.deepEqual(groups[0].entryIds, [1, 2])
   assert.equal(groups[0].entries.length, 2)
-  assert.deepEqual(groups[0].entries[0], { id: 1, hours: 4, project: 'P1', task: 'T1', date: '2026-08-14' })
+  // El desglose lleva client/projectNumber (null si la entry no viene enriquecida
+  // con deriveEntriesClient), además de project/task/date/hours.
+  assert.deepEqual(groups[0].entries[0], {
+    id: 1, hours: 4, project: 'P1', projectNumber: null, client: null, task: 'T1', date: '2026-08-14',
+  })
   assert.equal(groups[1].user, 'Bob')
   assert.equal(groups[1].hours, 3)
 })
@@ -102,4 +106,52 @@ test('invoicelessPaidRows ordena cada bucket por fecha desc (en horas, sin plata
   const { spInternal } = invoicelessPaidRows(payments, entries)
   assert.deepEqual(spInternal.map((r) => r.id), ['b', 'a']) // más reciente arriba
   assert.equal(spInternal[0].hours, 1)
+})
+
+test('pendingToPayByContractor propaga client y projectNumber al desglose (entries enriquecidas)', () => {
+  const entries = [
+    e({ id: 1, user: 'Ana', hours: 4, project: 'P1', projectNumber: 'PRJ-1', client: 'HSS', task: 'T1', date: '2026-08-14' }),
+  ]
+  const groups = pendingToPayByContractor(entries, [], [], 'sp_internal')
+  assert.deepEqual(groups[0].entries[0], {
+    id: 1, hours: 4, project: 'P1', projectNumber: 'PRJ-1', client: 'HSS', task: 'T1', date: '2026-08-14',
+  })
+})
+
+test('invoicelessPaidRows expone entryIds para poder expandir el detalle', () => {
+  const entries = [
+    { id: 1, allocation: 'sp_internal', hours: 4 },
+    { id: 2, allocation: 'sp_internal', hours: 2 },
+  ]
+  const payments = [
+    { id: 'p1', invoiceId: null, entryIds: [1, 2], userName: 'Ana', paymentDate: '2026-08-20' },
+  ]
+  const { spInternal } = invoicelessPaidRows(payments, entries)
+  assert.deepEqual(spInternal[0].entryIds, [1, 2])
+  assert.equal(spInternal[0].entryCount, 2)
+})
+
+test('summarizeEntries agrega proyectos/clientes distintos y el rango de fechas y semanas', () => {
+  const summary = summarizeEntries([
+    { project: 'P1', client: 'HSS', projectNumber: 'PRJ-1', date: '2026-08-10' }, // domingo W33
+    { project: 'P1', client: 'HSS', projectNumber: 'PRJ-1', date: '2026-08-14' },
+    { project: 'P2', client: 'Acme', projectNumber: 'PRJ-2', date: '2026-08-20' }, // W34
+  ])
+  assert.deepEqual(summary.projects, ['P1', 'P2'])
+  assert.deepEqual(summary.clients, ['HSS', 'Acme'])
+  assert.deepEqual(summary.projectNumbers, ['PRJ-1', 'PRJ-2'])
+  assert.equal(summary.dateStart, '2026-08-10')
+  assert.equal(summary.dateEnd, '2026-08-20')
+  // Semana domingo–sábado: el domingo de la primera fecha y el sábado de la última.
+  assert.equal(summary.weekStart, '2026-08-09')
+  assert.equal(summary.weekEnd, '2026-08-22')
+})
+
+test('summarizeEntries tolera lista vacía / campos faltantes sin romper', () => {
+  const summary = summarizeEntries([{ hours: 1 }, null, { project: 'P1' }])
+  assert.deepEqual(summary.projects, ['P1'])
+  assert.deepEqual(summary.clients, [])
+  assert.deepEqual(summary.projectNumbers, [])
+  assert.equal(summary.dateStart, null)
+  assert.equal(summary.weekStart, null)
 })

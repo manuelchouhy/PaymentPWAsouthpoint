@@ -1,18 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, BellRing, Download } from 'lucide-react'
+import { AlertTriangle, BellRing, ChevronDown, ChevronRight, Download } from 'lucide-react'
 import { paymentAlertLevel } from '../lib/paymentsData'
 import {
   pendingToPayByContractor,
   invoicelessPaidRows,
   paidEntryIdsFrom,
+  summarizeEntries,
 } from '../lib/paymentsGrouping'
 import { invoiceCompletion } from '../lib/invoiceCompletion'
-import { buildProjectIndex } from '../lib/entryClient'
+import { buildProjectIndex, deriveEntriesClient } from '../lib/entryClient'
 import { api } from '../lib/api'
 import { downloadPaymentReceipt } from '../lib/paymentReceipt'
-import { formatDate, formatHours } from '../lib/format'
+import { formatDate, formatHours, formatWeek } from '../lib/format'
 import { BillingBadge } from '../components/BillingBadge'
 import { RegisterPaymentModal } from '../components/RegisterPaymentModal'
 import { Toast } from '../components/Toast'
@@ -53,6 +54,69 @@ const PAY_LABELS = {
   sp_internal: { low: 'SP internal', cap: 'SP internal' },
 }
 
+// Rango de semanas (domingo–sábado) que cubre un pago: "W33" si es una sola,
+// "W33–W35" si cruza varias. null si no hay fechas. Usa el rango de fechas del
+// resumen (summarizeEntries), no la lista completa.
+function formatWeekRange(dateStart, dateEnd) {
+  if (!dateStart && !dateEnd) return null
+  const start = formatWeek(dateStart)
+  const end = formatWeek(dateEnd)
+  return start === end ? start : `${start}–${end}`
+}
+
+// Meta condensada de una fila a partir del resumen agregado: proyecto (o "N
+// projects" si cruza varios), cliente (o "N clients"), y el rango de semanas. Une
+// sólo las partes con dato, con " · ". Devuelve '' si no hay nada que mostrar.
+function formatGroupMeta(summary) {
+  const parts = []
+  if (summary.projects.length === 1) parts.push(summary.projects[0])
+  else if (summary.projects.length > 1) parts.push(`${summary.projects.length} projects`)
+  if (summary.clients.length === 1) parts.push(summary.clients[0])
+  else if (summary.clients.length > 1) parts.push(`${summary.clients.length} clients`)
+  const weeks = formatWeekRange(summary.dateStart, summary.dateEnd)
+  if (weeks) parts.push(weeks)
+  return parts.join(' · ')
+}
+
+// Desglose por hora de un pago (contractor de factura o invoice-less): una tabla
+// chica con Project #, Project, Client, Task, Date y Hours por cada time entry
+// cubierta. Se reusa en las tres tablas (pendientes, pagadas, invoice-less). Las
+// horas vienen ya enriquecidas (client/projectNumber) por deriveEntriesClient.
+function EntryBreakdown({ entries }) {
+  if (!entries || entries.length === 0) {
+    return <div className="pay-breakdown__empty">No hour detail available for this payment.</div>
+  }
+  const sorted = [...entries].sort((a, b) =>
+    String(a.date || '').localeCompare(String(b.date || '')),
+  )
+  return (
+    <table className="pay-breakdown">
+      <thead>
+        <tr>
+          <th scope="col">Project #</th>
+          <th scope="col">Project</th>
+          <th scope="col">Client</th>
+          <th scope="col">Task</th>
+          <th scope="col">Date</th>
+          <th scope="col" className="col-num">Hours</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((entry) => (
+          <tr key={entry.id}>
+            <td className="cell-mono">{entry.projectNumber || '—'}</td>
+            <td>{entry.project || '—'}</td>
+            <td>{entry.client || '—'}</td>
+            <td>{entry.task || '—'}</td>
+            <td className="cell-mono">{entry.date ? formatDate(entry.date) : '—'}</td>
+            <td className="col-num cell-mono">{formatHours(entry.hours)} h</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
 export function PaymentsPage() {
   const { user, profile, can } = useOutletContext()
   const [invoices, setInvoices] = useState([])
@@ -73,6 +137,14 @@ export function PaymentsPage() {
   // (columna "Project #" del encabezado). La factura guarda el proyecto como texto,
   // así que el número se une por nombre — con el caveat de nombres homónimos (abajo).
   const [projects, setProjects] = useState([])
+  // Clientes: para resolver el cliente de cada hora (time_entries.client llega
+  // vacío del sync; el dato vive en el proyecto → grupo → cliente). Va aparte del
+  // core igual que projects: si falla, la fila muestra proyecto sin cliente.
+  const [clients, setClients] = useState([])
+  // Filas expandidas (detalle por hora). Clave: `inv:<icId>` para contractors de
+  // factura, `<allocation>:<user>` para pendientes invoice-less, `paid:<paymentId>`
+  // para pagos invoice-less ya hechos.
+  const [expandedKeys, setExpandedKeys] = useState(() => new Set())
   const [toast, setToast] = useState(null)
 
   function load() {
@@ -106,6 +178,15 @@ export function PaymentsPage() {
       .catch((error) =>
         console.warn('No se pudieron cargar los proyectos (número de proyecto en el header):', error),
       )
+    // Clientes: sólo para resolver el cliente de cada hora en el detalle/meta. Igual
+    // que projects, va aparte del core: si falla, se muestra el proyecto sin cliente
+    // en vez de tumbar toda la página por una columna informativa.
+    api.clients
+      .list()
+      .then((clientRows) => setClients(clientRows))
+      .catch((error) =>
+        console.warn('No se pudieron cargar los clientes (cliente en el detalle de horas):', error),
+      )
   }
 
   useEffect(() => {
@@ -133,6 +214,33 @@ export function PaymentsPage() {
   const projectIndex = useMemo(() => buildProjectIndex(projects), [projects])
   const projectNumberFor = (name) =>
     name ? projectIndex.byName.get(name)?.projectNumber ?? null : null
+
+  // Horas enriquecidas con client + projectNumber (deriveEntriesClient: resuelve la
+  // cadena hora → proyecto → grupo → cliente por id de Zoho). Alimenta el desglose
+  // por hora y el meta de cada fila. Recalcula cuando llegan projects/clients (que
+  // cargan aparte del core): mientras no estén, muestra proyecto sin cliente.
+  const enrichedEntries = useMemo(
+    () => deriveEntriesClient(entries, projects, clients),
+    [entries, projects, clients],
+  )
+  // Índice hora-por-id para joinear los entry_ids de un contractor de factura (o de
+  // un pago invoice-less ya hecho) con su desglose enriquecido.
+  const entryById = useMemo(() => {
+    const map = new Map()
+    for (const entry of enrichedEntries) map.set(String(entry.id), entry)
+    return map
+  }, [enrichedEntries])
+  const entriesForIds = (entryIds) =>
+    (entryIds ?? []).map((id) => entryById.get(String(id))).filter(Boolean)
+
+  const isExpanded = (key) => expandedKeys.has(key)
+  const toggleExpand = (key) =>
+    setExpandedKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
 
   const warningBefore = alertSettings?.warningDaysBeforeDue ?? 3
   const ALERT_RANK = { overdue: 0, warning: 1, on_time: 2 }
@@ -177,18 +285,18 @@ export function PaymentsPage() {
 
   // Horas invoice-less pendientes de pago, por contractor (overage / sp_internal).
   const overagePending = useMemo(
-    () => pendingToPayByContractor(entries, payments, invoices, 'overage'),
-    [entries, payments, invoices],
+    () => pendingToPayByContractor(enrichedEntries, payments, invoices, 'overage'),
+    [enrichedEntries, payments, invoices],
   )
   const spInternalPending = useMemo(
-    () => pendingToPayByContractor(entries, payments, invoices, 'sp_internal'),
-    [entries, payments, invoices],
+    () => pendingToPayByContractor(enrichedEntries, payments, invoices, 'sp_internal'),
+    [enrichedEntries, payments, invoices],
   )
 
   // Pagos invoice-less YA hechos (read-only), separados por allocation.
   const { overage: overagePaid, spInternal: spInternalPaid } = useMemo(
-    () => invoicelessPaidRows(payments, entries),
-    [payments, entries],
+    () => invoicelessPaidRows(payments, enrichedEntries),
+    [payments, enrichedEntries],
   )
 
   // KPIs sobre las facturas pendientes de pago. Total pendiente en HORAS (suma de las
@@ -408,26 +516,60 @@ export function PaymentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {pending.map((group) => (
-                  <tr key={group.user || '—'}>
-                    <td className="cell-strong">{group.user || '—'}</td>
-                    <td className="col-num cell-mono">{formatHours(group.hours)} h</td>
-                    <td>
-                      {can('payments.create') && (
-                        <button
-                          type="button"
-                          className="btn btn--pay btn--row"
-                          onClick={() => {
-                            setPayTarget({ ...group, allocation })
-                            setPaySelectedIds(new Set(group.entryIds.map(String)))
-                          }}
-                        >
-                          Pay {label.low}
-                        </button>
+                {pending.map((group) => {
+                  const key = `${allocation}:${group.user}`
+                  const open = isExpanded(key)
+                  const meta = formatGroupMeta(summarizeEntries(group.entries))
+                  return (
+                    <Fragment key={group.user || '—'}>
+                      <tr>
+                        <td className="cell-strong">
+                          <div className="pay-cell-lead">
+                            <button
+                              type="button"
+                              className="pay-expand"
+                              onClick={() => toggleExpand(key)}
+                              aria-expanded={open}
+                              aria-label={open ? 'Hide hour detail' : 'Show hour detail'}
+                            >
+                              {open ? (
+                                <ChevronDown size={15} aria-hidden="true" />
+                              ) : (
+                                <ChevronRight size={15} aria-hidden="true" />
+                              )}
+                            </button>
+                            <span className="pay-cell-lead__text">
+                              <span>{group.user || '—'}</span>
+                              {meta && <span className="cell-soft pay-meta">{meta}</span>}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="col-num cell-mono">{formatHours(group.hours)} h</td>
+                        <td>
+                          {can('payments.create') && (
+                            <button
+                              type="button"
+                              className="btn btn--pay btn--row"
+                              onClick={() => {
+                                setPayTarget({ ...group, allocation })
+                                setPaySelectedIds(new Set(group.entryIds.map(String)))
+                              }}
+                            >
+                              Pay {label.low}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {open && (
+                        <tr className="pay-detail-row">
+                          <td colSpan={3}>
+                            <EntryBreakdown entries={group.entries} />
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                  </tr>
-                ))}
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -457,16 +599,51 @@ export function PaymentsPage() {
               </tr>
             </thead>
             <tbody>
-              {paidRows.map((row) => (
-                <tr key={row.id} className="row-static">
-                  <td className="cell-strong">{row.user || '—'}</td>
-                  <td className="col-num cell-mono">
-                    {formatHours(row.hours)} h
-                    <span className="cell-soft"> · {row.entryCount}</span>
-                  </td>
-                  <td className="cell-mono">{formatDate(row.paymentDate)}</td>
-                </tr>
-              ))}
+              {paidRows.map((row) => {
+                const key = `paid:${row.id}`
+                const open = isExpanded(key)
+                const rowEntries = entriesForIds(row.entryIds)
+                const meta = formatGroupMeta(summarizeEntries(rowEntries))
+                return (
+                  <Fragment key={row.id}>
+                    <tr className="row-static">
+                      <td className="cell-strong">
+                        <div className="pay-cell-lead">
+                          <button
+                            type="button"
+                            className="pay-expand"
+                            onClick={() => toggleExpand(key)}
+                            aria-expanded={open}
+                            aria-label={open ? 'Hide hour detail' : 'Show hour detail'}
+                          >
+                            {open ? (
+                              <ChevronDown size={15} aria-hidden="true" />
+                            ) : (
+                              <ChevronRight size={15} aria-hidden="true" />
+                            )}
+                          </button>
+                          <span className="pay-cell-lead__text">
+                            <span>{row.user || '—'}</span>
+                            {meta && <span className="cell-soft pay-meta">{meta}</span>}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="col-num cell-mono">
+                        {formatHours(row.hours)} h
+                        <span className="cell-soft"> · {row.entryCount}</span>
+                      </td>
+                      <td className="cell-mono">{formatDate(row.paymentDate)}</td>
+                    </tr>
+                    {open && (
+                      <tr className="pay-detail-row">
+                        <td colSpan={3}>
+                          <EntryBreakdown entries={rowEntries} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -613,40 +790,79 @@ export function PaymentsPage() {
                           </div>
                         </td>
                       </tr>
-                      {r.contractors.map((ic) => (
-                        <tr key={ic.id} className={ic.paid ? 'row-static' : ''}>
-                          <td>{ic.contractor}</td>
-                          <td className="cell-mono">{ic.supplierInvoiceNumber ?? '—'}</td>
-                          <td className="col-num cell-mono">{formatHours(ic.hours)} h</td>
-                          <td>
-                            {ic.paid ? (
-                              <span className="badge badge--ok">Paid</span>
-                            ) : (
-                              <span className="cell-pop-empty">Pending</span>
+                      {r.contractors.map((ic) => {
+                        const key = `inv:${ic.id}`
+                        const open = isExpanded(key)
+                        const icEntries = entriesForIds(ic.entryIds)
+                        // Proyecto/cliente/semana ya están en el header del grupo; la
+                        // fila agrega el rango de semanas de ESTE contractor (subconjunto
+                        // de la factura) y el detalle por hora al expandir.
+                        const icSummary = summarizeEntries(icEntries)
+                        const weeks = formatWeekRange(icSummary.dateStart, icSummary.dateEnd)
+                        return (
+                          <Fragment key={ic.id}>
+                            <tr className={ic.paid ? 'row-static' : ''}>
+                              <td>
+                                <div className="pay-cell-lead">
+                                  <button
+                                    type="button"
+                                    className="pay-expand"
+                                    onClick={() => toggleExpand(key)}
+                                    aria-expanded={open}
+                                    aria-label={open ? 'Hide hour detail' : 'Show hour detail'}
+                                  >
+                                    {open ? (
+                                      <ChevronDown size={15} aria-hidden="true" />
+                                    ) : (
+                                      <ChevronRight size={15} aria-hidden="true" />
+                                    )}
+                                  </button>
+                                  <span className="pay-cell-lead__text">
+                                    <span>{ic.contractor}</span>
+                                    {weeks && <span className="cell-soft pay-meta">{weeks}</span>}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="cell-mono">{ic.supplierInvoiceNumber ?? '—'}</td>
+                              <td className="col-num cell-mono">{formatHours(ic.hours)} h</td>
+                              <td>
+                                {ic.paid ? (
+                                  <span className="badge badge--ok">Paid</span>
+                                ) : (
+                                  <span className="cell-pop-empty">Pending</span>
+                                )}
+                              </td>
+                              <td>
+                                {!ic.paid && payable && can('payments.create') ? (
+                                  <button
+                                    type="button"
+                                    className="btn btn--pay btn--row"
+                                    onClick={() => setPayTargetContractor({ invoice: r.inv, ic })}
+                                  >
+                                    Register Payment
+                                  </button>
+                                ) : ic.paid ? (
+                                  <button
+                                    type="button"
+                                    className="btn btn--ghost btn--row"
+                                    onClick={() => handleDownload(r.inv, ic)}
+                                  >
+                                    <Download size={14} aria-hidden="true" />
+                                    Receipt
+                                  </button>
+                                ) : null}
+                              </td>
+                            </tr>
+                            {open && (
+                              <tr className="pay-detail-row">
+                                <td colSpan={5}>
+                                  <EntryBreakdown entries={icEntries} />
+                                </td>
+                              </tr>
                             )}
-                          </td>
-                          <td>
-                            {!ic.paid && payable && can('payments.create') ? (
-                              <button
-                                type="button"
-                                className="btn btn--pay btn--row"
-                                onClick={() => setPayTargetContractor({ invoice: r.inv, ic })}
-                              >
-                                Register Payment
-                              </button>
-                            ) : ic.paid ? (
-                              <button
-                                type="button"
-                                className="btn btn--ghost btn--row"
-                                onClick={() => handleDownload(r.inv, ic)}
-                              >
-                                <Download size={14} aria-hidden="true" />
-                                Receipt
-                              </button>
-                            ) : null}
-                          </td>
-                        </tr>
-                      ))}
+                          </Fragment>
+                        )
+                      })}
                     </tbody>
                   )
                 })}
