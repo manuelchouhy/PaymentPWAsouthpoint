@@ -259,7 +259,7 @@ export function ClientDetailPage() {
         </div>
         <h1 className="masthead__title">Client Detail</h1>
         <p className="masthead__sub">
-          Internal on-screen view. Bill-to-client approved hours only — no costs, no provider
+          Internal on-screen view. Bill-to-client approved hours only. No costs, no provider
           names, and nothing to export from here.
         </p>
       </motion.header>
