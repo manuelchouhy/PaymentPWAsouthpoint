@@ -141,6 +141,11 @@ function ReadonlyRows({ rows, showProvider = true, onDetail }) {
                 </td>
               )}
               <td>
+                {row.projectNumber && (
+                  <span className="cell-mono cell-soft" style={{ marginRight: 6 }}>
+                    {row.projectNumber}
+                  </span>
+                )}
                 {row.project || '—'}
                 {row.task && <div className="cell-soft">{row.task}</div>}
               </td>
