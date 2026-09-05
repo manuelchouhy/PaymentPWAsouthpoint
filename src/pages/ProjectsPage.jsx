@@ -122,11 +122,11 @@ export function ProjectsPage() {
     [clients, withClient, masterNames],
   )
   const leadDevOptions = useMemo(
-    () => [...new Set(projects.map((p) => p.leadDeveloper).filter(Boolean))].sort(),
+    () => sortedUnique(projects.map((p) => p.leadDeveloper)),
     [projects],
   )
   const projectNameOptions = useMemo(
-    () => [...new Set(projects.map((p) => p.projectName).filter(Boolean))].sort(),
+    () => sortedUnique(projects.map((p) => p.projectName)),
     [projects],
   )
   // sortedUnique: dedup + orden natural (numeric) — 'PRJ-2' antes de 'PRJ-10'.
