@@ -7,11 +7,12 @@ import {
   contractStatus,
   countByStatus,
   daysRemaining,
+  isActiveProject,
 } from '../lib/projectsData'
 import { projectSows, stageSows } from '../lib/projectSows'
 import { api } from '../lib/api'
 import { buildClientResolver } from '../lib/clientResolver'
-import { clientFilterKey, clientFilterOptions, sortedUnique } from '../lib/useEntryFilters'
+import { clientFilterKey, clientFilterOptions, sortedUnique, OTHER_CLIENT } from '../lib/useEntryFilters'
 import { formatDate, formatHours } from '../lib/format'
 import { ContractBadge } from '../components/ContractBadge'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
@@ -53,6 +54,13 @@ export function ProjectsPage() {
     expTo: '',
   })
   const [statusFilter, setStatusFilter] = useState(null) // null | 'Expired' | …
+  // Por defecto el listado muestra sólo proyectos Active / In Progress de Zoho
+  // (isActiveProject) — y como el listado es el punto de entrada al trabajo nuevo
+  // (click en la fila → detalle), eso acota el trabajo nuevo a proyectos en curso.
+  // El toggle deja ver TODOS los estados para gestión; no se borra ni oculta nada
+  // de forma permanente (el sync sigue trayendo todos con su estado real). Las
+  // vistas financieras/históricas NO usan este filtro (ver isActiveProject).
+  const [showAllStatuses, setShowAllStatuses] = useState(false)
   const [form, setForm] = useState(null) // null | { mode:'edit', project } — campos legacy, cualquier proyecto
   const [wizardOpen, setWizardOpen] = useState(false)
   const [wizardEditing, setWizardEditing] = useState(null) // "Edit SOW & Scope" — solo proyectos con clientId
@@ -111,45 +119,71 @@ export function ProjectsPage() {
     [clients],
   )
 
+  // Aplica el filtro de status (activo/todos) a una lista de proyectos. Un solo
+  // lugar para el criterio, así las opciones y la grilla no se desincronizan.
+  const applyStatusScope = (list) => (showAllStatuses ? list : list.filter(isActiveProject))
+
+  // Base de las opciones de filtro (nombre, #, SOW, lead dev y el centinela Others
+  // del filtro Client): sale del MISMO conjunto que muestra la grilla según el
+  // status, para no ofrecer un valor de un proyecto oculto que filtraría a cero. Con
+  // "Show all statuses" cubre todos.
+  const optionWithClient = useMemo(
+    () => applyStatusScope(withClient),
+    [withClient, showAllStatuses],
+  )
+
   // El desplegable Client lista SÓLO los clientes del maestro; cada proyecto se
   // filtra por el cliente que resuelve su Project Group (resolvedClient). Los
   // proyectos cuyo resolvedClient no está en el maestro (legacy o sin cliente) se
   // agrupan bajo la opción centinela Others, que se agrega al final sólo si hay al
-  // menos uno — así la lista queda idéntica a la de Clients sin dejar esos
-  // proyectos fuera de todo filtro. Mismo armado que Entries y Billing.
+  // menos uno EN EL SCOPE de status — o si ya está seleccionado, para que siga
+  // siendo destildable aunque el toggle de status lo saque del scope (mismo criterio
+  // que las otras opciones). Mismo armado que Entries y Billing.
   const clientOptions = useMemo(
-    () => clientFilterOptions(clients, withClient.some((p) => !masterNames.has(p.resolvedClient))),
-    [clients, withClient, masterNames],
+    () =>
+      clientFilterOptions(
+        clients,
+        optionWithClient.some((p) => !masterNames.has(p.resolvedClient)) ||
+          filters.clients.includes(OTHER_CLIENT),
+      ),
+    [clients, optionWithClient, masterNames, filters.clients],
   )
+  // Cada lista de opciones UNE el scope de status con lo ya seleccionado: así un
+  // valor elegido sigue siendo destildable aunque el toggle de status lo saque del
+  // scope (si no, quedaría un filtro puesto imposible de quitar salvo con Clear).
   const leadDevOptions = useMemo(
-    () => sortedUnique(projects.map((p) => p.leadDeveloper)),
-    [projects],
+    () => sortedUnique([...optionWithClient.map((p) => p.leadDeveloper), ...filters.leadDevelopers]),
+    [optionWithClient, filters.leadDevelopers],
   )
   const projectNameOptions = useMemo(
-    () => sortedUnique(projects.map((p) => p.projectName)),
-    [projects],
+    () => sortedUnique([...optionWithClient.map((p) => p.projectName), ...filters.projectNames]),
+    [optionWithClient, filters.projectNames],
   )
   // sortedUnique: dedup + orden natural (numeric) — 'PRJ-2' antes de 'PRJ-10'.
   const projectNumberOptions = useMemo(
-    () => sortedUnique(projects.map((p) => p.projectNumber)),
-    [projects],
+    () => sortedUnique([...optionWithClient.map((p) => p.projectNumber), ...filters.projectNumbers]),
+    [optionWithClient, filters.projectNumbers],
   )
   // Los SOW de un proyecto viven en dos lugares: el sowNumber de proyecto y, si
   // tiene stages, un SOW por stage (stageSowNumbers, cargado en batch por
   // getProjects). El filtro y la columna consideran ambos. Ver projectsData.js.
   const sowOptions = useMemo(
-    () =>
-      [
-        ...new Set(
-          projects.flatMap((p) => projectSows(p)),
-        ),
-      ].sort(),
-    [projects],
+    () => sortedUnique([...optionWithClient.flatMap((p) => projectSows(p)), ...filters.sows]),
+    [optionWithClient, filters.sows],
   )
 
+  // Las tarjetas de estado de contrato son un monitor de vencimientos (FR-08):
+  // cuentan sobre TODOS los proyectos, independientes del filtro de status del
+  // listado, para no esconder un contrato por vencer de un proyecto On Hold/Completed.
+  // Por eso el número de la tarjeta puede ser mayor que las filas que muestra al
+  // clickearla mientras el listado está en "sólo activos" — el toggle "Show all
+  // statuses" reconcilia ambos. (Los demás filtros tampoco se reflejan en el conteo.)
   const statusCounts = useMemo(() => countByStatus(projects), [projects])
 
-  const visible = useMemo(() => {
+  // Aplica TODOS los filtros MENOS el de status (activo/todos). De acá salen tanto
+  // `visible` (agregándole el filtro de status) como el empty-state hint: si esto
+  // tiene filas pero `visible` no, el vacío se debe al filtro de status.
+  const filteredIgnoringActive = useMemo(() => {
     const filtered = withClient.filter((p) => {
       if (filters.clients.length) {
         // La clave del proyecto es su cliente del maestro, o el centinela Others si
@@ -183,6 +217,13 @@ export function ProjectsPage() {
     })
     return sortByExp(filtered)
   }, [withClient, filters, statusFilter, masterNames])
+
+  // Grilla final: agrega el filtro de status (sólo activos salvo "Show all
+  // statuses"). Los manuales (sin zohoProjectId) nunca se ocultan (isActiveProject).
+  const visible = useMemo(
+    () => applyStatusScope(filteredIgnoringActive),
+    [filteredIgnoringActive, showAllStatuses],
+  )
 
   const toggle = (key, value) =>
     setFilters((prev) => ({
@@ -598,14 +639,28 @@ export function ProjectsPage() {
           </section>
 
           <div className="toolbar">
-            <ExportDropdown onExport={handleExport} />
-            <span className="toolbar__count">
-              {visible.length} {visible.length === 1 ? 'project' : 'projects'}
-            </span>
+            <label className="settings-check toolbar__toggle">
+              <input
+                type="checkbox"
+                checked={showAllStatuses}
+                onChange={(e) => setShowAllStatuses(e.target.checked)}
+              />
+              Show all statuses
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <ExportDropdown onExport={handleExport} />
+              <span className="toolbar__count">
+                {visible.length} {visible.length === 1 ? 'project' : 'projects'}
+              </span>
+            </div>
           </div>
 
           {visible.length === 0 ? (
-            <div className="empty">No projects to display.</div>
+            <div className="empty">
+              {!showAllStatuses && filteredIgnoringActive.length > 0
+                ? 'No active projects to display. Some are hidden by their status — turn on “Show all statuses” to see them.'
+                : 'No projects to display.'}
+            </div>
           ) : (
             <div className="table-wrap table-wrap--scroll">
               <table className="table proj-table proj-table--fit">
