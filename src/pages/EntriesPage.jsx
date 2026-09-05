@@ -440,7 +440,7 @@ export function EntriesPage() {
         </div>
         <h1 className="masthead__title">Entries</h1>
         <p className="masthead__sub">
-          Every logged hour, classified by hand. Unallocated hours come first — nothing is
+          Every logged hour, classified by hand. Unallocated hours come first. Nothing is
           classified automatically.
         </p>
       </motion.header>

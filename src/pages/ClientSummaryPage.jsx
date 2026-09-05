@@ -218,7 +218,7 @@ export function ClientSummaryPage() {
         </div>
         <h1 className="masthead__title">Client Summary</h1>
         <p className="masthead__sub">
-          Consumed counts bill-to-client hours only. Overage sits in its own column — it is never
+          Consumed counts bill-to-client hours only. Overage sits in its own column. It is never
           netted against what the client agreed to pay.
         </p>
       </motion.header>
