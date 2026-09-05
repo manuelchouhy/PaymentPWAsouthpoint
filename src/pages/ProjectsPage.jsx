@@ -7,6 +7,7 @@ import {
   contractStatus,
   countByStatus,
   daysRemaining,
+  isActiveProject,
 } from '../lib/projectsData'
 import { projectSows, stageSows } from '../lib/projectSows'
 import { api } from '../lib/api'
@@ -53,6 +54,13 @@ export function ProjectsPage() {
     expTo: '',
   })
   const [statusFilter, setStatusFilter] = useState(null) // null | 'Expired' | …
+  // Por defecto el listado muestra sólo proyectos Active / In Progress de Zoho
+  // (isActiveProject) — y como el listado es el punto de entrada al trabajo nuevo
+  // (click en la fila → detalle), eso acota el trabajo nuevo a proyectos en curso.
+  // El toggle deja ver TODOS los estados para gestión; no se borra ni oculta nada
+  // de forma permanente (el sync sigue trayendo todos con su estado real). Las
+  // vistas financieras/históricas NO usan este filtro (ver isActiveProject).
+  const [showAllStatuses, setShowAllStatuses] = useState(false)
   const [form, setForm] = useState(null) // null | { mode:'edit', project } — campos legacy, cualquier proyecto
   const [wizardOpen, setWizardOpen] = useState(false)
   const [wizardEditing, setWizardEditing] = useState(null) // "Edit SOW & Scope" — solo proyectos con clientId
@@ -151,6 +159,9 @@ export function ProjectsPage() {
 
   const visible = useMemo(() => {
     const filtered = withClient.filter((p) => {
+      // Sólo proyectos en curso (Active/In Progress) salvo que se pida ver todos.
+      // Los manuales (sin zohoProjectId) nunca se ocultan (ver isActiveProject).
+      if (!showAllStatuses && !isActiveProject(p)) return false
       if (filters.clients.length) {
         // La clave del proyecto es su cliente del maestro, o el centinela Others si
         // resuelve fuera de él (legacy o sin cliente) — mismo criterio que
@@ -182,7 +193,7 @@ export function ProjectsPage() {
       return true
     })
     return sortByExp(filtered)
-  }, [withClient, filters, statusFilter, masterNames])
+  }, [withClient, filters, statusFilter, masterNames, showAllStatuses])
 
   const toggle = (key, value) =>
     setFilters((prev) => ({
@@ -598,10 +609,20 @@ export function ProjectsPage() {
           </section>
 
           <div className="toolbar">
-            <ExportDropdown onExport={handleExport} />
-            <span className="toolbar__count">
-              {visible.length} {visible.length === 1 ? 'project' : 'projects'}
-            </span>
+            <label className="settings-check toolbar__toggle">
+              <input
+                type="checkbox"
+                checked={showAllStatuses}
+                onChange={(e) => setShowAllStatuses(e.target.checked)}
+              />
+              Show all statuses
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <ExportDropdown onExport={handleExport} />
+              <span className="toolbar__count">
+                {visible.length} {visible.length === 1 ? 'project' : 'projects'}
+              </span>
+            </div>
           </div>
 
           {visible.length === 0 ? (

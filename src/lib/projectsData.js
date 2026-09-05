@@ -289,6 +289,11 @@ export function countByStatus(projects) {
   return counts
 }
 
+// El filtro "proyecto en curso" (Active/In Progress) vive en ./projectStatus.js
+// —módulo puro, testeable con node --test— y se re-exporta acá por conveniencia
+// para los consumidores que ya importan de projectsData.
+export { ACTIVE_PROJECT_STATUSES, isActiveProject } from './projectStatus.js'
+
 // ---------- Configuración de alertas de contrato (FR-08) ----------
 
 let demoAlertSettings = {
