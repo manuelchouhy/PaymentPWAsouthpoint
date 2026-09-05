@@ -119,65 +119,60 @@ export function ProjectsPage() {
     [clients],
   )
 
+  // Base de las opciones de filtro (nombre, #, SOW, lead dev y el centinela Others
+  // del filtro Client): sale del MISMO conjunto que muestra la grilla según el
+  // status, para no ofrecer un valor de un proyecto oculto que filtraría a cero. Con
+  // "Show all statuses" cubre todos.
+  const optionWithClient = useMemo(
+    () => (showAllStatuses ? withClient : withClient.filter(isActiveProject)),
+    [withClient, showAllStatuses],
+  )
+
   // El desplegable Client lista SÓLO los clientes del maestro; cada proyecto se
   // filtra por el cliente que resuelve su Project Group (resolvedClient). Los
   // proyectos cuyo resolvedClient no está en el maestro (legacy o sin cliente) se
   // agrupan bajo la opción centinela Others, que se agrega al final sólo si hay al
-  // menos uno — así la lista queda idéntica a la de Clients sin dejar esos
-  // proyectos fuera de todo filtro. Mismo armado que Entries y Billing.
+  // menos uno EN EL SCOPE de status — así la lista queda idéntica a la de Clients
+  // sin dejar esos proyectos fuera de todo filtro. Mismo armado que Entries y Billing.
   const clientOptions = useMemo(
-    () => clientFilterOptions(clients, withClient.some((p) => !masterNames.has(p.resolvedClient))),
-    [clients, withClient, masterNames],
+    () => clientFilterOptions(clients, optionWithClient.some((p) => !masterNames.has(p.resolvedClient))),
+    [clients, optionWithClient, masterNames],
   )
-  // Base para las opciones de los filtros derivados de proyectos (nombre, #, SOW,
-  // lead dev): debe salir del MISMO conjunto que muestra la grilla, para no ofrecer
-  // un valor de un proyecto oculto por status que filtraría a cero filas. Con "Show
-  // all statuses" cubre todos. (El filtro Client se arma del maestro, aparte.)
-  const optionProjects = useMemo(
-    () => (showAllStatuses ? projects : projects.filter(isActiveProject)),
-    [projects, showAllStatuses],
-  )
+  // Cada lista de opciones UNE el scope de status con lo ya seleccionado: así un
+  // valor elegido sigue siendo destildable aunque el toggle de status lo saque del
+  // scope (si no, quedaría un filtro puesto imposible de quitar salvo con Clear).
   const leadDevOptions = useMemo(
-    () => sortedUnique(optionProjects.map((p) => p.leadDeveloper)),
-    [optionProjects],
+    () => sortedUnique([...optionWithClient.map((p) => p.leadDeveloper), ...filters.leadDevelopers]),
+    [optionWithClient, filters.leadDevelopers],
   )
   const projectNameOptions = useMemo(
-    () => sortedUnique(optionProjects.map((p) => p.projectName)),
-    [optionProjects],
+    () => sortedUnique([...optionWithClient.map((p) => p.projectName), ...filters.projectNames]),
+    [optionWithClient, filters.projectNames],
   )
   // sortedUnique: dedup + orden natural (numeric) — 'PRJ-2' antes de 'PRJ-10'.
   const projectNumberOptions = useMemo(
-    () => sortedUnique(optionProjects.map((p) => p.projectNumber)),
-    [optionProjects],
+    () => sortedUnique([...optionWithClient.map((p) => p.projectNumber), ...filters.projectNumbers]),
+    [optionWithClient, filters.projectNumbers],
   )
   // Los SOW de un proyecto viven en dos lugares: el sowNumber de proyecto y, si
   // tiene stages, un SOW por stage (stageSowNumbers, cargado en batch por
   // getProjects). El filtro y la columna consideran ambos. Ver projectsData.js.
   const sowOptions = useMemo(
-    () =>
-      [
-        ...new Set(
-          optionProjects.flatMap((p) => projectSows(p)),
-        ),
-      ].sort(),
-    [optionProjects],
+    () => sortedUnique([...optionWithClient.flatMap((p) => projectSows(p)), ...filters.sows]),
+    [optionWithClient, filters.sows],
   )
 
   // Las tarjetas de estado de contrato cuentan sobre la misma POBLACIÓN por status
-  // que la grilla (sólo activos por defecto; todos con "Show all statuses"), para
-  // que el número no incluya proyectos que el filtro de status oculta. Los otros
-  // filtros (cliente, fechas, etc.) NO se reflejan en el conteo —igual que antes—,
-  // así que con esos activos la tarjeta puede mostrar más que las filas resultantes.
-  const statusCounts = useMemo(
-    () => countByStatus(showAllStatuses ? projects : projects.filter(isActiveProject)),
-    [projects, showAllStatuses],
-  )
+  // que la grilla (sólo activos por defecto; todos con "Show all statuses"). Los
+  // otros filtros (cliente, fechas, etc.) NO se reflejan en el conteo —igual que
+  // antes—, así que con esos activos la tarjeta puede mostrar más que las filas.
+  const statusCounts = useMemo(() => countByStatus(optionWithClient), [optionWithClient])
 
-  const visible = useMemo(() => {
+  // Aplica TODOS los filtros MENOS el de status (activo/todos). De acá salen tanto
+  // `visible` (agregándole el filtro de status) como el empty-state hint: si esto
+  // tiene filas pero `visible` no, el vacío se debe al filtro de status.
+  const filteredIgnoringActive = useMemo(() => {
     const filtered = withClient.filter((p) => {
-      // Sólo proyectos en curso (Active/In Progress) salvo que se pida ver todos.
-      // Los manuales (sin zohoProjectId) nunca se ocultan (ver isActiveProject).
-      if (!showAllStatuses && !isActiveProject(p)) return false
       if (filters.clients.length) {
         // La clave del proyecto es su cliente del maestro, o el centinela Others si
         // resuelve fuera de él (legacy o sin cliente) — mismo criterio que
@@ -209,7 +204,14 @@ export function ProjectsPage() {
       return true
     })
     return sortByExp(filtered)
-  }, [withClient, filters, statusFilter, masterNames, showAllStatuses])
+  }, [withClient, filters, statusFilter, masterNames])
+
+  // Grilla final: agrega el filtro de status (sólo activos salvo "Show all
+  // statuses"). Los manuales (sin zohoProjectId) nunca se ocultan (isActiveProject).
+  const visible = useMemo(
+    () => (showAllStatuses ? filteredIgnoringActive : filteredIgnoringActive.filter(isActiveProject)),
+    [filteredIgnoringActive, showAllStatuses],
+  )
 
   const toggle = (key, value) =>
     setFilters((prev) => ({
@@ -643,7 +645,7 @@ export function ProjectsPage() {
 
           {visible.length === 0 ? (
             <div className="empty">
-              {!showAllStatuses && withClient.some((p) => !isActiveProject(p))
+              {!showAllStatuses && filteredIgnoringActive.length > 0
                 ? 'No active projects to display. Some are hidden by their status — turn on “Show all statuses” to see them.'
                 : 'No projects to display.'}
             </div>
