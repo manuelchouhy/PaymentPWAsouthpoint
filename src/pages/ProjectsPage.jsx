@@ -155,7 +155,14 @@ export function ProjectsPage() {
     [projects],
   )
 
-  const statusCounts = useMemo(() => countByStatus(projects), [projects])
+  // Las tarjetas de estado de contrato cuentan sobre la MISMA población que
+  // muestra la grilla por defecto: si se ocultan los no-activos, el número de la
+  // tarjeta y las filas que aparecen al clickearla deben coincidir. Con "Show all
+  // statuses" cuentan todos.
+  const statusCounts = useMemo(
+    () => countByStatus(showAllStatuses ? projects : projects.filter(isActiveProject)),
+    [projects, showAllStatuses],
+  )
 
   const visible = useMemo(() => {
     const filtered = withClient.filter((p) => {

@@ -62,6 +62,7 @@ const FIELD_TO_COLUMN = {
 const MOCK_PROJECTS = [
   {
     id: 'pr-1',
+    zohoProjectId: 'z-1001',
     client: 'HSS',
     projectName: 'DOMO Development & IT Support',
     projectNumber: 'PRJ-1001',
@@ -85,6 +86,7 @@ const MOCK_PROJECTS = [
   },
   {
     id: 'pr-2',
+    zohoProjectId: 'z-1002',
     client: 'Acme Analytics',
     projectName: 'Analytics Platform',
     projectNumber: 'PRJ-1002',
@@ -108,6 +110,7 @@ const MOCK_PROJECTS = [
   },
   {
     id: 'pr-3',
+    zohoProjectId: 'z-1003',
     client: 'Southpoint (interno)',
     projectName: 'Internal Hours Allocation',
     projectNumber: 'PRJ-1003',
@@ -131,6 +134,7 @@ const MOCK_PROJECTS = [
   },
   {
     id: 'pr-zoho',
+    zohoProjectId: 'z-88421',
     client: 'Northwind',
     projectName: 'Northwind Data Migration',
     projectNumber: 'Z-88421',
@@ -154,6 +158,7 @@ const MOCK_PROJECTS = [
   },
   {
     id: 'pr-4',
+    zohoProjectId: 'z-0980',
     client: 'HSS',
     projectName: 'Legacy ETL Maintenance',
     projectNumber: 'PRJ-0980',
