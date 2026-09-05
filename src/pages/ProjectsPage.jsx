@@ -11,6 +11,7 @@ import {
 import { projectSows, stageSows } from '../lib/projectSows'
 import { api } from '../lib/api'
 import { buildClientResolver } from '../lib/clientResolver'
+import { makeProjectFilterLabeler } from '../lib/entryClient'
 import { clientFilterKey, clientFilterOptions } from '../lib/useEntryFilters'
 import { formatDate, formatHours } from '../lib/format'
 import { ContractBadge } from '../components/ContractBadge'
@@ -128,6 +129,8 @@ export function ProjectsPage() {
     () => [...new Set(projects.map((p) => p.projectName).filter(Boolean))].sort(),
     [projects],
   )
+  // Label del filtro de Project: "NÚMERO · nombre" (el value sigue siendo el nombre).
+  const projectLabel = useMemo(() => makeProjectFilterLabeler(projects), [projects])
   // Los SOW de un proyecto viven en dos lugares: el sowNumber de proyecto y, si
   // tiene stages, un SOW por stage (stageSowNumbers, cargado en batch por
   // getProjects). El filtro y la columna consideran ambos. Ver projectsData.js.
@@ -527,6 +530,7 @@ export function ProjectsPage() {
                 options={projectNameOptions}
                 selected={filters.projectNames}
                 onToggle={(v) => toggle('projectNames', v)}
+                getLabel={projectLabel}
               />
               <MultiSelectDropdown
                 label="SOW"

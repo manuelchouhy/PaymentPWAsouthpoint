@@ -6,7 +6,7 @@ import { api } from '../lib/api'
 import { formatDate, formatHours, weekStartISO } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, sortedUnique, clientFilterOptions, OTHER_CLIENT } from '../lib/useEntryFilters'
-import { deriveEntriesClient } from '../lib/entryClient'
+import { deriveEntriesClient, makeProjectFilterLabeler } from '../lib/entryClient'
 import { buildClientResolver } from '../lib/clientResolver'
 import { groupBillToClient, groupReadonly } from '../lib/billingGrouping'
 import {
@@ -293,6 +293,9 @@ export function BillingPage() {
     () => deriveEntriesClient(entries, projects, clients),
     [entries, projects, clients],
   )
+
+  // Label del filtro de Project: "NÚMERO · nombre" (el value sigue siendo el nombre).
+  const projectLabel = useMemo(() => makeProjectFilterLabeler(projects), [projects])
 
   // Resolver maestro proyecto→cliente (id/grupo/legacy), el MISMO que canonicaliza
   // el cliente de la grilla. El modal agrupado lo usa para matchear sus avisos de
@@ -1017,6 +1020,7 @@ export function BillingPage() {
                 options={options.projects}
                 selected={filters.projects}
                 onToggle={(v) => toggleValue('projects', v)}
+                getLabel={projectLabel}
               />
               <MultiSelectDropdown
                 label="Contractor"

@@ -5,7 +5,7 @@ import { AlertTriangle, Info } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatDate, formatHours, formatWeek } from '../lib/format'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, clientFilterOptions, OTHER_CLIENT, UNALLOCATED, ALLOCATED } from '../lib/useEntryFilters'
-import { deriveEntriesClient } from '../lib/entryClient'
+import { deriveEntriesClient, makeProjectFilterLabeler } from '../lib/entryClient'
 import { isEntryFrozen, entryFrozenReason } from '../lib/entryFreeze'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { exportGrid } from '../lib/exportGrid'
@@ -109,6 +109,8 @@ export function EntriesPage() {
   // Maestro de clientes (página Clients): alimenta el dropdown de Client para que
   // liste TODOS los clientes, no sólo los que hoy tienen horas resueltas.
   const [clients, setClients] = useState([])
+  // Proyectos: para el número de proyecto en el label del filtro de Project.
+  const [projects, setProjects] = useState([])
   const [invoices, setInvoices] = useState([])
   // Pagos: para congelar las horas de overage ya pagadas (entryFreeze).
   const [payments, setPayments] = useState([])
@@ -169,6 +171,7 @@ export function EntriesPage() {
         if (cancelled) return
         setEntries(deriveEntriesClient(entryRows, projectRows, clientRows))
         setClients(clientRows)
+        setProjects(projectRows)
         setInvoices(invoiceRows)
         setPayments(paymentRows)
         // Los datos se releyeron: una selección armada sobre la tanda anterior
@@ -223,6 +226,9 @@ export function EntriesPage() {
     () => clientFilterOptions(clients, options.clients.includes(OTHER_CLIENT)),
     [clients, options.clients],
   )
+
+  // Label del filtro de Project: "NÚMERO · nombre" (el value sigue siendo el nombre).
+  const projectLabel = useMemo(() => makeProjectFilterLabeler(projects), [projects])
 
   const visible = useMemo(() => {
     const filtered = applyEntryFilters(entries, filters, invoiceByEntryId, masterNames)
@@ -500,6 +506,7 @@ export function EntriesPage() {
                 options={options.projects}
                 selected={filters.projects}
                 onToggle={(v) => toggleValue('projects', v)}
+                getLabel={projectLabel}
               />
               <MultiSelectDropdown
                 label="Contractor"
