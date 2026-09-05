@@ -32,8 +32,10 @@ export const ACTIVE_PROJECT_STATUSES = ['active', 'in progress']
  */
 export function isActiveProject(project) {
   if (!project) return false
-  // No vino de Zoho (proyecto manual) → este criterio no lo filtra.
-  if (project.zohoProjectId == null) return true
+  // No vino de Zoho (proyecto manual) → este criterio no lo filtra. Se usa un chequeo
+  // truthy (no `!= null`): un zoho_project_id '' no es una llave válida y cuenta como
+  // ausente, igual que en buildProjectIndex/findProjectForEntry (entryClient.js).
+  if (!project.zohoProjectId) return true
   const status = String(project.zohoStatus ?? '')
     .toLowerCase()
     .replace(/\s+/g, ' ')

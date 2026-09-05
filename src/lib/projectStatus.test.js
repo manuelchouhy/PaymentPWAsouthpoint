@@ -24,6 +24,8 @@ test('isActiveProject: proyecto MANUAL (sin zohoProjectId) → SIEMPRE visible',
   assert.equal(isActiveProject({ zohoProjectId: null, zohoStatus: null }), true)
   assert.equal(isActiveProject({ zohoStatus: null }), true) // zohoProjectId ausente
   assert.equal(isActiveProject({ zohoProjectId: null, zohoStatus: 'Completed' }), true)
+  // zoho_project_id '' cuenta como ausente (manual), igual que en entryClient.
+  assert.equal(isActiveProject({ zohoProjectId: '', zohoStatus: '' }), true)
 })
 
 test('isActiveProject: comparación normalizada (mayúsculas / espacios / minúsculas)', () => {
