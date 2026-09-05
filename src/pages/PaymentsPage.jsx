@@ -58,25 +58,34 @@ const PAY_LABELS = {
 // "W33–W35" si cruza varias. null si no hay fechas. Usa el rango de fechas del
 // resumen (summarizeEntries), no la lista completa.
 function formatWeekRange(dateStart, dateEnd) {
-  if (!dateStart && !dateEnd) return null
-  const start = formatWeek(dateStart)
-  const end = formatWeek(dateEnd)
+  // Coalesce: si sólo llega una punta del rango, la otra la iguala (una sola semana)
+  // en vez de formatear null como "—" y devolver un rango malformado tipo "W33–—".
+  const from = dateStart ?? dateEnd
+  const to = dateEnd ?? dateStart
+  if (!from || !to) return null
+  const start = formatWeek(from)
+  const end = formatWeek(to)
   // El año se compara por el AÑO DE LA SEMANA domingo–sábado (sundayWeekYear), no por
   // el año calendario del string: una semana física que cruza el 31-dic pertenece al
   // año de su domingo. Así dos fechas de la MISMA semana no se muestran como si
   // cruzaran de año, y una que sí cambia de año-semana se desambigua con el año (y no
   // se invierte el rango por comparar años calendario iguales de semanas distintas).
-  const yearStart = sundayWeekYear(dateStart ?? dateEnd)
-  const yearEnd = sundayWeekYear(dateEnd ?? dateStart)
+  const yearStart = sundayWeekYear(from)
+  const yearEnd = sundayWeekYear(to)
   if (yearStart !== yearEnd) return `${start} ${yearStart}–${end} ${yearEnd}`
   return start === end ? start : `${start}–${end}`
 }
 
-// Id estable para la fila de detalle de una fila de pago, derivado de su clave de
-// expand. Se sanea (la clave lleva ':') para ser un id HTML válido que el botón
-// pueda referenciar por aria-controls.
+// Id ÚNICO y estable para la fila de detalle, derivado de su clave de expand. Se
+// codifica la clave a hex (4 dígitos por unidad UTF-16) en vez de "sanear"
+// reemplazando caracteres inválidos: el reemplazo no es inyectivo (dos claves
+// distintas —p. ej. "Ana B" y "Ana-B", o una con ":"— colapsarían al mismo id,
+// duplicando ids y rompiendo el aria-controls). El hex sí lo es y da chars válidos.
 function detailIdFor(key) {
-  return `pay-detail-${String(key).replace(/[^a-zA-Z0-9_-]/g, '-')}`
+  const str = String(key)
+  let hex = ''
+  for (let i = 0; i < str.length; i++) hex += str.charCodeAt(i).toString(16).padStart(4, '0')
+  return `pay-detail-${hex}`
 }
 
 // Meta condensada de una fila a partir del resumen agregado: proyecto (o "N
@@ -145,7 +154,10 @@ function PayExpandCell({ open, onToggle, name, meta, controls }) {
         className="pay-expand"
         onClick={onToggle}
         aria-expanded={open}
-        aria-controls={controls}
+        // Sólo se referencia el detalle cuando existe en el DOM (fila expandida):
+        // la fila de detalle no se renderiza mientras está colapsada, así que un
+        // aria-controls fijo apuntaría a un id inexistente.
+        aria-controls={open ? controls : undefined}
         aria-label={open ? 'Hide hour detail' : 'Show hour detail'}
       >
         {open ? (
