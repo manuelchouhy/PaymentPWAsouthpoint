@@ -11,7 +11,6 @@ import {
 import { projectSows, stageSows } from '../lib/projectSows'
 import { api } from '../lib/api'
 import { buildClientResolver } from '../lib/clientResolver'
-import { makeProjectFilterLabeler } from '../lib/entryClient'
 import { clientFilterKey, clientFilterOptions } from '../lib/useEntryFilters'
 import { formatDate, formatHours } from '../lib/format'
 import { ContractBadge } from '../components/ContractBadge'
@@ -47,6 +46,7 @@ export function ProjectsPage() {
   const [filters, setFilters] = useState({
     clients: [],
     projectNames: [],
+    projectNumbers: [],
     sows: [],
     leadDevelopers: [],
     expFrom: '',
@@ -129,8 +129,10 @@ export function ProjectsPage() {
     () => [...new Set(projects.map((p) => p.projectName).filter(Boolean))].sort(),
     [projects],
   )
-  // Label del filtro de Project: "NÚMERO · nombre" (el value sigue siendo el nombre).
-  const projectLabel = useMemo(() => makeProjectFilterLabeler(projects), [projects])
+  const projectNumberOptions = useMemo(
+    () => [...new Set(projects.map((p) => p.projectNumber).filter(Boolean))].sort(),
+    [projects],
+  )
   // Los SOW de un proyecto viven en dos lugares: el sowNumber de proyecto y, si
   // tiene stages, un SOW por stage (stageSowNumbers, cargado en batch por
   // getProjects). El filtro y la columna consideran ambos. Ver projectsData.js.
@@ -157,6 +159,8 @@ export function ProjectsPage() {
         }
       }
       if (filters.projectNames.length && !filters.projectNames.includes(p.projectName))
+        return false
+      if (filters.projectNumbers.length && !filters.projectNumbers.includes(p.projectNumber))
         return false
       if (filters.sows.length) {
         const sows = projectSows(p)
@@ -190,6 +194,7 @@ export function ProjectsPage() {
   const filtersActive =
     filters.clients.length ||
     filters.projectNames.length ||
+    filters.projectNumbers.length ||
     filters.sows.length ||
     filters.leadDevelopers.length ||
     filters.expFrom ||
@@ -526,11 +531,16 @@ export function ProjectsPage() {
                 onToggle={(v) => toggle('clients', v)}
               />
               <MultiSelectDropdown
+                label="Project #"
+                options={projectNumberOptions}
+                selected={filters.projectNumbers}
+                onToggle={(v) => toggle('projectNumbers', v)}
+              />
+              <MultiSelectDropdown
                 label="Project"
                 options={projectNameOptions}
                 selected={filters.projectNames}
                 onToggle={(v) => toggle('projectNames', v)}
-                getLabel={projectLabel}
               />
               <MultiSelectDropdown
                 label="SOW"
@@ -572,6 +582,7 @@ export function ProjectsPage() {
                     setFilters({
                       clients: [],
                       projectNames: [],
+                      projectNumbers: [],
                       sows: [],
                       leadDevelopers: [],
                       expFrom: '',

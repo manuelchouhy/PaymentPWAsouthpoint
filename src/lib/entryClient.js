@@ -38,26 +38,6 @@ export function buildProjectIndex(projects = []) {
 }
 
 /**
- * Etiquetador de proyecto para los filtros: dado el listado de proyectos devuelve
- * una función `name → "NÚMERO · nombre"` (o sólo el nombre si el proyecto no tiene
- * número, o si el nombre es homónimo y por eso ambiguo). Se usa como `getLabel` del
- * dropdown de Project en Entries/Billing/Projects — el VALOR de la opción sigue
- * siendo el nombre (así el filtrado por `entry.project` no cambia); sólo cambia el
- * texto visible. Reusa buildProjectIndex para la misma semántica de homónimos que
- * el resto de la app (name ambiguo → byName null → sin número).
- *
- * @param {Array<object>} projects
- * @returns {(name: string) => string}
- */
-export function makeProjectFilterLabeler(projects = []) {
-  const { byName } = buildProjectIndex(projects)
-  return (name) => {
-    const number = byName.get(name)?.projectNumber ?? null
-    return number ? `${number} · ${name}` : name
-  }
-}
-
-/**
  * Proyecto de una hora. Si la hora trae `zohoProjectId` (truthy — un id "" cuenta
  * como ausente), ese es el dato autoritativo: se busca por id y, si no aparece, se
  * devuelve null. NO se cae al nombre: byZohoId y byName salen de la MISMA lista de

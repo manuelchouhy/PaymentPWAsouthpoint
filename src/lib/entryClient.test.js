@@ -4,7 +4,6 @@ import {
   buildProjectIndex,
   findProjectForEntry,
   deriveEntriesClient,
-  makeProjectFilterLabeler,
 } from './entryClient.js'
 
 const PROJECTS = [
@@ -99,19 +98,4 @@ test('deriveEntriesClient: entry con cliente propio → clientReason null', () =
   const [e] = deriveEntriesClient([{ id: 'e6', client: 'Cliente Zoho', project: 'x' }], PROJECTS, CLIENTS)
   assert.equal(e.client, 'Cliente Zoho')
   assert.equal(e.clientReason, null)
-})
-
-test('makeProjectFilterLabeler: antepone el número; sólo el nombre si falta o es ambiguo', () => {
-  const projects = [
-    { zohoProjectId: '1', projectName: 'Alpha', projectNumber: 'PRJ-1' },
-    { zohoProjectId: '2', projectName: 'Beta' }, // sin número
-    // Homónimo → byName null → sin número aunque alguno tenga.
-    { zohoProjectId: '3', projectName: 'Dup', projectNumber: 'PRJ-3' },
-    { zohoProjectId: '4', projectName: 'Dup', projectNumber: 'PRJ-4' },
-  ]
-  const label = makeProjectFilterLabeler(projects)
-  assert.equal(label('Alpha'), 'PRJ-1 · Alpha')
-  assert.equal(label('Beta'), 'Beta')
-  assert.equal(label('Dup'), 'Dup') // ambiguo: sólo el nombre
-  assert.equal(label('Fantasma'), 'Fantasma') // no existe: se devuelve tal cual
 })

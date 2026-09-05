@@ -18,7 +18,8 @@ import { sundayWeek, weekStartISO } from './format.js'
 const EMPTY_FILTERS = {
   contractors: [],
   clients: [],
-  projects: [],
+  projects: [], // por NOMBRE de proyecto (entry.project)
+  projectNumbers: [], // por NÚMERO de proyecto (entry.projectNumber) — filtro aparte
   tasks: [],
   billingStatuses: [], // 'Pending' | 'Invoiced' | 'Collected' | 'Paid'
   // Estado de aprobación de la entry (viene de Zoho approval_status y se guarda
@@ -99,6 +100,7 @@ export function useEntryFilters(initial) {
       filters.contractors.length > 0 ||
       filters.clients.length > 0 ||
       filters.projects.length > 0 ||
+      filters.projectNumbers.length > 0 ||
       filters.tasks.length > 0 ||
       filters.billingStatuses.length > 0 ||
       filters.statuses.length > 0 ||
@@ -120,6 +122,7 @@ const OPTION_DIMENSIONS = {
   contractors: (entry) => entry.user,
   clients: (entry) => entry.client,
   projects: (entry) => entry.project,
+  projectNumbers: (entry) => entry.projectNumber,
   tasks: (entry) => entry.task,
 }
 
@@ -214,6 +217,13 @@ export function applyEntryFilters(entries, filters, invoiceByEntryId, masterClie
       if (!filters.clients.includes(clientValue)) return false
     }
     if (filters.projects.length && !filters.projects.includes(entry.project)) {
+      return false
+    }
+    // Filtro por número de proyecto (independiente del de nombre). Las horas sin
+    // número resuelto (entry.projectNumber null/undefined) no aparecen como opción
+    // —sortedUnique descarta lo falsy— así que un filtro activo las oculta, igual
+    // que el resto de los multi-selects.
+    if (filters.projectNumbers?.length && !filters.projectNumbers.includes(entry.projectNumber)) {
       return false
     }
     if (filters.tasks.length && !filters.tasks.includes(entry.task)) {
