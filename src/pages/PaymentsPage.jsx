@@ -310,30 +310,23 @@ export function PaymentsPage() {
       return next
     })
 
-  // Fecha de cada hora por id (para contar las semanas realmente facturadas de cada
-  // factura multi-semana: sus entry_ids → fechas → semanas domingo–sábado distintas).
-  const entryDateById = useMemo(() => {
-    const m = new Map()
-    for (const e of entries) m.set(String(e.id), e.date)
-    return m
-  }, [entries])
-
   // Semanas realmente facturadas por una factura: las horas de todos sus contractors
   // → fechas → semanas distintas. 1 en una factura de una sola semana. Se usa para el
   // "(N weeks)" del período (grilla y receipt), así que vive en un solo lugar.
   //
-  // Devuelve null si ALGÚN entry_id de la factura no está en el `entries` cargado: sin
-  // los datos completos no afirmamos un conteo, porque un sub-conteo haría que
-  // formatInvoicePeriod marque como "no contiguo" (y agregue un "(N weeks)" erróneo) a
-  // una factura que en realidad sí lo es. Con null, el período degrada al rango pelado
-  // (seguro). getTimeEntries no pagina (cap ~1000, misma asunción que overage/
-  // sp_internal en esta página); si algún día se supera, se pagina para toda la página.
+  // Reusa el índice `entryById` (horas enriquecidas, que ya cargan `date`) en vez de un
+  // segundo map paralelo. Devuelve null si ALGÚN entry_id no está en el `entries`
+  // cargado O no tiene fecha resoluble: sin datos completos no afirmamos un conteo,
+  // porque un sub-conteo haría que formatInvoicePeriod marque como "no contiguo" (y
+  // agregue un "(N weeks)" erróneo) a una factura que en realidad sí lo es. Con null, el
+  // período degrada al rango pelado (seguro). getTimeEntries no pagina (cap ~1000, misma
+  // asunción que overage/sp_internal en esta página); si algún día se supera, se pagina.
   const invoiceWeekCount = (invoiceId) => {
     const ids = (contractorsByInvoice.get(invoiceId) ?? []).flatMap((c) => c.entryIds ?? [])
     const dates = []
     for (const id of ids) {
-      const date = entryDateById.get(String(id))
-      if (date === undefined) return null // datos incompletos → sin conteo afirmable
+      const date = entryById.get(String(id))?.date
+      if (!date) return null // hora ausente o sin fecha → sin conteo afirmable
       dates.push(date)
     }
     return distinctWeekCount(dates)
@@ -392,7 +385,7 @@ export function PaymentsPage() {
       })
     }
     return rows
-  }, [invoices, contractorsByInvoice, payments, showPaid, warningBefore, entryById, entryDateById])
+  }, [invoices, contractorsByInvoice, payments, showPaid, warningBefore, entryById])
 
   // Horas invoice-less pendientes de pago, por contractor (overage / sp_internal).
   // El meta condensado (proyecto/cliente/semana) de cada grupo se computa acá, una vez,
