@@ -34,11 +34,16 @@ import {
 // Orden y foco de la v1 (reunión 2026-08-15): Eduardo acotó la primera versión
 // a Clients, Projects and SOW, Entries, Billing y Payments. Esos cinco —más el
 // Dashboard, que sigue siendo la home— van arriba y son navegables. El resto
-// queda VISIBLE pero deshabilitado (`disabled: true`): Manuel lo pidió así en la
+// quedó VISIBLE pero deshabilitado (`disabled: true`): Manuel lo pidió así en la
 // reunión ("apagar el botón para que no se pueda apretar, pero que aparezca para
 // que no confunda la vista"). No se ocultan las RUTAS a propósito: la suite e2e
 // y las baselines visuales entran por `page.goto('/collections')` etc., así que
 // esconder el ítem del menú no las rompe, pero borrar la ruta sí.
+//
+// 2026-09-07: se re-habilitaron Client Summary, Client Detail y Supplier
+// Contracts (Manuel) para poder navegarlas y evaluar cómo mejorarlas. Capacity,
+// Collections, Traceability y los admin (Audit Log / Email Outbox) siguen
+// deshabilitados.
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', end: true, Icon: LayoutDashboard },
   { to: '/clients', label: 'Clients', Icon: Building2 },
@@ -46,11 +51,11 @@ const NAV_ITEMS = [
   { to: '/entries', label: 'Entries', Icon: ListChecks },
   { to: '/billing', label: 'Billing', Icon: Receipt },
   { to: '/payments', label: 'Payments', Icon: CreditCard },
-  { to: '/client-summary', label: 'Client Summary', Icon: PieChart, disabled: true },
+  { to: '/client-summary', label: 'Client Summary', Icon: PieChart },
   { to: '/capacity', label: 'Capacity', Icon: Gauge, disabled: true },
-  { to: '/client-detail', label: 'Client Detail', Icon: FileSearch, disabled: true },
+  { to: '/client-detail', label: 'Client Detail', Icon: FileSearch },
   { to: '/collections', label: 'Collections', Icon: Landmark, disabled: true },
-  { to: '/supplier-contracts', label: 'Supplier Contracts', Icon: FileText, disabled: true },
+  { to: '/supplier-contracts', label: 'Supplier Contracts', Icon: FileText },
   { to: '/traceability', label: 'Traceability', Icon: GitBranch, disabled: true },
 ]
 
