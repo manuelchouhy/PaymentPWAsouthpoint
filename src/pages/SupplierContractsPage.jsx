@@ -101,7 +101,7 @@ export function SupplierContractsPage() {
       { header: 'Supplier', key: 'supplierName' },
       { header: 'Contract #', key: 'contractNumber' },
       { header: 'Start Date', key: 'startDate' },
-      { header: 'Rol', key: 'role' },
+      { header: 'Role', key: 'role' },
       { header: 'Expiration', key: 'expirationDate' },
       { header: 'Renewal Date', key: 'renewalDate' },
       { header: 'Renewal Type', key: 'renewalType' },
@@ -265,7 +265,7 @@ export function SupplierContractsPage() {
                     <th scope="col">Supplier</th>
                     <th scope="col">Contract #</th>
                     <th scope="col">Start Date</th>
-                    <th scope="col">Rol</th>
+                    <th scope="col">Role</th>
                     <th scope="col">Expiration Date</th>
                     <th scope="col">Renewal Date</th>
                     <th scope="col">Payment Terms</th>

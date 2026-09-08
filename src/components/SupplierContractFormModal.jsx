@@ -8,7 +8,7 @@ const TEXT_FIELDS = [
   { key: 'supplierName', label: 'Supplier', required: true },
   { key: 'contractNumber', label: 'Contract #', required: true },
   { key: 'startDate', label: 'Start Date', required: true, type: 'date' },
-  { key: 'role', label: 'Rol', required: false },
+  { key: 'role', label: 'Role', required: false },
   { key: 'expirationDate', label: 'Expiration Date', required: true, type: 'date' },
   { key: 'renewalDate', label: 'Renewal Date', required: true, type: 'date' },
 ]

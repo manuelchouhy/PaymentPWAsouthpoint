@@ -59,7 +59,8 @@ y la columna DB es `supplier_name`, pero el **rótulo visible es "Contractor Nam
 
 **Rol** (`role`):
 Rol del contractor en el contrato (texto libre, ej. "Developer", "QA"). Campo del
-contrato, no un catálogo cerrado.
+contrato, no un catálogo cerrado. En la UI el label visible es **"Role"** (inglés,
+como el resto de la interfaz); la columna DB es `role`.
 
 ### Diseño
 

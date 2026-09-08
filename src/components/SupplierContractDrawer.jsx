@@ -11,7 +11,7 @@ import { useScrollLock } from '../lib/useScrollLock'
 const FIELD_LABELS = {
   supplierName: 'Supplier',
   contractNumber: 'Contract #',
-  role: 'Rol',
+  role: 'Role',
   startDate: 'Start Date',
   expirationDate: 'Expiration Date',
   renewalDate: 'Renewal Date',
@@ -110,7 +110,7 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
   const facts = [
     ['Contract #', contract.contractNumber],
     ['Start Date', formatDate(contract.startDate)],
-    ['Rol', contract.role],
+    ['Role', contract.role],
     ['Expiration Date', formatDate(contract.expirationDate)],
     ['Renewal Date', formatDate(contract.renewalDate)],
     ['Payment Terms', contract.paymentTerms],
