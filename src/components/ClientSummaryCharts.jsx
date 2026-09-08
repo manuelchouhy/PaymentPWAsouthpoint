@@ -38,9 +38,13 @@ export function ClientSummaryCharts({ totals }) {
   const donutData = [
     { key: 'consumed', name: 'Consumed', value: consumed, color: COLOR.consumed },
     { key: 'overage', name: 'Overage', value: overage, color: COLOR.overage },
-    { key: 'remaining', name: 'Remaining', value: remaining, color: COLOR.remaining },
   ]
-  const donutTotal = consumed + overage + remaining
+  // La porción Remaining solo tiene sentido si hay budget cargado: sin budget,
+  // "Remaining 0" leería como "todo consumido", que es falso (no hay contra qué medir).
+  if (totals.hasBudget) {
+    donutData.push({ key: 'remaining', name: 'Remaining', value: remaining, color: COLOR.remaining })
+  }
+  const donutTotal = donutData.reduce((sum, d) => sum + d.value, 0)
   const barEmpty = budget === 0 && consumed === 0 && overage === 0
 
   return (

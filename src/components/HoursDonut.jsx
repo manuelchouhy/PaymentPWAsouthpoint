@@ -5,6 +5,11 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
  * mockup). Componente compartido: lo usan el Dashboard (Billing Status /
  * Allocation) y Client Summary (Consumed / Overage / Remaining).
  *
+ * `total` llega como PROP a propósito (NO se deriva de `data`): en el Dashboard
+ * los dos donuts (billing status y allocation) comparten el mismo total de horas
+ * crudo para que ambos centros muestren el mismo número; sumar `data` reintroduce
+ * el drift de redondeo entre donuts. No lo cambies a un sum(data) al "simplificar".
+ *
  * @param {{ icon?: React.ReactNode, title: string,
  *           data: { key: string, name: string, value: number, color: string }[],
  *           total: number }} props

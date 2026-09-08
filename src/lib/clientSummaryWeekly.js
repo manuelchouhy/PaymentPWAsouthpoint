@@ -133,20 +133,9 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
     group.projects.sort((a, b) => coll(a.projectName, b.projectName))
   }
 
-  // Totales = suma de las filas mostradas (para que reconcilien con la grilla).
-  // Si dos proyectos comparten projectName, ambos muestran las mismas horas y el
-  // total las cuenta dos veces: es la misma limitación de la página actual
-  // (agrupa por nombre) y se prefiere que el total cuadre con lo visible. Ver ADR-0001.
-  const totals = { budget: 0, consumed: 0, overage: 0 }
-  for (const group of clients) {
-    for (const proj of group.projects) {
-      // Budget suma solo proyectos con presupuesto cargado: contar null como 0
-      // haría ver consumido > presupuesto en uno al que nunca se le cargó.
-      if (proj.budget != null) totals.budget += proj.budget
-      totals.consumed += proj.consumed
-      totals.overage += proj.overage
-    }
-  }
-
-  return { clients, totals }
+  // Los totales (por cliente / portfolio / gráficos) los computa la página a
+  // partir de este `clients`, porque dependen de los filtros aplicados y el scope
+  // de los gráficos difiere del de la grilla. El motor solo entrega la estructura
+  // por cliente → proyecto → semana.
+  return { clients }
 }

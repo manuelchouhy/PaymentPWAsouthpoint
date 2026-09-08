@@ -124,32 +124,22 @@ export function ClientSummaryPage() {
     ],
   )
 
-  // Totales de cliente (fila-cabecera) y de portfolio FILTRADO (fila total y los
-  // dos gráficos). Consumed/Overage se suman sobre las SEMANAS VISIBLES, así que
-  // Consumed cuadra con la suma de las celdas mostradas (también con el filtro
-  // Week). `remaining` se acumula POR PROYECTO (max(0, budget − consumido del
-  // proyecto)) para no netear el consumo de un proyecto contra el budget de otro:
-  // lo consume el donut de los gráficos. hasBudget distingue "budget real 0" de
-  // "ningún proyecto con budget".
-  //
-  // OJO: Cumulative y Remaining de cada FILA son acumulados ALL-TIME (por
-  // definición del motor) y NO se recortan por el filtro Week — miden algo
-  // distinto que el Consumed del período.
+  // Totales de la TABLA (fila-cabecera de cliente y fila Total): Consumed/Overage
+  // se suman sobre las SEMANAS VISIBLES, así que cuadran con la suma de las celdas
+  // mostradas incluso con el filtro Week activo. La tabla no muestra Cumulative/
+  // Remaining en estas filas. hasBudget distingue "budget real 0" de "sin budget".
   const clientTotals = useMemo(() => {
     const map = new Map()
     for (const group of clients) {
-      const t = { budget: 0, consumed: 0, overage: 0, remaining: 0, hasBudget: false }
+      const t = { budget: 0, consumed: 0, overage: 0, hasBudget: false }
       for (const p of group.projects) {
-        let projConsumed = 0
-        for (const w of p.weeks) {
-          projConsumed += w.consumed
-          t.overage += w.overage
-        }
-        t.consumed += projConsumed
         if (p.budget != null) {
           t.budget += p.budget
           t.hasBudget = true
-          t.remaining += Math.max(0, p.budget - projConsumed)
+        }
+        for (const w of p.weeks) {
+          t.consumed += w.consumed
+          t.overage += w.overage
         }
       }
       map.set(group.client, t)
@@ -158,16 +148,42 @@ export function ClientSummaryPage() {
   }, [clients])
 
   const totals = useMemo(() => {
-    const t = { budget: 0, consumed: 0, overage: 0, remaining: 0, hasBudget: false }
+    const t = { budget: 0, consumed: 0, overage: 0, hasBudget: false }
     for (const g of clientTotals.values()) {
       t.budget += g.budget
       t.consumed += g.consumed
       t.overage += g.overage
-      t.remaining += g.remaining
       if (g.hasBudget) t.hasBudget = true
     }
     return t
   }, [clientTotals])
+
+  // Totales de los GRÁFICOS: son una foto de estado de budget, así que usan las
+  // horas ALL-TIME de cada proyecto (project.consumed/overage del motor) y NO se
+  // recortan por el filtro Week (que solo achica filas de la tabla). El scope son
+  // los filtros de PROYECTO (Client/Project#/Name/SOW). remaining se acumula por
+  // proyecto (max(0, budget − consumido all-time)) para no netear entre proyectos.
+  const chartTotals = useMemo(() => {
+    const scope = filterClientSummary(summary.clients, {
+      clients: selectedClients,
+      projectNumbers: selectedProjectNumbers,
+      projectNames: selectedProjectNames,
+      sows: selectedSows,
+    })
+    const t = { budget: 0, consumed: 0, overage: 0, remaining: 0, hasBudget: false }
+    for (const group of scope) {
+      for (const p of group.projects) {
+        t.consumed += p.consumed
+        t.overage += p.overage
+        if (p.budget != null) {
+          t.budget += p.budget
+          t.hasBudget = true
+          t.remaining += Math.max(0, p.budget - p.consumed)
+        }
+      }
+    }
+    return t
+  }, [summary, selectedClients, selectedProjectNumbers, selectedProjectNames, selectedSows])
 
   function toggleIn(setter, value) {
     setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]))
@@ -406,7 +422,7 @@ export function ClientSummaryPage() {
             </div>
           )}
 
-          {clients.length > 0 && <ClientSummaryCharts totals={totals} />}
+          {clients.length > 0 && <ClientSummaryCharts totals={chartTotals} />}
         </motion.div>
       )}
     </>

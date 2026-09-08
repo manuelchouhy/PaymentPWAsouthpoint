@@ -160,24 +160,6 @@ test('la misma semana de años distintos no se fusiona (year-aware)', () => {
   )
 })
 
-test('totales de portfolio: suma filas; budget null no cuenta como 0', () => {
-  const { totals } = buildClientSummaryWeekly({
-    projects: [
-      project({ id: 1, projectName: 'A', customerName: 'HSS', baseBudgetHours: 120 }),
-      project({ id: 2, projectName: 'B', customerName: 'HSS', baseBudgetHours: null }),
-    ],
-    entries: [
-      entry({ project: 'A', hours: 23, allocation: 'bill_to_client' }),
-      entry({ project: 'B', hours: 5, allocation: 'bill_to_client' }),
-      entry({ project: 'A', hours: 2, allocation: 'overage' }),
-    ],
-    crsByProject: new Map(),
-  })
-  assert.equal(totals.budget, 120)
-  assert.equal(totals.consumed, 28)
-  assert.equal(totals.overage, 2)
-})
-
 test('agrupa por customerName, cae a client y luego a "Without client"', () => {
   const { clients } = buildClientSummaryWeekly({
     projects: [
@@ -213,14 +195,14 @@ test('dos proyectos con el mismo projectName no se contaminan cumulative/remaini
 })
 
 test('descarta entries sin nombre de proyecto (no las atribuye a nadie)', () => {
-  const { clients, totals } = buildClientSummaryWeekly({
+  const { clients } = buildClientSummaryWeekly({
     projects: [project({ projectName: '' })],
     entries: [entry({ project: '', hours: 50 }), entry({ project: null, hours: 7 })],
     crsByProject: new Map(),
   })
   // El proyecto de nombre vacío NO se apropia de las horas huérfanas.
   assert.equal(clients[0].projects[0].weeks.length, 0)
-  assert.equal(totals.consumed, 0)
+  assert.equal(clients[0].projects[0].consumed, 0)
 })
 
 test('un proyecto sin entries aparece igual, con weeks vacías y consumed 0', () => {
