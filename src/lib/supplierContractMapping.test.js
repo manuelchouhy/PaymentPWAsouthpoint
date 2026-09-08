@@ -26,3 +26,8 @@ test('contractToRow omite role cuando no se toca (undefined)', () => {
   const row = contractToRow({ supplierName: 'Ada' })
   assert.ok(!('role' in row))
 })
+
+test('contractToRow preserva un 0 numérico (no lo colapsa a null)', () => {
+  const row = contractToRow({ weeklyContractedHours: 0 })
+  assert.equal(row.weekly_contracted_hours, 0)
+})

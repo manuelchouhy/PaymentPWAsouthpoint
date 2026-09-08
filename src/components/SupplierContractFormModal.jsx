@@ -132,7 +132,9 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
         {
           supplierName: form.supplierName.trim(),
           contractNumber: form.contractNumber.trim(),
-          role: form.role.trim(),
+          // '' -> null: un Rol vacío se guarda como null en todos los caminos
+          // (demo, Supabase y auditoría), no como cadena vacía.
+          role: form.role.trim() || null,
           startDate: form.startDate,
           expirationDate: form.expirationDate,
           renewalDate: form.renewalDate,

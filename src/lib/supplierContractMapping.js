@@ -49,15 +49,16 @@ export function rowToContract(row) {
 }
 
 /**
- * Objeto de dominio → fila de Supabase (solo los campos presentes). `role` es
- * texto libre opcional: '' se normaliza a null para no guardar cadenas vacías
- * (mismo criterio que projectToRow con los textos opcionales).
+ * Objeto de dominio → fila de Supabase (solo los campos presentes). '' se
+ * normaliza a null en cualquier campo de texto para no guardar cadenas vacías;
+ * un 0 numérico (weeklyContractedHours) se preserva porque nunca es === ''.
+ * Mismo criterio field-agnostic que projectToRow.
  */
 export function contractToRow(c) {
   const row = {}
   for (const [field, column] of Object.entries(FIELD_TO_COLUMN)) {
     if (c[field] === undefined) continue
-    row[column] = field === 'role' && c[field] === '' ? null : c[field]
+    row[column] = c[field] === '' ? null : c[field]
   }
   return row
 }
