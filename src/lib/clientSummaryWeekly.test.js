@@ -202,6 +202,17 @@ test('dos proyectos con el mismo projectName no se contaminan cumulative/remaini
   assert.equal(byId.get(2).weeks[0].remaining, 170) // 200 - 30
 })
 
+test('descarta entries sin nombre de proyecto (no las atribuye a nadie)', () => {
+  const { clients, totals } = buildClientSummaryWeekly({
+    projects: [project({ projectName: '' })],
+    entries: [entry({ project: '', hours: 50 }), entry({ project: null, hours: 7 })],
+    crsByProject: new Map(),
+  })
+  // El proyecto de nombre vacío NO se apropia de las horas huérfanas.
+  assert.equal(clients[0].projects[0].weeks.length, 0)
+  assert.equal(totals.consumed, 0)
+})
+
 test('un proyecto sin entries aparece igual, con weeks vacías y consumed 0', () => {
   const { clients } = buildClientSummaryWeekly({
     projects: [project({ baseBudgetHours: 120 })],

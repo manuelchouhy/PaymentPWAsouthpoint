@@ -47,6 +47,10 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
     if (e.status !== 'Approved') continue
     if (e.allocation !== 'bill_to_client' && e.allocation !== 'overage') continue
     const name = e.project ?? ''
+    // Una entry sin nombre de proyecto no se puede atribuir a ningún proyecto:
+    // se descarta (igual que la página, que la bucketeaba bajo '' y nunca la
+    // leía). Evita además que un proyecto con projectName vacío se las apropie.
+    if (!name) continue
     const weekStart = weekStartISO(e.date ?? '')
     if (!weekStart) continue
     const hours = Number(e.hours) || 0
@@ -76,18 +80,22 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
     )
 
     // Semanas del proyecto, en orden cronológico, con cumulative/remaining.
-    // El lookup normaliza el nombre igual que el bucket (`?? ''`) para que
-    // coincidan. Se CLONA cada objeto de semana: dos proyectos con el mismo
-    // projectName comparten el mismo bucket, y sin el clon la mutación de
-    // cumulative/remaining de uno pisaría la del otro (apuntan al mismo objeto).
-    const weekMap = byProjectWeek.get(project.projectName ?? '')
+    // Se CLONA cada objeto de semana: dos proyectos con el mismo projectName
+    // comparten el mismo bucket, y sin el clon la mutación de cumulative/
+    // remaining de uno pisaría la del otro (apuntan al mismo objeto).
+    const weekMap = byProjectWeek.get(project.projectName)
     const weeks = weekMap ? [...weekMap.values()].map((w) => ({ ...w })) : []
     weeks.sort((a, b) => a.weekStart.localeCompare(b.weekStart))
+    // Una sola pasada: cumulative/remaining por semana y los totales del proyecto.
     let cumulative = 0
+    let consumedTotal = 0
+    let overageTotal = 0
     for (const w of weeks) {
       cumulative += w.consumed
       w.cumulative = cumulative
       w.remaining = budget == null ? null : budget - cumulative
+      consumedTotal += w.consumed
+      overageTotal += w.overage
     }
 
     const row = {
@@ -97,8 +105,8 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
       sowNumber: sowLabel(project),
       zohoStatus: project.zohoStatus ?? null,
       budget,
-      consumed: weeks.reduce((s, w) => s + w.consumed, 0),
-      overage: weeks.reduce((s, w) => s + w.overage, 0),
+      consumed: consumedTotal,
+      overage: overageTotal,
       weeks,
     }
 
@@ -116,6 +124,10 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
     )
   }
 
+  // Totales = suma de las filas mostradas (para que reconcilien con la grilla).
+  // Si dos proyectos comparten projectName, ambos muestran las mismas horas y el
+  // total las cuenta dos veces: es la misma limitación de la página actual
+  // (agrupa por nombre) y se prefiere que el total cuadre con lo visible. Ver ADR-0001.
   const totals = { budget: 0, consumed: 0, overage: 0 }
   for (const group of clients) {
     for (const proj of group.projects) {
