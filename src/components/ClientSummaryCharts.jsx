@@ -51,6 +51,10 @@ export function ClientSummaryCharts({ totals }) {
   if (totals.hasBudget) {
     donutData.push({ key: 'remaining', name: 'Remaining', value: remaining, color: COLOR.remaining })
   }
+  // Suma de las porciones del donut (incluye Remaining si hay budget): define su
+  // estado vacío. Con budget>0 y sin horas logueadas sigue habiendo porción
+  // Remaining, así que el donut se dibuja (no cae a "No hour data").
+  const donutTotal = donutData.reduce((sum, d) => sum + d.value, 0)
   // Centro del donut = horas REALMENTE logueadas (consumed + overage), no la suma
   // de las porciones (que incluye el remaining, que no son horas trabajadas).
   const loggedHours = round1(consumed + overage)
