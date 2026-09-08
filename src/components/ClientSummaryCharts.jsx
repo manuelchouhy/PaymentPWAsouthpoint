@@ -1,5 +1,6 @@
-import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { TrendingUp } from 'lucide-react'
+import { HoursDonut } from './HoursDonut'
 
 // Paleta alineada al resto de la app: consumed cyan, overage ámbar (como los
 // badges de overage), remaining gris, budget celeste.
@@ -10,29 +11,24 @@ const COLOR = {
   remaining: '#52525b',
 }
 
-const TOOLTIP_STYLE = {
-  background: 'var(--surface)',
-  border: '1px solid var(--line-strong)',
-  borderRadius: 8,
-  fontSize: 12,
-  color: 'var(--text)',
-}
-
 const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
 
 /**
- * Los dos gráficos de Client Summary, alimentados por los totales ya filtrados
- * de la página (respetan los filtros aplicados). Gráfica 1: barras Budget vs
+ * Los dos gráficos de Client Summary, alimentados por los totales ya filtrados de
+ * la página (respetan los filtros aplicados). Gráfica 1: barras Budget vs
  * Consumed vs Overage. Gráfica 2: donut del reparto Consumed / Overage /
- * Remaining (remaining = budget − consumed, sin bajar de 0).
+ * Remaining. `remaining` viene calculado POR PROYECTO desde la página (suma de
+ * max(0, budget − consumed) de cada proyecto con budget), no como budget − consumed
+ * global, para no netear el consumo de un proyecto contra el budget de otro.
  *
- * @param {{ totals: { budget: number, consumed: number, overage: number, hasBudget: boolean } }} props
+ * @param {{ totals: { budget: number, consumed: number, overage: number,
+ *           remaining: number, hasBudget: boolean } }} props
  */
 export function ClientSummaryCharts({ totals }) {
   const budget = totals.hasBudget ? round1(totals.budget) : 0
   const consumed = round1(totals.consumed)
   const overage = round1(totals.overage)
-  const remaining = Math.max(0, round1(budget - consumed))
+  const remaining = round1(totals.remaining)
 
   const barData = [
     { name: 'Budget', value: budget, color: COLOR.budget },
@@ -45,7 +41,7 @@ export function ClientSummaryCharts({ totals }) {
     { key: 'remaining', name: 'Remaining', value: remaining, color: COLOR.remaining },
   ]
   const donutTotal = consumed + overage + remaining
-  const nothing = budget === 0 && consumed === 0 && overage === 0
+  const barEmpty = budget === 0 && consumed === 0 && overage === 0
 
   return (
     <div className="dash-main">
@@ -56,7 +52,7 @@ export function ClientSummaryCharts({ totals }) {
             Budget vs Consumed vs Overage
           </span>
         </div>
-        {nothing ? (
+        {barEmpty ? (
           <p className="dash-widget__empty">No hour data available.</p>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
@@ -66,7 +62,7 @@ export function ClientSummaryCharts({ totals }) {
               <YAxis tick={{ fontSize: 12, fill: 'var(--text)' }} tickLine={false} axisLine={false} width={44} />
               <Tooltip
                 formatter={(value, _n, item) => [`${round1(value)} h`, item?.payload?.name]}
-                contentStyle={TOOLTIP_STYLE}
+                contentStyle={{ background: 'var(--surface)', border: '1px solid var(--line-strong)', borderRadius: 8, fontSize: 12, color: 'var(--text)' }}
                 cursor={{ fill: 'var(--line-strong)', opacity: 0.15 }}
               />
               <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive={false}>
@@ -79,45 +75,12 @@ export function ClientSummaryCharts({ totals }) {
         )}
       </div>
 
-      <div className="dash-widget">
-        <div className="dash-widget__head">
-          <span className="dash-widget__title">
-            <TrendingUp size={14} />
-            Consumed / Overage / Remaining
-          </span>
-        </div>
-        {donutTotal === 0 ? (
-          <p className="dash-widget__empty">No hour data available.</p>
-        ) : (
-          <div className="billing-dist">
-            <div className="billing-dist__chart">
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie data={donutData} cx="50%" cy="50%" innerRadius={64} outerRadius={90} paddingAngle={2} dataKey="value" isAnimationActive={false}>
-                    {donutData.map((entry) => (
-                      <Cell key={entry.key} fill={entry.color} stroke="transparent" />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value, name) => [`${round1(value)} h`, name]} contentStyle={TOOLTIP_STYLE} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="billing-dist__center" aria-hidden="true">
-                <span className="billing-dist__total">{round1(donutTotal).toFixed(1)}</span>
-                <span className="billing-dist__unit">Hours</span>
-              </div>
-            </div>
-            <ul className="billing-dist__legend">
-              {donutData.map((entry) => (
-                <li key={entry.key} className="billing-dist__row">
-                  <span className="billing-dist__dot" style={{ background: entry.color }} />
-                  <span className="billing-dist__name">{entry.name}</span>
-                  <span className="billing-dist__val">{entry.value.toFixed(1)} h</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
+      <HoursDonut
+        icon={<TrendingUp size={14} />}
+        title="Consumed / Overage / Remaining"
+        data={donutTotal === 0 ? [] : donutData}
+        total={round1(donutTotal)}
+      />
     </div>
   )
 }

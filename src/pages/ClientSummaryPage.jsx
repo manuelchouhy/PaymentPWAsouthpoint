@@ -124,25 +124,32 @@ export function ClientSummaryPage() {
     ],
   )
 
-  // Totales de cliente (fila-cabecera) y de portfolio FILTRADO (fila total). El
-  // Consumed/Overage se suma sobre las SEMANAS VISIBLES, así que Consumed cuadra
-  // con la suma de las celdas Consumed mostradas (también con el filtro Week).
-  // OJO: Cumulative y Remaining de cada fila son acumulados ALL-TIME (por
+  // Totales de cliente (fila-cabecera) y de portfolio FILTRADO (fila total y los
+  // dos gráficos). Consumed/Overage se suman sobre las SEMANAS VISIBLES, así que
+  // Consumed cuadra con la suma de las celdas mostradas (también con el filtro
+  // Week). `remaining` se acumula POR PROYECTO (max(0, budget − consumido del
+  // proyecto)) para no netear el consumo de un proyecto contra el budget de otro:
+  // lo consume el donut de los gráficos. hasBudget distingue "budget real 0" de
+  // "ningún proyecto con budget".
+  //
+  // OJO: Cumulative y Remaining de cada FILA son acumulados ALL-TIME (por
   // definición del motor) y NO se recortan por el filtro Week — miden algo
-  // distinto que el Consumed del período. hasBudget distingue "budget real 0" de
-  // "ningún proyecto con budget". summary.totals (sin filtrar) lo usan los gráficos.
+  // distinto que el Consumed del período.
   const clientTotals = useMemo(() => {
     const map = new Map()
     for (const group of clients) {
-      const t = { budget: 0, consumed: 0, overage: 0, hasBudget: false }
+      const t = { budget: 0, consumed: 0, overage: 0, remaining: 0, hasBudget: false }
       for (const p of group.projects) {
+        let projConsumed = 0
+        for (const w of p.weeks) {
+          projConsumed += w.consumed
+          t.overage += w.overage
+        }
+        t.consumed += projConsumed
         if (p.budget != null) {
           t.budget += p.budget
           t.hasBudget = true
-        }
-        for (const w of p.weeks) {
-          t.consumed += w.consumed
-          t.overage += w.overage
+          t.remaining += Math.max(0, p.budget - projConsumed)
         }
       }
       map.set(group.client, t)
@@ -151,11 +158,12 @@ export function ClientSummaryPage() {
   }, [clients])
 
   const totals = useMemo(() => {
-    const t = { budget: 0, consumed: 0, overage: 0, hasBudget: false }
+    const t = { budget: 0, consumed: 0, overage: 0, remaining: 0, hasBudget: false }
     for (const g of clientTotals.values()) {
       t.budget += g.budget
       t.consumed += g.consumed
       t.overage += g.overage
+      t.remaining += g.remaining
       if (g.hasBudget) t.hasBudget = true
     }
     return t
