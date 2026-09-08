@@ -5,8 +5,8 @@ import { PAYMENT_TERMS, RENEWAL_TYPES } from '../lib/supplierContractsData'
 import { useScrollLock } from '../lib/useScrollLock'
 
 const TEXT_FIELDS = [
-  { key: 'supplierName', label: 'Supplier', required: true },
   { key: 'contractNumber', label: 'Contract #', required: true },
+  { key: 'supplierName', label: 'Contractor Name', required: true },
   { key: 'startDate', label: 'Start Date', required: true, type: 'date' },
   { key: 'role', label: 'Role', required: false },
   { key: 'expirationDate', label: 'Expiration Date', required: true, type: 'date' },
@@ -30,7 +30,7 @@ function emptyForm() {
 }
 
 /**
- * Modal de alta / edición de Supplier Contract (FR-14). Sin upload de PDF (FR-15).
+ * Modal de alta / edición de Supplier Contract (FR-14). Sin adjuntar archivos.
  *
  * @param {{ initial?: object|null, onClose: () => void, onSubmit: (payload) => Promise<void> }} props
  */
@@ -52,33 +52,12 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
         initial.weeklyContractedHours == null ? '' : String(initial.weeklyContractedHours),
     }
   })
-  const [pdfFile, setPdfFile] = useState(null)
-  const [pdfError, setPdfError] = useState('')
   const [touched, setTouched] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [dupError, setDupError] = useState(false)
   const dialogRef = useRef(null)
   const firstRef = useRef(null)
-
-  function onPickPdf(file) {
-    setPdfError('')
-    if (!file) {
-      setPdfFile(null)
-      return
-    }
-    if (file.type !== 'application/pdf') {
-      setPdfError('The file must be a PDF.')
-      setPdfFile(null)
-      return
-    }
-    if (file.size > 20 * 1024 * 1024) {
-      setPdfError('The PDF cannot exceed 20 MB.')
-      setPdfFile(null)
-      return
-    }
-    setPdfFile(file)
-  }
 
   useScrollLock()
 
@@ -143,7 +122,6 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
           isPrioritySupplier: form.isPrioritySupplier,
           weeklyContractedHours: weeklyHoursNumber,
         },
-        pdfFile,
       )
     } catch (error) {
       setSubmitting(false)
@@ -258,29 +236,6 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
                 <span className="field__error">Enter a number of 0 or more.</span>
               )}
             </div>
-          </div>
-
-          <div className="field">
-            <label className="field__label" htmlFor="sc-pdf">
-              Contract PDF
-              <span className="field__hint">optional · PDF · max 20 MB</span>
-            </label>
-            <input
-              id="sc-pdf"
-              type="file"
-              accept="application/pdf,.pdf"
-              className="field__input field__input--file"
-              onChange={(e) => onPickPdf(e.target.files?.[0] ?? null)}
-            />
-            {pdfFile && (
-              <span className="field__filename">{pdfFile.name}</span>
-            )}
-            {isEdit && initial?.pdfUrl && !pdfFile && (
-              <span className="field__filename field__filename--muted">
-                A PDF is already uploaded. Uploading a new one will replace it.
-              </span>
-            )}
-            {pdfError && <span className="field__error">{pdfError}</span>}
           </div>
 
           <label className="settings-check">

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, BellRing, FileText, Plus, Star } from 'lucide-react'
+import { AlertTriangle, BellRing, Plus, Star } from 'lucide-react'
 import {
   RENEWAL_TYPES,
   SUPPLIER_STATUSES,
@@ -98,14 +98,14 @@ export function SupplierContractsPage() {
 
   function handleExport(format) {
     const cols = [
-      { header: 'Supplier', key: 'supplierName' },
       { header: 'Contract #', key: 'contractNumber' },
+      { header: 'Contractor Name', key: 'supplierName' },
       { header: 'Start Date', key: 'startDate' },
       { header: 'Role', key: 'role' },
       { header: 'Expiration', key: 'expirationDate' },
       { header: 'Renewal Date', key: 'renewalDate' },
-      { header: 'Renewal Type', key: 'renewalType' },
       { header: 'Payment Terms', key: 'paymentTerms' },
+      { header: 'Renewal Type', key: 'renewalType' },
       { header: 'Status', key: 'status' },
       { header: 'Days Left', key: 'daysLeft' },
     ]
@@ -117,8 +117,7 @@ export function SupplierContractsPage() {
     exportGrid({ rows: exportRows, columns: cols, title: 'Supplier Contracts', gridName: 'supplier_contracts', format, generatedBy: user?.email ?? '' })
   }
 
-  async function handleCreate(payload, pdfFile) {
-    if (pdfFile) payload = { ...payload, pdfUrl: await api.supplierContracts.uploadPdf(pdfFile) }
+  async function handleCreate(payload) {
     const created = await api.supplierContracts.create(payload, user?.email ?? null)
     api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.create', resourceType: 'supplier_contract', resourceId: created.id, after: { contractNumber: created.contractNumber, supplierName: created.supplierName, expirationDate: created.expirationDate } })
     setContracts((prev) => sortByExp([created, ...prev]))
@@ -126,8 +125,7 @@ export function SupplierContractsPage() {
     setToast({ id: Date.now(), message: `Contract created: ${created.contractNumber}` })
   }
 
-  async function handleUpdate(payload, pdfFile) {
-    if (pdfFile) payload = { ...payload, pdfUrl: await api.supplierContracts.uploadPdf(pdfFile) }
+  async function handleUpdate(payload) {
     const updated = await api.supplierContracts.update(form.contract, payload, user?.email ?? null)
     api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.update', resourceType: 'supplier_contract', resourceId: updated.id, before: { contractNumber: form.contract.contractNumber }, after: { contractNumber: updated.contractNumber, expirationDate: updated.expirationDate } })
     setContracts((prev) => sortByExp(prev.map((c) => (c.id === updated.id ? updated : c))))
@@ -135,11 +133,10 @@ export function SupplierContractsPage() {
     setToast({ id: Date.now(), message: `Contract updated: ${updated.contractNumber}` })
   }
 
-  async function handleRenew(payload, pdfFile) {
-    const pdfUrl = await api.supplierContracts.uploadPdf(pdfFile)
+  async function handleRenew(payload) {
     const { archived, created } = await api.supplierContracts.renew(
       renewing,
-      { ...payload, pdfUrl },
+      payload,
       user?.email ?? null,
     )
     api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'supplier_contract.renew', resourceType: 'supplier_contract', resourceId: created.id, before: { contractNumber: renewing.contractNumber, contractId: renewing.id }, after: { contractNumber: created.contractNumber, expirationDate: created.expirationDate } })
@@ -262,8 +259,8 @@ export function SupplierContractsPage() {
               <table className="table proj-table">
                 <thead>
                   <tr>
-                    <th scope="col">Supplier</th>
                     <th scope="col">Contract #</th>
+                    <th scope="col">Contractor Name</th>
                     <th scope="col">Start Date</th>
                     <th scope="col">Role</th>
                     <th scope="col">Expiration Date</th>
@@ -271,7 +268,6 @@ export function SupplierContractsPage() {
                     <th scope="col">Payment Terms</th>
                     <th scope="col">Renewal Type</th>
                     <th scope="col">Status</th>
-                    <th scope="col">PDF</th>
                     <th scope="col" className="col-num">Days Remaining</th>
                   </tr>
                 </thead>
@@ -294,13 +290,13 @@ export function SupplierContractsPage() {
                         onClick={() => setDetail(c)}
                         title={`View ${c.supplierName}`}
                       >
+                        <td className="cell-mono">{c.contractNumber}</td>
                         <td className="cell-strong">
                           {c.isPrioritySupplier && (
                             <Star size={13} aria-hidden="true" className="sc-priority-star" />
                           )}
                           {c.supplierName}
                         </td>
-                        <td className="cell-mono">{c.contractNumber}</td>
                         <td className="cell-mono">{formatDate(c.startDate)}</td>
                         <td className="cell-soft">{c.role || '—'}</td>
                         <td className="cell-mono">{formatDate(c.expirationDate)}</td>
@@ -308,13 +304,6 @@ export function SupplierContractsPage() {
                         <td className="cell-mono">{c.paymentTerms}</td>
                         <td className="cell-soft">{c.renewalType}</td>
                         <td><SupplierStatusBadge status={st} /></td>
-                        <td>
-                          {c.pdfUrl ? (
-                            <span className="sc-pdf-badge" title="Download from detail view">
-                              <FileText size={14} aria-hidden="true" /> PDF
-                            </span>
-                          ) : '—'}
-                        </td>
                         <td className={`col-num cell-mono${days != null && days < 0 ? ' proj-days--overdue' : ''}`}>
                           {days == null ? '—' : days}
                         </td>
