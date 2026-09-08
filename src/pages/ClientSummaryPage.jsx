@@ -9,6 +9,7 @@ import { buildClientSummaryWeekly, weekLabel } from '../lib/clientSummaryWeekly'
 import { filterClientSummary } from '../lib/clientSummaryFilter'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
+import { ClientSummaryCharts } from '../components/ClientSummaryCharts'
 import { sortedUnique } from '../lib/useEntryFilters'
 
 /** '—' para nulos; si no, horas formateadas. */
@@ -396,6 +397,8 @@ export function ClientSummaryPage() {
               </table>
             </div>
           )}
+
+          {clients.length > 0 && <ClientSummaryCharts totals={totals} />}
         </motion.div>
       )}
     </>
