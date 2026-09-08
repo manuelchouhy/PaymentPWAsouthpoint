@@ -230,17 +230,7 @@ export function rejectChangeRequest(id, decidedBy) {
   return decideChangeRequest(id, 'rejected', decidedBy)
 }
 
-/**
- * Presupuesto vigente = base del SOW + lo aprobado que amplía budget. Los
- * write_off_overage no suman: son horas que SouthPoint absorbe, no horas
- * nuevas que el cliente autorizó.
- * @param {?number} baseBudgetHours
- * @param {ChangeRequest[]} changeRequests
- * @returns {?number} null si el proyecto no tiene presupuesto base cargado.
- */
-export function effectiveBudgetHours(baseBudgetHours, changeRequests) {
-  if (baseBudgetHours == null) return null
-  return changeRequests
-    .filter((cr) => cr.status === 'approved' && cr.type === 'expand_budget')
-    .reduce((total, cr) => total + cr.deltaHours, Number(baseBudgetHours))
-}
+// El cálculo puro del presupuesto vigente vive en ./effectiveBudget.js (sin
+// dependencias de red, testeable aislado) y se re-exporta acá por conveniencia
+// para los consumidores que ya lo importan desde este módulo.
+export { effectiveBudgetHours } from './effectiveBudget.js'

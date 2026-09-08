@@ -1,40 +1,69 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useOutletContext } from 'react-router-dom'
+import { useOutletContext } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
-import { effectiveBudgetHours } from '../lib/changeRequestsData'
+import { buildClientSummaryWeekly, weekLabel } from '../lib/clientSummaryWeekly'
+import { filterClientSummary } from '../lib/clientSummaryFilter'
+import { chartTotals, portfolioTotals, tableTotalsByClient } from '../lib/clientSummaryTotals'
+import { buildClientResolver } from '../lib/clientResolver'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
+import { ClientSummaryCharts } from '../components/ClientSummaryCharts'
 import { sortedUnique } from '../lib/useEntryFilters'
 
-const UNASSIGNED = 'Without client'
+/** '—' para nulos; si no, horas formateadas. */
+function hoursOrDash(value) {
+  return value == null ? '—' : formatHours(value)
+}
+
+/**
+ * Redondea a 1 decimal para el export, manteniendo el tipo numérico (para que la
+ * planilla pueda sumar) y evitando los artefactos de float (10.1000000001) que
+ * aparecerían al exportar la suma acumulada cruda. Los no-números (celda vacía)
+ * pasan tal cual. Coincide con lo que muestra formatHours en la grilla.
+ */
+function num1(value) {
+  return typeof value === 'number' ? Math.round(value * 10) / 10 : value
+}
 
 export function ClientSummaryPage() {
   const { user } = useOutletContext()
-  const navigate = useNavigate()
   const [projects, setProjects] = useState([])
   const [entries, setEntries] = useState([])
   const [crsByProject, setCrsByProject] = useState(() => new Map())
+  const [clientMasters, setClientMasters] = useState([])
   const [status, setStatus] = useState('loading')
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedClients, setSelectedClients] = useState([])
+  const [selectedProjectNumbers, setSelectedProjectNumbers] = useState([])
+  const [selectedProjectNames, setSelectedProjectNames] = useState([])
+  const [selectedSows, setSelectedSows] = useState([])
+  const [selectedWeeks, setSelectedWeeks] = useState([])
 
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
+    // clients alimenta el resolver grupo→cliente, pero NO es esencial para ver la
+    // grilla: si su fetch falla (permisos, modo http sin clients.list, red) se
+    // degrada a [] y la agrupación cae al texto legacy. Mismo patrón que ProjectsPage.
+    const clientsList = Promise.resolve()
+      .then(() => api.clients.list())
+      .catch(() => [])
     Promise.all([
       api.projects.list(),
       api.timeEntries.list(),
       api.changeRequests.listByProject(),
+      clientsList,
     ])
-      .then(([projectRows, entryRows, crMap]) => {
+      .then(([projectRows, entryRows, crMap, clientRows]) => {
         if (cancelled) return
         setProjects(projectRows)
         setEntries(entryRows)
         setCrsByProject(crMap)
+        setClientMasters(clientRows)
         setStatus('ready')
       })
       .catch((error) => {
@@ -47,153 +76,147 @@ export function ClientSummaryPage() {
     }
   }, [reloadKey])
 
-  // Horas por proyecto, separadas por allocation. Consumed son SOLO las
-  // bill_to_client: el overage se muestra al lado y nunca se resta ni se suma
-  // acá — es justamente la plata que todavía no está decidida quién paga.
-  const hoursByProject = useMemo(() => {
-    const map = new Map()
-    for (const entry of entries) {
-      // Sólo aprobadas, igual que Billing y que getConsumedHoursByProject: una
-      // hora rechazada no se le imputa al presupuesto del cliente. Entries deja
-      // clasificar rechazadas, así que sin este filtro un triage masivo infla
-      // el consumido contra el budget.
-      if (entry.status !== 'Approved') continue
-      if (entry.allocation !== 'bill_to_client' && entry.allocation !== 'overage') continue
-      const key = entry.project ?? ''
-      const acc = map.get(key) ?? { consumed: 0, overage: 0 }
-      const hours = Number(entry.hours) || 0
-      if (entry.allocation === 'bill_to_client') acc.consumed += hours
-      else acc.overage += hours
-      map.set(key, acc)
-    }
-    return map
-  }, [entries])
+  // Cliente resuelto de cada proyecto (cadena manual→grupo→legacy; ver
+  // clientResolver, mismo resolver que Entries/Billing/Projects). Un proyecto cuyo
+  // grupo de Zoho es "Velociti" resuelve al cliente "GS3" aunque projects.client
+  // venga vacío. Se anota aparte para no pisar los campos crudos del sync.
+  const resolvedProjects = useMemo(() => {
+    const resolve = buildClientResolver(clientMasters)
+    return projects.map((p) => ({ ...p, resolvedClient: resolve(p).client ?? '' }))
+  }, [projects, clientMasters])
 
-  // Nombres de proyecto que realmente figuran en alguna entry — los únicos que
-  // Entries ofrece como opción de filtro.
-  const projectsWithEntries = useMemo(
-    () => new Set(entries.map((e) => e.project).filter(Boolean)),
-    [entries],
+  // Toda la agregación semanal (consumed/overage/cumulative/remaining por semana,
+  // budget del proyecto) vive en el motor puro clientSummaryWeekly. Agrupa por el
+  // cliente resuelto (resolvedClient).
+  const summary = useMemo(
+    () => buildClientSummaryWeekly({ projects: resolvedProjects, entries, crsByProject }),
+    [resolvedProjects, entries, crsByProject],
   )
 
-  // Nombre con el que se agrupa un proyecto. `customerName` es el nombre
-  // comercial que trae el sync de Zoho; `client` es lo que escribe el wizard al
-  // elegir un cliente de la tabla clients (guarda ademas client_id, pero NO
-  // customer_name). Sin este fallback, todo proyecto creado desde el wizard
-  // caia en "Without client" aunque tuviera su cliente bien asignado.
-  const groupNameOf = (project) => project.customerName || project.client || UNASSIGNED
-
-  const clientOptions = useMemo(() => sortedUnique(projects.map(groupNameOf)), [projects])
-
-  const groups = useMemo(() => {
-    const byClient = new Map()
-    for (const project of projects) {
-      const client = groupNameOf(project)
-      if (selectedClients.length && !selectedClients.includes(client)) continue
-      const hours = hoursByProject.get(project.projectName) ?? { consumed: 0, overage: 0 }
-      const budget = effectiveBudgetHours(
-        project.baseBudgetHours,
-        crsByProject.get(String(project.id)) ?? [],
-      )
-      const row = {
-        id: project.id,
-        projectName: project.projectName,
-        sowNumber: project.sowNumber,
-        zohoStatus: project.zohoStatus,
-        budget,
-        consumed: hours.consumed,
-        overage: hours.overage,
-      }
-      const group = byClient.get(client)
-      if (group) group.rows.push(row)
-      else byClient.set(client, { client, rows: [row] })
+  // Opciones de cada filtro, derivadas de la salida COMPLETA del motor (misma
+  // fuente que la grilla; no se duplica la regla de agrupación).
+  const clientOptions = useMemo(
+    () => sortedUnique(summary.clients.map((c) => c.client)),
+    [summary],
+  )
+  const allProjects = useMemo(() => summary.clients.flatMap((c) => c.projects), [summary])
+  const projectNumberOptions = useMemo(
+    () => sortedUnique(allProjects.map((p) => p.projectNumber)),
+    [allProjects],
+  )
+  const projectNameOptions = useMemo(
+    () => sortedUnique(allProjects.map((p) => p.projectName)),
+    [allProjects],
+  )
+  // El SOW del proyecto puede venir coma-separado (multi-stage); las opciones son
+  // los SOW individuales.
+  const sowOptions = useMemo(
+    () => sortedUnique(allProjects.flatMap((p) => p.sowNumbers ?? [])),
+    [allProjects],
+  )
+  // Semanas presentes en cualquier proyecto, rotuladas year-aware y ordenadas por
+  // su domingo. El value del filtro es el rótulo (único por semana física).
+  const weekOptions = useMemo(() => {
+    const byLabel = new Map()
+    for (const p of allProjects) {
+      for (const w of p.weeks) byLabel.set(weekLabel(w), w.weekStart)
     }
+    return [...byLabel.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([label]) => label)
+  }, [allProjects])
 
-    const list = [...byClient.values()].sort((a, b) => a.client.localeCompare(b.client, 'es'))
-    for (const group of list) {
-      group.rows.sort((a, b) => (a.projectName ?? '').localeCompare(b.projectName ?? '', 'es'))
-      // Nombres de proyecto del grupo que además aparecen en alguna entry: el
-      // dropdown de Project en Entries se arma con los nombres presentes en las
-      // entries, así que mandar uno sin horas deja un filtro puesto que no se
-      // puede destildar porque no figura en la lista — sólo "Clear" lo saca.
-      group.projectNames = [
-        ...new Set(group.rows.map((r) => r.projectName).filter((n) => n && projectsWithEntries.has(n))),
-      ]
-      group.consumed = group.rows.reduce((sum, r) => sum + r.consumed, 0)
-      group.overage = group.rows.reduce((sum, r) => sum + r.overage, 0)
-      // El budget del cliente suma sólo proyectos que tienen presupuesto
-      // cargado: contar null como 0 haría ver "consumido > presupuesto" en un
-      // proyecto al que simplemente nunca se le cargó el número.
-      group.budget = group.rows.reduce((sum, r) => sum + (r.budget ?? 0), 0)
-    }
-    return list
-  }, [projects, selectedClients, hoursByProject, crsByProject, projectsWithEntries])
-
-  const totals = useMemo(
-    () => ({
-      consumed: groups.reduce((sum, g) => sum + g.consumed, 0),
-      overage: groups.reduce((sum, g) => sum + g.overage, 0),
-      budget: groups.reduce((sum, g) => sum + g.budget, 0),
-    }),
-    [groups],
+  // Scope de PROYECTO (Client/Project#/Name/SOW), sin el filtro Week: es la base
+  // tanto de la tabla como de los gráficos. Lógica pura en clientSummaryFilter.
+  const projectScoped = useMemo(
+    () =>
+      filterClientSummary(summary.clients, {
+        clients: selectedClients,
+        projectNumbers: selectedProjectNumbers,
+        projectNames: selectedProjectNames,
+        sows: selectedSows,
+      }),
+    [summary, selectedClients, selectedProjectNumbers, selectedProjectNames, selectedSows],
   )
 
-  function toggleClient(value) {
-    setSelectedClients((prev) =>
-      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
-    )
+  // La tabla aplica además el filtro Week sobre el scope de proyecto (recorta
+  // filas-semana y descarta proyectos/clientes sin semana visible).
+  const clients = useMemo(
+    () => filterClientSummary(projectScoped, { weeks: selectedWeeks }),
+    [projectScoped, selectedWeeks],
+  )
+
+  // Totales de la TABLA (agregación pura, testeada en clientSummaryTotals): suman
+  // las SEMANAS VISIBLES, así cuadran con las celdas Consumed/Overage mostradas
+  // aunque el filtro Week haya recortado filas.
+  const clientTotals = useMemo(() => tableTotalsByClient(clients), [clients])
+  const totals = useMemo(() => portfolioTotals(clientTotals), [clientTotals])
+
+  // Totales de los GRÁFICOS: foto de estado de budget con horas ALL-TIME por
+  // proyecto sobre el scope de PROYECTO (NO se recortan por el filtro Week).
+  const chartTotalsValue = useMemo(() => chartTotals(projectScoped), [projectScoped])
+
+  function toggleIn(setter, value) {
+    setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]))
   }
 
-  // El drill-down filtra por NOMBRE DE PROYECTO, no por cliente, porque es la
-  // misma clave con la que se calculó el número clickeado (`hoursByProject` se
-  // agrupa por `entry.project`).
-  //
-  // Filtrar por cliente fallaba en las dos direcciones: de menos, porque un
-  // proyecto sin `projects.client` cargado aporta horas al total pero no tiene
-  // valor con el cual filtrarlas; y de más, porque dos grupos pueden compartir
-  // el mismo `client` de Zoho cuando difieren en `customerName`, y clickear
-  // cualquiera traía las horas de ambos.
-  //
-  // OJO, la grilla de destino NO es igual al número clickeado, y no puede serlo:
-  // Entries no filtra por status ni por allocation, así que muestra también las
-  // rechazadas y las de overage, que el consumido excluye. Es un "llevame a las
-  // horas de este proyecto", no una reconciliación. Tampoco distingue dos
-  // proyectos que se llamen igual — limitación de fondo: `hoursByProject` los
-  // mete en el mismo balde, así que la fila ya venía sumando las horas de los
-  // dos desde antes de este drill-down.
-  function goToEntries(projectNames) {
-    const params = new URLSearchParams()
-    for (const value of new Set((projectNames ?? []).filter(Boolean))) {
-      params.append('project', value)
-    }
-    // Sin filtro que mandar, navegar abriría Entries con TODA la cartera
-    // presentada como si fueran las horas de este cliente. Mejor no ofrecer el
-    // drill-down (abajo el link no se dibuja) que ofrecer uno que miente.
-    if (![...params.keys()].length) return
-    navigate(`/entries?${params.toString()}`)
+  const anyFilter = [
+    selectedClients,
+    selectedProjectNumbers,
+    selectedProjectNames,
+    selectedSows,
+    selectedWeeks,
+  ].some((a) => a.length > 0)
+
+  function clearAllFilters() {
+    setSelectedClients([])
+    setSelectedProjectNumbers([])
+    setSelectedProjectNames([])
+    setSelectedSows([])
+    setSelectedWeeks([])
   }
 
   function handleExport(format) {
     const cols = [
       { header: 'Client', key: 'client' },
-      { header: 'Project', key: 'project' },
+      { header: 'Project #', key: 'projectNumber' },
+      { header: 'Project', key: 'projectName' },
       { header: 'SOW', key: 'sow' },
+      { header: 'Week', key: 'week' },
       { header: 'Status', key: 'status' },
-      { header: 'Consumed', key: 'consumed' },
       { header: 'Budget', key: 'budget' },
+      { header: 'Consumed', key: 'consumed' },
+      { header: 'Cumulative', key: 'cumulative' },
+      { header: 'Remaining', key: 'remaining' },
       { header: 'Overage', key: 'overage' },
     ]
-    const rows = groups.flatMap((group) =>
-      group.rows.map((row) => ({
-        client: group.client,
-        project: row.projectName ?? '',
-        sow: row.sowNumber ?? '',
-        status: row.zohoStatus ?? '',
-        consumed: row.consumed,
-        budget: row.budget ?? '',
-        overage: row.overage,
-      })),
-    )
+    const rows = []
+    for (const group of clients) {
+      for (const project of group.projects) {
+        const base = {
+          client: group.client,
+          projectNumber: project.projectNumber ?? '',
+          projectName: project.projectName ?? '',
+          sow: project.sowNumber ?? '',
+          status: project.zohoStatus ?? '',
+        }
+        // Budget solo en la PRIMERA fila del proyecto: repetirlo por semana haría
+        // que sumar la columna Budget en una planilla infle el total × nº semanas.
+        if (project.weeks.length === 0) {
+          rows.push({ ...base, week: '', budget: num1(project.budget ?? ''), consumed: 0, cumulative: 0, remaining: num1(project.budget ?? ''), overage: 0 })
+          continue
+        }
+        project.weeks.forEach((week, i) => {
+          rows.push({
+            ...base,
+            week: weekLabel(week),
+            budget: i === 0 ? num1(project.budget ?? '') : '',
+            consumed: num1(week.consumed),
+            cumulative: num1(week.cumulative),
+            remaining: num1(week.remaining ?? ''),
+            overage: num1(week.overage),
+          })
+        })
+      }
+    }
     exportGrid({
       rows,
       columns: cols,
@@ -218,8 +241,8 @@ export function ClientSummaryPage() {
         </div>
         <h1 className="masthead__title">Client Summary</h1>
         <p className="masthead__sub">
-          Consumed counts bill-to-client hours only. Overage sits in its own column. It is never
-          netted against what the client agreed to pay.
+          Weekly view per project. Budget is the estimated hours (SOW plus approved change
+          requests); Consumed counts bill-to-client hours only, and Overage sits in its own column.
         </p>
       </motion.header>
 
@@ -246,13 +269,37 @@ export function ClientSummaryPage() {
                 label="Client"
                 options={clientOptions}
                 selected={selectedClients}
-                onToggle={toggleClient}
+                onToggle={(v) => toggleIn(setSelectedClients, v)}
               />
-              {selectedClients.length > 0 && (
+              <MultiSelectDropdown
+                label="Project #"
+                options={projectNumberOptions}
+                selected={selectedProjectNumbers}
+                onToggle={(v) => toggleIn(setSelectedProjectNumbers, v)}
+              />
+              <MultiSelectDropdown
+                label="Project"
+                options={projectNameOptions}
+                selected={selectedProjectNames}
+                onToggle={(v) => toggleIn(setSelectedProjectNames, v)}
+              />
+              <MultiSelectDropdown
+                label="SOW"
+                options={sowOptions}
+                selected={selectedSows}
+                onToggle={(v) => toggleIn(setSelectedSows, v)}
+              />
+              <MultiSelectDropdown
+                label="Week"
+                options={weekOptions}
+                selected={selectedWeeks}
+                onToggle={(v) => toggleIn(setSelectedWeeks, v)}
+              />
+              {anyFilter && (
                 <button
                   type="button"
                   className="btn btn--ghost filterbar__clear"
-                  onClick={() => setSelectedClients([])}
+                  onClick={clearAllFilters}
                 >
                   Clear
                 </button>
@@ -262,104 +309,91 @@ export function ClientSummaryPage() {
 
           <div className="toolbar">
             <span className="toolbar__count">
-              {groups.length} {groups.length === 1 ? 'client' : 'clients'}
+              {clients.length} {clients.length === 1 ? 'client' : 'clients'}
             </span>
-            {groups.length > 0 && <ExportDropdown onExport={handleExport} />}
+            {clients.length > 0 && <ExportDropdown onExport={handleExport} />}
           </div>
 
-          {groups.length === 0 ? (
+          {clients.length === 0 ? (
             <div className="empty">No projects to summarise.</div>
           ) : (
             <div className="table-wrap table-wrap--scroll">
               <table className="table proj-table">
                 <thead>
                   <tr>
-                    <th scope="col">Client / Project</th>
+                    <th scope="col">Client</th>
+                    <th scope="col">Project #</th>
+                    <th scope="col">Project</th>
+                    <th scope="col">SOW</th>
+                    <th scope="col">Week</th>
                     <th scope="col">Status</th>
-                    <th scope="col" className="col-num">Consumed</th>
                     <th scope="col" className="col-num">Budget</th>
+                    <th scope="col" className="col-num">Consumed</th>
+                    <th scope="col" className="col-num">Cumulative</th>
+                    <th scope="col" className="col-num">Remaining</th>
                     <th scope="col" className="col-num">Overage</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {groups.map((group) => (
-                    <Fragment key={group.client}>
-                      <tr className="summary-row--client">
-                        <th scope="rowgroup">
-                          {group.projectNames.length ? (
-                            <button
-                              type="button"
-                              className="linklike"
-                              onClick={() => goToEntries(group.projectNames)}
-                            >
-                              {group.client}
-                            </button>
-                          ) : (
-                            // Ningún proyecto del grupo tiene nombre: no hay
-                            // filtro posible, así que tampoco link.
-                            group.client
-                          )}
-                        </th>
-                        <td />
-                        <td className="col-num cell-mono">{formatHours(group.consumed)}</td>
-                        <td className="col-num cell-mono">
-                          {group.budget ? formatHours(group.budget) : '—'}
-                        </td>
-                        <td className="col-num cell-mono">
-                          {group.overage ? formatHours(group.overage) : '0.0'}
-                        </td>
-                      </tr>
-                      {group.rows.map((row) => (
-                        <tr key={row.id}>
-                          <td style={{ paddingLeft: 26 }}>
-                            {/* Mismo criterio que el link del grupo: un proyecto
-                                sin entries deja en Entries un filtro que no
-                                figura en el dropdown y sólo sale con "Clear". */}
-                            {projectsWithEntries.has(row.projectName) ? (
-                              <button
-                                type="button"
-                                className="linklike"
-                                onClick={() => goToEntries([row.projectName])}
-                              >
-                                {row.projectName || '—'}
-                                {row.sowNumber && (
-                                  <span className="cell-soft"> · {row.sowNumber}</span>
-                                )}
-                              </button>
-                            ) : (
-                              <>
-                                {row.projectName || '—'}
-                                {row.sowNumber && (
-                                  <span className="cell-soft"> · {row.sowNumber}</span>
-                                )}
-                              </>
-                            )}
-                          </td>
-                          <td className="cell-soft">{row.zohoStatus || '—'}</td>
-                          <td className="col-num cell-mono">{formatHours(row.consumed)}</td>
-                          <td className="col-num cell-mono">
-                            {row.budget == null ? '—' : formatHours(row.budget)}
-                          </td>
-                          <td className="col-num cell-mono">
-                            {row.overage ? formatHours(row.overage) : '0.0'}
-                          </td>
+                  {clients.map((group) => {
+                    const ct = clientTotals.get(group.client)
+                    return (
+                      <Fragment key={group.client}>
+                        <tr className="summary-row--client">
+                          <th scope="rowgroup">{group.client}</th>
+                          <td colSpan={5} />
+                          <td className="col-num cell-mono">{ct.hasBudget ? formatHours(ct.budget) : '—'}</td>
+                          <td className="col-num cell-mono">{formatHours(ct.consumed)}</td>
+                          <td className="col-num" />
+                          <td className="col-num" />
+                          <td className="col-num cell-mono">{formatHours(ct.overage)}</td>
                         </tr>
-                      ))}
-                    </Fragment>
-                  ))}
+                        {group.projects.map((project) => {
+                          // Un proyecto sin semanas con horas igual aparece, con una
+                          // fila de placeholders (Week '—', consumido 0).
+                          const weekRows = project.weeks.length ? project.weeks : [null]
+                          return weekRows.map((week, wi) => (
+                            <tr key={`${project.id}-${week ? week.weekStart : 'none'}`}>
+                              <td />
+                              {/* La identidad del proyecto se repite en cada fila-semana
+                                  (fiel al ejemplo del doc); el Budget, en cambio, va solo
+                                  en la 1ª fila (igual que el export) para que sumar la
+                                  columna no lo cuente ×nº-semanas. */}
+                              <td className="cell-mono">{project.projectNumber || '—'}</td>
+                              <td>{project.projectName || '—'}</td>
+                              <td className="cell-soft">{project.sowNumber || '—'}</td>
+                              <td className="cell-mono">{week ? weekLabel(week) : '—'}</td>
+                              <td className="cell-soft">{project.zohoStatus || '—'}</td>
+                              <td className="col-num cell-mono">{wi === 0 ? hoursOrDash(project.budget) : ''}</td>
+                              <td className="col-num cell-mono">{formatHours(week ? week.consumed : 0)}</td>
+                              <td className="col-num cell-mono">{formatHours(week ? week.cumulative : 0)}</td>
+                              <td className="col-num cell-mono">
+                                {week ? hoursOrDash(week.remaining) : hoursOrDash(project.budget)}
+                              </td>
+                              <td className="col-num cell-mono">{formatHours(week ? week.overage : 0)}</td>
+                            </tr>
+                          ))
+                        })}
+                      </Fragment>
+                    )
+                  })}
                   <tr className="summary-row--total">
                     <th scope="row">Total portfolio</th>
-                    <td />
+                    <td colSpan={5} />
+                    <td className="col-num cell-mono">{totals.hasBudget ? formatHours(totals.budget) : '—'}</td>
                     <td className="col-num cell-mono">{formatHours(totals.consumed)}</td>
-                    <td className="col-num cell-mono">
-                      {totals.budget ? formatHours(totals.budget) : '—'}
-                    </td>
+                    <td className="col-num" />
+                    <td className="col-num" />
                     <td className="col-num cell-mono">{formatHours(totals.overage)}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           )}
+
+          {/* Los gráficos dependen del scope de PROYECTO, no del filtro Week (que
+              solo achica la tabla): se muestran aunque el Week vacíe la grilla. */}
+          {projectScoped.length > 0 && <ClientSummaryCharts totals={chartTotalsValue} />}
         </motion.div>
       )}
     </>
