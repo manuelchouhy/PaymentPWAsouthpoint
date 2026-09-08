@@ -30,8 +30,11 @@ export function ClientSummaryCharts({ totals }) {
   const overage = round1(totals.overage)
   const remaining = round1(totals.remaining)
 
+  // La barra Budget solo si hay budget cargado: sin budget, una barra en 0 leería
+  // como "budget cero" en vez de "sin budget" (igual criterio que el donut, que
+  // suelta la porción Remaining en ese caso).
   const barData = [
-    { name: 'Budget', value: budget, color: COLOR.budget },
+    ...(totals.hasBudget ? [{ name: 'Budget', value: budget, color: COLOR.budget }] : []),
     { name: 'Consumed', value: consumed, color: COLOR.consumed },
     { name: 'Overage', value: overage, color: COLOR.overage },
   ]

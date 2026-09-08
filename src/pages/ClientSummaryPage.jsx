@@ -371,7 +371,9 @@ export function ClientSummaryPage() {
             </div>
           )}
 
-          {clients.length > 0 && <ClientSummaryCharts totals={chartTotalsValue} />}
+          {/* Los gráficos dependen del scope de PROYECTO, no del filtro Week (que
+              solo achica la tabla): se muestran aunque el Week vacíe la grilla. */}
+          {projectScoped.length > 0 && <ClientSummaryCharts totals={chartTotalsValue} />}
         </motion.div>
       )}
     </>
