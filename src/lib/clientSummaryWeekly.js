@@ -76,8 +76,12 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
     )
 
     // Semanas del proyecto, en orden cronológico, con cumulative/remaining.
-    const weekMap = byProjectWeek.get(project.projectName)
-    const weeks = weekMap ? [...weekMap.values()] : []
+    // El lookup normaliza el nombre igual que el bucket (`?? ''`) para que
+    // coincidan. Se CLONA cada objeto de semana: dos proyectos con el mismo
+    // projectName comparten el mismo bucket, y sin el clon la mutación de
+    // cumulative/remaining de uno pisaría la del otro (apuntan al mismo objeto).
+    const weekMap = byProjectWeek.get(project.projectName ?? '')
+    const weeks = weekMap ? [...weekMap.values()].map((w) => ({ ...w })) : []
     weeks.sort((a, b) => a.weekStart.localeCompare(b.weekStart))
     let cumulative = 0
     for (const w of weeks) {

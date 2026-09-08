@@ -185,6 +185,23 @@ test('agrupa por customerName, cae a client y luego a "Without client"', () => {
   )
 })
 
+test('dos proyectos con el mismo projectName no se contaminan cumulative/remaining', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [
+      project({ id: 1, projectName: 'Dup', customerName: 'HSS', baseBudgetHours: 120 }),
+      project({ id: 2, projectName: 'Dup', customerName: 'HSS', baseBudgetHours: 200 }),
+    ],
+    entries: [entry({ project: 'Dup', hours: 30 })],
+    crsByProject: new Map(),
+  })
+  const projs = clients[0].projects
+  assert.equal(projs.length, 2)
+  const byId = new Map(projs.map((p) => [p.id, p]))
+  // Cada proyecto tiene su propio remaining contra SU budget, sin pisarse.
+  assert.equal(byId.get(1).weeks[0].remaining, 90) // 120 - 30
+  assert.equal(byId.get(2).weeks[0].remaining, 170) // 200 - 30
+})
+
 test('un proyecto sin entries aparece igual, con weeks vacías y consumed 0', () => {
   const { clients } = buildClientSummaryWeekly({
     projects: [project({ baseBudgetHours: 120 })],
