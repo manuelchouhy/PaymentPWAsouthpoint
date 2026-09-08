@@ -5,15 +5,11 @@ import { AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
-import { buildClientSummaryWeekly } from '../lib/clientSummaryWeekly'
+import { buildClientSummaryWeekly, weekLabel } from '../lib/clientSummaryWeekly'
+import { filterClientSummary } from '../lib/clientSummaryFilter'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { sortedUnique } from '../lib/useEntryFilters'
-
-/** Rótulo de semana year-aware, ej. "WEEK 35 · 2026". */
-function weekLabel(week) {
-  return `WEEK ${week.sundayWeek} · ${week.year}`
-}
 
 /** '—' para nulos; si no, horas formateadas. */
 function hoursOrDash(value) {
@@ -83,11 +79,11 @@ export function ClientSummaryPage() {
   )
   const allProjects = useMemo(() => summary.clients.flatMap((c) => c.projects), [summary])
   const projectNumberOptions = useMemo(
-    () => sortedUnique(allProjects.map((p) => p.projectNumber).filter(Boolean)),
+    () => sortedUnique(allProjects.map((p) => p.projectNumber)),
     [allProjects],
   )
   const projectNameOptions = useMemo(
-    () => sortedUnique(allProjects.map((p) => p.projectName).filter(Boolean)),
+    () => sortedUnique(allProjects.map((p) => p.projectName)),
     [allProjects],
   )
   // El SOW del proyecto puede venir coma-separado (multi-stage); las opciones son
@@ -106,46 +102,34 @@ export function ClientSummaryPage() {
     return [...byLabel.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([label]) => label)
   }, [allProjects])
 
-  // Filtro combinado: AND entre categorías, OR dentro de cada una. El orden
-  // (numérico, en ambos niveles) ya lo resuelve el motor, así que acá solo se
-  // filtra. El filtro Week actúa a nivel de fila-semana: recorta las semanas
-  // visibles y descarta el proyecto (y el cliente) que quede sin ninguna.
-  const clients = useMemo(() => {
-    const weekActive = selectedWeeks.length > 0
-    const sowMatch = (p) => {
-      if (!selectedSows.length) return true
-      const own = p.sowNumber ? p.sowNumber.split(', ') : []
-      return own.some((s) => selectedSows.includes(s))
-    }
-    const result = []
-    for (const group of summary.clients) {
-      if (selectedClients.length && !selectedClients.includes(group.client)) continue
-      const projects = []
-      for (const p of group.projects) {
-        if (selectedProjectNumbers.length && !selectedProjectNumbers.includes(p.projectNumber)) continue
-        if (selectedProjectNames.length && !selectedProjectNames.includes(p.projectName)) continue
-        if (!sowMatch(p)) continue
-        const weeks = weekActive ? p.weeks.filter((w) => selectedWeeks.includes(weekLabel(w))) : p.weeks
-        if (weekActive && weeks.length === 0) continue
-        projects.push(weeks === p.weeks ? p : { ...p, weeks })
-      }
-      if (projects.length) result.push({ ...group, projects })
-    }
-    return result
-  }, [
-    summary,
-    selectedClients,
-    selectedProjectNumbers,
-    selectedProjectNames,
-    selectedSows,
-    selectedWeeks,
-  ])
+  // Filtro combinado (AND entre categorías, OR dentro): lógica pura en
+  // clientSummaryFilter (testeada aparte). El orden ya lo resuelve el motor.
+  const clients = useMemo(
+    () =>
+      filterClientSummary(summary.clients, {
+        clients: selectedClients,
+        projectNumbers: selectedProjectNumbers,
+        projectNames: selectedProjectNames,
+        sows: selectedSows,
+        weeks: selectedWeeks,
+      }),
+    [
+      summary,
+      selectedClients,
+      selectedProjectNumbers,
+      selectedProjectNames,
+      selectedSows,
+      selectedWeeks,
+    ],
+  )
 
-  // Totales de cliente (fila-cabecera) y de portfolio FILTRADO (fila total): se
-  // recomputan acá a partir de las SEMANAS VISIBLES (no de project.consumed) para
-  // que reconcilien con las filas mostradas incluso con el filtro Week activo. El
-  // motor solo expone el total sin filtrar (summary.totals, para los gráficos) y
-  // no totales por-cliente. hasBudget distingue "budget real 0" de "sin budget".
+  // Totales de cliente (fila-cabecera) y de portfolio FILTRADO (fila total). El
+  // Consumed/Overage se suma sobre las SEMANAS VISIBLES, así que Consumed cuadra
+  // con la suma de las celdas Consumed mostradas (también con el filtro Week).
+  // OJO: Cumulative y Remaining de cada fila son acumulados ALL-TIME (por
+  // definición del motor) y NO se recortan por el filtro Week — miden algo
+  // distinto que el Consumed del período. hasBudget distingue "budget real 0" de
+  // "ningún proyecto con budget". summary.totals (sin filtrar) lo usan los gráficos.
   const clientTotals = useMemo(() => {
     const map = new Map()
     for (const group of clients) {
@@ -180,12 +164,13 @@ export function ClientSummaryPage() {
     setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]))
   }
 
-  const anyFilter =
-    selectedClients.length ||
-    selectedProjectNumbers.length ||
-    selectedProjectNames.length ||
-    selectedSows.length ||
-    selectedWeeks.length
+  const anyFilter = [
+    selectedClients,
+    selectedProjectNumbers,
+    selectedProjectNames,
+    selectedSows,
+    selectedWeeks,
+  ].some((a) => a.length > 0)
 
   function clearAllFilters() {
     setSelectedClients([])
@@ -316,7 +301,7 @@ export function ClientSummaryPage() {
                 selected={selectedWeeks}
                 onToggle={(v) => toggleIn(setSelectedWeeks, v)}
               />
-              {anyFilter > 0 && (
+              {anyFilter && (
                 <button
                   type="button"
                   className="btn btn--ghost filterbar__clear"

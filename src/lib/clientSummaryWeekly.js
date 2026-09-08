@@ -22,6 +22,11 @@ import { effectiveBudgetHours } from './effectiveBudget.js'
 
 const UNASSIGNED = 'Without client'
 
+/** Rótulo de semana year-aware, ej. "WEEK 35 · 2026". Único por semana física. */
+export function weekLabel(week) {
+  return `WEEK ${week.sundayWeek} · ${week.year}`
+}
+
 /** Nombre de cliente con el que se agrupa un proyecto (mismo criterio que la página). */
 function groupNameOf(project) {
   return project.customerName || project.client || UNASSIGNED
