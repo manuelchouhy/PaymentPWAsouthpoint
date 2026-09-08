@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, BellOff, Download, Pencil, RefreshCw, Star, X } from 'lucide-react'
+import { ArrowRight, BellOff, Pencil, RefreshCw, Star, X } from 'lucide-react'
 import { SupplierStatusBadge } from './SupplierStatusBadge'
 import { displaySupplierStatus } from '../lib/supplierContractsData'
 import { daysRemaining } from '../lib/projectsData'
@@ -9,8 +9,9 @@ import { formatDate, formatDateTime } from '../lib/format'
 import { useScrollLock } from '../lib/useScrollLock'
 
 const FIELD_LABELS = {
-  supplierName: 'Supplier',
+  supplierName: 'Contractor Name',
   contractNumber: 'Contract #',
+  role: 'Role',
   startDate: 'Start Date',
   expirationDate: 'Expiration Date',
   renewalDate: 'Renewal Date',
@@ -47,31 +48,12 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
   const [renewals, setRenewals] = useState([])
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
-  const [pdfBusy, setPdfBusy] = useState(false)
-  const [pdfMsg, setPdfMsg] = useState('')
   const drawerRef = useRef(null)
 
   const days = daysRemaining(contract.expirationDate)
   const status = displaySupplierStatus(contract)
   const isExpired = status === 'Expired'
   const isRenewing = status === 'Renewal in Progress'
-  const isDemoPdf = typeof contract.pdfUrl === 'string' && contract.pdfUrl.startsWith('demo://')
-
-  async function openPdf() {
-    setPdfMsg('')
-    if (isDemoPdf) {
-      setPdfMsg('Demo mode: the PDF cannot be downloaded (only the filename was saved).')
-      return
-    }
-    setPdfBusy(true)
-    try {
-      const url = await api.supplierContracts.getPdfUrl(contract.pdfUrl)
-      if (url) window.open(url, '_blank', 'noopener')
-      else setPdfMsg('Could not generate the download link.')
-    } finally {
-      setPdfBusy(false)
-    }
-  }
 
   useScrollLock()
 
@@ -109,6 +91,7 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
   const facts = [
     ['Contract #', contract.contractNumber],
     ['Start Date', formatDate(contract.startDate)],
+    ['Role', contract.role],
     ['Expiration Date', formatDate(contract.expirationDate)],
     ['Renewal Date', formatDate(contract.renewalDate)],
     ['Payment Terms', contract.paymentTerms],
@@ -181,19 +164,6 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
         </div>
 
         <div className="drawer__section">
-          <span className="drawer__section-label">Contract PDF</span>
-          {contract.pdfUrl ? (
-            <button type="button" className="sc-pdf-link" onClick={openPdf} disabled={pdfBusy}>
-              {pdfBusy ? <span className="spinner" aria-hidden="true" /> : <Download size={15} aria-hidden="true" />}
-              {pdfBusy ? 'Generating link…' : 'Download PDF'}
-            </button>
-          ) : (
-            <p className="drawer__empty">No PDF uploaded. Add one via Edit.</p>
-          )}
-          {pdfMsg && <p className="drawer__empty">{pdfMsg}</p>}
-        </div>
-
-        <div className="drawer__section">
           <span className="drawer__section-label">Renewal History</span>
           {loading ? (
             <p className="drawer__empty">Loading…</p>
@@ -208,7 +178,6 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
                   </span>
                   <span className="drawer__history-meta">
                     {formatDate(r.startDate)} → {formatDate(r.expirationDate)}
-                    {r.pdfUrl ? ' · PDF available' : ''}
                   </span>
                 </li>
               ))}

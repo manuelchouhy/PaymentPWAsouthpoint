@@ -13,9 +13,9 @@ const REQUIRED = ['contractNumber', 'startDate', 'expirationDate', 'renewalDate'
 
 /**
  * Modal de renovación de contrato (FR-15). Crea una nueva versión enlazada al
- * contrato actual (parent_contract_id) y archiva el viejo. El PDF es obligatorio.
+ * contrato actual (parent_contract_id) y archiva el viejo. Sin adjuntar archivos.
  *
- * @param {{ contract: object, onClose: () => void, onSubmit: (payload, pdfFile) => Promise<void> }} props
+ * @param {{ contract: object, onClose: () => void, onSubmit: (payload) => Promise<void> }} props
  */
 export function RenewContractModal({ contract, onClose, onSubmit }) {
   const [form, setForm] = useState(() => ({
@@ -24,8 +24,6 @@ export function RenewContractModal({ contract, onClose, onSubmit }) {
     expirationDate: '',
     renewalDate: '',
   }))
-  const [pdfFile, setPdfFile] = useState(null)
-  const [pdfError, setPdfError] = useState('')
   const [touched, setTouched] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -46,27 +44,8 @@ export function RenewContractModal({ contract, onClose, onSubmit }) {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
-  function onPickPdf(file) {
-    setPdfError('')
-    if (!file) {
-      setPdfFile(null)
-      return
-    }
-    if (file.type !== 'application/pdf') {
-      setPdfError('The file must be a PDF.')
-      setPdfFile(null)
-      return
-    }
-    if (file.size > 20 * 1024 * 1024) {
-      setPdfError('The PDF cannot exceed 20 MB.')
-      setPdfFile(null)
-      return
-    }
-    setPdfFile(file)
-  }
-
   const missing = REQUIRED.filter((k) => !String(form[k] ?? '').trim())
-  const valid = missing.length === 0 && Boolean(pdfFile)
+  const valid = missing.length === 0
 
   function set(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -76,20 +55,16 @@ export function RenewContractModal({ contract, onClose, onSubmit }) {
   async function handleSubmit(event) {
     event.preventDefault()
     setTouched(true)
-    if (!pdfFile) setPdfError('A PDF is required for the renewal.')
     if (!valid || submitting) return
     setSubmitError('')
     setSubmitting(true)
     try {
-      await onSubmit(
-        {
-          contractNumber: form.contractNumber.trim(),
-          startDate: form.startDate,
-          expirationDate: form.expirationDate,
-          renewalDate: form.renewalDate,
-        },
-        pdfFile,
-      )
+      await onSubmit({
+        contractNumber: form.contractNumber.trim(),
+        startDate: form.startDate,
+        expirationDate: form.expirationDate,
+        renewalDate: form.renewalDate,
+      })
     } catch (error) {
       setSubmitting(false)
       if (error?.code === 'duplicate') {
@@ -164,22 +139,6 @@ export function RenewContractModal({ contract, onClose, onSubmit }) {
                 </div>
               )
             })}
-          </div>
-
-          <div className="field">
-            <label className="field__label" htmlFor="renew-pdf">
-              New Contract PDF
-              <span className="field__req">required</span>
-            </label>
-            <input
-              id="renew-pdf"
-              type="file"
-              accept="application/pdf,.pdf"
-              className="field__input field__input--file"
-              onChange={(e) => onPickPdf(e.target.files?.[0] ?? null)}
-            />
-            {pdfFile && <span className="field__filename">{pdfFile.name}</span>}
-            {pdfError && <span className="field__error">{pdfError}</span>}
           </div>
 
           {submitError && (

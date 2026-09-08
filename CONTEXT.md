@@ -19,9 +19,18 @@ Estado de una factura dentro de su ciclo de vida: **Pending → Invoiced →
 Collected → Paid**. Aplica a una factura ya creada, no a horas sueltas.
 _Avoid_: usar "Pending" para referirse a horas "to bill" (son cosas distintas).
 
+**Budget**:
+Horas **estimadas** de un proyecto: el estimado de la SOW más los change requests
+aprobados. Es un total del proyecto (no un valor por semana) y **crece cuando se
+aprueba un change request**. En código lo calcula `effectiveBudgetHours(baseBudget,
+changeRequests)`.
+_Avoid_: tratar el Budget como una cuota semanal.
+
 **Overage**:
 Horas por encima de lo contratado (allocation `overage`); se pagan al contractor,
-no se facturan al cliente.
+no se facturan al cliente. Nace cuando el **consumido acumulado** (horas
+`bill_to_client` aprobadas) supera el **Budget** y ese excedente NO se absorbe con
+un change request: entonces se clasifica como `overage` en vez de subir el Budget.
 
 **Week**:
 La semana física de facturación, **domingo → sábado**, identificada por el domingo
@@ -39,6 +48,19 @@ Dos filtros con el mismo rótulo "Week" pero distinta semántica, a propósito:
 - **Filtro numérico "W35"** (Payments): atajo **year-blind** sobre el número de
   `sundayWeek` — W35/2025 y W35/2026 caen juntas. Limitación conocida y aceptada
   en Payments; no es el comportamiento del navegador.
+
+### Supplier Contracts
+
+**Contractor / Supplier**:
+El **proveedor** de horas (un contractor). El módulo se llama "Supplier Contracts"
+y la columna DB es `supplier_name`, pero el **rótulo visible es "Contractor Name"**
+(alineado con el spec del negocio). Son el mismo concepto: en UI decimos
+"Contractor", en el modelo de datos quedó "supplier".
+
+**Rol** (`role`):
+Rol del contractor en el contrato (texto libre, ej. "Developer", "QA"). Campo del
+contrato, no un catálogo cerrado. En la UI el label visible es **"Role"** (inglés,
+como el resto de la interfaz); la columna DB es `role`.
 
 ### Diseño
 
