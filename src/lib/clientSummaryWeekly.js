@@ -115,13 +115,13 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
     else byClient.set(clientName, { client: clientName, projects: [row] })
   }
 
-  const clients = [...byClient.values()].sort((a, b) =>
-    a.client.localeCompare(b.client, 'es'),
-  )
+  // Orden numérico (mismo collator que sortedUnique, que arma el dropdown de la
+  // página) para que "Client 2" vaya antes que "Client 10" y la grilla coincida
+  // con el filtro. Se ordena en los dos niveles: clientes y proyectos.
+  const coll = (a, b) => (a ?? '').localeCompare(b ?? '', 'es', { numeric: true })
+  const clients = [...byClient.values()].sort((a, b) => coll(a.client, b.client))
   for (const group of clients) {
-    group.projects.sort((a, b) =>
-      (a.projectName ?? '').localeCompare(b.projectName ?? '', 'es'),
-    )
+    group.projects.sort((a, b) => coll(a.projectName, b.projectName))
   }
 
   // Totales = suma de las filas mostradas (para que reconcilien con la grilla).

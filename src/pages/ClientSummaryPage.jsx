@@ -20,6 +20,16 @@ function hoursOrDash(value) {
   return value == null ? '—' : formatHours(value)
 }
 
+/**
+ * Redondea a 1 decimal para el export, manteniendo el tipo numérico (para que la
+ * planilla pueda sumar) y evitando los artefactos de float (10.1000000001) que
+ * aparecerían al exportar la suma acumulada cruda. Los no-números (celda vacía)
+ * pasan tal cual. Coincide con lo que muestra formatHours en la grilla.
+ */
+function num1(value) {
+  return typeof value === 'number' ? Math.round(value * 10) / 10 : value
+}
+
 export function ClientSummaryPage() {
   const { user } = useOutletContext()
   const [projects, setProjects] = useState([])
@@ -68,18 +78,11 @@ export function ClientSummaryPage() {
     [summary],
   )
 
-  // El filtro de Cliente se aplica sobre la salida del motor. Se reordena con el
-  // mismo collator numérico que el dropdown (sortedUnique), en los DOS niveles
-  // (clientes y proyectos dentro de cada cliente), para que grilla y filtro
-  // presenten todo en el mismo orden.
+  // El filtro de Cliente se aplica sobre la salida del motor. El orden (numérico,
+  // en ambos niveles) ya lo resuelve el motor, así que acá solo se filtra.
   const clients = useMemo(() => {
-    const coll = (a, b) => (a ?? '').localeCompare(b ?? '', 'es', { numeric: true })
-    const list = selectedClients.length
-      ? summary.clients.filter((c) => selectedClients.includes(c.client))
-      : summary.clients
-    return [...list]
-      .map((g) => ({ ...g, projects: [...g.projects].sort((a, b) => coll(a.projectName, b.projectName)) }))
-      .sort((a, b) => coll(a.client, b.client))
+    if (!selectedClients.length) return summary.clients
+    return summary.clients.filter((c) => selectedClients.includes(c.client))
   }, [summary, selectedClients])
 
   // Totales de cliente (fila-cabecera) y de portfolio FILTRADO (fila total): se
@@ -147,18 +150,18 @@ export function ClientSummaryPage() {
         // Budget solo en la PRIMERA fila del proyecto: repetirlo por semana haría
         // que sumar la columna Budget en una planilla infle el total × nº semanas.
         if (project.weeks.length === 0) {
-          rows.push({ ...base, week: '', budget: project.budget ?? '', consumed: 0, cumulative: 0, remaining: project.budget ?? '', overage: 0 })
+          rows.push({ ...base, week: '', budget: num1(project.budget ?? ''), consumed: 0, cumulative: 0, remaining: num1(project.budget ?? ''), overage: 0 })
           continue
         }
         project.weeks.forEach((week, i) => {
           rows.push({
             ...base,
             week: weekLabel(week),
-            budget: i === 0 ? (project.budget ?? '') : '',
-            consumed: week.consumed,
-            cumulative: week.cumulative,
-            remaining: week.remaining ?? '',
-            overage: week.overage,
+            budget: i === 0 ? num1(project.budget ?? '') : '',
+            consumed: num1(week.consumed),
+            cumulative: num1(week.cumulative),
+            remaining: num1(week.remaining ?? ''),
+            overage: num1(week.overage),
           })
         })
       }
