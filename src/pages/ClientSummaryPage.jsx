@@ -10,16 +10,9 @@ import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { sortedUnique } from '../lib/useEntryFilters'
 
-const UNASSIGNED = 'Without client'
-
 /** Rótulo de semana year-aware, ej. "WEEK 35 · 2026". */
 function weekLabel(week) {
   return `WEEK ${week.sundayWeek} · ${week.year}`
-}
-
-/** Nombre de cliente con el que se agrupa un proyecto (para las opciones del filtro). */
-function groupNameOf(project) {
-  return project.customerName || project.client || UNASSIGNED
 }
 
 /** '—' para nulos; si no, horas formateadas. */
@@ -61,8 +54,6 @@ export function ClientSummaryPage() {
     }
   }, [reloadKey])
 
-  const clientOptions = useMemo(() => sortedUnique(projects.map(groupNameOf)), [projects])
-
   // Toda la agregación semanal (consumed/overage/cumulative/remaining por semana,
   // budget del proyecto, totales) vive en el motor puro clientSummaryWeekly.
   const summary = useMemo(
@@ -70,20 +61,35 @@ export function ClientSummaryPage() {
     [projects, entries, crsByProject],
   )
 
-  // El filtro de Cliente se aplica sobre la salida del motor.
+  // Opciones del filtro Cliente = los clientes que arma el motor (misma fuente
+  // que la grilla; no se duplica la regla de agrupación).
+  const clientOptions = useMemo(
+    () => sortedUnique(summary.clients.map((c) => c.client)),
+    [summary],
+  )
+
+  // El filtro de Cliente se aplica sobre la salida del motor. Se reordena con el
+  // mismo collator numérico que el dropdown (sortedUnique) para que la grilla y
+  // el filtro presenten los clientes en el mismo orden.
   const clients = useMemo(() => {
-    if (!selectedClients.length) return summary.clients
-    return summary.clients.filter((c) => selectedClients.includes(c.client))
+    const list = selectedClients.length
+      ? summary.clients.filter((c) => selectedClients.includes(c.client))
+      : summary.clients
+    return [...list].sort((a, b) => a.client.localeCompare(b.client, 'es', { numeric: true }))
   }, [summary, selectedClients])
 
   // Totales de cliente (para la fila-cabecera) y de portfolio filtrado (para la
   // fila total): suma de las filas visibles, igual criterio que el motor.
+  // hasBudget distingue "budget real 0" de "ningún proyecto tiene budget cargado".
   const clientTotals = useMemo(() => {
     const map = new Map()
     for (const group of clients) {
-      const t = { budget: 0, consumed: 0, overage: 0 }
+      const t = { budget: 0, consumed: 0, overage: 0, hasBudget: false }
       for (const p of group.projects) {
-        if (p.budget != null) t.budget += p.budget
+        if (p.budget != null) {
+          t.budget += p.budget
+          t.hasBudget = true
+        }
         t.consumed += p.consumed
         t.overage += p.overage
       }
@@ -93,11 +99,12 @@ export function ClientSummaryPage() {
   }, [clients])
 
   const totals = useMemo(() => {
-    const t = { budget: 0, consumed: 0, overage: 0 }
+    const t = { budget: 0, consumed: 0, overage: 0, hasBudget: false }
     for (const g of clientTotals.values()) {
       t.budget += g.budget
       t.consumed += g.consumed
       t.overage += g.overage
+      if (g.hasBudget) t.hasBudget = true
     }
     return t
   }, [clientTotals])
@@ -131,22 +138,24 @@ export function ClientSummaryPage() {
           projectName: project.projectName ?? '',
           sow: project.sowNumber ?? '',
           status: project.zohoStatus ?? '',
-          budget: project.budget ?? '',
         }
+        // Budget solo en la PRIMERA fila del proyecto: repetirlo por semana haría
+        // que sumar la columna Budget en una planilla infle el total × nº semanas.
         if (project.weeks.length === 0) {
-          rows.push({ ...base, week: '', consumed: 0, cumulative: 0, remaining: project.budget ?? '', overage: 0 })
+          rows.push({ ...base, week: '', budget: project.budget ?? '', consumed: 0, cumulative: 0, remaining: project.budget ?? '', overage: 0 })
           continue
         }
-        for (const week of project.weeks) {
+        project.weeks.forEach((week, i) => {
           rows.push({
             ...base,
             week: weekLabel(week),
+            budget: i === 0 ? (project.budget ?? '') : '',
             consumed: week.consumed,
             cumulative: week.cumulative,
             remaining: week.remaining ?? '',
             overage: week.overage,
           })
-        }
+        })
       }
     }
     exportGrid({
@@ -250,19 +259,17 @@ export function ClientSummaryPage() {
                         <tr className="summary-row--client">
                           <th scope="rowgroup">{group.client}</th>
                           <td colSpan={5} />
-                          <td className="col-num cell-mono">{hoursOrDash(ct.budget || null)}</td>
+                          <td className="col-num cell-mono">{ct.hasBudget ? formatHours(ct.budget) : '—'}</td>
                           <td className="col-num cell-mono">{formatHours(ct.consumed)}</td>
                           <td className="col-num" />
                           <td className="col-num" />
-                          <td className="col-num cell-mono">{ct.overage ? formatHours(ct.overage) : '0.0'}</td>
+                          <td className="col-num cell-mono">{formatHours(ct.overage)}</td>
                         </tr>
                         {group.projects.map((project) => {
                           // Un proyecto sin semanas con horas igual aparece, con una
                           // fila de placeholders (Week '—', consumido 0).
-                          const rows = project.weeks.length
-                            ? project.weeks
-                            : [null]
-                          return rows.map((week, i) => (
+                          const weekRows = project.weeks.length ? project.weeks : [null]
+                          return weekRows.map((week) => (
                             <tr key={`${project.id}-${week ? week.weekStart : 'none'}`}>
                               <td />
                               {/* La identidad del proyecto se repite en cada fila-semana
@@ -274,13 +281,11 @@ export function ClientSummaryPage() {
                               <td className="cell-soft">{project.zohoStatus || '—'}</td>
                               <td className="col-num cell-mono">{hoursOrDash(project.budget)}</td>
                               <td className="col-num cell-mono">{formatHours(week ? week.consumed : 0)}</td>
-                              <td className="col-num cell-mono">{week ? formatHours(week.cumulative) : '0.0'}</td>
+                              <td className="col-num cell-mono">{formatHours(week ? week.cumulative : 0)}</td>
                               <td className="col-num cell-mono">
                                 {week ? hoursOrDash(week.remaining) : hoursOrDash(project.budget)}
                               </td>
-                              <td className="col-num cell-mono">
-                                {week && week.overage ? formatHours(week.overage) : '0.0'}
-                              </td>
+                              <td className="col-num cell-mono">{formatHours(week ? week.overage : 0)}</td>
                             </tr>
                           ))
                         })}
@@ -290,7 +295,7 @@ export function ClientSummaryPage() {
                   <tr className="summary-row--total">
                     <th scope="row">Total portfolio</th>
                     <td colSpan={5} />
-                    <td className="col-num cell-mono">{hoursOrDash(totals.budget || null)}</td>
+                    <td className="col-num cell-mono">{totals.hasBudget ? formatHours(totals.budget) : '—'}</td>
                     <td className="col-num cell-mono">{formatHours(totals.consumed)}</td>
                     <td className="col-num" />
                     <td className="col-num" />
