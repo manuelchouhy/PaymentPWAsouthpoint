@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { chartTotals, portfolioTotals, tableTotalsByClient } from './clientSummaryTotals.js'
 
-const wk = (consumed, overage = 0) => ({ consumed, overage, cumulative: consumed, remaining: 0 })
+const wk = (consumed, overage = 0, pending = 0) => ({ consumed, overage, pending, cumulative: consumed, remaining: 0 })
 
 function sample() {
   return [
@@ -23,6 +23,13 @@ test('tableTotalsByClient suma sobre semanas visibles', () => {
   assert.equal(hss.overage, 2)
   assert.equal(hss.budget, 120) // solo el proyecto con budget
   assert.equal(hss.hasBudget, true)
+})
+
+test('tableTotalsByClient suma las horas pending', () => {
+  const clients = [
+    { client: 'HSS', projects: [{ id: 1, budget: 120, consumed: 30, overage: 0, weeks: [wk(20, 0, 3), wk(10, 0, 4)] }] },
+  ]
+  assert.equal(tableTotalsByClient(clients).get('HSS').pending, 7)
 })
 
 test('tableTotalsByClient respeta el recorte de semanas (menos filas → menos consumed)', () => {

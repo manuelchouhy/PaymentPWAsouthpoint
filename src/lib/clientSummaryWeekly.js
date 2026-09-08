@@ -57,8 +57,13 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
   // única clave con la que las entries se atan al proyecto.
   const byProjectWeek = new Map()
   for (const e of entries) {
-    if (e.status !== 'Approved') continue
     if (e.allocation !== 'bill_to_client' && e.allocation !== 'overage') continue
+    // Se procesan: Approved (consumed/overage) y bill_to_client Pending (pending,
+    // horas facturables aún sin aprobar en Zoho). Las Rejected y cualquier otro
+    // estado se descartan.
+    const isApproved = e.status === 'Approved'
+    const isPending = e.status === 'Pending' && e.allocation === 'bill_to_client'
+    if (!isApproved && !isPending) continue
     const name = e.project ?? ''
     // Una entry sin nombre de proyecto no se puede atribuir a ningún proyecto:
     // se descarta (igual que la página, que la bucketeaba bajo '' y nunca la
@@ -78,8 +83,10 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
       year: sundayWeekYear(e.date ?? ''),
       consumed: 0,
       overage: 0,
+      pending: 0,
     }
-    if (e.allocation === 'bill_to_client') acc.consumed += hours
+    if (isPending) acc.pending += hours
+    else if (e.allocation === 'bill_to_client') acc.consumed += hours
     else acc.overage += hours
     weeks.set(weekStart, acc)
   }
@@ -103,12 +110,14 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
     let cumulative = 0
     let consumedTotal = 0
     let overageTotal = 0
+    let pendingTotal = 0
     for (const w of weeks) {
       cumulative += w.consumed
       w.cumulative = cumulative
       w.remaining = budget == null ? null : budget - cumulative
       consumedTotal += w.consumed
       overageTotal += w.overage
+      pendingTotal += w.pending
     }
 
     const sows = sowList(project)
@@ -122,6 +131,7 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
       budget,
       consumed: consumedTotal,
       overage: overageTotal,
+      pending: pendingTotal,
       weeks,
     }
 

@@ -16,7 +16,7 @@
 export function tableTotalsByClient(clients) {
   const map = new Map()
   for (const group of clients) {
-    const t = { budget: 0, consumed: 0, overage: 0, hasBudget: false }
+    const t = { budget: 0, consumed: 0, overage: 0, pending: 0, hasBudget: false }
     for (const p of group.projects) {
       if (p.budget != null) {
         t.budget += p.budget
@@ -25,6 +25,7 @@ export function tableTotalsByClient(clients) {
       for (const w of p.weeks) {
         t.consumed += w.consumed
         t.overage += w.overage
+        t.pending += w.pending
       }
     }
     map.set(group.client, t)
@@ -34,11 +35,12 @@ export function tableTotalsByClient(clients) {
 
 /** Total de portfolio a partir del mapa por-cliente. */
 export function portfolioTotals(byClient) {
-  const t = { budget: 0, consumed: 0, overage: 0, hasBudget: false }
+  const t = { budget: 0, consumed: 0, overage: 0, pending: 0, hasBudget: false }
   for (const g of byClient.values()) {
     t.budget += g.budget
     t.consumed += g.consumed
     t.overage += g.overage
+    t.pending += g.pending
     if (g.hasBudget) t.hasBudget = true
   }
   return t
