@@ -101,6 +101,7 @@ export function SupplierContractsPage() {
       { header: 'Supplier', key: 'supplierName' },
       { header: 'Contract #', key: 'contractNumber' },
       { header: 'Start Date', key: 'startDate' },
+      { header: 'Rol', key: 'role' },
       { header: 'Expiration', key: 'expirationDate' },
       { header: 'Renewal Date', key: 'renewalDate' },
       { header: 'Renewal Type', key: 'renewalType' },
@@ -264,6 +265,7 @@ export function SupplierContractsPage() {
                     <th scope="col">Supplier</th>
                     <th scope="col">Contract #</th>
                     <th scope="col">Start Date</th>
+                    <th scope="col">Rol</th>
                     <th scope="col">Expiration Date</th>
                     <th scope="col">Renewal Date</th>
                     <th scope="col">Payment Terms</th>
@@ -300,6 +302,7 @@ export function SupplierContractsPage() {
                         </td>
                         <td className="cell-mono">{c.contractNumber}</td>
                         <td className="cell-mono">{formatDate(c.startDate)}</td>
+                        <td className="cell-soft">{c.role || '—'}</td>
                         <td className="cell-mono">{formatDate(c.expirationDate)}</td>
                         <td className="cell-mono">{formatDate(c.renewalDate)}</td>
                         <td className="cell-mono">{c.paymentTerms}</td>

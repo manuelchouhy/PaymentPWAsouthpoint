@@ -6,6 +6,7 @@
  * @property {string} supplierName
  * @property {boolean} isPrioritySupplier
  * @property {string} contractNumber
+ * @property {?string} role
  * @property {string} startDate
  * @property {string} expirationDate
  * @property {string} renewalDate
@@ -24,6 +25,7 @@
 import { supabase, isSupabaseConfigured } from './supabase'
 import { daysRemaining } from './projectsData'
 import { demoDate } from './demoDates'
+import { FIELD_TO_COLUMN, rowToContract, contractToRow } from './supplierContractMapping.js'
 
 export const PAYMENT_TERMS = ['Net 15', 'Net 30', 'Net 45']
 export const RENEWAL_TYPES = ['Manual', 'Auto-notify']
@@ -34,18 +36,6 @@ export const SUPPLIER_STATUSES = [
   'Critical',
   'Expired',
 ]
-
-const FIELD_TO_COLUMN = {
-  supplierName: 'supplier_name',
-  isPrioritySupplier: 'is_priority_supplier',
-  contractNumber: 'contract_number',
-  startDate: 'start_date',
-  expirationDate: 'expiration_date',
-  renewalDate: 'renewal_date',
-  paymentTerms: 'payment_terms',
-  renewalType: 'renewal_type',
-  weeklyContractedHours: 'weekly_contracted_hours',
-}
 
 /** Estado calculado por días restantes (la columna 'Renewal in Progress' es manual). */
 export function supplierContractStatus(days) {
@@ -204,42 +194,6 @@ const demoAlertLog = {
       createdAt: '2026-04-06T08:00:00.000Z',
     },
   ],
-}
-
-function rowToContract(row) {
-  return {
-    id: row.id,
-    supplierName: row.supplier_name,
-    isPrioritySupplier: Boolean(row.is_priority_supplier),
-    contractNumber: row.contract_number,
-    startDate: row.start_date,
-    expirationDate: row.expiration_date,
-    renewalDate: row.renewal_date,
-    paymentTerms: row.payment_terms,
-    renewalType: row.renewal_type,
-    status: row.status,
-    // Number(): PostgREST puede serializar numeric como string para no perder
-    // precisión; sin la coerción, sumar horas en Capacidad concatenaría en
-    // vez de sumar (mismo patrón que amountReceived/amountPaid/etc.).
-    weeklyContractedHours:
-      row.weekly_contracted_hours == null ? null : Number(row.weekly_contracted_hours),
-    pdfUrl: row.pdf_url ?? null,
-    archived: Boolean(row.archived),
-    parentContractId: row.parent_contract_id ?? null,
-    snoozeUntil: row.snooze_until ?? null,
-    previousStatus: row.previous_status ?? null,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    createdBy: row.created_by ?? null,
-  }
-}
-
-function contractToRow(c) {
-  const row = {}
-  for (const [field, column] of Object.entries(FIELD_TO_COLUMN)) {
-    if (c[field] !== undefined) row[column] = c[field]
-  }
-  return row
 }
 
 const sortByExp = (list) =>
@@ -456,6 +410,7 @@ export async function renewSupplierContract(oldContract, payload, by) {
       supplierName: oldContract.supplierName,
       isPrioritySupplier: oldContract.isPrioritySupplier,
       contractNumber: payload.contractNumber,
+      role: oldContract.role ?? null,
       startDate: payload.startDate,
       expirationDate: payload.expirationDate,
       renewalDate: payload.renewalDate,
@@ -486,6 +441,7 @@ export async function renewSupplierContract(oldContract, payload, by) {
       supplier_name: oldContract.supplierName,
       is_priority_supplier: oldContract.isPrioritySupplier,
       contract_number: payload.contractNumber,
+      role: oldContract.role ?? null,
       start_date: payload.startDate,
       expiration_date: payload.expirationDate,
       renewal_date: payload.renewalDate,

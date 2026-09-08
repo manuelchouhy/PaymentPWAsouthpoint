@@ -8,6 +8,7 @@ const TEXT_FIELDS = [
   { key: 'supplierName', label: 'Supplier', required: true },
   { key: 'contractNumber', label: 'Contract #', required: true },
   { key: 'startDate', label: 'Start Date', required: true, type: 'date' },
+  { key: 'role', label: 'Rol', required: false },
   { key: 'expirationDate', label: 'Expiration Date', required: true, type: 'date' },
   { key: 'renewalDate', label: 'Renewal Date', required: true, type: 'date' },
 ]
@@ -18,6 +19,7 @@ function emptyForm() {
     supplierName: '',
     contractNumber: '',
     startDate: '',
+    role: '',
     expirationDate: '',
     renewalDate: '',
     paymentTerms: PAYMENT_TERMS[1], // Net 30
@@ -40,6 +42,7 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
       supplierName: initial.supplierName ?? '',
       contractNumber: initial.contractNumber ?? '',
       startDate: initial.startDate ?? '',
+      role: initial.role ?? '',
       expirationDate: initial.expirationDate ?? '',
       renewalDate: initial.renewalDate ?? '',
       paymentTerms: initial.paymentTerms ?? PAYMENT_TERMS[1],
@@ -129,6 +132,7 @@ export function SupplierContractFormModal({ initial = null, onClose, onSubmit })
         {
           supplierName: form.supplierName.trim(),
           contractNumber: form.contractNumber.trim(),
+          role: form.role.trim(),
           startDate: form.startDate,
           expirationDate: form.expirationDate,
           renewalDate: form.renewalDate,
