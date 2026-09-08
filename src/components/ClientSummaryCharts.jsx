@@ -72,7 +72,7 @@ export function ClientSummaryCharts({ totals }) {
         <div className="dash-widget__head">
           <span className="dash-widget__title">
             <TrendingUp size={14} />
-            Budget vs Consumed vs Overage
+            Budget · Consumed · Pending · Overage
           </span>
         </div>
         {noData ? (
