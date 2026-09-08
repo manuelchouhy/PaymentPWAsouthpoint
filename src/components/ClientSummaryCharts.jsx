@@ -44,11 +44,19 @@ export function ClientSummaryCharts({ totals }) {
   if (totals.hasBudget) {
     donutData.push({ key: 'remaining', name: 'Remaining', value: remaining, color: COLOR.remaining })
   }
-  const donutTotal = donutData.reduce((sum, d) => sum + d.value, 0)
-  const barEmpty = budget === 0 && consumed === 0 && overage === 0
+  // Centro del donut = horas REALMENTE logueadas (consumed + overage), no la suma
+  // de las porciones (que incluye el remaining, que no son horas trabajadas).
+  const loggedHours = round1(consumed + overage)
+  // Un solo criterio de "sin datos" para las dos gráficas, así no muestran estados
+  // vacíos distintos lado a lado.
+  const noData = budget === 0 && consumed === 0 && overage === 0
 
   return (
-    <div className="dash-main">
+    <>
+      <p className="state__hint">
+        Budget status across all periods — the Week filter narrows the table only, not these charts.
+      </p>
+      <div className="dash-main">
       <div className="dash-widget">
         <div className="dash-widget__head">
           <span className="dash-widget__title">
@@ -56,7 +64,7 @@ export function ClientSummaryCharts({ totals }) {
             Budget vs Consumed vs Overage
           </span>
         </div>
-        {barEmpty ? (
+        {noData ? (
           <p className="dash-widget__empty">No hour data available.</p>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
@@ -82,9 +90,10 @@ export function ClientSummaryCharts({ totals }) {
       <HoursDonut
         icon={<TrendingUp size={14} />}
         title="Consumed / Overage / Remaining"
-        data={donutTotal === 0 ? [] : donutData}
-        total={round1(donutTotal)}
+        data={noData ? [] : donutData}
+        total={loggedHours}
       />
-    </div>
+      </div>
+    </>
   )
 }

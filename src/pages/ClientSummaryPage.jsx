@@ -7,6 +7,7 @@ import { formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { buildClientSummaryWeekly, weekLabel } from '../lib/clientSummaryWeekly'
 import { filterClientSummary } from '../lib/clientSummaryFilter'
+import { chartTotals, portfolioTotals, tableTotalsByClient } from '../lib/clientSummaryTotals'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { ClientSummaryCharts } from '../components/ClientSummaryCharts'
@@ -103,87 +104,35 @@ export function ClientSummaryPage() {
     return [...byLabel.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([label]) => label)
   }, [allProjects])
 
-  // Filtro combinado (AND entre categorías, OR dentro): lógica pura en
-  // clientSummaryFilter (testeada aparte). El orden ya lo resuelve el motor.
-  const clients = useMemo(
+  // Scope de PROYECTO (Client/Project#/Name/SOW), sin el filtro Week: es la base
+  // tanto de la tabla como de los gráficos. Lógica pura en clientSummaryFilter.
+  const projectScoped = useMemo(
     () =>
       filterClientSummary(summary.clients, {
         clients: selectedClients,
         projectNumbers: selectedProjectNumbers,
         projectNames: selectedProjectNames,
         sows: selectedSows,
-        weeks: selectedWeeks,
       }),
-    [
-      summary,
-      selectedClients,
-      selectedProjectNumbers,
-      selectedProjectNames,
-      selectedSows,
-      selectedWeeks,
-    ],
+    [summary, selectedClients, selectedProjectNumbers, selectedProjectNames, selectedSows],
   )
 
-  // Totales de la TABLA (fila-cabecera de cliente y fila Total): Consumed/Overage
-  // se suman sobre las SEMANAS VISIBLES, así que cuadran con la suma de las celdas
-  // mostradas incluso con el filtro Week activo. La tabla no muestra Cumulative/
-  // Remaining en estas filas. hasBudget distingue "budget real 0" de "sin budget".
-  const clientTotals = useMemo(() => {
-    const map = new Map()
-    for (const group of clients) {
-      const t = { budget: 0, consumed: 0, overage: 0, hasBudget: false }
-      for (const p of group.projects) {
-        if (p.budget != null) {
-          t.budget += p.budget
-          t.hasBudget = true
-        }
-        for (const w of p.weeks) {
-          t.consumed += w.consumed
-          t.overage += w.overage
-        }
-      }
-      map.set(group.client, t)
-    }
-    return map
-  }, [clients])
+  // La tabla aplica además el filtro Week sobre el scope de proyecto (recorta
+  // filas-semana y descarta proyectos/clientes sin semana visible).
+  const clients = useMemo(
+    () => filterClientSummary(projectScoped, { weeks: selectedWeeks }),
+    [projectScoped, selectedWeeks],
+  )
 
-  const totals = useMemo(() => {
-    const t = { budget: 0, consumed: 0, overage: 0, hasBudget: false }
-    for (const g of clientTotals.values()) {
-      t.budget += g.budget
-      t.consumed += g.consumed
-      t.overage += g.overage
-      if (g.hasBudget) t.hasBudget = true
-    }
-    return t
-  }, [clientTotals])
+  // Totales de la TABLA (agregación pura, testeada en clientSummaryTotals): suman
+  // las SEMANAS VISIBLES, así cuadran con las celdas Consumed/Overage mostradas
+  // aunque el filtro Week haya recortado filas.
+  const clientTotals = useMemo(() => tableTotalsByClient(clients), [clients])
+  const totals = useMemo(() => portfolioTotals(clientTotals), [clientTotals])
 
-  // Totales de los GRÁFICOS: son una foto de estado de budget, así que usan las
-  // horas ALL-TIME de cada proyecto (project.consumed/overage del motor) y NO se
-  // recortan por el filtro Week (que solo achica filas de la tabla). El scope son
-  // los filtros de PROYECTO (Client/Project#/Name/SOW). remaining se acumula por
-  // proyecto (max(0, budget − consumido all-time)) para no netear entre proyectos.
-  const chartTotals = useMemo(() => {
-    const scope = filterClientSummary(summary.clients, {
-      clients: selectedClients,
-      projectNumbers: selectedProjectNumbers,
-      projectNames: selectedProjectNames,
-      sows: selectedSows,
-    })
-    const t = { budget: 0, consumed: 0, overage: 0, remaining: 0, hasBudget: false }
-    for (const group of scope) {
-      for (const p of group.projects) {
-        t.consumed += p.consumed
-        t.overage += p.overage
-        if (p.budget != null) {
-          t.budget += p.budget
-          t.hasBudget = true
-          t.remaining += Math.max(0, p.budget - p.consumed)
-        }
-      }
-    }
-    return t
-  }, [summary, selectedClients, selectedProjectNumbers, selectedProjectNames, selectedSows])
+  // Totales de los GRÁFICOS: foto de estado de budget con horas ALL-TIME por
+  // proyecto sobre el scope de PROYECTO (NO se recortan por el filtro Week).
+  const chartTotalsValue = useMemo(() => chartTotals(projectScoped), [projectScoped])
 
   function toggleIn(setter, value) {
     setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]))
@@ -422,7 +371,7 @@ export function ClientSummaryPage() {
             </div>
           )}
 
-          {clients.length > 0 && <ClientSummaryCharts totals={chartTotals} />}
+          {clients.length > 0 && <ClientSummaryCharts totals={chartTotalsValue} />}
         </motion.div>
       )}
     </>
