@@ -32,12 +32,14 @@ function groupNameOf(project) {
   return project.customerName || project.client || UNASSIGNED
 }
 
-/** SOW a mostrar: los SOW de stage (coma-separados) si hay, si no el sowNumber. */
-function sowLabel(project) {
-  if (project.stageSowNumbers && project.stageSowNumbers.length) {
-    return project.stageSowNumbers.join(', ')
-  }
-  return project.sowNumber ?? ''
+/**
+ * SOW del proyecto como lista: los SOW de stage si el proyecto es multi-stage, si
+ * no el sowNumber suelto. Es la fuente para el rótulo (join) y para el filtro por
+ * SOW individual — así el filtro no depende de re-parsear el string unido.
+ */
+function sowList(project) {
+  if (project.stageSowNumbers && project.stageSowNumbers.length) return project.stageSowNumbers
+  return project.sowNumber ? [project.sowNumber] : []
 }
 
 /**
@@ -103,11 +105,13 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
       overageTotal += w.overage
     }
 
+    const sows = sowList(project)
     const row = {
       id: project.id,
       projectName: project.projectName,
       projectNumber: project.projectNumber ?? '',
-      sowNumber: sowLabel(project),
+      sowNumber: sows.join(', '), // rótulo para la grilla/export
+      sowNumbers: sows, // lista para filtrar por SOW individual
       zohoStatus: project.zohoStatus ?? null,
       budget,
       consumed: consumedTotal,

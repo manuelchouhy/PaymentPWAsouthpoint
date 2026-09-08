@@ -31,8 +31,7 @@ export function filterClientSummary(clients, filters = {}) {
   const weekActive = weeks.length > 0
   const sowMatch = (p) => {
     if (!sows.length) return true
-    const own = p.sowNumber ? p.sowNumber.split(', ') : []
-    return own.some((s) => sows.includes(s))
+    return (p.sowNumbers ?? []).some((s) => sows.includes(s))
   }
 
   const result = []

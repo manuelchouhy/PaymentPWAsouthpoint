@@ -10,13 +10,13 @@ function sample() {
     {
       client: 'HSS',
       projects: [
-        { id: 1, projectNumber: 'SP-25', projectName: 'Forecasting', sowNumber: 'SOW-213', weeks: [wk(31, '2026-08-02'), wk(32, '2026-08-09')] },
-        { id: 2, projectNumber: 'SP-7', projectName: 'ETL', sowNumber: 'SOW-1, SOW-2', weeks: [wk(31, '2026-08-02')] },
+        { id: 1, projectNumber: 'SP-25', projectName: 'Forecasting', sowNumber: 'SOW-213', sowNumbers: ['SOW-213'], weeks: [wk(31, '2026-08-02'), wk(32, '2026-08-09')] },
+        { id: 2, projectNumber: 'SP-7', projectName: 'ETL', sowNumber: 'SOW-1, SOW-2', sowNumbers: ['SOW-1', 'SOW-2'], weeks: [wk(31, '2026-08-02')] },
       ],
     },
     {
       client: 'Acme',
-      projects: [{ id: 3, projectNumber: 'AC-1', projectName: 'Platform', sowNumber: 'SOW-9', weeks: [] }],
+      projects: [{ id: 3, projectNumber: 'AC-1', projectName: 'Platform', sowNumber: 'SOW-9', sowNumbers: ['SOW-9'], weeks: [] }],
     },
   ]
 }

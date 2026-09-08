@@ -89,7 +89,7 @@ export function ClientSummaryPage() {
   // El SOW del proyecto puede venir coma-separado (multi-stage); las opciones son
   // los SOW individuales.
   const sowOptions = useMemo(
-    () => sortedUnique(allProjects.flatMap((p) => (p.sowNumber ? p.sowNumber.split(', ') : []))),
+    () => sortedUnique(allProjects.flatMap((p) => p.sowNumbers ?? [])),
     [allProjects],
   )
   // Semanas presentes en cualquier proyecto, rotuladas year-aware y ordenadas por

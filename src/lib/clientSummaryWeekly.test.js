@@ -130,7 +130,17 @@ test('multi-stage: SOW coma-separado y horas sumadas a nivel proyecto', () => {
   })
   const proj = clients[0].projects[0]
   assert.equal(proj.sowNumber, 'SOW-1, SOW-2')
+  assert.deepEqual(proj.sowNumbers, ['SOW-1', 'SOW-2'])
   assert.equal(proj.consumed, 12)
+})
+
+test('sowNumbers es lista con un solo SOW cuando el proyecto no es multi-stage', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project({ sowNumber: 'SOW-213' })],
+    entries: [],
+    crsByProject: new Map(),
+  })
+  assert.deepEqual(clients[0].projects[0].sowNumbers, ['SOW-213'])
 })
 
 test('la misma semana de años distintos no se fusiona (year-aware)', () => {
