@@ -69,18 +69,23 @@ export function ClientSummaryPage() {
   )
 
   // El filtro de Cliente se aplica sobre la salida del motor. Se reordena con el
-  // mismo collator numérico que el dropdown (sortedUnique) para que la grilla y
-  // el filtro presenten los clientes en el mismo orden.
+  // mismo collator numérico que el dropdown (sortedUnique), en los DOS niveles
+  // (clientes y proyectos dentro de cada cliente), para que grilla y filtro
+  // presenten todo en el mismo orden.
   const clients = useMemo(() => {
+    const coll = (a, b) => (a ?? '').localeCompare(b ?? '', 'es', { numeric: true })
     const list = selectedClients.length
       ? summary.clients.filter((c) => selectedClients.includes(c.client))
       : summary.clients
-    return [...list].sort((a, b) => a.client.localeCompare(b.client, 'es', { numeric: true }))
+    return [...list]
+      .map((g) => ({ ...g, projects: [...g.projects].sort((a, b) => coll(a.projectName, b.projectName)) }))
+      .sort((a, b) => coll(a.client, b.client))
   }, [summary, selectedClients])
 
-  // Totales de cliente (para la fila-cabecera) y de portfolio filtrado (para la
-  // fila total): suma de las filas visibles, igual criterio que el motor.
-  // hasBudget distingue "budget real 0" de "ningún proyecto tiene budget cargado".
+  // Totales de cliente (fila-cabecera) y de portfolio FILTRADO (fila total): se
+  // recomputan acá a partir de las filas visibles porque el motor solo expone el
+  // total sin filtrar (summary.totals) y no totales por-cliente. hasBudget
+  // distingue "budget real 0" de "ningún proyecto tiene budget cargado".
   const clientTotals = useMemo(() => {
     const map = new Map()
     for (const group of clients) {
@@ -269,17 +274,19 @@ export function ClientSummaryPage() {
                           // Un proyecto sin semanas con horas igual aparece, con una
                           // fila de placeholders (Week '—', consumido 0).
                           const weekRows = project.weeks.length ? project.weeks : [null]
-                          return weekRows.map((week) => (
+                          return weekRows.map((week, wi) => (
                             <tr key={`${project.id}-${week ? week.weekStart : 'none'}`}>
                               <td />
                               {/* La identidad del proyecto se repite en cada fila-semana
-                                  (fiel al ejemplo del doc). */}
+                                  (fiel al ejemplo del doc); el Budget, en cambio, va solo
+                                  en la 1ª fila (igual que el export) para que sumar la
+                                  columna no lo cuente ×nº-semanas. */}
                               <td className="cell-mono">{project.projectNumber || '—'}</td>
                               <td>{project.projectName || '—'}</td>
                               <td className="cell-soft">{project.sowNumber || '—'}</td>
                               <td className="cell-mono">{week ? weekLabel(week) : '—'}</td>
                               <td className="cell-soft">{project.zohoStatus || '—'}</td>
-                              <td className="col-num cell-mono">{hoursOrDash(project.budget)}</td>
+                              <td className="col-num cell-mono">{wi === 0 ? hoursOrDash(project.budget) : ''}</td>
                               <td className="col-num cell-mono">{formatHours(week ? week.consumed : 0)}</td>
                               <td className="col-num cell-mono">{formatHours(week ? week.cumulative : 0)}</td>
                               <td className="col-num cell-mono">
