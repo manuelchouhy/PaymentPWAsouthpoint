@@ -38,6 +38,10 @@ export function ClientSummaryPage() {
   const [status, setStatus] = useState('loading')
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedClients, setSelectedClients] = useState([])
+  const [selectedProjectNumbers, setSelectedProjectNumbers] = useState([])
+  const [selectedProjectNames, setSelectedProjectNames] = useState([])
+  const [selectedSows, setSelectedSows] = useState([])
+  const [selectedWeeks, setSelectedWeeks] = useState([])
 
   useEffect(() => {
     let cancelled = false
@@ -71,24 +75,77 @@ export function ClientSummaryPage() {
     [projects, entries, crsByProject],
   )
 
-  // Opciones del filtro Cliente = los clientes que arma el motor (misma fuente
-  // que la grilla; no se duplica la regla de agrupación).
+  // Opciones de cada filtro, derivadas de la salida COMPLETA del motor (misma
+  // fuente que la grilla; no se duplica la regla de agrupación).
   const clientOptions = useMemo(
     () => sortedUnique(summary.clients.map((c) => c.client)),
     [summary],
   )
+  const allProjects = useMemo(() => summary.clients.flatMap((c) => c.projects), [summary])
+  const projectNumberOptions = useMemo(
+    () => sortedUnique(allProjects.map((p) => p.projectNumber).filter(Boolean)),
+    [allProjects],
+  )
+  const projectNameOptions = useMemo(
+    () => sortedUnique(allProjects.map((p) => p.projectName).filter(Boolean)),
+    [allProjects],
+  )
+  // El SOW del proyecto puede venir coma-separado (multi-stage); las opciones son
+  // los SOW individuales.
+  const sowOptions = useMemo(
+    () => sortedUnique(allProjects.flatMap((p) => (p.sowNumber ? p.sowNumber.split(', ') : []))),
+    [allProjects],
+  )
+  // Semanas presentes en cualquier proyecto, rotuladas year-aware y ordenadas por
+  // su domingo. El value del filtro es el rótulo (único por semana física).
+  const weekOptions = useMemo(() => {
+    const byLabel = new Map()
+    for (const p of allProjects) {
+      for (const w of p.weeks) byLabel.set(weekLabel(w), w.weekStart)
+    }
+    return [...byLabel.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([label]) => label)
+  }, [allProjects])
 
-  // El filtro de Cliente se aplica sobre la salida del motor. El orden (numérico,
-  // en ambos niveles) ya lo resuelve el motor, así que acá solo se filtra.
+  // Filtro combinado: AND entre categorías, OR dentro de cada una. El orden
+  // (numérico, en ambos niveles) ya lo resuelve el motor, así que acá solo se
+  // filtra. El filtro Week actúa a nivel de fila-semana: recorta las semanas
+  // visibles y descarta el proyecto (y el cliente) que quede sin ninguna.
   const clients = useMemo(() => {
-    if (!selectedClients.length) return summary.clients
-    return summary.clients.filter((c) => selectedClients.includes(c.client))
-  }, [summary, selectedClients])
+    const weekActive = selectedWeeks.length > 0
+    const sowMatch = (p) => {
+      if (!selectedSows.length) return true
+      const own = p.sowNumber ? p.sowNumber.split(', ') : []
+      return own.some((s) => selectedSows.includes(s))
+    }
+    const result = []
+    for (const group of summary.clients) {
+      if (selectedClients.length && !selectedClients.includes(group.client)) continue
+      const projects = []
+      for (const p of group.projects) {
+        if (selectedProjectNumbers.length && !selectedProjectNumbers.includes(p.projectNumber)) continue
+        if (selectedProjectNames.length && !selectedProjectNames.includes(p.projectName)) continue
+        if (!sowMatch(p)) continue
+        const weeks = weekActive ? p.weeks.filter((w) => selectedWeeks.includes(weekLabel(w))) : p.weeks
+        if (weekActive && weeks.length === 0) continue
+        projects.push(weeks === p.weeks ? p : { ...p, weeks })
+      }
+      if (projects.length) result.push({ ...group, projects })
+    }
+    return result
+  }, [
+    summary,
+    selectedClients,
+    selectedProjectNumbers,
+    selectedProjectNames,
+    selectedSows,
+    selectedWeeks,
+  ])
 
   // Totales de cliente (fila-cabecera) y de portfolio FILTRADO (fila total): se
-  // recomputan acá a partir de las filas visibles porque el motor solo expone el
-  // total sin filtrar (summary.totals) y no totales por-cliente. hasBudget
-  // distingue "budget real 0" de "ningún proyecto tiene budget cargado".
+  // recomputan acá a partir de las SEMANAS VISIBLES (no de project.consumed) para
+  // que reconcilien con las filas mostradas incluso con el filtro Week activo. El
+  // motor solo expone el total sin filtrar (summary.totals, para los gráficos) y
+  // no totales por-cliente. hasBudget distingue "budget real 0" de "sin budget".
   const clientTotals = useMemo(() => {
     const map = new Map()
     for (const group of clients) {
@@ -98,8 +155,10 @@ export function ClientSummaryPage() {
           t.budget += p.budget
           t.hasBudget = true
         }
-        t.consumed += p.consumed
-        t.overage += p.overage
+        for (const w of p.weeks) {
+          t.consumed += w.consumed
+          t.overage += w.overage
+        }
       }
       map.set(group.client, t)
     }
@@ -117,10 +176,23 @@ export function ClientSummaryPage() {
     return t
   }, [clientTotals])
 
-  function toggleClient(value) {
-    setSelectedClients((prev) =>
-      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
-    )
+  function toggleIn(setter, value) {
+    setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]))
+  }
+
+  const anyFilter =
+    selectedClients.length ||
+    selectedProjectNumbers.length ||
+    selectedProjectNames.length ||
+    selectedSows.length ||
+    selectedWeeks.length
+
+  function clearAllFilters() {
+    setSelectedClients([])
+    setSelectedProjectNumbers([])
+    setSelectedProjectNames([])
+    setSelectedSows([])
+    setSelectedWeeks([])
   }
 
   function handleExport(format) {
@@ -218,13 +290,37 @@ export function ClientSummaryPage() {
                 label="Client"
                 options={clientOptions}
                 selected={selectedClients}
-                onToggle={toggleClient}
+                onToggle={(v) => toggleIn(setSelectedClients, v)}
               />
-              {selectedClients.length > 0 && (
+              <MultiSelectDropdown
+                label="Project #"
+                options={projectNumberOptions}
+                selected={selectedProjectNumbers}
+                onToggle={(v) => toggleIn(setSelectedProjectNumbers, v)}
+              />
+              <MultiSelectDropdown
+                label="Project"
+                options={projectNameOptions}
+                selected={selectedProjectNames}
+                onToggle={(v) => toggleIn(setSelectedProjectNames, v)}
+              />
+              <MultiSelectDropdown
+                label="SOW"
+                options={sowOptions}
+                selected={selectedSows}
+                onToggle={(v) => toggleIn(setSelectedSows, v)}
+              />
+              <MultiSelectDropdown
+                label="Week"
+                options={weekOptions}
+                selected={selectedWeeks}
+                onToggle={(v) => toggleIn(setSelectedWeeks, v)}
+              />
+              {anyFilter > 0 && (
                 <button
                   type="button"
                   className="btn btn--ghost filterbar__clear"
-                  onClick={() => setSelectedClients([])}
+                  onClick={clearAllFilters}
                 >
                   Clear
                 </button>
