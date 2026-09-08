@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { chartTotals, portfolioTotals, tableTotalsByClient } from './clientSummaryTotals.js'
 
-const wk = (consumed, overage = 0) => ({ consumed, overage, cumulative: consumed, remaining: 0 })
+const wk = (consumed, overage = 0, pending = 0) => ({ consumed, overage, pending, cumulative: consumed, remaining: 0 })
 
 function sample() {
   return [
@@ -25,6 +25,13 @@ test('tableTotalsByClient suma sobre semanas visibles', () => {
   assert.equal(hss.hasBudget, true)
 })
 
+test('tableTotalsByClient suma las horas pending', () => {
+  const clients = [
+    { client: 'HSS', projects: [{ id: 1, budget: 120, consumed: 30, overage: 0, weeks: [wk(20, 0, 3), wk(10, 0, 4)] }] },
+  ]
+  assert.equal(tableTotalsByClient(clients).get('HSS').pending, 7)
+})
+
 test('tableTotalsByClient respeta el recorte de semanas (menos filas → menos consumed)', () => {
   const clients = sample()
   clients[0].projects[0].weeks = [wk(10, 2)] // solo una semana visible
@@ -45,6 +52,16 @@ test('chartTotals usa horas all-time del proyecto y remaining por-proyecto', () 
   assert.equal(t.overage, 2)
   assert.equal(t.budget, 120)
   assert.equal(t.remaining, 90) // max(0, 120-30); el proyecto sin budget no aporta
+})
+
+test('chartTotals suma pending all-time por proyecto', () => {
+  const clients = [
+    { client: 'HSS', projects: [
+      { id: 1, budget: 120, consumed: 30, overage: 0, pending: 12, weeks: [] },
+      { id: 2, budget: null, consumed: 0, overage: 0, pending: 5, weeks: [] },
+    ] },
+  ]
+  assert.equal(chartTotals(clients).pending, 17)
 })
 
 test('chartTotals no netea el sobreconsumo de un proyecto contra otro', () => {

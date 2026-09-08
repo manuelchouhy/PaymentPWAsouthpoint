@@ -184,6 +184,7 @@ export function ClientSummaryPage() {
       { header: 'Status', key: 'status' },
       { header: 'Budget', key: 'budget' },
       { header: 'Consumed', key: 'consumed' },
+      { header: 'Pending', key: 'pending' },
       { header: 'Cumulative', key: 'cumulative' },
       { header: 'Remaining', key: 'remaining' },
       { header: 'Overage', key: 'overage' },
@@ -201,7 +202,7 @@ export function ClientSummaryPage() {
         // Budget solo en la PRIMERA fila del proyecto: repetirlo por semana haría
         // que sumar la columna Budget en una planilla infle el total × nº semanas.
         if (project.weeks.length === 0) {
-          rows.push({ ...base, week: '', budget: num1(project.budget ?? ''), consumed: 0, cumulative: 0, remaining: num1(project.budget ?? ''), overage: 0 })
+          rows.push({ ...base, week: '', budget: num1(project.budget ?? ''), consumed: 0, pending: 0, cumulative: 0, remaining: num1(project.budget ?? ''), overage: 0 })
           continue
         }
         project.weeks.forEach((week, i) => {
@@ -210,6 +211,7 @@ export function ClientSummaryPage() {
             week: weekLabel(week),
             budget: i === 0 ? num1(project.budget ?? '') : '',
             consumed: num1(week.consumed),
+            pending: num1(week.pending),
             cumulative: num1(week.cumulative),
             remaining: num1(week.remaining ?? ''),
             overage: num1(week.overage),
@@ -242,7 +244,8 @@ export function ClientSummaryPage() {
         <h1 className="masthead__title">Client Summary</h1>
         <p className="masthead__sub">
           Weekly view per project. Budget is the estimated hours (SOW plus approved change
-          requests); Consumed counts bill-to-client hours only, and Overage sits in its own column.
+          requests). Consumed counts approved bill-to-client hours; Pending shows bill-to-client
+          hours not yet approved in Zoho; Overage sits in its own column.
         </p>
       </motion.header>
 
@@ -329,6 +332,7 @@ export function ClientSummaryPage() {
                     <th scope="col">Status</th>
                     <th scope="col" className="col-num">Budget</th>
                     <th scope="col" className="col-num">Consumed</th>
+                    <th scope="col" className="col-num">Pending</th>
                     <th scope="col" className="col-num">Cumulative</th>
                     <th scope="col" className="col-num">Remaining</th>
                     <th scope="col" className="col-num">Overage</th>
@@ -344,6 +348,7 @@ export function ClientSummaryPage() {
                           <td colSpan={5} />
                           <td className="col-num cell-mono">{ct.hasBudget ? formatHours(ct.budget) : '—'}</td>
                           <td className="col-num cell-mono">{formatHours(ct.consumed)}</td>
+                          <td className="col-num cell-mono">{formatHours(ct.pending)}</td>
                           <td className="col-num" />
                           <td className="col-num" />
                           <td className="col-num cell-mono">{formatHours(ct.overage)}</td>
@@ -366,6 +371,7 @@ export function ClientSummaryPage() {
                               <td className="cell-soft">{project.zohoStatus || '—'}</td>
                               <td className="col-num cell-mono">{wi === 0 ? hoursOrDash(project.budget) : ''}</td>
                               <td className="col-num cell-mono">{formatHours(week ? week.consumed : 0)}</td>
+                              <td className="col-num cell-mono">{formatHours(week ? week.pending : 0)}</td>
                               <td className="col-num cell-mono">{formatHours(week ? week.cumulative : 0)}</td>
                               <td className="col-num cell-mono">
                                 {week ? hoursOrDash(week.remaining) : hoursOrDash(project.budget)}
@@ -382,6 +388,7 @@ export function ClientSummaryPage() {
                     <td colSpan={5} />
                     <td className="col-num cell-mono">{totals.hasBudget ? formatHours(totals.budget) : '—'}</td>
                     <td className="col-num cell-mono">{formatHours(totals.consumed)}</td>
+                    <td className="col-num cell-mono">{formatHours(totals.pending)}</td>
                     <td className="col-num" />
                     <td className="col-num" />
                     <td className="col-num cell-mono">{formatHours(totals.overage)}</td>

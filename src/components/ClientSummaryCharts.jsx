@@ -7,6 +7,7 @@ import { HoursDonut } from './HoursDonut'
 const COLOR = {
   budget: '#38bdf8',
   consumed: '#22d3ee',
+  pending: '#a3a3a3',
   overage: '#f59e0b',
   remaining: '#52525b',
 }
@@ -22,20 +23,23 @@ const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
  * global, para no netear el consumo de un proyecto contra el budget de otro.
  *
  * @param {{ totals: { budget: number, consumed: number, overage: number,
- *           remaining: number, hasBudget: boolean } }} props
+ *           pending: number, remaining: number, hasBudget: boolean } }} props
  */
 export function ClientSummaryCharts({ totals }) {
   const budget = totals.hasBudget ? round1(totals.budget) : 0
   const consumed = round1(totals.consumed)
   const overage = round1(totals.overage)
+  const pending = round1(totals.pending || 0)
   const remaining = round1(totals.remaining)
 
   // La barra Budget solo si hay budget cargado: sin budget, una barra en 0 leería
   // como "budget cero" en vez de "sin budget" (igual criterio que el donut, que
-  // suelta la porción Remaining en ese caso).
+  // suelta la porción Remaining en ese caso). Pending (horas facturables sin
+  // aprobar) va como barra propia para que también se vea en el gráfico.
   const barData = [
     ...(totals.hasBudget ? [{ name: 'Budget', value: budget, color: COLOR.budget }] : []),
     { name: 'Consumed', value: consumed, color: COLOR.consumed },
+    { name: 'Pending', value: pending, color: COLOR.pending },
     { name: 'Overage', value: overage, color: COLOR.overage },
   ]
   const donutData = [
@@ -47,12 +51,16 @@ export function ClientSummaryCharts({ totals }) {
   if (totals.hasBudget) {
     donutData.push({ key: 'remaining', name: 'Remaining', value: remaining, color: COLOR.remaining })
   }
+  // Suma de las porciones del donut (incluye Remaining si hay budget): define su
+  // estado vacío. Con budget>0 y sin horas logueadas sigue habiendo porción
+  // Remaining, así que el donut se dibuja (no cae a "No hour data").
+  const donutTotal = donutData.reduce((sum, d) => sum + d.value, 0)
   // Centro del donut = horas REALMENTE logueadas (consumed + overage), no la suma
   // de las porciones (que incluye el remaining, que no son horas trabajadas).
   const loggedHours = round1(consumed + overage)
   // Un solo criterio de "sin datos" para las dos gráficas, así no muestran estados
   // vacíos distintos lado a lado.
-  const noData = budget === 0 && consumed === 0 && overage === 0
+  const noData = budget === 0 && consumed === 0 && overage === 0 && pending === 0
 
   return (
     <>
@@ -64,7 +72,7 @@ export function ClientSummaryCharts({ totals }) {
         <div className="dash-widget__head">
           <span className="dash-widget__title">
             <TrendingUp size={14} />
-            Budget vs Consumed vs Overage
+            Budget · Consumed · Pending · Overage
           </span>
         </div>
         {noData ? (
@@ -93,7 +101,10 @@ export function ClientSummaryCharts({ totals }) {
       <HoursDonut
         icon={<TrendingUp size={14} />}
         title="Consumed / Overage / Remaining"
-        data={noData ? [] : donutData}
+        // El donut usa SU propio vacío (donutTotal): el pending no es parte del
+        // donut, así que un scope solo-pending muestra "No hour data" acá aunque
+        // el gráfico de barras sí dibuje su barra Pending.
+        data={donutTotal === 0 ? [] : donutData}
         total={loggedHours}
       />
       </div>

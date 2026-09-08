@@ -81,6 +81,37 @@ test('solo cuenta entries Approved (ignora Rejected/Pending y sp_internal/unallo
   assert.equal(clients[0].projects[0].consumed, 23)
 })
 
+test('cuenta las horas bill_to_client Pending como pending (no como consumed)', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project()],
+    entries: [
+      entry({ hours: 10, status: 'Approved', allocation: 'bill_to_client' }),
+      entry({ hours: 4, status: 'Pending', allocation: 'bill_to_client' }),
+      entry({ hours: 9, status: 'Rejected', allocation: 'bill_to_client' }), // no cuenta
+    ],
+    crsByProject: new Map(),
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.consumed, 10) // solo Approved
+  assert.equal(proj.pending, 4) // solo Pending
+  assert.equal(proj.weeks[0].pending, 4)
+  // El acumulado/remanente NO se ve afectado por las Pending.
+  assert.equal(proj.weeks[0].cumulative, 10)
+})
+
+test('una entry overage Pending NO cuenta (ni pending ni overage)', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project()],
+    entries: [entry({ hours: 8, status: 'Pending', allocation: 'overage' })],
+    crsByProject: new Map(),
+  })
+  const proj = clients[0].projects[0]
+  // overage Pending se descarta: no hay semanas, todo en 0.
+  assert.equal(proj.weeks.length, 0)
+  assert.equal(proj.pending, 0)
+  assert.equal(proj.overage, 0)
+})
+
 test('separa overage de consumed en la misma semana', () => {
   const { clients } = buildClientSummaryWeekly({
     projects: [project()],
