@@ -10,7 +10,10 @@
  *  - Budget = effectiveBudgetHours(baseBudgetHours, changeRequests): estimado de
  *    la SOW + change requests aprobados. Total del proyecto, no por semana.
  *  - Consumed (semana) = horas Approved con allocation bill_to_client.
+ *  - Pending (semana)  = horas bill_to_client con status Pending (facturables aún
+ *    sin aprobar en Zoho). NO cuentan como Consumed ni afectan cumulative/remaining.
  *  - Overage (semana)  = horas Approved con allocation overage.
+ *  - Rejected y demás estados se descartan.
  *  - Cumulative = consumido acumulado en orden cronológico (incluye la semana).
  *  - Remaining  = budget − cumulative (puede ser negativo).
  *  - Granularidad proyecto (no SOW): las entries se atan al proyecto por nombre,

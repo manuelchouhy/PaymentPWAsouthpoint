@@ -54,6 +54,16 @@ test('chartTotals usa horas all-time del proyecto y remaining por-proyecto', () 
   assert.equal(t.remaining, 90) // max(0, 120-30); el proyecto sin budget no aporta
 })
 
+test('chartTotals suma pending all-time por proyecto', () => {
+  const clients = [
+    { client: 'HSS', projects: [
+      { id: 1, budget: 120, consumed: 30, overage: 0, pending: 12, weeks: [] },
+      { id: 2, budget: null, consumed: 0, overage: 0, pending: 5, weeks: [] },
+    ] },
+  ]
+  assert.equal(chartTotals(clients).pending, 17)
+})
+
 test('chartTotals no netea el sobreconsumo de un proyecto contra otro', () => {
   const clients = [
     {

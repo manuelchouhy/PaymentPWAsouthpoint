@@ -7,6 +7,7 @@ import { HoursDonut } from './HoursDonut'
 const COLOR = {
   budget: '#38bdf8',
   consumed: '#22d3ee',
+  pending: '#a3a3a3',
   overage: '#f59e0b',
   remaining: '#52525b',
 }
@@ -28,14 +29,17 @@ export function ClientSummaryCharts({ totals }) {
   const budget = totals.hasBudget ? round1(totals.budget) : 0
   const consumed = round1(totals.consumed)
   const overage = round1(totals.overage)
+  const pending = round1(totals.pending || 0)
   const remaining = round1(totals.remaining)
 
   // La barra Budget solo si hay budget cargado: sin budget, una barra en 0 leería
   // como "budget cero" en vez de "sin budget" (igual criterio que el donut, que
-  // suelta la porción Remaining en ese caso).
+  // suelta la porción Remaining en ese caso). Pending (horas facturables sin
+  // aprobar) va como barra propia para que también se vea en el gráfico.
   const barData = [
     ...(totals.hasBudget ? [{ name: 'Budget', value: budget, color: COLOR.budget }] : []),
     { name: 'Consumed', value: consumed, color: COLOR.consumed },
+    { name: 'Pending', value: pending, color: COLOR.pending },
     { name: 'Overage', value: overage, color: COLOR.overage },
   ]
   const donutData = [
@@ -52,7 +56,7 @@ export function ClientSummaryCharts({ totals }) {
   const loggedHours = round1(consumed + overage)
   // Un solo criterio de "sin datos" para las dos gráficas, así no muestran estados
   // vacíos distintos lado a lado.
-  const noData = budget === 0 && consumed === 0 && overage === 0
+  const noData = budget === 0 && consumed === 0 && overage === 0 && pending === 0
 
   return (
     <>
