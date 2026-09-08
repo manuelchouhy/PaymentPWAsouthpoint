@@ -25,7 +25,7 @@ export function tableTotalsByClient(clients) {
       for (const w of p.weeks) {
         t.consumed += w.consumed
         t.overage += w.overage
-        t.pending += w.pending
+        t.pending += w.pending || 0
       }
     }
     map.set(group.client, t)
@@ -40,7 +40,7 @@ export function portfolioTotals(byClient) {
     t.budget += g.budget
     t.consumed += g.consumed
     t.overage += g.overage
-    t.pending += g.pending
+    t.pending += g.pending || 0
     if (g.hasBudget) t.hasBudget = true
   }
   return t

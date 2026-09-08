@@ -23,7 +23,7 @@ const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
  * global, para no netear el consumo de un proyecto contra el budget de otro.
  *
  * @param {{ totals: { budget: number, consumed: number, overage: number,
- *           remaining: number, hasBudget: boolean } }} props
+ *           pending: number, remaining: number, hasBudget: boolean } }} props
  */
 export function ClientSummaryCharts({ totals }) {
   const budget = totals.hasBudget ? round1(totals.budget) : 0
@@ -97,7 +97,10 @@ export function ClientSummaryCharts({ totals }) {
       <HoursDonut
         icon={<TrendingUp size={14} />}
         title="Consumed / Overage / Remaining"
-        data={noData ? [] : donutData}
+        // El donut usa SU propio vacío (donutTotal): el pending no es parte del
+        // donut, así que un scope solo-pending muestra "No hour data" acá aunque
+        // el gráfico de barras sí dibuje su barra Pending.
+        data={donutTotal === 0 ? [] : donutData}
         total={loggedHours}
       />
       </div>
