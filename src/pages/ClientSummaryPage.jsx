@@ -8,6 +8,7 @@ import { exportGrid } from '../lib/exportGrid'
 import { buildClientSummaryWeekly, weekLabel } from '../lib/clientSummaryWeekly'
 import { filterClientSummary } from '../lib/clientSummaryFilter'
 import { chartTotals, portfolioTotals, tableTotalsByClient } from '../lib/clientSummaryTotals'
+import { buildClientResolver } from '../lib/clientResolver'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { ClientSummaryCharts } from '../components/ClientSummaryCharts'
@@ -33,6 +34,7 @@ export function ClientSummaryPage() {
   const [projects, setProjects] = useState([])
   const [entries, setEntries] = useState([])
   const [crsByProject, setCrsByProject] = useState(() => new Map())
+  const [clientMasters, setClientMasters] = useState([])
   const [status, setStatus] = useState('loading')
   const [reloadKey, setReloadKey] = useState(0)
   const [selectedClients, setSelectedClients] = useState([])
@@ -44,16 +46,24 @@ export function ClientSummaryPage() {
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
+    // clients alimenta el resolver grupo→cliente, pero NO es esencial para ver la
+    // grilla: si su fetch falla (permisos, modo http sin clients.list, red) se
+    // degrada a [] y la agrupación cae al texto legacy. Mismo patrón que ProjectsPage.
+    const clientsList = Promise.resolve()
+      .then(() => api.clients.list())
+      .catch(() => [])
     Promise.all([
       api.projects.list(),
       api.timeEntries.list(),
       api.changeRequests.listByProject(),
+      clientsList,
     ])
-      .then(([projectRows, entryRows, crMap]) => {
+      .then(([projectRows, entryRows, crMap, clientRows]) => {
         if (cancelled) return
         setProjects(projectRows)
         setEntries(entryRows)
         setCrsByProject(crMap)
+        setClientMasters(clientRows)
         setStatus('ready')
       })
       .catch((error) => {
@@ -66,11 +76,21 @@ export function ClientSummaryPage() {
     }
   }, [reloadKey])
 
+  // Cliente resuelto de cada proyecto (cadena manual→grupo→legacy; ver
+  // clientResolver, mismo resolver que Entries/Billing/Projects). Un proyecto cuyo
+  // grupo de Zoho es "Velociti" resuelve al cliente "GS3" aunque projects.client
+  // venga vacío. Se anota aparte para no pisar los campos crudos del sync.
+  const resolvedProjects = useMemo(() => {
+    const resolve = buildClientResolver(clientMasters)
+    return projects.map((p) => ({ ...p, resolvedClient: resolve(p).client ?? '' }))
+  }, [projects, clientMasters])
+
   // Toda la agregación semanal (consumed/overage/cumulative/remaining por semana,
-  // budget del proyecto, totales) vive en el motor puro clientSummaryWeekly.
+  // budget del proyecto) vive en el motor puro clientSummaryWeekly. Agrupa por el
+  // cliente resuelto (resolvedClient).
   const summary = useMemo(
-    () => buildClientSummaryWeekly({ projects, entries, crsByProject }),
-    [projects, entries, crsByProject],
+    () => buildClientSummaryWeekly({ projects: resolvedProjects, entries, crsByProject }),
+    [resolvedProjects, entries, crsByProject],
   )
 
   // Opciones de cada filtro, derivadas de la salida COMPLETA del motor (misma

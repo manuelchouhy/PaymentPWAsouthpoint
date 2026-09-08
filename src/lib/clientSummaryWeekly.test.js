@@ -160,7 +160,20 @@ test('la misma semana de años distintos no se fusiona (year-aware)', () => {
   )
 })
 
-test('agrupa por customerName, cae a client y luego a "Without client"', () => {
+test('agrupa por resolvedClient cuando está presente (gana al texto legacy)', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [
+      // Grupo de Zoho resuelto a "GS3" aunque el texto legacy esté vacío.
+      project({ id: 1, projectName: 'Velociti', customerName: null, client: '', resolvedClient: 'GS3' }),
+    ],
+    entries: [entry({ project: 'Velociti', hours: 4 })],
+    crsByProject: new Map(),
+  })
+  assert.equal(clients.length, 1)
+  assert.equal(clients[0].client, 'GS3')
+})
+
+test('sin resolvedClient cae a customerName / client / "Without client"', () => {
   const { clients } = buildClientSummaryWeekly({
     projects: [
       project({ id: 1, projectName: 'A', customerName: 'HSS', client: 'x' }),

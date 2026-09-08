@@ -27,9 +27,15 @@ export function weekLabel(week) {
   return `WEEK ${week.sundayWeek} · ${week.year}`
 }
 
-/** Nombre de cliente con el que se agrupa un proyecto (mismo criterio que la página). */
+/**
+ * Nombre de cliente con el que se agrupa un proyecto. Prefiere `resolvedClient`
+ * (cliente resuelto por buildClientResolver: cadena manual→grupo→legacy, que la
+ * página anota antes de llamar al motor); si no viene, cae al texto legacy
+ * (customerName || client) y por último a "Without client". El fallback mantiene
+ * al motor usable sin el resolver (tests, modo sin clients).
+ */
 function groupNameOf(project) {
-  return project.customerName || project.client || UNASSIGNED
+  return project.resolvedClient || project.customerName || project.client || UNASSIGNED
 }
 
 /**
