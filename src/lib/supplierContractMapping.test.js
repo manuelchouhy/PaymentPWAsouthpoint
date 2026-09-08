@@ -31,3 +31,9 @@ test('contractToRow preserva un 0 numérico (no lo colapsa a null)', () => {
   const row = contractToRow({ weeklyContractedHours: 0 })
   assert.equal(row.weekly_contracted_hours, 0)
 })
+
+test('contractToRow NO colapsa a null los textos requeridos vacíos (columnas NOT NULL)', () => {
+  const row = contractToRow({ supplierName: '', contractNumber: '' })
+  assert.equal(row.supplier_name, '')
+  assert.equal(row.contract_number, '')
+})

@@ -109,8 +109,8 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
 
   const facts = [
     ['Contract #', contract.contractNumber],
-    ['Rol', contract.role],
     ['Start Date', formatDate(contract.startDate)],
+    ['Rol', contract.role],
     ['Expiration Date', formatDate(contract.expirationDate)],
     ['Renewal Date', formatDate(contract.renewalDate)],
     ['Payment Terms', contract.paymentTerms],

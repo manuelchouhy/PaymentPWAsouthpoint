@@ -49,16 +49,19 @@ export function rowToContract(row) {
 }
 
 /**
- * Objeto de dominio → fila de Supabase (solo los campos presentes). '' se
- * normaliza a null en cualquier campo de texto para no guardar cadenas vacías;
- * un 0 numérico (weeklyContractedHours) se preserva porque nunca es === ''.
- * Mismo criterio field-agnostic que projectToRow.
+ * Objeto de dominio → fila de Supabase (solo los campos presentes). Solo `role`
+ * (columna nullable, texto libre) normaliza '' → null para no guardar cadenas
+ * vacías. NO se generaliza a todos los textos: supplier_name / contract_number /
+ * payment_terms / renewal_type son NOT NULL, y coercionarlos a null convertiría
+ * un valor requerido vacío en una violación de constraint (23502) en vez del
+ * comportamiento previo de guardar ''. La validación del form ya bloquea vacíos
+ * en los requeridos; esta coerción es defensa solo para el campo opcional.
  */
 export function contractToRow(c) {
   const row = {}
   for (const [field, column] of Object.entries(FIELD_TO_COLUMN)) {
     if (c[field] === undefined) continue
-    row[column] = c[field] === '' ? null : c[field]
+    row[column] = field === 'role' && c[field] === '' ? null : c[field]
   }
   return row
 }
