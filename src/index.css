@@ -5337,15 +5337,16 @@ select.field__input { cursor: pointer; }
    --text-soft (no --text-faint) porque estas celdas muestran DATOS ('0.0'), y
    --text-faint no pasa WCAG AA sobre --surface (ver notas en este archivo). */
 .client-summary .cell-quiet { color: var(--text-soft); }
-/* Overage con horas → ámbar (atención). Remaining negativo → rojo. */
-.client-summary .cell-over { color: hsl(var(--warning)); font-weight: 600; }
+/* Overage con horas → ámbar (atención). Remaining negativo → rojo.
+   En tema claro el overage usa un ámbar más oscuro (amber-700) para pasar WCAG
+   AA como TEXTO; en oscuro, el --warning brillante ya contrasta sobre --surface.
+   El rojo --no como texto ya se usa en la app (.proj-days--overdue) y pasa AA. */
+.client-summary .cell-over { color: #B45309; font-weight: 600; }
+.dark .client-summary .cell-over { color: hsl(var(--warning)); }
 .client-summary .cell-neg { color: var(--no); font-weight: 600; }
 /* Separador arriba de cada bloque de cliente, para agruparlos de un vistazo
    (el fondo/peso ya venían de .summary-row--client). */
 .client-summary .summary-row--client > * { border-top: 2px solid var(--line-strong); }
-/* Un poco más de aire vertical en cada celda. */
-.client-summary .proj-table td,
-.client-summary .proj-table th { padding-top: 9px; padding-bottom: 9px; }
 
 /* Fila secundaria: Contracts (más ancho, es una lista) + Supplier Contracts.
    Dos columnas para que el contenido llene el ancho y no quede la mitad derecha vacía. */
