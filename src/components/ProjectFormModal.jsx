@@ -227,8 +227,8 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
                     <input
                       id={`pf-${field.key}`}
                       ref={index === firstFocusableIndex ? firstRef : undefined}
-                      type={field.type === 'date' ? 'date' : field.type === 'number' ? 'number' : 'text'}
-                      min={field.type === 'number' ? '0' : undefined}
+                      type={field.type || 'text'}
+                      min={isBudget ? '0' : undefined}
                       step={isBudget ? '0.5' : undefined}
                       className={`field__input${isMissing || showDup || budgetError ? ' field__input--error' : ''}`}
                       value={value}
