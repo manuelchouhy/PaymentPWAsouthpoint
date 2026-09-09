@@ -8,6 +8,7 @@ import { useEntryFilters, applyEntryFilters, buildFilterOptions, clientFilterOpt
 import { deriveEntriesClient } from '../lib/entryClient'
 import { isEntryFrozen, entryFrozenReason } from '../lib/entryFreeze'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
+import { useSyncReload } from '../lib/useSyncReload'
 import { exportGrid } from '../lib/exportGrid'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { WeekNavigator } from '../components/WeekNavigator'
@@ -115,6 +116,7 @@ export function EntriesPage() {
   const [status, setStatus] = useState('loading')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [reloadKey, setReloadKey] = useState(0)
+  useSyncReload(setReloadKey)
   // Client Summary linkea acá con ?client=/?project=: llegar a la grilla sin
   // filtrar obligaría a rehacer a mano el filtro que ya estaba puesto allá.
   const [searchParams] = useSearchParams()

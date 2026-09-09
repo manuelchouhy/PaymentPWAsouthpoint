@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { HoursDonut } from '../components/HoursDonut'
 import { api } from '../lib/api'
+import { useSyncReloadKey } from '../lib/useSyncReload'
 import { ALLOCATION_LABELS } from '../lib/allocations'
 import { ContractsExpiringWidget } from '../components/dashboard/ContractsExpiringWidget'
 import { SupplierContractsWidget } from '../components/dashboard/SupplierContractsWidget'
@@ -97,6 +98,7 @@ export function DashboardPage() {
   const [data, setData] = useState(null)
   const [loadStatus, setLoadStatus] = useState('loading')
 
+  const reloadKey = useSyncReloadKey()
   useEffect(() => {
     let cancelled = false
     setLoadStatus('loading')
@@ -119,7 +121,7 @@ export function DashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reloadKey])
 
   // Map: entryId (string) → invoice
   const invoiceByEntryId = useMemo(() => {

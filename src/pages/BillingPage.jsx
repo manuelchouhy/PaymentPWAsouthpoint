@@ -18,6 +18,7 @@ import {
   selectionScope,
 } from '../lib/billingSelection'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
+import { useSyncReload } from '../lib/useSyncReload'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { Checkbox } from '../components/Checkbox'
 import { ExportDropdown } from '../components/ExportDropdown'
@@ -177,6 +178,7 @@ export function BillingPage() {
   const [clients, setClients] = useState([])
   const [status, setStatus] = useState('loading')
   const [reloadKey, setReloadKey] = useState(0)
+  useSyncReload(setReloadKey)
   const [selectedKeys, setSelectedKeys] = useState(() => new Set())
   // Semanas abiertas, estado ABSOLUTO por id de semana (no un "flip" respecto de
   // una posición). Si se guardara el flip contra "la más reciente" y esa semana

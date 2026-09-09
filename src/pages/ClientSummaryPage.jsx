@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { buildClientSummaryWeekly, weekLabel } from '../lib/clientSummaryWeekly'
+import { useSyncReload } from '../lib/useSyncReload'
 import { filterClientSummary } from '../lib/clientSummaryFilter'
 import {
   chartTotals,
@@ -66,6 +67,7 @@ export function ClientSummaryPage() {
   const [clientMasters, setClientMasters] = useState([])
   const [status, setStatus] = useState('loading')
   const [reloadKey, setReloadKey] = useState(0)
+  useSyncReload(setReloadKey)
   const [selectedClients, setSelectedClients] = useState([])
   const [selectedProjectNumbers, setSelectedProjectNumbers] = useState([])
   const [selectedProjectNames, setSelectedProjectNames] = useState([])

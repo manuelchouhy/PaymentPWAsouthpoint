@@ -7,6 +7,7 @@ import { SyncStatus } from './SyncStatus'
 import { SyncLogModal } from './SyncLogModal'
 import { NAV_ITEMS, ADMIN_NAV_ITEMS } from './Sidebar'
 import { api } from '../lib/api'
+import { emitSyncCompleted } from '../lib/useSyncReload'
 
 const ALL_ITEMS = [...NAV_ITEMS, ...ADMIN_NAV_ITEMS]
 const SYNC_POLL_MS = 60000
@@ -34,6 +35,7 @@ export function Header({ rolesBadge, onToggleSidebar, user, profile, onSignOut }
   const breadcrumb = useBreadcrumb()
   const [syncStatus, setSyncStatus] = useState(null)
   const [syncLogOpen, setSyncLogOpen] = useState(false)
+  const [syncing, setSyncing] = useState(false)
 
   // Estado de sync global (tabla única en Supabase): se muestra en el header
   // para que sea visible desde cualquier pantalla, no solo en Time Entries.
@@ -54,6 +56,26 @@ export function Header({ rolesBadge, onToggleSidebar, user, profile, onSignOut }
     }
   }, [])
 
+  // Fuerza un sync de Zoho on-demand desde el Header. Al terminar, refresca el
+  // estado del historial y emite el evento global para que la página visible
+  // vuelva a cargar sus datos (recarga suave, sin recargar la ventana).
+  async function handleSync() {
+    if (syncing) return
+    setSyncing(true)
+    try {
+      await api.sync.trigger()
+      emitSyncCompleted()
+    } catch (error) {
+      console.error('No se pudo sincronizar:', error)
+    } finally {
+      // Tanto en éxito como en error la Edge Function dejó el estado escrito.
+      api.sync.getStatus()
+        .then((data) => setSyncStatus(data))
+        .catch(() => {})
+      setSyncing(false)
+    }
+  }
+
   return (
     <header className="app-header">
       <button
@@ -69,7 +91,12 @@ export function Header({ rolesBadge, onToggleSidebar, user, profile, onSignOut }
         {rolesBadge !== 'No role' && (
           <span className="masthead__badge">{rolesBadge}</span>
         )}
-        <SyncStatus status={syncStatus} onOpenLog={() => setSyncLogOpen(true)} />
+        <SyncStatus
+          status={syncStatus}
+          onOpenLog={() => setSyncLogOpen(true)}
+          onRefresh={handleSync}
+          syncing={syncing}
+        />
         <ThemeToggle />
         {user && (
           <HeaderUserMenu user={user} profile={profile} onSignOut={onSignOut} />
