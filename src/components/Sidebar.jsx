@@ -55,7 +55,7 @@ const NAV_ITEMS = [
   { to: '/capacity', label: 'Capacity', Icon: Gauge, disabled: true },
   { to: '/client-detail', label: 'Client Detail', Icon: FileSearch },
   { to: '/collections', label: 'Collections', Icon: Landmark, disabled: true },
-  { to: '/supplier-contracts', label: 'Supplier Contracts', Icon: FileText },
+  { to: '/supplier-contracts', label: 'Vendors Contracts', Icon: FileText },
   { to: '/traceability', label: 'Traceability', Icon: GitBranch, disabled: true },
 ]
 

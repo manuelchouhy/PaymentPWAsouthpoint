@@ -114,7 +114,7 @@ export function SupplierContractsPage() {
       status: displaySupplierStatus(c),
       daysLeft: daysRemaining(c.expirationDate),
     }))
-    exportGrid({ rows: exportRows, columns: cols, title: 'Supplier Contracts', gridName: 'supplier_contracts', format, generatedBy: user?.email ?? '' })
+    exportGrid({ rows: exportRows, columns: cols, title: 'Vendors Contracts', gridName: 'supplier_contracts', format, generatedBy: user?.email ?? '' })
   }
 
   async function handleCreate(payload) {
@@ -167,10 +167,10 @@ export function SupplierContractsPage() {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="masthead__top">
-          <span className="masthead__kicker">Supplier contracts</span>
+          <span className="masthead__kicker">Vendors contracts</span>
           <span className="masthead__rule" aria-hidden="true" />
         </div>
-        <h1 className="masthead__title">Supplier Contracts</h1>
+        <h1 className="masthead__title">Vendors Contracts</h1>
         <p className="masthead__sub">
           Supplier (contractor) contracts, sorted by expiration date.
           southpointlabs receives priority treatment.
