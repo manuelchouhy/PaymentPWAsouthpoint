@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { ArrowRight, ArrowLeft, FileUp, Loader2, Plus, Save, X } from 'lucide-react'
 import { ClientPicker } from './ClientPicker'
 import { parseSowDocument } from '../lib/sowParser'
+import { parseBudgetInput } from '../lib/budgetInput'
 import { isGenericFileType } from '../lib/projectsData'
 import { fileNameFromPath } from '../lib/format'
 import { api } from '../lib/api'
@@ -380,11 +381,11 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
         form.stages.some(stageMissing) ||
         (!isEdit && form.stages.length === 0)),
   }
-  // !(n > 0) en vez de n <= 0: Number(x) <= 0 es false para NaN (un valor no
-  // numérico colaría como "válido"), !(NaN > 0) es true — rechaza tanto NaN
-  // como vacío/cero/negativo en una sola condición.
+  // Budget: requerido y > 0 (a diferencia del form de edición, que permite vacío
+  // y 0 como corrección). parseBudgetInput —fuente única compartida— lo expresa
+  // con { allowEmpty:false, allowZero:false }; rechaza NaN, vacío, cero y negativo.
   const step2Missing = {
-    budgetHours: !(Number(form.budgetHours) > 0),
+    budgetHours: Boolean(parseBudgetInput(form.budgetHours, { allowEmpty: false, allowZero: false }).error),
     periodStart: !form.periodStart,
     periodEnd: !form.periodEnd,
   }

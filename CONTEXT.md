@@ -26,6 +26,18 @@ aprueba un change request**. En código lo calcula `effectiveBudgetHours(baseBud
 changeRequests)`.
 _Avoid_: tratar el Budget como una cuota semanal.
 
+**Base budget (estimado del SOW)** vs **Change request**:
+Son dos cosas distintas y no se confunden.
+- **Editar el base budget** = **corregir/cargar el estimado del SOW** cuando está
+  mal o falta (ej. el SOW decía 150 y eran 200; un proyecto sincronizado de Zoho
+  llegó sin budget). Es un **arreglo de un dato**, no un cambio de lo pactado: **no
+  lleva aprobación**, solo queda auditado.
+- **Change request** = ampliar lo **pactado** con el cliente (que pagará el
+  excedente). Es un compromiso comercial nuevo: nace `pending` y **requiere
+  aprobación** antes de sumar al Budget.
+_Avoid_: usar el edit del base para meter una ampliación de alcance (eso es un
+change request); usar un change request para corregir un base mal cargado.
+
 **Overage**:
 Horas por encima de lo contratado (allocation `overage`); se pagan al contractor,
 no se facturan al cliente. Nace cuando el **consumido acumulado** (horas
