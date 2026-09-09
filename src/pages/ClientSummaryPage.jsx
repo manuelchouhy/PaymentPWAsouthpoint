@@ -380,7 +380,10 @@ export function ClientSummaryPage() {
                           // (pura, testeada en projectRowTotals). El chevron despliega
                           // el desglose por semana. Colapsado por defecto → tabla corta.
                           const pt = projectRowTotals(project)
-                          const hasWeeks = project.weeks.length > 0
+                          // weeks local con el mismo guard que projectRowTotals
+                          // (?? []), para que ambos call sites traten weeks igual.
+                          const weeks = project.weeks ?? []
+                          const hasWeeks = weeks.length > 0
                           const open = expandedProjects.has(project.id)
                           const detailId = `cs-weeks-${project.id}`
                           return (
@@ -424,7 +427,7 @@ export function ClientSummaryPage() {
                                     semanas hay adentro (o '—' si no hay). */}
                                 <td className="cell-soft">
                                   {hasWeeks
-                                    ? `${project.weeks.length} ${project.weeks.length === 1 ? 'week' : 'weeks'}`
+                                    ? `${weeks.length} ${weeks.length === 1 ? 'week' : 'weeks'}`
                                     : '—'}
                                 </td>
                                 <td className="cell-soft">{project.zohoStatus || '—'}</td>
@@ -439,7 +442,7 @@ export function ClientSummaryPage() {
                                   La identidad del proyecto queda en la fila padre; acá solo
                                   la semana y sus horas. */}
                               {open &&
-                                project.weeks.map((week, wi) => (
+                                weeks.map((week, wi) => (
                                   <tr
                                     key={`${project.id}-${week.weekStart}`}
                                     className="cs-week-row"

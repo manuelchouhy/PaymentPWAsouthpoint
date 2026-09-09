@@ -119,6 +119,22 @@ test('projectRowTotals sin semanas: remaining cae al budget y acumulados en 0', 
   assert.equal(t.remaining, 80) // sin semanas queda intacto el budget
 })
 
+test('projectRowTotals trata campos de semana faltantes como 0 (sin NaN)', () => {
+  const project = {
+    id: 9,
+    budget: 50,
+    weeks: [
+      { cumulative: 10, remaining: 40 }, // sin consumed/pending/overage
+      { consumed: 5, cumulative: 15, remaining: 35 }, // sin pending/overage
+    ],
+  }
+  const t = projectRowTotals(project)
+  assert.equal(t.consumed, 5)
+  assert.equal(t.pending, 0)
+  assert.equal(t.overage, 0)
+  assert.equal(Number.isNaN(t.consumed), false)
+})
+
 test('projectRowTotals sin budget: hasBudget=false y remaining null si no hay semanas', () => {
   const t = projectRowTotals({ id: 3, budget: null, weeks: [] })
   assert.equal(t.hasBudget, false)

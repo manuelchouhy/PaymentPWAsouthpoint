@@ -67,9 +67,9 @@ export function projectRowTotals(project) {
     remaining: project.budget ?? null,
   }
   for (const w of weeks) {
-    t.consumed += w.consumed
+    t.consumed += w.consumed || 0
     t.pending += w.pending || 0
-    t.overage += w.overage
+    t.overage += w.overage || 0
   }
   if (weeks.length) {
     const last = weeks[weeks.length - 1]
