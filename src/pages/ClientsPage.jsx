@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, Plus } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatDateTime } from '../lib/format'
+import { useSyncReloadKey } from '../lib/useSyncReload'
 import { ClientFormModal } from '../components/ClientFormModal'
 import { ClientDetailDrawer } from '../components/ClientDetailDrawer'
 import { Toast } from '../components/Toast'
@@ -19,6 +20,7 @@ export function ClientsPage() {
   const [detail, setDetail] = useState(null)
   const [toast, setToast] = useState(null)
 
+  const reloadKey = useSyncReloadKey()
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
@@ -36,7 +38,7 @@ export function ClientsPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reloadKey])
 
   async function handleCreate(payload, msaFile) {
     // MSA opcional: si no se subió archivo, el cliente se crea sin MSA (trabajo

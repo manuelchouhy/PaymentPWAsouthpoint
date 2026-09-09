@@ -3,6 +3,7 @@ import { Link, useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, BellRing, ChevronDown, ChevronRight, Download } from 'lucide-react'
 import { paymentAlertLevel } from '../lib/paymentsData'
+import { useSyncReloadKey } from '../lib/useSyncReload'
 import {
   pendingToPayByContractor,
   invoicelessPaidRows,
@@ -257,10 +258,11 @@ export function PaymentsPage() {
       )
   }
 
+  const reloadKey = useSyncReloadKey()
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [reloadKey])
 
   // invoice_contractors agrupados por factura (para expandir cada factura a sus
   // contractors pendientes de pago).

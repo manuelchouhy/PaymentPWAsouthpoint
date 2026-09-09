@@ -12,6 +12,7 @@ import {
 import { projectSows, stageSows } from '../lib/projectSows'
 import { api } from '../lib/api'
 import { buildClientResolver } from '../lib/clientResolver'
+import { useSyncReloadKey } from '../lib/useSyncReload'
 import { clientFilterKey, clientFilterOptions, sortedUnique, OTHER_CLIENT } from '../lib/useEntryFilters'
 import { formatDate, formatHours } from '../lib/format'
 import { ContractBadge } from '../components/ContractBadge'
@@ -67,6 +68,7 @@ export function ProjectsPage() {
   const [detail, setDetail] = useState(null)
   const [toast, setToast] = useState(null)
 
+  const reloadKey = useSyncReloadKey()
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
@@ -96,7 +98,7 @@ export function ProjectsPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reloadKey])
 
   // Cliente resuelto de cada proyecto (cadena manual→grupo→legacy; ver
   // clientResolver). Un proyecto cuyo grupo de Zoho es "GS3" resuelve al cliente

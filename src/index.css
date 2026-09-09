@@ -1125,8 +1125,13 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .sync-status__text--error,
 .sync-status__text--error .sync-status__value { color: var(--no); }
 
-.sync-status__history { width: 32px; height: 32px; }
-.sync-status__history svg { width: 16px; height: 16px; }
+.sync-status__history,
+.sync-status__refresh { width: 32px; height: 32px; }
+.sync-status__history svg,
+.sync-status__refresh svg { width: 16px; height: 16px; }
+.sync-status__refresh:not(:disabled):hover svg { color: hsl(var(--primary)); }
+.sync-status__refresh .icon-spin { color: hsl(var(--primary)); }
+.sync-status__refresh:disabled { cursor: default; }
 
 /* --- Filtro --------------------------------------------------------------- */
 .filter {

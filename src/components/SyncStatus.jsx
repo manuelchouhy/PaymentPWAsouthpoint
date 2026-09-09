@@ -1,15 +1,24 @@
 import { useEffect, useState } from 'react'
-import { History } from 'lucide-react'
+import { History, RefreshCw } from 'lucide-react'
 import { formatRelativeTime } from '../lib/format'
 
 /**
- * Texto "Última actualización: hace 7 min" + botón de historial (icono reloj).
+ * Texto "Última actualización: hace 7 min" + botón de sync + botón de historial.
  * El texto relativo se recalcula solo cada 30 s para que quede "en vivo" sin
  * depender de nuevas cargas de datos.
  *
- * @param {{ status: import('../lib/data').SyncStatus | null, onOpenLog: () => void }} props
+ * `onRefresh`/`syncing` son opcionales: si se pasan, se muestra el botón para
+ * forzar un sync de Zoho pegado al historial (así vive en el Header global y no
+ * solo en la pantalla de Time Entries).
+ *
+ * @param {{
+ *   status: import('../lib/data').SyncStatus | null,
+ *   onOpenLog: () => void,
+ *   onRefresh?: () => void,
+ *   syncing?: boolean,
+ * }} props
  */
-export function SyncStatus({ status, onOpenLog }) {
+export function SyncStatus({ status, onOpenLog, onRefresh, syncing = false }) {
   // Tick periódico → fuerza re-render para refrescar el "hace N min".
   const [, setTick] = useState(0)
   useEffect(() => {
@@ -45,6 +54,23 @@ export function SyncStatus({ status, onOpenLog }) {
           'No syncs yet'
         )}
       </span>
+      {onRefresh && (
+        <button
+          type="button"
+          className="icon-btn sync-status__refresh"
+          onClick={onRefresh}
+          disabled={syncing}
+          aria-busy={syncing}
+          aria-label={syncing ? 'Syncing…' : 'Force a Zoho sync'}
+          title="Force a Zoho sync"
+        >
+          <RefreshCw
+            size={16}
+            className={syncing ? 'icon-spin' : ''}
+            aria-hidden="true"
+          />
+        </button>
+      )}
       <button
         type="button"
         className="icon-btn sync-status__history"
