@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useState } from 'react'
 import { ArrowRight, BellOff, Pencil, RefreshCw, Star, X } from 'lucide-react'
 import { SupplierStatusBadge } from './SupplierStatusBadge'
 import { displaySupplierStatus } from '../lib/supplierContractsData'
@@ -38,17 +37,23 @@ function alertLabel(a) {
 }
 
 /**
- * Drawer de detalle de Supplier Contract (FR-14 / FR-15).
+ * Modal (pop-up centrado) de detalle de Supplier/Vendors Contract (FR-14 / FR-15).
+ * Antes era un drawer lateral; ahora reutiliza el sistema de modal
+ * (.modal-backdrop / .modal, igual que .modal--entry-detail), conservando las
+ * secciones de contenido .drawer__* (facts, historiales, acciones).
+ *
+ * NO usa framer-motion a propósito (igual que .modal--entry-detail): en una
+ * pestaña oculta el `exit` de AnimatePresence no completa y el modal quedaba
+ * montado. Con divs planos cierra siempre.
  *
  * @param {{ contract: object, onClose: () => void, onEdit: () => void,
  *           onRenew?: () => void, onMarkRenewal?: () => void }} props
  */
-export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onMarkRenewal }) {
+export function SupplierContractModal({ contract, onClose, onEdit, onRenew, onMarkRenewal }) {
   const [history, setHistory] = useState([])
   const [renewals, setRenewals] = useState([])
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
-  const drawerRef = useRef(null)
 
   const days = daysRemaining(contract.expirationDate)
   const status = displaySupplierStatus(contract)
@@ -101,29 +106,17 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
   ]
 
   return (
-    <motion.div
-      className="drawer-backdrop"
-      onClick={onClose}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-    >
-      <motion.aside
-        className="drawer"
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal modal--supplier-detail"
         role="dialog"
         aria-modal="true"
         aria-labelledby="sc-drawer-title"
-        ref={drawerRef}
         onClick={(e) => e.stopPropagation()}
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 30, stiffness: 300 }}
       >
         <div className="drawer__head">
           <div>
-            <span className="drawer__kicker">Supplier Contract</span>
+            <span className="drawer__kicker">Vendors Contract</span>
             <h2 className="drawer__title" id="sc-drawer-title">
               {contract.isPrioritySupplier && (
                 <Star size={15} aria-hidden="true" className="sc-priority-star" />
@@ -262,7 +255,7 @@ export function SupplierContractDrawer({ contract, onClose, onEdit, onRenew, onM
             )}
           </div>
         </div>
-      </motion.aside>
-    </motion.div>
+      </div>
+    </div>
   )
 }

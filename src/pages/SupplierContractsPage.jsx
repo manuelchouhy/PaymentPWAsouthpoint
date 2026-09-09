@@ -16,7 +16,7 @@ import { SupplierStatusBadge } from '../components/SupplierStatusBadge'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { SupplierContractFormModal } from '../components/SupplierContractFormModal'
 import { RenewContractModal } from '../components/RenewContractModal'
-import { SupplierContractDrawer } from '../components/SupplierContractDrawer'
+import { SupplierContractModal } from '../components/SupplierContractModal'
 import { PriorityContractBanner } from '../components/PriorityContractBanner'
 import { Toast } from '../components/Toast'
 import { ExportDropdown } from '../components/ExportDropdown'
@@ -339,26 +339,26 @@ export function SupplierContractsPage() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {detail && (
-          <SupplierContractDrawer
-            key={`detail-${detail.id}`}
-            contract={detail}
-            onClose={() => setDetail(null)}
-            onEdit={() => {
-              const contract = detail
-              setDetail(null)
-              setForm({ mode: 'edit', contract })
-            }}
-            onRenew={() => {
-              const contract = detail
-              setDetail(null)
-              setRenewing(contract)
-            }}
-            onMarkRenewal={() => handleMarkRenewal(detail)}
-          />
-        )}
-      </AnimatePresence>
+      {/* Sin AnimatePresence: el modal de detalle usa divs planos (no
+          framer-motion) para no colgarse en pestaña oculta; ver el componente. */}
+      {detail && (
+        <SupplierContractModal
+          key={`detail-${detail.id}`}
+          contract={detail}
+          onClose={() => setDetail(null)}
+          onEdit={() => {
+            const contract = detail
+            setDetail(null)
+            setForm({ mode: 'edit', contract })
+          }}
+          onRenew={() => {
+            const contract = detail
+            setDetail(null)
+            setRenewing(contract)
+          }}
+          onMarkRenewal={() => handleMarkRenewal(detail)}
+        />
+      )}
 
       <AnimatePresence>
         {toast && (
