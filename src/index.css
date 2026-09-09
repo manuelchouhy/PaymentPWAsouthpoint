@@ -5303,6 +5303,29 @@ select.field__input { cursor: pointer; }
 /* El caption va pegado a sus gráficas (unidad visual), no al ritmo de 22px. */
 .cs-charts .state__hint { margin: 0 0 10px; }
 
+/* Filas colapsables de Client Summary: 1 fila por proyecto (con totales) que se
+   despliega a su desglose por semana. Reusa el chevron .pay-expand de Payments. */
+.cs-lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* Spacer del mismo ancho que el chevron, para alinear los proyectos sin semanas
+   (que no tienen botón) con los que sí lo tienen. */
+.pay-expand--empty {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+}
+.cs-project-row--expandable { cursor: pointer; }
+.cs-project-row--expandable:hover td { background: var(--line-strong); }
+.dark .cs-project-row--expandable:hover td { background: rgba(255, 255, 255, .04); }
+/* Desglose por semana: fondo apenas hundido y la etiqueta de semana indentada,
+   para leerse como hijo de la fila del proyecto. */
+.cs-week-row td { background: rgba(0, 0, 0, .02); }
+.dark .cs-week-row td { background: rgba(255, 255, 255, .02); }
+.cs-week-label { padding-left: 26px; }
+
 /* Fila secundaria: Contracts (más ancho, es una lista) + Supplier Contracts.
    Dos columnas para que el contenido llene el ancho y no quede la mitad derecha vacía. */
 .dash-secondary {
