@@ -46,8 +46,10 @@ function num1(value) {
 //     negativo (sobre budget).
 function hoursCellClass(value, kind = 'plain') {
   const base = 'col-num cell-mono'
-  if (value == null) return `${base} cell-quiet`
-  const r = Math.round(value * 10) / 10
+  const r = num1(value) // mismo redondeo que muestra la celda (reusa num1)
+  // null/undefined ('—') y NaN → atenuado: cubre el invariante "un 0.0 mostrado
+  // siempre se ve atenuado" (formatHours(NaN) también imprime 0.0).
+  if (!Number.isFinite(r)) return `${base} cell-quiet`
   if (kind === 'overage') return r > 0 ? `${base} cell-over` : `${base} cell-quiet`
   if (kind === 'remaining' && r < 0) return `${base} cell-neg`
   return r === 0 ? `${base} cell-quiet` : base

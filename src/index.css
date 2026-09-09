@@ -5329,20 +5329,14 @@ select.field__input { cursor: pointer; }
 /* --- Legibilidad de la grilla de Client Summary --------------------------
    La tabla tiene 12 columnas y varios tipos de fila; sin ayuda visual se lee
    "entreverada". Estas reglas dan jerarquía SIN sumar un segundo acento de
-   color a las filas (eso lo reservan los badges en otras tablas): header fijo,
-   números tabulares, ceros/'—' atenuados y color solo en lo accionable. */
-/* Header fijo al hacer scroll dentro del wrapper. */
-.client-summary .proj-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line-strong);
-}
+   color a las filas (eso lo reservan los badges en otras tablas): números
+   tabulares, ceros/'—' atenuados y color solo en lo accionable. */
 /* Columnas numéricas alineadas dígito a dígito. */
 .client-summary .col-num { font-variant-numeric: tabular-nums; }
-/* Ceros y '—' atenuados: los valores reales resaltan sobre el ruido. */
-.client-summary .cell-quiet { color: var(--text-faint); }
+/* Ceros y '—' atenuados: los valores reales resaltan sobre el ruido. Se usa
+   --text-soft (no --text-faint) porque estas celdas muestran DATOS ('0.0'), y
+   --text-faint no pasa WCAG AA sobre --surface (ver notas en este archivo). */
+.client-summary .cell-quiet { color: var(--text-soft); }
 /* Overage con horas → ámbar (atención). Remaining negativo → rojo. */
 .client-summary .cell-over { color: hsl(var(--warning)); font-weight: 600; }
 .client-summary .cell-neg { color: var(--no); font-weight: 600; }
