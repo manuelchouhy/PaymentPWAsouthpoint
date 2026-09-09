@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
 import { ArrowRight, BellOff, Pencil, RefreshCw, Star, X } from 'lucide-react'
 import { SupplierStatusBadge } from './SupplierStatusBadge'
 import { displaySupplierStatus } from '../lib/supplierContractsData'
@@ -42,6 +41,10 @@ function alertLabel(a) {
  * Antes era un drawer lateral; ahora reutiliza el sistema de modal
  * (.modal-backdrop / .modal, igual que .modal--entry-detail), conservando las
  * secciones de contenido .drawer__* (facts, historiales, acciones).
+ *
+ * NO usa framer-motion a propósito (igual que .modal--entry-detail): en una
+ * pestaña oculta el `exit` de AnimatePresence no completa y el modal quedaba
+ * montado. Con divs planos cierra siempre.
  *
  * @param {{ contract: object, onClose: () => void, onEdit: () => void,
  *           onRenew?: () => void, onMarkRenewal?: () => void }} props
@@ -103,24 +106,13 @@ export function SupplierContractModal({ contract, onClose, onEdit, onRenew, onMa
   ]
 
   return (
-    <motion.div
-      className="modal-backdrop"
-      onClick={onClose}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-    >
-      <motion.div
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
         className="modal modal--supplier-detail"
         role="dialog"
         aria-modal="true"
         aria-labelledby="sc-drawer-title"
         onClick={(e) => e.stopPropagation()}
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.98 }}
-        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="drawer__head">
           <div>
@@ -263,7 +255,7 @@ export function SupplierContractModal({ contract, onClose, onEdit, onRenew, onMa
             )}
           </div>
         </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   )
 }

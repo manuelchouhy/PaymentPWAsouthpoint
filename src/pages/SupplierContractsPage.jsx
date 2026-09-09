@@ -339,26 +339,26 @@ export function SupplierContractsPage() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {detail && (
-          <SupplierContractModal
-            key={`detail-${detail.id}`}
-            contract={detail}
-            onClose={() => setDetail(null)}
-            onEdit={() => {
-              const contract = detail
-              setDetail(null)
-              setForm({ mode: 'edit', contract })
-            }}
-            onRenew={() => {
-              const contract = detail
-              setDetail(null)
-              setRenewing(contract)
-            }}
-            onMarkRenewal={() => handleMarkRenewal(detail)}
-          />
-        )}
-      </AnimatePresence>
+      {/* Sin AnimatePresence: el modal de detalle usa divs planos (no
+          framer-motion) para no colgarse en pestaña oculta; ver el componente. */}
+      {detail && (
+        <SupplierContractModal
+          key={`detail-${detail.id}`}
+          contract={detail}
+          onClose={() => setDetail(null)}
+          onEdit={() => {
+            const contract = detail
+            setDetail(null)
+            setForm({ mode: 'edit', contract })
+          }}
+          onRenew={() => {
+            const contract = detail
+            setDetail(null)
+            setRenewing(contract)
+          }}
+          onMarkRenewal={() => handleMarkRenewal(detail)}
+        />
+      )}
 
       <AnimatePresence>
         {toast && (
