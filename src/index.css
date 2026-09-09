@@ -5326,6 +5326,33 @@ select.field__input { cursor: pointer; }
 .dark .cs-week-row td { background: rgba(255, 255, 255, .02); }
 .cs-week-label { padding-left: 26px; }
 
+/* --- Legibilidad de la grilla de Client Summary --------------------------
+   La tabla tiene 12 columnas y varios tipos de fila; sin ayuda visual se lee
+   "entreverada". Estas reglas dan jerarquía SIN sumar un segundo acento de
+   color a las filas (eso lo reservan los badges en otras tablas): header fijo,
+   números tabulares, ceros/'—' atenuados y color solo en lo accionable. */
+/* Header fijo al hacer scroll dentro del wrapper. */
+.client-summary .proj-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-strong);
+}
+/* Columnas numéricas alineadas dígito a dígito. */
+.client-summary .col-num { font-variant-numeric: tabular-nums; }
+/* Ceros y '—' atenuados: los valores reales resaltan sobre el ruido. */
+.client-summary .cell-quiet { color: var(--text-faint); }
+/* Overage con horas → ámbar (atención). Remaining negativo → rojo. */
+.client-summary .cell-over { color: hsl(var(--warning)); font-weight: 600; }
+.client-summary .cell-neg { color: var(--no); font-weight: 600; }
+/* Separador arriba de cada bloque de cliente, para agruparlos de un vistazo
+   (el fondo/peso ya venían de .summary-row--client). */
+.client-summary .summary-row--client > * { border-top: 2px solid var(--line-strong); }
+/* Un poco más de aire vertical en cada celda. */
+.client-summary .proj-table td,
+.client-summary .proj-table th { padding-top: 9px; padding-bottom: 9px; }
+
 /* Fila secundaria: Contracts (más ancho, es una lista) + Supplier Contracts.
    Dos columnas para que el contenido llene el ancho y no quede la mitad derecha vacía. */
 .dash-secondary {
