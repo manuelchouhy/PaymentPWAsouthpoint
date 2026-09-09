@@ -34,6 +34,30 @@ function num1(value) {
   return typeof value === 'number' ? Math.round(value * 10) / 10 : value
 }
 
+// --- className de celdas numéricas -------------------------------------------
+// Un solo criterio para TODA la grilla, así el estilo nunca contradice el texto
+// ni difiere entre columnas (la tabla se leía "entreverada" con todo del mismo
+// peso). Reglas:
+//   - se decide sobre el valor REDONDEADO a 1 decimal (igual que formatHours),
+//     de modo que un '0.0' mostrado siempre se ve atenuado (no importa si el
+//     crudo era 0.04);
+//   - cero o nulo ('—') → atenuado (cell-quiet), en todas las columnas por igual;
+//   - kind 'overage' → ámbar si hay sobreconsumo; kind 'remaining' → rojo si es
+//     negativo (sobre budget).
+function hoursCellClass(value, kind = 'plain') {
+  const base = 'col-num cell-mono'
+  const r = num1(value) // mismo redondeo que muestra la celda (reusa num1)
+  // null/undefined ('—') y NaN → atenuado: cubre el invariante "un 0.0 mostrado
+  // siempre se ve atenuado" (formatHours(NaN) también imprime 0.0).
+  if (!Number.isFinite(r)) return `${base} cell-quiet`
+  if (kind === 'overage') return r > 0 ? `${base} cell-over` : `${base} cell-quiet`
+  // Signo del valor CRUDO (no del redondeado): un remaining de -0.03 se muestra
+  // como "-0.0" (negativo a la vista), así que va en rojo, no atenuado; num1
+  // lo redondearía a -0 y perdería el signo.
+  if (kind === 'remaining' && value < 0) return `${base} cell-neg`
+  return r === 0 ? `${base} cell-quiet` : base
+}
+
 export function ClientSummaryPage() {
   const { user } = useOutletContext()
   const [projects, setProjects] = useState([])
@@ -368,12 +392,14 @@ export function ClientSummaryPage() {
                         <tr className="summary-row--client">
                           <th scope="rowgroup">{group.client}</th>
                           <td colSpan={5} />
-                          <td className="col-num cell-mono">{ct.hasBudget ? formatHours(ct.budget) : '—'}</td>
-                          <td className="col-num cell-mono">{formatHours(ct.consumed)}</td>
-                          <td className="col-num cell-mono">{formatHours(ct.pending)}</td>
+                          <td className={hoursCellClass(ct.hasBudget ? ct.budget : null)}>
+                            {ct.hasBudget ? formatHours(ct.budget) : '—'}
+                          </td>
+                          <td className={hoursCellClass(ct.consumed)}>{formatHours(ct.consumed)}</td>
+                          <td className={hoursCellClass(ct.pending)}>{formatHours(ct.pending)}</td>
                           <td className="col-num" />
                           <td className="col-num" />
-                          <td className="col-num cell-mono">{formatHours(ct.overage)}</td>
+                          <td className={hoursCellClass(ct.overage, 'overage')}>{formatHours(ct.overage)}</td>
                         </tr>
                         {group.projects.map((project) => {
                           // Fila COLAPSADA: una por proyecto, con los totales
@@ -431,12 +457,12 @@ export function ClientSummaryPage() {
                                     : '—'}
                                 </td>
                                 <td className="cell-soft">{project.zohoStatus || '—'}</td>
-                                <td className="col-num cell-mono">{hoursOrDash(pt.budget)}</td>
-                                <td className="col-num cell-mono">{formatHours(pt.consumed)}</td>
-                                <td className="col-num cell-mono">{formatHours(pt.pending)}</td>
-                                <td className="col-num cell-mono">{formatHours(pt.cumulative)}</td>
-                                <td className="col-num cell-mono">{hoursOrDash(pt.remaining)}</td>
-                                <td className="col-num cell-mono">{formatHours(pt.overage)}</td>
+                                <td className={hoursCellClass(pt.budget)}>{hoursOrDash(pt.budget)}</td>
+                                <td className={hoursCellClass(pt.consumed)}>{formatHours(pt.consumed)}</td>
+                                <td className={hoursCellClass(pt.pending)}>{formatHours(pt.pending)}</td>
+                                <td className={hoursCellClass(pt.cumulative)}>{formatHours(pt.cumulative)}</td>
+                                <td className={hoursCellClass(pt.remaining, 'remaining')}>{hoursOrDash(pt.remaining)}</td>
+                                <td className={hoursCellClass(pt.overage, 'overage')}>{formatHours(pt.overage)}</td>
                               </tr>
                               {/* Desglose por semana: solo en el DOM cuando está expandida.
                                   La identidad del proyecto queda en la fila padre; acá solo
@@ -455,11 +481,11 @@ export function ClientSummaryPage() {
                                     <td className="cell-mono cs-week-label">{weekLabel(week)}</td>
                                     <td />
                                     <td className="col-num" />
-                                    <td className="col-num cell-mono">{formatHours(week.consumed)}</td>
-                                    <td className="col-num cell-mono">{formatHours(week.pending)}</td>
-                                    <td className="col-num cell-mono">{formatHours(week.cumulative)}</td>
-                                    <td className="col-num cell-mono">{hoursOrDash(week.remaining)}</td>
-                                    <td className="col-num cell-mono">{formatHours(week.overage)}</td>
+                                    <td className={hoursCellClass(week.consumed)}>{formatHours(week.consumed)}</td>
+                                    <td className={hoursCellClass(week.pending)}>{formatHours(week.pending)}</td>
+                                    <td className={hoursCellClass(week.cumulative)}>{formatHours(week.cumulative)}</td>
+                                    <td className={hoursCellClass(week.remaining, 'remaining')}>{hoursOrDash(week.remaining)}</td>
+                                    <td className={hoursCellClass(week.overage, 'overage')}>{formatHours(week.overage)}</td>
                                   </tr>
                                 ))}
                             </Fragment>
@@ -471,12 +497,14 @@ export function ClientSummaryPage() {
                   <tr className="summary-row--total">
                     <th scope="row">Total portfolio</th>
                     <td colSpan={5} />
-                    <td className="col-num cell-mono">{totals.hasBudget ? formatHours(totals.budget) : '—'}</td>
-                    <td className="col-num cell-mono">{formatHours(totals.consumed)}</td>
-                    <td className="col-num cell-mono">{formatHours(totals.pending)}</td>
+                    <td className={hoursCellClass(totals.hasBudget ? totals.budget : null)}>
+                      {totals.hasBudget ? formatHours(totals.budget) : '—'}
+                    </td>
+                    <td className={hoursCellClass(totals.consumed)}>{formatHours(totals.consumed)}</td>
+                    <td className={hoursCellClass(totals.pending)}>{formatHours(totals.pending)}</td>
                     <td className="col-num" />
                     <td className="col-num" />
-                    <td className="col-num cell-mono">{formatHours(totals.overage)}</td>
+                    <td className={hoursCellClass(totals.overage, 'overage')}>{formatHours(totals.overage)}</td>
                   </tr>
                 </tbody>
               </table>
