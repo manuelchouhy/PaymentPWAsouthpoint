@@ -51,7 +51,10 @@ function hoursCellClass(value, kind = 'plain') {
   // siempre se ve atenuado" (formatHours(NaN) también imprime 0.0).
   if (!Number.isFinite(r)) return `${base} cell-quiet`
   if (kind === 'overage') return r > 0 ? `${base} cell-over` : `${base} cell-quiet`
-  if (kind === 'remaining' && r < 0) return `${base} cell-neg`
+  // Signo del valor CRUDO (no del redondeado): un remaining de -0.03 se muestra
+  // como "-0.0" (negativo a la vista), así que va en rojo, no atenuado; num1
+  // lo redondearía a -0 y perdería el signo.
+  if (kind === 'remaining' && value < 0) return `${base} cell-neg`
   return r === 0 ? `${base} cell-quiet` : base
 }
 
