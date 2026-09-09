@@ -53,7 +53,7 @@ const NAV_ITEMS = [
   { to: '/payments', label: 'Payments', Icon: CreditCard },
   { to: '/client-summary', label: 'Client Summary', Icon: PieChart },
   { to: '/capacity', label: 'Capacity', Icon: Gauge, disabled: true },
-  { to: '/client-detail', label: 'Client Detail', Icon: FileSearch },
+  { to: '/client-detail', label: 'Client Detail', Icon: FileSearch, disabled: true },
   { to: '/collections', label: 'Collections', Icon: Landmark, disabled: true },
   { to: '/supplier-contracts', label: 'Vendors Contracts', Icon: FileText },
   { to: '/traceability', label: 'Traceability', Icon: GitBranch, disabled: true },
