@@ -263,6 +263,11 @@ export function ClientSummaryPage() {
 
       {status === 'ready' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4, delay: 0.05 }}>
+          {/* Los gráficos dependen del scope de PROYECTO, no del filtro Week (que
+              solo achica la tabla): se muestran aunque el Week vacíe la grilla.
+              Van arriba de todo (antes de filtros y grilla). */}
+          {projectScoped.length > 0 && <ClientSummaryCharts totals={chartTotalsValue} />}
+
           <section className="filterbar" aria-label="Filters">
             <div className="filterbar__head">
               <span className="filterbar__title">Filters</span>
@@ -397,10 +402,6 @@ export function ClientSummaryPage() {
               </table>
             </div>
           )}
-
-          {/* Los gráficos dependen del scope de PROYECTO, no del filtro Week (que
-              solo achica la tabla): se muestran aunque el Week vacíe la grilla. */}
-          {projectScoped.length > 0 && <ClientSummaryCharts totals={chartTotalsValue} />}
         </motion.div>
       )}
     </>
