@@ -5289,6 +5289,20 @@ select.field__input { cursor: pointer; }
 .dash-main .dash-widget,
 .dash-secondary .dash-widget { max-width: none; }
 
+/* Client Summary: ritmo vertical uniforme entre gráficas, filtros, toolbar y
+   grilla — antes quedaban pegados. Scopeado a la página para no tocar el
+   Dashboard, que comparte .dash-main / .filterbar / .toolbar. */
+.client-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+/* El gap del contenedor ya separa cada bloque: se anulan los márgenes propios
+   para no duplicar el espacio. */
+.client-summary .filterbar { margin-bottom: 0; }
+/* El caption va pegado a sus gráficas (unidad visual), no al ritmo de 22px. */
+.cs-charts .state__hint { margin: 0 0 10px; }
+
 /* Fila secundaria: Contracts (más ancho, es una lista) + Supplier Contracts.
    Dos columnas para que el contenido llene el ancho y no quede la mitad derecha vacía. */
 .dash-secondary {

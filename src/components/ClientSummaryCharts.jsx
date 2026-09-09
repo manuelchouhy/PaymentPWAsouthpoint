@@ -63,7 +63,7 @@ export function ClientSummaryCharts({ totals }) {
   const noData = budget === 0 && consumed === 0 && overage === 0 && pending === 0
 
   return (
-    <>
+    <section className="cs-charts">
       <p className="state__hint">
         Budget status across all periods — the Week filter narrows the table only, not these charts.
       </p>
@@ -108,6 +108,6 @@ export function ClientSummaryCharts({ totals }) {
         total={loggedHours}
       />
       </div>
-    </>
+    </section>
   )
 }
