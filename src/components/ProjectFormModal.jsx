@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { FolderPlus, Save, X } from 'lucide-react'
 import { ClientPicker } from './ClientPicker'
 import { useScrollLock } from '../lib/useScrollLock'
+import { parseBudgetInput } from '../lib/budgetInput'
 
 // Definición de campos (orden, label, tipo). "required" queda resuelto por
 // proyecto en requiredKeys() más abajo, no acá — ver por qué.
@@ -19,6 +20,11 @@ const FIELDS = [
   { key: 'approver', label: 'Approver' },
   { key: 'customerManager', label: 'Customer Manager' },
   { key: 'leadDeveloper', label: 'Lead Developer' },
+  // Budget del SOW (base_budget_hours). Numérico y OPCIONAL: corregir/cargar el
+  // estimado del SOW (no es un change request, ver CONTEXT.md). Editable en
+  // CUALQUIER proyecto —incluidos los sincronizados de Zoho con client_id null,
+  // que no tienen otro editor de budget—; por eso vive acá y no sólo en el wizard.
+  { key: 'baseBudgetHours', label: 'Budget Hours', type: 'number' },
 ]
 
 const ALWAYS_REQUIRED = ['client', 'projectName']
@@ -108,7 +114,11 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
   }, [onClose])
 
   const missing = [...required].filter((k) => !String(form[k] ?? '').trim())
-  const valid = missing.length === 0
+  // Budget: opcional (vacío → null), si se carga debe ser un número ≥ 0 (el 0 es
+  // válido como corrección). parseBudgetInput es la fuente única de qué es válido,
+  // compartida con el wizard. Un budget inválido bloquea Save.
+  const budgetResult = parseBudgetInput(form.baseBudgetHours, { allowEmpty: true, allowZero: true })
+  const valid = missing.length === 0 && !budgetResult.error
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -124,6 +134,13 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
     try {
       const payload = {}
       for (const f of FIELDS) {
+        // Budget: se manda el NÚMERO parseado (o null si vacío), no el string —
+        // así la columna numérica recibe 0/150.5, no "0"/"150.5". La validez ya
+        // la garantiza `valid` (Save bloqueado si budgetResult.error).
+        if (f.key === 'baseBudgetHours') {
+          payload[f.key] = budgetResult.value
+          continue
+        }
         const trimmed = String(form[f.key] ?? '').trim()
         // "client" es `text not null` en la DB (0004_projects.sql, nunca
         // relajada) — a diferencia del resto, no puede mandarse null aunque
@@ -193,6 +210,8 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
               // dejarlo editable acá lo desincroniza del cliente vinculado
               // (autopopulado de MSA, futuras vistas por cliente, etc.).
               const clientLinked = field.key === 'client' && isClientLinked(initial)
+              const isBudget = field.key === 'baseBudgetHours'
+              const budgetError = isBudget && touched ? budgetResult.error : null
               return (
                 <div className="field" key={field.key}>
                   <label className="field__label" htmlFor={clientLinked ? undefined : `pf-${field.key}`}>
@@ -208,16 +227,19 @@ export function ProjectFormModal({ initial = null, onClose, onSubmit }) {
                     <input
                       id={`pf-${field.key}`}
                       ref={index === firstFocusableIndex ? firstRef : undefined}
-                      type={field.type === 'date' ? 'date' : 'text'}
-                      className={`field__input${isMissing || showDup ? ' field__input--error' : ''}`}
+                      type={field.type || 'text'}
+                      min={isBudget ? '0' : undefined}
+                      step={isBudget ? '0.5' : undefined}
+                      className={`field__input${isMissing || showDup || budgetError ? ' field__input--error' : ''}`}
                       value={value}
                       onChange={(e) => setField(field.key, e.target.value)}
                       onBlur={() => setTouched(true)}
                       autoComplete="off"
-                      aria-invalid={isMissing || showDup}
+                      aria-invalid={isMissing || showDup || Boolean(budgetError)}
                     />
                   )}
                   {isMissing && <span className="field__error">This field is required.</span>}
+                  {budgetError && <span className="field__error">{budgetError}</span>}
                 </div>
               )
             })}

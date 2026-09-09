@@ -328,7 +328,7 @@ export function ProjectsPage() {
 
   async function handleUpdate(payload) {
     const updated = await api.projects.update(form.project, payload, user?.email ?? null)
-    api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'project.update', resourceType: 'project', resourceId: updated.id, before: { projectNumber: form.project.projectNumber }, after: { projectNumber: updated.projectNumber, projectName: updated.projectName, client: updated.client } })
+    api.audit.log({ actorEmail: user?.email, actorRole: profile?.roles?.[0] ?? null, action: 'project.update', resourceType: 'project', resourceId: updated.id, before: { projectNumber: form.project.projectNumber, baseBudgetHours: form.project.baseBudgetHours ?? null }, after: { projectNumber: updated.projectNumber, projectName: updated.projectName, client: updated.client, baseBudgetHours: updated.baseBudgetHours ?? null } })
     // El form no-wizard no edita stages: se preserva el stageSowNumbers que ya
     // tenía la fila (updated viene con [] de rowToProject).
     setProjects((prev) =>
