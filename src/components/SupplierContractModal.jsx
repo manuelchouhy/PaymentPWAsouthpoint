@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowRight, BellOff, Pencil, RefreshCw, Star, X } from 'lucide-react'
 import { SupplierStatusBadge } from './SupplierStatusBadge'
@@ -51,7 +51,6 @@ export function SupplierContractModal({ contract, onClose, onEdit, onRenew, onMa
   const [renewals, setRenewals] = useState([])
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
-  const dialogRef = useRef(null)
 
   const days = daysRemaining(contract.expirationDate)
   const status = displaySupplierStatus(contract)
@@ -117,7 +116,6 @@ export function SupplierContractModal({ contract, onClose, onEdit, onRenew, onMa
         role="dialog"
         aria-modal="true"
         aria-labelledby="sc-drawer-title"
-        ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
