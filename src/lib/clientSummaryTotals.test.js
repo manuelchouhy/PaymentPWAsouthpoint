@@ -1,6 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { chartTotals, portfolioTotals, tableTotalsByClient } from './clientSummaryTotals.js'
+import {
+  chartTotals,
+  portfolioTotals,
+  projectRowTotals,
+  tableTotalsByClient,
+} from './clientSummaryTotals.js'
 
 const wk = (consumed, overage = 0, pending = 0) => ({ consumed, overage, pending, cumulative: consumed, remaining: 0 })
 
@@ -83,4 +88,56 @@ test('sin budget cargado, hasBudget=false y remaining 0', () => {
   const t = chartTotals([{ client: 'X', projects: [{ id: 1, budget: null, consumed: 10, overage: 0, weeks: [] }] }])
   assert.equal(t.hasBudget, false)
   assert.equal(t.remaining, 0)
+})
+
+test('projectRowTotals suma consumed/pending/overage y toma cumulative/remaining finales', () => {
+  const project = {
+    id: 1,
+    budget: 120,
+    weeks: [
+      { consumed: 20, overage: 0, pending: 3, cumulative: 20, remaining: 100 },
+      { consumed: 10, overage: 2, pending: 4, cumulative: 30, remaining: 90 },
+      { consumed: 24, overage: 3, pending: 0, cumulative: 54, remaining: 66 },
+    ],
+  }
+  const t = projectRowTotals(project)
+  assert.equal(t.budget, 120)
+  assert.equal(t.hasBudget, true)
+  assert.equal(t.consumed, 54) // 20+10+24 (suma)
+  assert.equal(t.pending, 7) // 3+4+0 (suma)
+  assert.equal(t.overage, 5) // 0+2+3 (suma)
+  assert.equal(t.cumulative, 54) // final, NO suma
+  assert.equal(t.remaining, 66) // final, NO suma
+})
+
+test('projectRowTotals sin semanas: remaining cae al budget y acumulados en 0', () => {
+  const t = projectRowTotals({ id: 2, budget: 80, weeks: [] })
+  assert.equal(t.consumed, 0)
+  assert.equal(t.pending, 0)
+  assert.equal(t.overage, 0)
+  assert.equal(t.cumulative, 0)
+  assert.equal(t.remaining, 80) // sin semanas queda intacto el budget
+})
+
+test('projectRowTotals trata campos de semana faltantes como 0 (sin NaN)', () => {
+  const project = {
+    id: 9,
+    budget: 50,
+    weeks: [
+      { cumulative: 10, remaining: 40 }, // sin consumed/pending/overage
+      { consumed: 5, cumulative: 15, remaining: 35 }, // sin pending/overage
+    ],
+  }
+  const t = projectRowTotals(project)
+  assert.equal(t.consumed, 5)
+  assert.equal(t.pending, 0)
+  assert.equal(t.overage, 0)
+  assert.equal(Number.isNaN(t.consumed), false)
+})
+
+test('projectRowTotals sin budget: hasBudget=false y remaining null si no hay semanas', () => {
+  const t = projectRowTotals({ id: 3, budget: null, weeks: [] })
+  assert.equal(t.hasBudget, false)
+  assert.equal(t.budget, null)
+  assert.equal(t.remaining, null)
 })

@@ -1,13 +1,18 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { buildClientSummaryWeekly, weekLabel } from '../lib/clientSummaryWeekly'
 import { filterClientSummary } from '../lib/clientSummaryFilter'
-import { chartTotals, portfolioTotals, tableTotalsByClient } from '../lib/clientSummaryTotals'
+import {
+  chartTotals,
+  portfolioTotals,
+  projectRowTotals,
+  tableTotalsByClient,
+} from '../lib/clientSummaryTotals'
 import { buildClientResolver } from '../lib/clientResolver'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ExportDropdown } from '../components/ExportDropdown'
@@ -42,6 +47,9 @@ export function ClientSummaryPage() {
   const [selectedProjectNames, setSelectedProjectNames] = useState([])
   const [selectedSows, setSelectedSows] = useState([])
   const [selectedWeeks, setSelectedWeeks] = useState([])
+  // Proyectos con el desglose por semana desplegado. Colapsados por defecto (Set
+  // vacío) para que la tabla arranque corta: 1 fila por proyecto con sus totales.
+  const [expandedProjects, setExpandedProjects] = useState(() => new Set())
 
   useEffect(() => {
     let cancelled = false
@@ -156,6 +164,15 @@ export function ClientSummaryPage() {
 
   function toggleIn(setter, value) {
     setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]))
+  }
+
+  function toggleProject(id) {
+    setExpandedProjects((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   const anyFilter = [
@@ -359,31 +376,94 @@ export function ClientSummaryPage() {
                           <td className="col-num cell-mono">{formatHours(ct.overage)}</td>
                         </tr>
                         {group.projects.map((project) => {
-                          // Un proyecto sin semanas con horas igual aparece, con una
-                          // fila de placeholders (Week '—', consumido 0).
-                          const weekRows = project.weeks.length ? project.weeks : [null]
-                          return weekRows.map((week, wi) => (
-                            <tr key={`${project.id}-${week ? week.weekStart : 'none'}`}>
-                              <td />
-                              {/* La identidad del proyecto se repite en cada fila-semana
-                                  (fiel al ejemplo del doc); el Budget, en cambio, va solo
-                                  en la 1ª fila (igual que el export) para que sumar la
-                                  columna no lo cuente ×nº-semanas. */}
-                              <td className="cell-mono">{project.projectNumber || '—'}</td>
-                              <td>{project.projectName || '—'}</td>
-                              <td className="cell-soft">{project.sowNumber || '—'}</td>
-                              <td className="cell-mono">{week ? weekLabel(week) : '—'}</td>
-                              <td className="cell-soft">{project.zohoStatus || '—'}</td>
-                              <td className="col-num cell-mono">{wi === 0 ? hoursOrDash(project.budget) : ''}</td>
-                              <td className="col-num cell-mono">{formatHours(week ? week.consumed : 0)}</td>
-                              <td className="col-num cell-mono">{formatHours(week ? week.pending : 0)}</td>
-                              <td className="col-num cell-mono">{formatHours(week ? week.cumulative : 0)}</td>
-                              <td className="col-num cell-mono">
-                                {week ? hoursOrDash(week.remaining) : hoursOrDash(project.budget)}
-                              </td>
-                              <td className="col-num cell-mono">{formatHours(week ? week.overage : 0)}</td>
-                            </tr>
-                          ))
+                          // Fila COLAPSADA: una por proyecto, con los totales
+                          // (pura, testeada en projectRowTotals). El chevron despliega
+                          // el desglose por semana. Colapsado por defecto → tabla corta.
+                          const pt = projectRowTotals(project)
+                          // weeks local con el mismo guard que projectRowTotals
+                          // (?? []), para que ambos call sites traten weeks igual.
+                          const weeks = project.weeks ?? []
+                          const hasWeeks = weeks.length > 0
+                          const open = expandedProjects.has(project.id)
+                          const detailId = `cs-weeks-${project.id}`
+                          return (
+                            <Fragment key={project.id}>
+                              <tr
+                                className={`cs-project-row${hasWeeks ? ' cs-project-row--expandable' : ''}`}
+                                onClick={hasWeeks ? () => toggleProject(project.id) : undefined}
+                              >
+                                <td />
+                                <td className="cell-mono">
+                                  <div className="cs-lead">
+                                    {hasWeeks ? (
+                                      <button
+                                        type="button"
+                                        className="pay-expand"
+                                        // stopPropagation: el <tr> ya togglea; sin esto el
+                                        // click dispararía el toggle dos veces (fila + botón).
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          toggleProject(project.id)
+                                        }}
+                                        aria-expanded={open}
+                                        aria-controls={open ? detailId : undefined}
+                                        aria-label={open ? 'Hide weekly breakdown' : 'Show weekly breakdown'}
+                                      >
+                                        {open ? (
+                                          <ChevronDown size={15} aria-hidden="true" />
+                                        ) : (
+                                          <ChevronRight size={15} aria-hidden="true" />
+                                        )}
+                                      </button>
+                                    ) : (
+                                      <span className="pay-expand pay-expand--empty" aria-hidden="true" />
+                                    )}
+                                    <span>{project.projectNumber || '—'}</span>
+                                  </div>
+                                </td>
+                                <td>{project.projectName || '—'}</td>
+                                <td className="cell-soft">{project.sowNumber || '—'}</td>
+                                {/* En la columna Week, la fila colapsada resume cuántas
+                                    semanas hay adentro (o '—' si no hay). */}
+                                <td className="cell-soft">
+                                  {hasWeeks
+                                    ? `${weeks.length} ${weeks.length === 1 ? 'week' : 'weeks'}`
+                                    : '—'}
+                                </td>
+                                <td className="cell-soft">{project.zohoStatus || '—'}</td>
+                                <td className="col-num cell-mono">{hoursOrDash(pt.budget)}</td>
+                                <td className="col-num cell-mono">{formatHours(pt.consumed)}</td>
+                                <td className="col-num cell-mono">{formatHours(pt.pending)}</td>
+                                <td className="col-num cell-mono">{formatHours(pt.cumulative)}</td>
+                                <td className="col-num cell-mono">{hoursOrDash(pt.remaining)}</td>
+                                <td className="col-num cell-mono">{formatHours(pt.overage)}</td>
+                              </tr>
+                              {/* Desglose por semana: solo en el DOM cuando está expandida.
+                                  La identidad del proyecto queda en la fila padre; acá solo
+                                  la semana y sus horas. */}
+                              {open &&
+                                weeks.map((week, wi) => (
+                                  <tr
+                                    key={`${project.id}-${week.weekStart}`}
+                                    className="cs-week-row"
+                                    id={wi === 0 ? detailId : undefined}
+                                  >
+                                    <td />
+                                    <td />
+                                    <td />
+                                    <td />
+                                    <td className="cell-mono cs-week-label">{weekLabel(week)}</td>
+                                    <td />
+                                    <td className="col-num" />
+                                    <td className="col-num cell-mono">{formatHours(week.consumed)}</td>
+                                    <td className="col-num cell-mono">{formatHours(week.pending)}</td>
+                                    <td className="col-num cell-mono">{formatHours(week.cumulative)}</td>
+                                    <td className="col-num cell-mono">{hoursOrDash(week.remaining)}</td>
+                                    <td className="col-num cell-mono">{formatHours(week.overage)}</td>
+                                  </tr>
+                                ))}
+                            </Fragment>
+                          )
                         })}
                       </Fragment>
                     )

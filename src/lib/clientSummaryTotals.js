@@ -47,6 +47,39 @@ export function portfolioTotals(byClient) {
 }
 
 /**
+ * Totales de UN proyecto para su fila COLAPSADA (una fila por proyecto en vez de
+ * una por semana). Suma sobre las semanas VISIBLES que se le pasen (coherente con
+ * tableTotalsByClient bajo el filtro Week):
+ *  - consumed / pending / overage → suma de las semanas.
+ *  - cumulative / remaining → el valor FINAL (última semana visible), porque son
+ *    acumulados: sumarlos no tendría sentido.
+ *  - budget → el fijo del proyecto; remaining cae al budget si no hay semanas.
+ */
+export function projectRowTotals(project) {
+  const weeks = project.weeks ?? []
+  const t = {
+    budget: project.budget ?? null,
+    hasBudget: project.budget != null,
+    consumed: 0,
+    pending: 0,
+    overage: 0,
+    cumulative: 0,
+    remaining: project.budget ?? null,
+  }
+  for (const w of weeks) {
+    t.consumed += w.consumed || 0
+    t.pending += w.pending || 0
+    t.overage += w.overage || 0
+  }
+  if (weeks.length) {
+    const last = weeks[weeks.length - 1]
+    t.cumulative = last.cumulative
+    t.remaining = last.remaining
+  }
+  return t
+}
+
+/**
  * Totales para los gráficos: horas ALL-TIME por proyecto. `remaining` se acumula
  * POR PROYECTO (max(0, budget − consumido all-time)) para no netear el consumo de
  * un proyecto contra el budget de otro.
