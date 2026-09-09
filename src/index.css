@@ -2919,6 +2919,17 @@ th.col-pop { text-align: center; }
   padding: 32px;
 }
 
+/* Detalle de Vendors/Supplier Contract: pop-up centrado (antes era drawer
+   lateral). Mismo enfoque que .modal--entry-detail — .modal no es flex y el
+   contenido usa secciones .drawer__* que se separaban con el gap del flex. */
+.modal--supplier-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 640px;
+  padding: 32px;
+}
+
 /* Texto más grande para el detalle de horas (Entries/Billing), en línea con los
    modales --wide de Billing/Payments. Scopeado: no afecta otros drawers. */
 .modal--entry-detail .drawer__title { font-size: 1.5rem; }

@@ -16,7 +16,7 @@ import { SupplierStatusBadge } from '../components/SupplierStatusBadge'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { SupplierContractFormModal } from '../components/SupplierContractFormModal'
 import { RenewContractModal } from '../components/RenewContractModal'
-import { SupplierContractDrawer } from '../components/SupplierContractDrawer'
+import { SupplierContractModal } from '../components/SupplierContractModal'
 import { PriorityContractBanner } from '../components/PriorityContractBanner'
 import { Toast } from '../components/Toast'
 import { ExportDropdown } from '../components/ExportDropdown'
@@ -341,7 +341,7 @@ export function SupplierContractsPage() {
 
       <AnimatePresence>
         {detail && (
-          <SupplierContractDrawer
+          <SupplierContractModal
             key={`detail-${detail.id}`}
             contract={detail}
             onClose={() => setDetail(null)}
