@@ -38,11 +38,33 @@ Son dos cosas distintas y no se confunden.
 _Avoid_: usar el edit del base para meter una ampliación de alcance (eso es un
 change request); usar un change request para corregir un base mal cargado.
 
+**SP internal** (allocation `sp_internal`):
+Horas de **proyectos internos de la empresa** (SouthPoint), no de un cliente. Se
+pagan al contractor pero **no se facturan a nadie**. Por naturaleza viven en
+proyectos del grupo **SouthPoint Internal**; un proyecto de cliente real no tiene
+horas `sp_internal`. En Client Summary cuentan como **Consumed** de la fila
+SouthPoint Internal (ver "Consumed"). Ver también el pago sin factura en Payments.
+_Avoid_: pensar que una hora `sp_internal` pueda pertenecer a un cliente real.
+
+**Consumed**:
+Horas de trabajo **consumidas por el proyecto** en Client Summary. La allocation
+que cuenta depende del cliente:
+- clientes con Budget → horas `bill_to_client` **aprobadas** (consumen el Budget;
+  alimentan `cumulative` y `remaining`).
+- **SouthPoint Internal** (sin Budget) → horas `sp_internal` **aprobadas** (costo
+  interno; no hay Budget contra qué medir, así que **Remaining y Overage quedan en
+  blanco** en esa fila).
+Un mismo cliente nunca mezcla ambas: `bill_to_client` va a clientes reales y
+`sp_internal` a SouthPoint Internal.
+_Avoid_: leer "Consumed" como "siempre facturable"; para SouthPoint Internal es
+costo interno, no facturación.
+
 **Overage**:
 Horas por encima de lo contratado (allocation `overage`); se pagan al contractor,
 no se facturan al cliente. Nace cuando el **consumido acumulado** (horas
 `bill_to_client` aprobadas) supera el **Budget** y ese excedente NO se absorbe con
 un change request: entonces se clasifica como `overage` en vez de subir el Budget.
+No aplica a SouthPoint Internal (no tiene Budget que superar).
 
 **Week**:
 La semana física de facturación, **domingo → sábado**, identificada por el domingo

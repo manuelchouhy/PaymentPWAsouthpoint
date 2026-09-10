@@ -9,8 +9,9 @@
  * Reglas de dominio:
  *  - Budget = effectiveBudgetHours(baseBudgetHours, changeRequests): estimado de
  *    la SOW + change requests aprobados. Total del proyecto, no por semana.
- *  - Consumed (semana) = horas Approved con allocation bill_to_client.
- *  - Pending (semana)  = horas bill_to_client con status Pending (facturables aún
+ *  - Consumed (semana) = horas Approved con allocation bill_to_client (clientes con
+ *    budget) o sp_internal (proyectos internos → SouthPoint Internal, sin budget).
+ *  - Pending (semana)  = horas bill_to_client o sp_internal con status Pending (aún
  *    sin aprobar en Zoho). NO cuentan como Consumed ni afectan cumulative/remaining.
  *  - Overage (semana)  = horas Approved con allocation overage.
  *  - Rejected y demás estados se descartan.
@@ -59,13 +60,18 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
   // Se keyea por NOMBRE de proyecto (entry.project), igual que la página: es la
   // única clave con la que las entries se atan al proyecto.
   const byProjectWeek = new Map()
+  // Allocations que cuentan como "consumido" del proyecto: bill_to_client (clientes
+  // con budget) y sp_internal (proyectos internos de la empresa → cliente SouthPoint
+  // Internal, sin budget). overage se contabiliza aparte. Ver CONTEXT.md ("Consumed"
+  // y "SP internal") y docs/adr/0002.
+  const isConsumedAlloc = (a) => a === 'bill_to_client' || a === 'sp_internal'
   for (const e of entries) {
-    if (e.allocation !== 'bill_to_client' && e.allocation !== 'overage') continue
-    // Se procesan: Approved (consumed/overage) y bill_to_client Pending (pending,
-    // horas facturables aún sin aprobar en Zoho). Las Rejected y cualquier otro
-    // estado se descartan.
+    if (!isConsumedAlloc(e.allocation) && e.allocation !== 'overage') continue
+    // Se procesan: Approved (consumed/overage) y Pending de una allocation "consumed"
+    // (horas aún sin aprobar en Zoho). Las Rejected, cualquier otro estado y overage
+    // Pending se descartan.
     const isApproved = e.status === 'Approved'
-    const isPending = e.status === 'Pending' && e.allocation === 'bill_to_client'
+    const isPending = e.status === 'Pending' && isConsumedAlloc(e.allocation)
     if (!isApproved && !isPending) continue
     const name = e.project ?? ''
     // Una entry sin nombre de proyecto no se puede atribuir a ningún proyecto:
@@ -89,8 +95,8 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
       pending: 0,
     }
     if (isPending) acc.pending += hours
-    else if (e.allocation === 'bill_to_client') acc.consumed += hours
-    else acc.overage += hours
+    else if (e.allocation === 'overage') acc.overage += hours
+    else acc.consumed += hours // bill_to_client o sp_internal Approved
     weeks.set(weekStart, acc)
   }
 
