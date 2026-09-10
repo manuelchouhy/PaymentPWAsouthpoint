@@ -758,7 +758,9 @@ export function BillingPage() {
                 // granularidad del export read-only (handleExportReadonly).
                 projectNumber: row.projectNumber ?? '',
                 project: row.project,
-                task: row.task,
+                // Incluye el id del task (formatTaskLabel) igual que la grilla, para
+                // que una fila exportada se pueda rastrear hasta su task de Zoho.
+                task: formatTaskLabel(row.task, row.taskNumber),
                 date: row.date ? formatDate(row.date) : '',
                 reason: '',
                 hours: row.hours,
@@ -806,7 +808,7 @@ export function BillingPage() {
         week: week ? week.week : '—',
         projectNumber: row.projectNumber ?? '',
         project: row.project || '',
-        task: row.task || '',
+        task: formatTaskLabel(row.task, row.taskNumber),
         date: row.date ? formatDate(row.date) : '',
         hours: row.hours,
         entries: row.entries.length,
