@@ -11,6 +11,7 @@ import {
   summarizeEntries,
 } from '../lib/paymentsGrouping'
 import { invoiceCompletion } from '../lib/invoiceCompletion'
+import { entryPaymentStatus } from '../lib/entryPaymentStatus'
 import { buildProjectIndex, deriveEntriesClient } from '../lib/entryClient'
 import { api } from '../lib/api'
 import { downloadPaymentReceipt } from '../lib/paymentReceipt'
@@ -61,6 +62,11 @@ const PAY_LABELS = {
   overage: { low: 'overage', cap: 'Overage' },
   sp_internal: { low: 'SP internal', cap: 'SP internal' },
 }
+
+// Tope de horas YA pagadas que el picker "Hours to pay" muestra como contexto
+// (las más recientes). Evita que el historial pagado —sin límite— sepulte las
+// pendientes seleccionables.
+const PAID_PICKER_LIMIT = 25
 
 // Rango de semanas (domingo–sábado) que cubre un pago: "W33" si es una sola,
 // "W33–W35" si cruza varias. null si no hay fechas. Usa el rango de fechas del
@@ -414,6 +420,16 @@ export function PaymentsPage() {
     return { overage: overage.map(decorate), spInternal: spInternal.map(decorate) }
   }, [payments, enrichedEntries, entryById])
 
+  // Ids (string) de las horas YA pagadas: lo usa el picker "Hours to pay" para
+  // marcar el estado de cada hora (entryPaymentStatus). Las pendientes que muestra
+  // el picker dan 'pending'; una ya pagada daría 'paid' (defensivo).
+  const paidEntryIds = useMemo(() => paidEntryIdsFrom(payments), [payments])
+
+  // Una hora es pendiente (seleccionable/pagable) si no está en las pagadas. El picker
+  // muestra ambas; sólo las pendientes entran a la selección y al pago. Se usa igual en
+  // el display y en el submit para que no puedan divergir.
+  const isPending = (entry) => entryPaymentStatus(entry, paidEntryIds) === 'pending'
+
   // KPIs sobre las facturas pendientes de pago. Total pendiente en HORAS (suma de las
   // horas de los contractors todavía sin pagar en las facturas pagables).
   const kpis = useMemo(() => {
@@ -524,7 +540,12 @@ export function PaymentsPage() {
   // contractor. Sin factura y sin monto (en horas).
   async function handleRegisterPayment(payload) {
     const { allocation, user: contractor } = payTarget
-    const selected = payTarget.entries.filter((e) => paySelectedIds.has(String(e.id)))
+    // Sólo horas pendientes: payTarget.entries ahora incluye las ya pagadas (read-only
+    // en el picker); el guard isPending evita re-pagar una hora aunque su id llegara a
+    // paySelectedIds por un cambio futuro. Mismo criterio que el display.
+    const selected = payTarget.entries.filter(
+      (e) => paySelectedIds.has(String(e.id)) && isPending(e),
+    )
     const entryIds = selected.map((e) => e.id)
     const hours = selected.reduce((sum, e) => sum + e.hours, 0)
     const { payment } = await api.payments.createOverage(
@@ -655,7 +676,39 @@ export function PaymentsPage() {
                               type="button"
                               className="btn btn--pay btn--row"
                               onClick={() => {
-                                setPayTarget({ ...group, allocation })
+                                // El picker muestra las pendientes (seleccionables) MÁS las
+                                // ya pagadas de este contractor+allocation (read-only, badge
+                                // "Paid"), para ver el estado de cada hora. pendingCount
+                                // guarda cuántas son pendientes (las pagadas no cuentan para
+                                // "X of Y" ni para la selección).
+                                const paidRows =
+                                  allocation === 'overage' ? overagePaid : spInternalPaid
+                                const pendingIds = new Set(
+                                  group.entries.map((e) => String(e.id)),
+                                )
+                                // Dedup por id: un id repetido (misma hora en dos pagos, o ya
+                                // presente entre las pendientes) rompería el key de React.
+                                const seen = new Set()
+                                const paidEntries = paidRows
+                                  .filter((r) => r.user === group.user)
+                                  .flatMap((r) => r.entries)
+                                  .filter((e) => {
+                                    const k = String(e.id)
+                                    if (pendingIds.has(k) || seen.has(k)) return false
+                                    seen.add(k)
+                                    return true
+                                  })
+                                  // Más recientes primero, y acotadas: mostrar historial pagado
+                                  // como contexto sin arrastrar TODO (crece sin límite y sepulta
+                                  // las pendientes seleccionables).
+                                  .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+                                  .slice(0, PAID_PICKER_LIMIT)
+                                setPayTarget({
+                                  ...group,
+                                  allocation,
+                                  entries: [...group.entries, ...paidEntries],
+                                  pendingCount: group.entries.length,
+                                })
                                 setPaySelectedIds(new Set(group.entryIds.map(String)))
                               }}
                             >
@@ -986,8 +1039,11 @@ export function PaymentsPage() {
         {payTarget &&
           (() => {
             const label = PAY_LABELS[payTarget.allocation]
-            const selected = payTarget.entries.filter((e) =>
-              paySelectedIds.has(String(e.id)),
+            // Sólo las pendientes son seleccionables/pagables: las pagadas van
+            // read-only en el picker (checkbox deshabilitado), así que se excluyen
+            // de la selección de forma defensiva aunque no puedan togglearse.
+            const selected = payTarget.entries.filter(
+              (e) => paySelectedIds.has(String(e.id)) && isPending(e),
             )
             const selHours = selected.reduce((sum, e) => sum + e.hours, 0)
             const toggle = (id) =>
@@ -1005,8 +1061,8 @@ export function PaymentsPage() {
                 submitLabel={`Register ${label.low} payment`}
                 extraValid={selected.length > 0}
                 summaryName={payTarget.user}
-                summaryMeta={`${label.cap} · ${selected.length} of ${payTarget.entries.length} ${
-                  payTarget.entries.length === 1 ? 'entry' : 'entries'
+                summaryMeta={`${label.cap} · ${selected.length} of ${payTarget.pendingCount} ${
+                  payTarget.pendingCount === 1 ? 'entry' : 'entries'
                 }`}
                 summaryFigure={`${formatHours(selHours)} h`}
                 summaryFigureLabel={`${label.cap} hours (selected)`}
@@ -1014,23 +1070,36 @@ export function PaymentsPage() {
                   <div className="overage-picker">
                     <span className="overage-picker__title">Hours to pay</span>
                     <ul className="overage-picker__list">
-                      {payTarget.entries.map((e) => (
-                        <li key={e.id}>
-                          <label className="overage-picker__row">
-                            <input
-                              type="checkbox"
-                              checked={paySelectedIds.has(String(e.id))}
-                              onChange={() => toggle(e.id)}
-                            />
-                            <span className="overage-picker__desc">
-                              {e.project || '—'}
-                              {e.task ? ` · ${e.task}` : ''}
-                              {e.date ? ` · ${formatDate(e.date)}` : ''}
-                            </span>
-                            <span className="overage-picker__hours">{formatHours(e.hours)} h</span>
-                          </label>
-                        </li>
-                      ))}
+                      {payTarget.entries.map((e) => {
+                        const status = entryPaymentStatus(e, paidEntryIds)
+                        const isPaid = status === 'paid'
+                        return (
+                          <li key={e.id}>
+                            <label
+                              className={`overage-picker__row${isPaid ? ' overage-picker__row--paid' : ''}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={paySelectedIds.has(String(e.id))}
+                                disabled={isPaid}
+                                onChange={() => toggle(e.id)}
+                              />
+                              <span className="overage-picker__desc">
+                                {e.project || '—'}
+                                {e.task ? ` · ${e.task}` : ''}
+                                {e.date ? ` · ${formatDate(e.date)}` : ''}
+                              </span>
+                              <span className="overage-picker__hours">{formatHours(e.hours)} h</span>
+                              {/* Indicador pasivo: pointer-events:none (CSS) deja pasar el
+                                  click al <label>, así clickear el badge de una fila pendiente
+                                  la togglea igual que el resto de la fila. */}
+                              <span className={`badge badge--${status}`}>
+                                {isPaid ? 'Paid' : 'Pending'}
+                              </span>
+                            </label>
+                          </li>
+                        )
+                      })}
                     </ul>
                     {selected.length === 0 && (
                       <span className="field__error">Select at least one hour to pay.</span>

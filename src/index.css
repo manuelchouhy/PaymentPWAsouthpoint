@@ -2642,6 +2642,23 @@ th.col-pop { text-align: center; }
   background: var(--surface-2, rgba(127, 127, 127, .06));
 }
 
+/* Hora ya pagada: read-only en el picker (checkbox deshabilitado). Se atenúan el
+   texto y el checkbox para distinguirla de las pendientes, pero NO el badge "Paid":
+   es el indicador que la feature agrega y tiene que quedar legible. */
+.overage-picker__row--paid {
+  cursor: default;
+}
+.overage-picker__row--paid input,
+.overage-picker__row--paid .overage-picker__desc,
+.overage-picker__row--paid .overage-picker__hours {
+  opacity: .62;
+}
+/* El badge de estado es un indicador pasivo: dejar pasar el click al <label> para que
+   clickearlo togglee la selección de la fila (pendiente) en vez de ser una dead-zone. */
+.overage-picker__row .badge {
+  pointer-events: none;
+}
+
 .overage-picker__row input {
   flex: none;
 }
