@@ -2,57 +2,60 @@ import { test, expect } from '@playwright/test'
 import { loginAsTestAdmin } from './helpers'
 
 /**
- * Slice 01 (lote WhatsApp 2026-09-10): el task id se muestra junto al nombre en la
- * página Entries (/entries) y en Billing. Ambos tests son de SOLO LECTURA.
+ * Slice 01 (lote WhatsApp 2026-09-10): el task id se muestra junto al nombre.
+ * Ambos tests son de SOLO LECTURA (no escriben en la base). La base de test tiene
+ * datos reales (entries con task id), así que exigen al menos un id presente en vez
+ * de pasar en vacío — un grid vacío o roto debe fallar, no dar falso verde.
  *
- * Best-effort: sólo afirman el formato "#id · nombre" sobre las filas que tienen
- * task id (no fallan si la base viva no tiene ninguno visible en ese momento).
+ *  - Entries (/entries): columna "Task #" propia (siempre visible) con el id crudo.
+ *  - Billing: rótulo del task en la fila de una hora con el formato "#id · nombre".
  */
 
 test.describe('Slice 01 · task id junto al nombre', () => {
-  test('Entries (/entries): la columna Task muestra "#id · nombre" cuando hay task id', async ({
-    page,
-  }) => {
+  test('Entries (/entries): columna "Task #" propia con el id del task', async ({ page }) => {
     await loginAsTestAdmin(page)
     await page.goto('/entries')
 
-    // Las celdas de Task de la grilla de Entries; las que tienen id empiezan con "#".
-    const taskCells = page.locator('td.col-task')
-    await taskCells.first().waitFor({ state: 'visible' })
-    const count = await taskCells.count()
+    // Header de la columna nueva (siempre visible, no col-optional).
+    await expect(page.locator('th.col-tasknum')).toHaveText('Task #')
 
-    let checked = 0
+    // La grilla tiene filas en la base de test → la primera celda Task # aparece.
+    const taskNumCells = page.locator('td.col-tasknum')
+    await taskNumCells.first().waitFor({ state: 'visible' })
+    const count = await taskNumCells.count()
+
+    let withId = 0
     for (let i = 0; i < count; i++) {
-      const text = (await taskCells.nth(i).innerText()).trim()
-      if (text.startsWith('#')) {
-        expect(text).toMatch(/^#\S+/)
-        checked++
+      const text = (await taskNumCells.nth(i).innerText()).trim()
+      if (text && text !== '—') {
+        expect(text).toMatch(/^\S+$/) // un id sin espacios
+        withId++
       }
     }
-    console.log(`[slice01] Entries: celdas Task con id verificadas: ${checked} de ${count}`)
+    expect(withId).toBeGreaterThan(0)
+    console.log(`[slice01] Entries: celdas Task # con id: ${withId} de ${count}`)
   })
 
-  test('Billing: el rótulo del task usa "#id · nombre" cuando hay task id (best-effort)', async ({
-    page,
-  }) => {
+  test('Billing: el rótulo del task usa "#id · nombre" cuando hay task id', async ({ page }) => {
     await loginAsTestAdmin(page)
     await page.goto('/billing')
 
-    // Las filas de hora muestran el rótulo del task en un .cell-soft dentro de la
-    // grilla de facturación. Tomamos los que empiezan con "#" (los que tienen id).
+    // Espera a que la grilla pinte (sin timeout fijo): el primer rótulo de task.
     const labels = page.locator('.proj-table .cell-soft')
-    await page.waitForTimeout(1500) // deja cargar la grilla contra la base viva
+    await labels.first().waitFor({ state: 'visible' })
     const count = await labels.count()
 
     let checked = 0
     for (let i = 0; i < count; i++) {
       const text = (await labels.nth(i).innerText()).trim()
       if (text.startsWith('#')) {
-        // Formato "#<id> · <nombre>" o sólo "#<id>": el id son dígitos tras el #.
-        expect(text).toMatch(/^#\S+/)
+        // "#<id> · <nombre>" o sólo "#<id>": id sin espacios ni '·', y si hay
+        // separador, un nombre no vacío después.
+        expect(text).toMatch(/^#[^\s·]+( · .+)?$/)
         checked++
       }
     }
-    console.log(`[slice01] rótulos con task id verificados: ${checked} de ${count} cell-soft`)
+    expect(checked).toBeGreaterThan(0)
+    console.log(`[slice01] Billing: rótulos con task id: ${checked} de ${count} cell-soft`)
   })
 })
