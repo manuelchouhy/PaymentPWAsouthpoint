@@ -287,8 +287,9 @@ export function ClientSummaryPage() {
         <h1 className="masthead__title">Client Summary</h1>
         <p className="masthead__sub">
           Weekly view per project. Budget is the estimated hours (SOW plus approved change
-          requests). Consumed counts approved bill-to-client hours; Pending shows bill-to-client
-          hours not yet approved in Zoho; Overage sits in its own column.
+          requests). Consumed counts approved hours — bill-to-client for clients, plus internal
+          hours for SouthPoint Internal (no budget); Pending shows those hours not yet approved
+          in Zoho; Overage sits in its own column.
         </p>
       </motion.header>
 
