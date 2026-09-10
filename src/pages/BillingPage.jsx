@@ -225,6 +225,10 @@ export function BillingPage() {
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
+    // Reset en cada (re)carga: hasta que los CRs vuelvan, el budget del cuadro #2 no es
+    // confiable (mostraría el base con CRs viejos). Sin esto, un reload por sync dejaría
+    // crsLoaded en true con el crsByProject anterior.
+    setCrsLoaded(false)
     // Los proyectos son sólo para etiquetar el SOW de cada fila: van aparte de
     // Promise.all y con catch propio para que un fallo suyo no tire la pantalla
     // entera, que sí puede facturar sin ese dato.
@@ -480,12 +484,13 @@ export function BillingPage() {
     // filtro de contractor/estado que por casualidad deja un solo proyecto NO cuenta
     // como "el proyecto que estoy mirando".
     if (!filters.projects.length && !filters.projectNumbers.length) return null
-    // Todas las horas del scope deben compartir UN projectNumber real. Si alguna no
-    // tiene número (mezcla no resuelta) o hay más de uno → no es un proyecto único.
-    const nums = new Set(filteredAllAllocations.map((e) => e.projectNumber || ''))
+    // Con el filtro de proyecto ya activo, el scope está acotado al/los proyecto(s)
+    // elegido(s): las horas sin projectNumber resuelto son de ese proyecto (join viejo)
+    // y se ignoran para no ocultar el cuadro. Si quedan DOS números reales → el filtro
+    // abarca varios proyectos (homónimos) → "—".
+    const nums = new Set(filteredAllAllocations.map((e) => e.projectNumber).filter(Boolean))
     if (nums.size !== 1) return null
     const [num] = [...nums]
-    if (!num) return null
     // projectNumber duplicado (dos proyectos con el mismo número, ej. id49/id50): el
     // budget saldría de uno y el consumed de ambos → ambiguo, mejor "—".
     const matches = projects.filter((p) => p.projectNumber === num)
@@ -1154,7 +1159,7 @@ export function BillingPage() {
                 {formatHours(cards.overage)}
                 <span className="dash-kpi__unit"> h</span>
               </span>
-              <span className="dash-kpi__hint">approved overage hours</span>
+              <span className="dash-kpi__hint">overage hours pending payment</span>
             </div>
           </div>
 

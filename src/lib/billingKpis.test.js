@@ -53,29 +53,21 @@ test('unallocated: Approved con allocation falsy y SIN facturar', () => {
   assert.equal(r.unallocated, 7) // 5 + 2
 })
 
-test('overage: suma Approved con allocation overage, sin facturar', () => {
+test('overage coincide con la tab: allocation overage y NO pagada (sin filtrar status/invoiced)', () => {
   const all = [
-    e('1', 6, { allocation: 'overage' }),
-    e('2', 2, { allocation: 'overage', status: 'Pending' }), // no aprobada → excluida
-    e('3', 3, { allocation: 'sp_internal' }), // otra allocation → excluida
-    e('4', 5, { allocation: 'overage' }), // facturada → excluida (mismo criterio que unallocated)
-  ]
-  const r = billingKpis({ billToClient: [], allAllocations: all, invoicedIds: new Set(['4']) })
-  assert.equal(r.overage, 6)
-})
-
-test('overage excluye las ya pagadas al contractor (coincide con la tab)', () => {
-  const all = [
-    e('1', 6, { allocation: 'overage' }),
-    e('2', 4, { allocation: 'overage' }), // pagada → excluida
+    e('1', 6, { allocation: 'overage' }), // approved → cuenta
+    e('2', 2, { allocation: 'overage', status: 'Pending' }), // pending → cuenta (la tab lo lista)
+    e('3', 5, { allocation: 'overage' }), // facturada → cuenta (la tab la mantiene, sólo la marca)
+    e('4', 9, { allocation: 'overage' }), // pagada → NO cuenta (la tab la saca)
+    e('5', 3, { allocation: 'sp_internal' }), // otra allocation → excluida
   ]
   const r = billingKpis({
     billToClient: [],
     allAllocations: all,
-    invoicedIds: new Set(),
-    paidIds: new Set(['2']),
+    invoicedIds: new Set(['3']),
+    paidIds: new Set(['4']),
   })
-  assert.equal(r.overage, 6)
+  assert.equal(r.overage, 13) // 6 + 2 + 5
 })
 
 test('listas vacías → todo en cero', () => {

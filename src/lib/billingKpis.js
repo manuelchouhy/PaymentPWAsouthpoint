@@ -44,21 +44,21 @@ export function billingKpis({
 
   // Invoiced: cualquier hora ya facturada del scope (sin filtrar por allocation ni
   // status — las facturas viejas son pre-triage y sus horas tienen allocation null).
-  // Sin allocation y Overage cuentan sólo lo aprobado y NO facturado (las facturadas
-  // ya están congeladas): mismo criterio para las dos, tratando igual "lo facturado".
   let invoiced = 0
   let unallocated = 0
   let overage = 0
   for (const entry of allAllocations) {
-    if (isInvoiced(entry)) {
-      invoiced += h(entry)
-      continue
+    if (isInvoiced(entry)) invoiced += h(entry)
+    // Overage coincide EXACTAMENTE con la tab de Overage (overageGroups): allocation
+    // overage y NO pagada al contractor — sin filtrar por status ni invoiced, para que
+    // el cuadro y la tab de la misma pantalla nunca discrepen.
+    if (entry?.allocation === 'overage') {
+      if (!isPaid(entry)) overage += h(entry)
+    } else if (isApproved(entry) && !isInvoiced(entry) && !entry?.allocation) {
+      // Sin allocation: aprobadas, sin clasificar y sin facturar (las facturadas ya
+      // están congeladas y no se pueden triagear).
+      unallocated += h(entry)
     }
-    if (!isApproved(entry)) continue
-    if (!entry?.allocation) unallocated += h(entry)
-    // Overage excluye también las ya pagadas al contractor, para coincidir con la tab
-    // de Overage (que lista sólo lo pendiente de pago).
-    else if (entry.allocation === 'overage' && !isPaid(entry)) overage += h(entry)
   }
 
   return { pendingToBill, pendingCount, invoiced, unallocated, overage }
