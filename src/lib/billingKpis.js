@@ -12,12 +12,21 @@
  * @param {Array<{id:string|number, hours:number, status:string, allocation?:string|null}>} args.allAllocations
  *   Horas del scope de CUALQUIER allocation (misma lista `filteredAllAllocations`).
  * @param {Set<string>} args.invoicedIds  ids (string) de las horas ya facturadas.
+ * @param {Set<string>} [args.paidIds]  ids (string) de las horas overage ya pagadas al
+ *   contractor (Payments): se excluyen del KPI Overage para que coincida con la tab
+ *   de Overage (que muestra sólo lo pendiente de pago).
  * @returns {{pendingToBill:number, pendingCount:number, invoiced:number,
  *   unallocated:number, overage:number}}
  */
-export function billingKpis({ billToClient = [], allAllocations = [], invoicedIds = new Set() }) {
+export function billingKpis({
+  billToClient = [],
+  allAllocations = [],
+  invoicedIds = new Set(),
+  paidIds = new Set(),
+}) {
   const isApproved = (e) => e?.status === 'Approved'
   const isInvoiced = (e) => invoicedIds.has(String(e?.id))
+  const isPaid = (e) => paidIds.has(String(e?.id))
   const h = (e) => Number(e?.hours) || 0
 
   // Pending to bill: bill_to_client aprobadas y SIN facturar (lo que está por entrar
@@ -46,7 +55,9 @@ export function billingKpis({ billToClient = [], allAllocations = [], invoicedId
     }
     if (!isApproved(entry)) continue
     if (!entry.allocation) unallocated += h(entry)
-    else if (entry.allocation === 'overage') overage += h(entry)
+    // Overage excluye también las ya pagadas al contractor, para coincidir con la tab
+    // de Overage (que lista sólo lo pendiente de pago).
+    else if (entry.allocation === 'overage' && !isPaid(entry)) overage += h(entry)
   }
 
   return { pendingToBill, pendingCount, invoiced, unallocated, overage }

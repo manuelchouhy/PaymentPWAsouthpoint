@@ -450,6 +450,7 @@ export function BillingPage() {
       billToClient: filtered,
       allAllocations: filteredAllAllocations,
       invoicedIds,
+      paidIds: paidEntryIds,
     })
     // Filas que el usuario TODAVÍA PUEDE clasificar bajo el filtro actual:
     // aprobadas, sin factura (setEntriesAllocation congela sólo las facturadas)
@@ -463,17 +464,27 @@ export function BillingPage() {
       classifiable += 1
     }
     return { ...kpis, classifiable }
-  }, [filtered, filteredAllAllocations, invoiceByEntryId])
+  }, [filtered, filteredAllAllocations, invoiceByEntryId, paidEntryIds])
 
   // Cuadro #2: sólo tiene sentido cuando el filtro deja UN proyecto en scope (un único
   // projectNumber). Devuelve su budget efectivo y su consumed. Con varios/ninguno →
   // null y el cuadro muestra "—".
   const singleProject = useMemo(() => {
-    const nums = new Set(filteredAllAllocations.map((e) => e.projectNumber).filter(Boolean))
+    // Sólo con un filtro activo: si no, no es "el proyecto que estoy mirando".
+    if (!isActive) return null
+    // Todas las horas del scope deben compartir UN projectNumber real. Si alguna no
+    // tiene número (mezcla no resuelta) o hay más de uno → no es un proyecto único.
+    const nums = new Set(filteredAllAllocations.map((e) => e.projectNumber || ''))
     if (nums.size !== 1) return null
     const [num] = [...nums]
-    const project = projects.find((p) => p.projectNumber === num)
-    if (!project) return null
+    if (!num) return null
+    // projectNumber duplicado (dos proyectos con el mismo número, ej. id49/id50): el
+    // budget saldría de uno y el consumed de ambos → ambiguo, mejor "—".
+    const matches = projects.filter((p) => p.projectNumber === num)
+    if (matches.length !== 1) return null
+    const project = matches[0]
+    // budget efectivo; puede ser null si el proyecto no tiene base budget (la JSX lo
+    // muestra como "—", no como 0).
     const budget = effectiveBudgetHours(
       project.baseBudgetHours,
       crsByProject.get(String(project.id)) ?? [],
@@ -490,7 +501,7 @@ export function BillingPage() {
       consumed += Number(en.hours) || 0
     }
     return { budget, consumed }
-  }, [filteredAllAllocations, projects, crsByProject, entriesConCliente])
+  }, [isActive, filteredAllAllocations, projects, crsByProject, entriesConCliente])
 
   // Las horas facturables ordenadas por cliente → semana domingo→sábado → filas
   // proveedor·proyecto·task (billingGrouping). "Sin cliente" queda arriba, no es
@@ -1084,7 +1095,7 @@ export function BillingPage() {
                     <span className="dash-kpi__unit"> + </span>
                     {formatHours(singleProject.consumed)}
                     <span className="dash-kpi__unit"> / </span>
-                    {formatHours(singleProject.budget)}
+                    {singleProject.budget != null ? formatHours(singleProject.budget) : '—'}
                     <span className="dash-kpi__unit"> h</span>
                   </>
                 ) : (

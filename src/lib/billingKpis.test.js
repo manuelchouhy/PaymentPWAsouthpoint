@@ -64,6 +64,20 @@ test('overage: suma Approved con allocation overage, sin facturar', () => {
   assert.equal(r.overage, 6)
 })
 
+test('overage excluye las ya pagadas al contractor (coincide con la tab)', () => {
+  const all = [
+    e('1', 6, { allocation: 'overage' }),
+    e('2', 4, { allocation: 'overage' }), // pagada → excluida
+  ]
+  const r = billingKpis({
+    billToClient: [],
+    allAllocations: all,
+    invoicedIds: new Set(),
+    paidIds: new Set(['2']),
+  })
+  assert.equal(r.overage, 6)
+})
+
 test('listas vacías → todo en cero', () => {
   const r = billingKpis({})
   assert.deepEqual(r, {
