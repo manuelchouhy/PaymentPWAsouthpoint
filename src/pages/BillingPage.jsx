@@ -182,6 +182,9 @@ export function BillingPage() {
   // Change requests por proyecto (Map<String(project.id), CR[]>): alimentan el budget
   // efectivo del cuadro #2 cuando el filtro deja un único proyecto. Ver Client Summary.
   const [crsByProject, setCrsByProject] = useState(() => new Map())
+  // Los CRs cargan en una cadena async aparte: hasta que estén, el budget del cuadro #2
+  // no es confiable (sería sólo el base, sin las expansiones aprobadas) → se muestra "—".
+  const [crsLoaded, setCrsLoaded] = useState(false)
   const [clients, setClients] = useState([])
   const [status, setStatus] = useState('loading')
   const [reloadKey, setReloadKey] = useState(0)
@@ -269,7 +272,9 @@ export function BillingPage() {
     Promise.resolve()
       .then(() => api.changeRequests.listByProject())
       .then((crMap) => {
-        if (!cancelled) setCrsByProject(crMap)
+        if (cancelled) return
+        setCrsByProject(crMap)
+        setCrsLoaded(true)
       })
       .catch((error) =>
         console.error('No se pudieron cargar los change requests de Billing:', error),
@@ -445,11 +450,12 @@ export function BillingPage() {
   // unallocated, overage y consumed. classifiable queda acá porque lo usa el
   // empty-state (decidir si mandar a Entries), no un cuadro.
   const cards = useMemo(() => {
-    const invoicedIds = new Set(invoiceByEntryId.keys())
+    // invoiceByEntryId ya es un Map con .has(String(id)); billingKpis sólo lo usa así,
+    // así que se pasa tal cual (sin copiarlo a un Set).
     const kpis = billingKpis({
       billToClient: filtered,
       allAllocations: filteredAllAllocations,
-      invoicedIds,
+      invoicedIds: invoiceByEntryId,
       paidIds: paidEntryIds,
     })
     // Filas que el usuario TODAVÍA PUEDE clasificar bajo el filtro actual:
@@ -459,7 +465,7 @@ export function BillingPage() {
     let classifiable = 0
     for (const entry of filteredAllAllocations) {
       if (entry.status !== 'Approved') continue
-      if (invoicedIds.has(String(entry.id))) continue
+      if (invoiceByEntryId.has(String(entry.id))) continue
       if (entry.allocation === 'bill_to_client') continue
       classifiable += 1
     }
@@ -470,8 +476,10 @@ export function BillingPage() {
   // projectNumber). Devuelve su budget efectivo y su consumed. Con varios/ninguno →
   // null y el cuadro muestra "—".
   const singleProject = useMemo(() => {
-    // Sólo con un filtro activo: si no, no es "el proyecto que estoy mirando".
-    if (!isActive) return null
+    // Sólo cuando el usuario filtró EXPLÍCITAMENTE por proyecto (nombre o número): un
+    // filtro de contractor/estado que por casualidad deja un solo proyecto NO cuenta
+    // como "el proyecto que estoy mirando".
+    if (!filters.projects.length && !filters.projectNumbers.length) return null
     // Todas las horas del scope deben compartir UN projectNumber real. Si alguna no
     // tiene número (mezcla no resuelta) o hay más de uno → no es un proyecto único.
     const nums = new Set(filteredAllAllocations.map((e) => e.projectNumber || ''))
@@ -483,16 +491,17 @@ export function BillingPage() {
     const matches = projects.filter((p) => p.projectNumber === num)
     if (matches.length !== 1) return null
     const project = matches[0]
-    // budget efectivo; puede ser null si el proyecto no tiene base budget (la JSX lo
-    // muestra como "—", no como 0).
-    const budget = effectiveBudgetHours(
-      project.baseBudgetHours,
-      crsByProject.get(String(project.id)) ?? [],
-    )
+    // budget efectivo; null si el proyecto no tiene base budget o si los CRs todavía no
+    // cargaron (sería sólo el base, engañoso). La JSX lo muestra como "—", no como 0.
+    const budget = crsLoaded
+      ? effectiveBudgetHours(project.baseBudgetHours, crsByProject.get(String(project.id)) ?? [])
+      : null
     // Consumed del PROYECTO COMPLETO (todas las semanas), NO el subconjunto que dejan
     // los otros filtros (semana/contractor): así el ratio consumed/budget es coherente
     // (comparar el consumido total contra el budget total). Aprobadas bill_to_client de
     // ese projectNumber sobre TODAS las entries, no sobre `filtered`.
+    // NOTA (decisión del usuario): acá el consumed NO incluye sp_internal, a diferencia
+    // de Client Summary (que sí lo cuenta contra el mismo budget). Es intencional.
     let consumed = 0
     for (const en of entriesConCliente) {
       if (en.projectNumber !== num) continue
@@ -501,7 +510,15 @@ export function BillingPage() {
       consumed += Number(en.hours) || 0
     }
     return { budget, consumed }
-  }, [isActive, filteredAllAllocations, projects, crsByProject, entriesConCliente])
+  }, [
+    filters.projects,
+    filters.projectNumbers,
+    filteredAllAllocations,
+    projects,
+    crsByProject,
+    crsLoaded,
+    entriesConCliente,
+  ])
 
   // Las horas facturables ordenadas por cliente → semana domingo→sábado → filas
   // proveedor·proyecto·task (billingGrouping). "Sin cliente" queda arriba, no es

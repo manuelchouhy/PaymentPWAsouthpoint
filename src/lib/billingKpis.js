@@ -11,7 +11,8 @@
  *   Horas del scope con allocation bill_to_client (misma lista `filtered` de la grilla).
  * @param {Array<{id:string|number, hours:number, status:string, allocation?:string|null}>} args.allAllocations
  *   Horas del scope de CUALQUIER allocation (misma lista `filteredAllAllocations`).
- * @param {Set<string>} args.invoicedIds  ids (string) de las horas ya facturadas.
+ * @param {{has:(id:string)=>boolean}} args.invoicedIds  colección con `.has(String(id))`
+ *   de las horas ya facturadas (Set o el Map invoiceByEntryId sirven).
  * @param {Set<string>} [args.paidIds]  ids (string) de las horas overage ya pagadas al
  *   contractor (Payments): se excluyen del KPI Overage para que coincida con la tab
  *   de Overage (que muestra sólo lo pendiente de pago).
@@ -54,7 +55,7 @@ export function billingKpis({
       continue
     }
     if (!isApproved(entry)) continue
-    if (!entry.allocation) unallocated += h(entry)
+    if (!entry?.allocation) unallocated += h(entry)
     // Overage excluye también las ya pagadas al contractor, para coincidir con la tab
     // de Overage (que lista sólo lo pendiente de pago).
     else if (entry.allocation === 'overage' && !isPaid(entry)) overage += h(entry)
