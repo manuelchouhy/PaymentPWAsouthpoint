@@ -2653,6 +2653,11 @@ th.col-pop { text-align: center; }
 .overage-picker__row--paid .overage-picker__hours {
   opacity: .62;
 }
+/* El badge de estado es un indicador pasivo: dejar pasar el click al <label> para que
+   clickearlo togglee la selección de la fila (pendiente) en vez de ser una dead-zone. */
+.overage-picker__row .badge {
+  pointer-events: none;
+}
 
 .overage-picker__row input {
   flex: none;

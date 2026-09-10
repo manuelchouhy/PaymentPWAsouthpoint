@@ -22,6 +22,7 @@ import {
   sundayWeekYear,
   formatInvoicePeriod,
   distinctWeekCount,
+  weekStartISO,
 } from '../lib/format'
 import { BillingBadge } from '../components/BillingBadge'
 import { RegisterPaymentModal } from '../components/RegisterPaymentModal'
@@ -420,6 +421,11 @@ export function PaymentsPage() {
   // el picker dan 'pending'; una ya pagada daría 'paid' (defensivo).
   const paidEntryIds = useMemo(() => paidEntryIdsFrom(payments), [payments])
 
+  // Una hora es pendiente (seleccionable/pagable) si no está en las pagadas. El picker
+  // muestra ambas; sólo las pendientes entran a la selección y al pago. Se usa igual en
+  // el display y en el submit para que no puedan divergir.
+  const isPending = (entry) => entryPaymentStatus(entry, paidEntryIds) === 'pending'
+
   // KPIs sobre las facturas pendientes de pago. Total pendiente en HORAS (suma de las
   // horas de los contractors todavía sin pagar en las facturas pagables).
   const kpis = useMemo(() => {
@@ -530,12 +536,11 @@ export function PaymentsPage() {
   // contractor. Sin factura y sin monto (en horas).
   async function handleRegisterPayment(payload) {
     const { allocation, user: contractor } = payTarget
-    // Mismo criterio que el display (línea ~1013): sólo horas pendientes. payTarget.entries
-    // ahora incluye las ya pagadas (read-only en el picker); el guard evita re-pagar una
-    // hora aunque su id llegara a paySelectedIds por un cambio futuro.
+    // Sólo horas pendientes: payTarget.entries ahora incluye las ya pagadas (read-only
+    // en el picker); el guard isPending evita re-pagar una hora aunque su id llegara a
+    // paySelectedIds por un cambio futuro. Mismo criterio que el display.
     const selected = payTarget.entries.filter(
-      (e) =>
-        paySelectedIds.has(String(e.id)) && entryPaymentStatus(e, paidEntryIds) === 'pending',
+      (e) => paySelectedIds.has(String(e.id)) && isPending(e),
     )
     const entryIds = selected.map((e) => e.id)
     const hours = selected.reduce((sum, e) => sum + e.hours, 0)
@@ -674,11 +679,18 @@ export function PaymentsPage() {
                                 // "X of Y" ni para la selección).
                                 const paidRows =
                                   allocation === 'overage' ? overagePaid : spInternalPaid
-                                // Dedup por id: un id repetido (misma hora en dos pagos, o ya
-                                // presente entre las pendientes) rompería el key de React.
                                 const pendingIds = new Set(
                                   group.entries.map((e) => String(e.id)),
                                 )
+                                // Acotar las pagadas a las MISMAS semanas (domingo–sábado) que
+                                // las pendientes: da el contexto del período que se está pagando
+                                // y evita arrastrar TODO el historial pagado del contractor (que
+                                // crece sin límite y sepultaría las pendientes seleccionables).
+                                const pendingWeeks = new Set(
+                                  group.entries.map((e) => weekStartISO(e.date)).filter(Boolean),
+                                )
+                                // Dedup por id: un id repetido (misma hora en dos pagos, o ya
+                                // presente entre las pendientes) rompería el key de React.
                                 const seen = new Set()
                                 const paidEntries = paidRows
                                   .filter((r) => r.user === group.user)
@@ -686,6 +698,7 @@ export function PaymentsPage() {
                                   .filter((e) => {
                                     const k = String(e.id)
                                     if (pendingIds.has(k) || seen.has(k)) return false
+                                    if (!pendingWeeks.has(weekStartISO(e.date))) return false
                                     seen.add(k)
                                     return true
                                   })
@@ -1029,9 +1042,7 @@ export function PaymentsPage() {
             // read-only en el picker (checkbox deshabilitado), así que se excluyen
             // de la selección de forma defensiva aunque no puedan togglearse.
             const selected = payTarget.entries.filter(
-              (e) =>
-                paySelectedIds.has(String(e.id)) &&
-                entryPaymentStatus(e, paidEntryIds) === 'pending',
+              (e) => paySelectedIds.has(String(e.id)) && isPending(e),
             )
             const selHours = selected.reduce((sum, e) => sum + e.hours, 0)
             const toggle = (id) =>
@@ -1078,12 +1089,10 @@ export function PaymentsPage() {
                                 {e.date ? ` · ${formatDate(e.date)}` : ''}
                               </span>
                               <span className="overage-picker__hours">{formatHours(e.hours)} h</span>
-                              {/* preventDefault: el badge es un indicador pasivo dentro del
-                                  <label>; sin esto, clickearlo togglearía el checkbox. */}
-                              <span
-                                className={`badge badge--${status}`}
-                                onClick={(ev) => ev.preventDefault()}
-                              >
+                              {/* Indicador pasivo: pointer-events:none (CSS) deja pasar el
+                                  click al <label>, así clickear el badge de una fila pendiente
+                                  la togglea igual que el resto de la fila. */}
+                              <span className={`badge badge--${status}`}>
                                 {isPaid ? 'Paid' : 'Pending'}
                               </span>
                             </label>
