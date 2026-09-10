@@ -22,7 +22,8 @@ import { supabase, isSupabaseConfigured } from './supabase'
 import { paidEntryIdsFrom } from './paymentsGrouping'
 import { markDemoInvoiceContractorPaid } from './data'
 
-export const BANK_METHODS = ['BBVA', 'Itaú', 'Santander', 'Other']
+// Métodos de pago (bank_method): en un módulo puro para poder unit-testearlos.
+export { BANK_METHODS } from './bankMethods'
 
 /**
  * Nivel de alerta de pago al contractor (FR-13).
