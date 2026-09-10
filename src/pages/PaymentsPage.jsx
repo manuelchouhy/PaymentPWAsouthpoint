@@ -530,7 +530,13 @@ export function PaymentsPage() {
   // contractor. Sin factura y sin monto (en horas).
   async function handleRegisterPayment(payload) {
     const { allocation, user: contractor } = payTarget
-    const selected = payTarget.entries.filter((e) => paySelectedIds.has(String(e.id)))
+    // Mismo criterio que el display (línea ~1013): sólo horas pendientes. payTarget.entries
+    // ahora incluye las ya pagadas (read-only en el picker); el guard evita re-pagar una
+    // hora aunque su id llegara a paySelectedIds por un cambio futuro.
+    const selected = payTarget.entries.filter(
+      (e) =>
+        paySelectedIds.has(String(e.id)) && entryPaymentStatus(e, paidEntryIds) === 'pending',
+    )
     const entryIds = selected.map((e) => e.id)
     const hours = selected.reduce((sum, e) => sum + e.hours, 0)
     const { payment } = await api.payments.createOverage(
@@ -668,9 +674,21 @@ export function PaymentsPage() {
                                 // "X of Y" ni para la selección).
                                 const paidRows =
                                   allocation === 'overage' ? overagePaid : spInternalPaid
+                                // Dedup por id: un id repetido (misma hora en dos pagos, o ya
+                                // presente entre las pendientes) rompería el key de React.
+                                const pendingIds = new Set(
+                                  group.entries.map((e) => String(e.id)),
+                                )
+                                const seen = new Set()
                                 const paidEntries = paidRows
                                   .filter((r) => r.user === group.user)
                                   .flatMap((r) => r.entries)
+                                  .filter((e) => {
+                                    const k = String(e.id)
+                                    if (pendingIds.has(k) || seen.has(k)) return false
+                                    seen.add(k)
+                                    return true
+                                  })
                                 setPayTarget({
                                   ...group,
                                   allocation,

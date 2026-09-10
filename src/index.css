@@ -2642,11 +2642,16 @@ th.col-pop { text-align: center; }
   background: var(--surface-2, rgba(127, 127, 127, .06));
 }
 
-/* Hora ya pagada: read-only en el picker (checkbox deshabilitado), atenuada para
-   distinguirla de las pendientes seleccionables. */
+/* Hora ya pagada: read-only en el picker (checkbox deshabilitado). Se atenúan el
+   texto y el checkbox para distinguirla de las pendientes, pero NO el badge "Paid":
+   es el indicador que la feature agrega y tiene que quedar legible. */
 .overage-picker__row--paid {
-  opacity: .62;
   cursor: default;
+}
+.overage-picker__row--paid input,
+.overage-picker__row--paid .overage-picker__desc,
+.overage-picker__row--paid .overage-picker__hours {
+  opacity: .62;
 }
 
 .overage-picker__row input {
