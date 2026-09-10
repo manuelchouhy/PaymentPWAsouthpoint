@@ -22,7 +22,9 @@ import { supabase, isSupabaseConfigured } from './supabase'
 import { paidEntryIdsFrom } from './paymentsGrouping'
 import { markDemoInvoiceContractorPaid } from './data'
 
-export const BANK_METHODS = ['BBVA', 'Itaú', 'Santander', 'Other']
+// 'Other' queda último como catch-all. bank_method se persiste como text libre
+// (sin enum/CHECK en DB), así que sumar un método es sólo agregarlo acá.
+export const BANK_METHODS = ['BBVA', 'Itaú', 'Santander', 'Prex', 'Other']
 
 /**
  * Nivel de alerta de pago al contractor (FR-13).
