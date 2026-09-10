@@ -2642,6 +2642,13 @@ th.col-pop { text-align: center; }
   background: var(--surface-2, rgba(127, 127, 127, .06));
 }
 
+/* Hora ya pagada: read-only en el picker (checkbox deshabilitado), atenuada para
+   distinguirla de las pendientes seleccionables. */
+.overage-picker__row--paid {
+  opacity: .62;
+  cursor: default;
+}
+
 .overage-picker__row input {
   flex: none;
 }

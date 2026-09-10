@@ -661,7 +661,22 @@ export function PaymentsPage() {
                               type="button"
                               className="btn btn--pay btn--row"
                               onClick={() => {
-                                setPayTarget({ ...group, allocation })
+                                // El picker muestra las pendientes (seleccionables) MÁS las
+                                // ya pagadas de este contractor+allocation (read-only, badge
+                                // "Paid"), para ver el estado de cada hora. pendingCount
+                                // guarda cuántas son pendientes (las pagadas no cuentan para
+                                // "X of Y" ni para la selección).
+                                const paidRows =
+                                  allocation === 'overage' ? overagePaid : spInternalPaid
+                                const paidEntries = paidRows
+                                  .filter((r) => r.user === group.user)
+                                  .flatMap((r) => r.entries)
+                                setPayTarget({
+                                  ...group,
+                                  allocation,
+                                  entries: [...group.entries, ...paidEntries],
+                                  pendingCount: group.entries.length,
+                                })
                                 setPaySelectedIds(new Set(group.entryIds.map(String)))
                               }}
                             >
@@ -992,8 +1007,13 @@ export function PaymentsPage() {
         {payTarget &&
           (() => {
             const label = PAY_LABELS[payTarget.allocation]
-            const selected = payTarget.entries.filter((e) =>
-              paySelectedIds.has(String(e.id)),
+            // Sólo las pendientes son seleccionables/pagables: las pagadas van
+            // read-only en el picker (checkbox deshabilitado), así que se excluyen
+            // de la selección de forma defensiva aunque no puedan togglearse.
+            const selected = payTarget.entries.filter(
+              (e) =>
+                paySelectedIds.has(String(e.id)) &&
+                entryPaymentStatus(e, paidEntryIds) === 'pending',
             )
             const selHours = selected.reduce((sum, e) => sum + e.hours, 0)
             const toggle = (id) =>
@@ -1011,8 +1031,8 @@ export function PaymentsPage() {
                 submitLabel={`Register ${label.low} payment`}
                 extraValid={selected.length > 0}
                 summaryName={payTarget.user}
-                summaryMeta={`${label.cap} · ${selected.length} of ${payTarget.entries.length} ${
-                  payTarget.entries.length === 1 ? 'entry' : 'entries'
+                summaryMeta={`${label.cap} · ${selected.length} of ${payTarget.pendingCount} ${
+                  payTarget.pendingCount === 1 ? 'entry' : 'entries'
                 }`}
                 summaryFigure={`${formatHours(selHours)} h`}
                 summaryFigureLabel={`${label.cap} hours (selected)`}
@@ -1022,12 +1042,16 @@ export function PaymentsPage() {
                     <ul className="overage-picker__list">
                       {payTarget.entries.map((e) => {
                         const status = entryPaymentStatus(e, paidEntryIds)
+                        const isPaid = status === 'paid'
                         return (
                           <li key={e.id}>
-                            <label className="overage-picker__row">
+                            <label
+                              className={`overage-picker__row${isPaid ? ' overage-picker__row--paid' : ''}`}
+                            >
                               <input
                                 type="checkbox"
                                 checked={paySelectedIds.has(String(e.id))}
+                                disabled={isPaid}
                                 onChange={() => toggle(e.id)}
                               />
                               <span className="overage-picker__desc">
@@ -1036,8 +1060,13 @@ export function PaymentsPage() {
                                 {e.date ? ` · ${formatDate(e.date)}` : ''}
                               </span>
                               <span className="overage-picker__hours">{formatHours(e.hours)} h</span>
-                              <span className={`badge badge--${status}`}>
-                                {status === 'paid' ? 'Paid' : 'Pending'}
+                              {/* preventDefault: el badge es un indicador pasivo dentro del
+                                  <label>; sin esto, clickearlo togglearía el checkbox. */}
+                              <span
+                                className={`badge badge--${status}`}
+                                onClick={(ev) => ev.preventDefault()}
+                              >
+                                {isPaid ? 'Paid' : 'Pending'}
                               </span>
                             </label>
                           </li>
