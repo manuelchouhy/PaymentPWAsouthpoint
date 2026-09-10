@@ -713,6 +713,7 @@ export function BillingPage() {
       { header: 'Project #', key: 'projectNumber' },
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
+      { header: 'Task #', key: 'taskNumber' },
       { header: 'Date', key: 'date' },
       { header: 'Reason', key: 'reason' },
       { header: 'Hours', key: 'hours' },
@@ -758,9 +759,10 @@ export function BillingPage() {
                 // granularidad del export read-only (handleExportReadonly).
                 projectNumber: row.projectNumber ?? '',
                 project: row.project,
-                // Incluye el id del task (formatTaskLabel) igual que la grilla, para
-                // que una fila exportada se pueda rastrear hasta su task de Zoho.
-                task: formatTaskLabel(row.task, row.taskNumber),
+                task: row.task,
+                // id del task en columna aparte (como el export de Entries): trazable a
+                // Zoho sin romper el matching por nombre de la columna Task.
+                taskNumber: row.taskNumber ?? '',
                 date: row.date ? formatDate(row.date) : '',
                 reason: '',
                 hours: row.hours,
@@ -796,6 +798,7 @@ export function BillingPage() {
       { header: 'Project #', key: 'projectNumber' },
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
+      { header: 'Task #', key: 'taskNumber' },
       { header: 'Date', key: 'date' },
       { header: 'Hours', key: 'hours' },
       { header: 'Entries', key: 'entries' },
@@ -808,7 +811,8 @@ export function BillingPage() {
         week: week ? week.week : '—',
         projectNumber: row.projectNumber ?? '',
         project: row.project || '',
-        task: formatTaskLabel(row.task, row.taskNumber),
+        task: row.task || '',
+        taskNumber: row.taskNumber ?? '',
         date: row.date ? formatDate(row.date) : '',
         hours: row.hours,
         entries: row.entries.length,

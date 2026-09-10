@@ -165,3 +165,10 @@ test('formatTaskLabel: sin id ni nombre → cadena vacía', () => {
   assert.equal(formatTaskLabel('', ''), '')
   assert.equal(formatTaskLabel(null, undefined), '')
 })
+
+test('formatTaskLabel: taskNumber numérico devuelve string (contrato @returns string)', () => {
+  const soloId = formatTaskLabel('', 123)
+  assert.equal(soloId, '123')
+  assert.equal(typeof soloId, 'string')
+  assert.equal(formatTaskLabel('Login design', 123), '123 · Login design')
+})

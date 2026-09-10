@@ -260,8 +260,10 @@ export function distinctWeekCount(isoDates = []) {
  * @returns {string}
  */
 export function formatTaskLabel(task, taskNumber) {
-  const name = task ?? ''
-  const id = taskNumber ?? ''
+  // Coerción a String: taskNumber puede llegar como número si la columna de Zoho es
+  // numérica; el contrato promete string en todas las ramas (incl. "sólo el id").
+  const name = task == null ? '' : String(task)
+  const id = taskNumber == null ? '' : String(taskNumber)
   if (id && name) return `${id} · ${name}`
   return id || name
 }
