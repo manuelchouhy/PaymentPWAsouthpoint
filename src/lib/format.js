@@ -252,9 +252,11 @@ export function distinctWeekCount(isoDates = []) {
 }
 
 /**
- * Rótulo de un task para la fila de una hora: "<id> · <nombre>" (el id adelante,
- * convención tipo ticket). Si no hay id (taskNumber vacío) devuelve sólo el nombre;
- * si no hay nombre, sólo el id; si no hay ninguno, cadena vacía.
+ * Rótulo de un task para la fila de una hora: "#<id> · <nombre>" (el id adelante,
+ * convención tipo ticket). El "#" distingue el id de Zoho del nombre, que en este
+ * dominio suele empezar con un ordinal (ej. "5 - HSS APP..."), para que no se lea
+ * como dos números. Si no hay id devuelve sólo el nombre; si no hay nombre, "#<id>";
+ * si no hay ninguno, cadena vacía.
  * @param {?string} task nombre del task
  * @param {?string} taskNumber id del task (entry.taskNumber)
  * @returns {string}
@@ -264,8 +266,9 @@ export function formatTaskLabel(task, taskNumber) {
   // numérica; el contrato promete string en todas las ramas (incl. "sólo el id").
   const name = task == null ? '' : String(task)
   const id = taskNumber == null ? '' : String(taskNumber)
-  if (id && name) return `${id} · ${name}`
-  return id || name
+  if (id && name) return `#${id} · ${name}`
+  if (id) return `#${id}`
+  return name
 }
 
 /**
