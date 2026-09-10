@@ -6,6 +6,7 @@ import {
   projectRowTotals,
   tableTotalsByClient,
 } from './clientSummaryTotals.js'
+import { buildClientSummaryWeekly } from './clientSummaryWeekly.js'
 
 const wk = (consumed, overage = 0, pending = 0) => ({ consumed, overage, pending, cumulative: consumed, remaining: 0 })
 
@@ -140,4 +141,26 @@ test('projectRowTotals sin budget: hasBudget=false y remaining null si no hay se
   assert.equal(t.hasBudget, false)
   assert.equal(t.budget, null)
   assert.equal(t.remaining, null)
+})
+
+test('las horas sp_internal del motor propagan a los totales de portfolio y a los gráficos', () => {
+  // Integración motor → totales: un cliente real con bill_to_client y SouthPoint
+  // Internal (sin budget) con sp_internal. Ambos deben sumar al Consumed total.
+  const { clients } = buildClientSummaryWeekly({
+    projects: [
+      { id: 1, projectName: 'Forecasting', customerName: 'HSS', baseBudgetHours: 120 },
+      { id: 4, projectName: 'SouthPoint Hub', resolvedClient: 'SouthPoint Internal', baseBudgetHours: null },
+    ],
+    entries: [
+      { date: '2026-08-05', project: 'Forecasting', hours: 30, status: 'Approved', allocation: 'bill_to_client' },
+      { date: '2026-08-05', project: 'SouthPoint Hub', hours: 12, status: 'Approved', allocation: 'sp_internal' },
+    ],
+    crsByProject: new Map(),
+  })
+  const portfolio = portfolioTotals(tableTotalsByClient(clients))
+  assert.equal(portfolio.consumed, 42) // 30 facturable + 12 interno
+  const chart = chartTotals(clients)
+  assert.equal(chart.consumed, 42)
+  assert.equal(chart.budget, 120) // solo el proyecto con budget aporta
+  assert.equal(chart.remaining, 90) // max(0, 120-30); el interno sin budget no aporta remaining
 })

@@ -66,19 +66,32 @@ test('cumulative y remaining se calculan cronológicamente entre semanas', () =>
   )
 })
 
-test('solo cuenta entries Approved (ignora Rejected/Pending y sp_internal/unallocated)', () => {
+test('no cuenta como consumed las Rejected, las Pending ni las sin clasificar (null)', () => {
   const { clients } = buildClientSummaryWeekly({
     projects: [project()],
     entries: [
       entry({ hours: 23, status: 'Approved', allocation: 'bill_to_client' }),
       entry({ hours: 99, status: 'Rejected', allocation: 'bill_to_client' }),
-      entry({ hours: 99, status: 'Pending', allocation: 'bill_to_client' }),
-      entry({ hours: 99, status: 'Approved', allocation: 'sp_internal' }),
-      entry({ hours: 99, status: 'Approved', allocation: null }),
+      entry({ hours: 99, status: 'Pending', allocation: 'bill_to_client' }), // pending, no consumed
+      entry({ hours: 99, status: 'Approved', allocation: null }), // sin clasificar: fuera
     ],
     crsByProject: new Map(),
   })
   assert.equal(clients[0].projects[0].consumed, 23)
+})
+
+test('cuenta las horas sp_internal Approved como consumed', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project()],
+    entries: [
+      entry({ hours: 10, status: 'Approved', allocation: 'bill_to_client' }),
+      entry({ hours: 7, status: 'Approved', allocation: 'sp_internal' }),
+    ],
+    crsByProject: new Map(),
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.consumed, 17) // 10 bill_to_client + 7 sp_internal
+  assert.equal(proj.weeks[0].consumed, 17)
 })
 
 test('cuenta las horas bill_to_client Pending como pending (no como consumed)', () => {
@@ -97,6 +110,21 @@ test('cuenta las horas bill_to_client Pending como pending (no como consumed)', 
   assert.equal(proj.weeks[0].pending, 4)
   // El acumulado/remanente NO se ve afectado por las Pending.
   assert.equal(proj.weeks[0].cumulative, 10)
+})
+
+test('cuenta las horas sp_internal Pending como pending (no como consumed)', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project()],
+    entries: [
+      entry({ hours: 6, status: 'Approved', allocation: 'sp_internal' }),
+      entry({ hours: 4, status: 'Pending', allocation: 'sp_internal' }),
+    ],
+    crsByProject: new Map(),
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.consumed, 6) // solo Approved
+  assert.equal(proj.pending, 4) // solo Pending
+  assert.equal(proj.weeks[0].cumulative, 6) // el acumulado no incluye la Pending
 })
 
 test('una entry overage Pending NO cuenta (ni pending ni overage)', () => {
@@ -247,6 +275,35 @@ test('descarta entries sin nombre de proyecto (no las atribuye a nadie)', () => 
   // El proyecto de nombre vacío NO se apropia de las horas huérfanas.
   assert.equal(clients[0].projects[0].weeks.length, 0)
   assert.equal(clients[0].projects[0].consumed, 0)
+})
+
+test('SouthPoint Internal (sin budget): sp_internal cuenta como consumed y remaining queda en blanco', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [
+      project({
+        id: 4,
+        projectName: 'SouthPoint Hub',
+        customerName: null,
+        client: '',
+        resolvedClient: 'SouthPoint Internal',
+        baseBudgetHours: null, // sin budget
+      }),
+    ],
+    entries: [
+      entry({ project: 'SouthPoint Hub', hours: 12, status: 'Approved', allocation: 'sp_internal' }),
+      entry({ project: 'SouthPoint Hub', hours: 5, status: 'Pending', allocation: 'sp_internal' }),
+    ],
+    crsByProject: new Map(),
+  })
+  assert.equal(clients[0].client, 'SouthPoint Internal')
+  const proj = clients[0].projects[0]
+  assert.equal(proj.budget, null)
+  assert.equal(proj.consumed, 12)
+  assert.equal(proj.pending, 5)
+  assert.equal(proj.overage, 0)
+  // Sin budget contra qué medir: remaining en blanco (null), cumulative sí acumula.
+  assert.equal(proj.weeks[0].cumulative, 12)
+  assert.equal(proj.weeks[0].remaining, null)
 })
 
 test('un proyecto sin entries aparece igual, con weeks vacías y consumed 0', () => {
