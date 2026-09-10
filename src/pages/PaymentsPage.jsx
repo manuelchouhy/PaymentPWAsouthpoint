@@ -22,7 +22,6 @@ import {
   sundayWeekYear,
   formatInvoicePeriod,
   distinctWeekCount,
-  weekStartISO,
 } from '../lib/format'
 import { BillingBadge } from '../components/BillingBadge'
 import { RegisterPaymentModal } from '../components/RegisterPaymentModal'
@@ -63,6 +62,11 @@ const PAY_LABELS = {
   overage: { low: 'overage', cap: 'Overage' },
   sp_internal: { low: 'SP internal', cap: 'SP internal' },
 }
+
+// Tope de horas YA pagadas que el picker "Hours to pay" muestra como contexto
+// (las más recientes). Evita que el historial pagado —sin límite— sepulte las
+// pendientes seleccionables.
+const PAID_PICKER_LIMIT = 25
 
 // Rango de semanas (domingo–sábado) que cubre un pago: "W33" si es una sola,
 // "W33–W35" si cruza varias. null si no hay fechas. Usa el rango de fechas del
@@ -682,13 +686,6 @@ export function PaymentsPage() {
                                 const pendingIds = new Set(
                                   group.entries.map((e) => String(e.id)),
                                 )
-                                // Acotar las pagadas a las MISMAS semanas (domingo–sábado) que
-                                // las pendientes: da el contexto del período que se está pagando
-                                // y evita arrastrar TODO el historial pagado del contractor (que
-                                // crece sin límite y sepultaría las pendientes seleccionables).
-                                const pendingWeeks = new Set(
-                                  group.entries.map((e) => weekStartISO(e.date)).filter(Boolean),
-                                )
                                 // Dedup por id: un id repetido (misma hora en dos pagos, o ya
                                 // presente entre las pendientes) rompería el key de React.
                                 const seen = new Set()
@@ -698,10 +695,14 @@ export function PaymentsPage() {
                                   .filter((e) => {
                                     const k = String(e.id)
                                     if (pendingIds.has(k) || seen.has(k)) return false
-                                    if (!pendingWeeks.has(weekStartISO(e.date))) return false
                                     seen.add(k)
                                     return true
                                   })
+                                  // Más recientes primero, y acotadas: mostrar historial pagado
+                                  // como contexto sin arrastrar TODO (crece sin límite y sepulta
+                                  // las pendientes seleccionables).
+                                  .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+                                  .slice(0, PAID_PICKER_LIMIT)
                                 setPayTarget({
                                   ...group,
                                   allocation,
