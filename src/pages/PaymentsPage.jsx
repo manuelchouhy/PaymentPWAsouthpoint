@@ -11,6 +11,7 @@ import {
   summarizeEntries,
 } from '../lib/paymentsGrouping'
 import { invoiceCompletion } from '../lib/invoiceCompletion'
+import { entryPaymentStatus } from '../lib/entryPaymentStatus'
 import { buildProjectIndex, deriveEntriesClient } from '../lib/entryClient'
 import { api } from '../lib/api'
 import { downloadPaymentReceipt } from '../lib/paymentReceipt'
@@ -413,6 +414,11 @@ export function PaymentsPage() {
     }
     return { overage: overage.map(decorate), spInternal: spInternal.map(decorate) }
   }, [payments, enrichedEntries, entryById])
+
+  // Ids (string) de las horas YA pagadas: lo usa el picker "Hours to pay" para
+  // marcar el estado de cada hora (entryPaymentStatus). Las pendientes que muestra
+  // el picker dan 'pending'; una ya pagada daría 'paid' (defensivo).
+  const paidEntryIds = useMemo(() => paidEntryIdsFrom(payments), [payments])
 
   // KPIs sobre las facturas pendientes de pago. Total pendiente en HORAS (suma de las
   // horas de los contractors todavía sin pagar en las facturas pagables).
@@ -1014,23 +1020,29 @@ export function PaymentsPage() {
                   <div className="overage-picker">
                     <span className="overage-picker__title">Hours to pay</span>
                     <ul className="overage-picker__list">
-                      {payTarget.entries.map((e) => (
-                        <li key={e.id}>
-                          <label className="overage-picker__row">
-                            <input
-                              type="checkbox"
-                              checked={paySelectedIds.has(String(e.id))}
-                              onChange={() => toggle(e.id)}
-                            />
-                            <span className="overage-picker__desc">
-                              {e.project || '—'}
-                              {e.task ? ` · ${e.task}` : ''}
-                              {e.date ? ` · ${formatDate(e.date)}` : ''}
-                            </span>
-                            <span className="overage-picker__hours">{formatHours(e.hours)} h</span>
-                          </label>
-                        </li>
-                      ))}
+                      {payTarget.entries.map((e) => {
+                        const status = entryPaymentStatus(e, paidEntryIds)
+                        return (
+                          <li key={e.id}>
+                            <label className="overage-picker__row">
+                              <input
+                                type="checkbox"
+                                checked={paySelectedIds.has(String(e.id))}
+                                onChange={() => toggle(e.id)}
+                              />
+                              <span className="overage-picker__desc">
+                                {e.project || '—'}
+                                {e.task ? ` · ${e.task}` : ''}
+                                {e.date ? ` · ${formatDate(e.date)}` : ''}
+                              </span>
+                              <span className="overage-picker__hours">{formatHours(e.hours)} h</span>
+                              <span className={`badge badge--${status}`}>
+                                {status === 'paid' ? 'Paid' : 'Pending'}
+                              </span>
+                            </label>
+                          </li>
+                        )
+                      })}
                     </ul>
                     {selected.length === 0 && (
                       <span className="field__error">Select at least one hour to pay.</span>
