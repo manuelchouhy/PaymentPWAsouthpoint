@@ -48,17 +48,18 @@ export function billingKpis({
   let unallocated = 0
   let overage = 0
   for (const entry of allAllocations) {
-    if (isInvoiced(entry)) invoiced += h(entry)
-    // Overage coincide EXACTAMENTE con la tab de Overage (overageGroups): allocation
-    // overage y NO pagada al contractor — sin filtrar por status ni invoiced, para que
-    // el cuadro y la tab de la misma pantalla nunca discrepen.
-    if (entry?.allocation === 'overage') {
-      if (!isPaid(entry)) overage += h(entry)
-    } else if (isApproved(entry) && !isInvoiced(entry) && !entry?.allocation) {
-      // Sin allocation: aprobadas, sin clasificar y sin facturar (las facturadas ya
-      // están congeladas y no se pueden triagear).
-      unallocated += h(entry)
+    if (isInvoiced(entry)) {
+      // Facturada: cuenta como Invoiced y queda congelada (no entra a unallocated ni
+      // overage, igual que la tab, que filtra Approved && !invoiced en groupReadonly).
+      invoiced += h(entry)
+      continue
     }
+    if (!isApproved(entry)) continue
+    if (!entry?.allocation) unallocated += h(entry)
+    // Overage coincide con la tab de Overage: sus horas pasan por el filtro
+    // (allocation overage && !paid) y luego por groupReadonly (Approved && !invoiced).
+    // O sea: Approved, NO facturada, overage y NO pagada al contractor.
+    else if (entry.allocation === 'overage' && !isPaid(entry)) overage += h(entry)
   }
 
   return { pendingToBill, pendingCount, invoiced, unallocated, overage }
