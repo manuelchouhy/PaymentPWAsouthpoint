@@ -3,7 +3,7 @@ import { useOutletContext, useSearchParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle, Info } from 'lucide-react'
 import { api } from '../lib/api'
-import { formatDate, formatHours, formatWeek } from '../lib/format'
+import { formatDate, formatHours, formatWeek, formatTaskLabel } from '../lib/format'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, clientFilterOptions, OTHER_CLIENT, UNALLOCATED, ALLOCATED } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
 import { isEntryFrozen, entryFrozenReason } from '../lib/entryFreeze'
@@ -308,6 +308,7 @@ export function EntriesPage() {
       { header: 'User', key: 'user' },
       { header: 'Client', key: 'client' },
       { header: 'Task', key: 'task' },
+      { header: 'Task #', key: 'taskNumber' },
       { header: 'Date', key: 'date' },
       { header: 'Week', key: 'week' },
       { header: 'Hours', key: 'hours' },
@@ -324,6 +325,7 @@ export function EntriesPage() {
       project: entry.project ?? '',
       client: entry.client ?? '',
       task: entry.task ?? '',
+      taskNumber: entry.taskNumber ?? '',
       date: entry.date ? formatDate(entry.date) : '',
       week: entry.date ? formatWeek(entry.date) : '',
       hours: Number(entry.hours) || 0,
@@ -725,8 +727,11 @@ export function EntriesPage() {
                           </td>
                           <td>{entry.user}</td>
                           <td className="cell-soft">{entry.client || '—'}</td>
-                          <td className="cell-soft col-task" title={entry.task || ''}>
-                            {entry.task || '—'}
+                          <td
+                            className="cell-soft col-task"
+                            title={formatTaskLabel(entry.task, entry.taskNumber) || ''}
+                          >
+                            {formatTaskLabel(entry.task, entry.taskNumber) || '—'}
                           </td>
                           <td className="cell-mono">{entry.date ? formatDate(entry.date) : '—'}</td>
                           <td className="cell-mono">{entry.date ? formatWeek(entry.date) : '—'}</td>

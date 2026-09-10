@@ -1993,10 +1993,9 @@ th.col-pop { text-align: center; }
   word-break: break-word;
 }
 
-/* FR-02 · Columnas secundarias (Client, Week). Si la grilla no entra, se ocultan
-   primero — las prioritarias (User, Project, Task, Hours, Status, Payment) siempre
-   quedan visibles. Task # dejó de ser secundaria (pedido: id del task siempre visible
-   junto al nombre) y ya no se oculta. Por debajo de 720px la vista pasa a tarjetas. */
+/* FR-02 · Columnas secundarias (Client, Task #, Week). Si la grilla no entra,
+   se ocultan primero — las prioritarias (User, Project, Task, Hours, Status,
+   Payment) siempre quedan visibles. Por debajo de 720px la vista pasa a tarjetas. */
 @media (max-width: 1180px) {
   .col-optional { display: none; }
 }
