@@ -308,6 +308,7 @@ export function EntriesPage() {
       { header: 'User', key: 'user' },
       { header: 'Client', key: 'client' },
       { header: 'Task', key: 'task' },
+      { header: 'Task #', key: 'taskNumber' },
       { header: 'Date', key: 'date' },
       { header: 'Week', key: 'week' },
       { header: 'Hours', key: 'hours' },
@@ -324,6 +325,7 @@ export function EntriesPage() {
       project: entry.project ?? '',
       client: entry.client ?? '',
       task: entry.task ?? '',
+      taskNumber: entry.taskNumber ?? '',
       date: entry.date ? formatDate(entry.date) : '',
       week: entry.date ? formatWeek(entry.date) : '',
       hours: Number(entry.hours) || 0,
@@ -647,6 +649,7 @@ export function EntriesPage() {
                       <th scope="col">User</th>
                       <th scope="col">Client</th>
                       <th scope="col" className="col-task">Task</th>
+                      <th scope="col" className="col-tasknum">Task #</th>
                       <th scope="col">Date</th>
                       <th scope="col">Week</th>
                       <th scope="col" className="col-num">Hours</th>
@@ -727,6 +730,12 @@ export function EntriesPage() {
                           <td className="cell-soft">{entry.client || '—'}</td>
                           <td className="cell-soft col-task" title={entry.task || ''}>
                             {entry.task || '—'}
+                          </td>
+                          <td
+                            className="col-tasknum cell-mono"
+                            title={entry.taskNumber || undefined}
+                          >
+                            {entry.taskNumber || '—'}
                           </td>
                           <td className="cell-mono">{entry.date ? formatDate(entry.date) : '—'}</td>
                           <td className="cell-mono">{entry.date ? formatWeek(entry.date) : '—'}</td>

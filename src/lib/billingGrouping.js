@@ -67,6 +67,9 @@ function groupRows(entries) {
       // no por proyecto, así que no hay un grupo de proyecto de donde tomarlo.
       projectNumber: entry.projectNumber ?? null,
       task: entry.task ?? '',
+      // id del task (entry.taskNumber): la grilla lo muestra junto al nombre con
+      // formatTaskLabel, para rastrear la hora hasta su task de Zoho sin salir de la app.
+      taskNumber: entry.taskNumber ?? '',
       date: entry.date ?? '',
       // invoiced: la hora ya está facturada (read-only en la grilla).
       invoiced: Boolean(entry._invoiced),

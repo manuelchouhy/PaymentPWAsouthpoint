@@ -10,6 +10,7 @@ import {
   formatUsDate,
   formatInvoicePeriod,
   distinctWeekCount,
+  formatTaskLabel,
 } from './format.js'
 
 // Las semanas de facturación van de DOMINGO a SÁBADO (no ISO lunes–domingo).
@@ -141,4 +142,38 @@ test('formatUsDate: MM-DD-YYYY como el rango del navegador', () => {
 test('el número de semana del mockup: WEEK - 35 · 2026', () => {
   assert.equal(sundayWeek('2026-08-23'), 35)
   assert.equal(sundayWeekYear('2026-08-23'), 2026)
+})
+
+// --- Rótulo de task (id · nombre) para las filas de hora -----------------------
+
+test('formatTaskLabel: con id y nombre → "#id · nombre"', () => {
+  assert.equal(formatTaskLabel('Login design', '123'), '#123 · Login design')
+})
+
+test('formatTaskLabel: el "#" distingue el id cuando el nombre empieza con un número', () => {
+  // Caso de dominio: nombres de task que empiezan con un ordinal (ej. "5 - HSS APP...").
+  assert.equal(formatTaskLabel('5 - HSS APP Development', '1003'), '#1003 · 5 - HSS APP Development')
+})
+
+test('formatTaskLabel: sin id (taskNumber vacío) → sólo el nombre (sin #)', () => {
+  assert.equal(formatTaskLabel('Login design', ''), 'Login design')
+  assert.equal(formatTaskLabel('Login design', null), 'Login design')
+  assert.equal(formatTaskLabel('Login design', undefined), 'Login design')
+})
+
+test('formatTaskLabel: sin nombre pero con id → "#id"', () => {
+  assert.equal(formatTaskLabel('', '123'), '#123')
+  assert.equal(formatTaskLabel(null, '123'), '#123')
+})
+
+test('formatTaskLabel: sin id ni nombre → cadena vacía', () => {
+  assert.equal(formatTaskLabel('', ''), '')
+  assert.equal(formatTaskLabel(null, undefined), '')
+})
+
+test('formatTaskLabel: taskNumber numérico devuelve string (contrato @returns string)', () => {
+  const soloId = formatTaskLabel('', 123)
+  assert.equal(soloId, '#123')
+  assert.equal(typeof soloId, 'string')
+  assert.equal(formatTaskLabel('Login design', 123), '#123 · Login design')
 })

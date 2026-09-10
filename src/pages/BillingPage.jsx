@@ -3,7 +3,7 @@ import { useOutletContext, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowRight, Info } from 'lucide-react'
 import { api } from '../lib/api'
-import { formatDate, formatHours } from '../lib/format'
+import { formatDate, formatHours, formatTaskLabel } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, sortedUnique, clientFilterOptions, OTHER_CLIENT } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
@@ -146,7 +146,9 @@ function ReadonlyRows({ rows, showProvider = true, onDetail }) {
                   </span>
                 )}
                 {row.project || '—'}
-                {row.task && <div className="cell-soft">{row.task}</div>}
+                {(row.task || row.taskNumber) && (
+                  <div className="cell-soft">{formatTaskLabel(row.task, row.taskNumber)}</div>
+                )}
               </td>
               <td className="cell-mono">{row.date ? formatDate(row.date) : '—'}</td>
               <td className="col-num cell-mono">{formatHours(row.hours)}</td>
@@ -711,6 +713,7 @@ export function BillingPage() {
       { header: 'Project #', key: 'projectNumber' },
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
+      { header: 'Task #', key: 'taskNumber' },
       { header: 'Date', key: 'date' },
       { header: 'Reason', key: 'reason' },
       { header: 'Hours', key: 'hours' },
@@ -734,8 +737,10 @@ export function BillingPage() {
             projectNumber: project.projectNumber ?? '',
             project: project.project,
             task: '',
-            // Bucket "Sin cliente" agrega por proyecto (varios logs) → sin una
-            // fecha única que exportar.
+            // Bucket "Sin cliente" agrega por proyecto (varios logs) → sin una fecha
+            // ni un task/id únicos que exportar. Task # explícito en '' por paridad con
+            // los otros push (la columna existe) y porque un id agregado sería engañoso.
+            taskNumber: '',
             date: '',
             reason: reasonLabel(project.reason),
             hours: project.hours,
@@ -757,6 +762,9 @@ export function BillingPage() {
                 projectNumber: row.projectNumber ?? '',
                 project: row.project,
                 task: row.task,
+                // id del task en columna aparte (como el export de Entries): trazable a
+                // Zoho sin romper el matching por nombre de la columna Task.
+                taskNumber: row.taskNumber ?? '',
                 date: row.date ? formatDate(row.date) : '',
                 reason: '',
                 hours: row.hours,
@@ -792,6 +800,7 @@ export function BillingPage() {
       { header: 'Project #', key: 'projectNumber' },
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
+      { header: 'Task #', key: 'taskNumber' },
       { header: 'Date', key: 'date' },
       { header: 'Hours', key: 'hours' },
       { header: 'Entries', key: 'entries' },
@@ -805,6 +814,7 @@ export function BillingPage() {
         projectNumber: row.projectNumber ?? '',
         project: row.project || '',
         task: row.task || '',
+        taskNumber: row.taskNumber ?? '',
         date: row.date ? formatDate(row.date) : '',
         hours: row.hours,
         entries: row.entries.length,
@@ -1447,10 +1457,10 @@ export function BillingPage() {
                                                   </td>
                                                   <td>
                                                     {row.project || '—'}
-                                                    {(row.task || sow) && (
+                                                    {(row.task || row.taskNumber || sow) && (
                                                       <div className="cell-soft">
-                                                        {row.task}
-                                                        {row.task && sow && ' · '}
+                                                        {formatTaskLabel(row.task, row.taskNumber)}
+                                                        {(row.task || row.taskNumber) && sow && ' · '}
                                                         {sow}
                                                       </div>
                                                     )}
