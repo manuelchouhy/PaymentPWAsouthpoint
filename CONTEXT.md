@@ -52,8 +52,8 @@ que cuenta depende del cliente:
 - clientes con Budget → horas `bill_to_client` **aprobadas** (consumen el Budget;
   alimentan `cumulative` y `remaining`).
 - **SouthPoint Internal** (sin Budget) → horas `sp_internal` **aprobadas** (costo
-  interno; no hay Budget contra qué medir, así que **Remaining y Overage quedan en
-  blanco** en esa fila).
+  interno; no hay Budget contra qué medir, así que **Remaining queda en blanco** en
+  esa fila y, por dominio, no hay Overage — ver "Overage").
 Un mismo cliente nunca mezcla ambas: `bill_to_client` va a clientes reales y
 `sp_internal` a SouthPoint Internal.
 _Avoid_: leer "Consumed" como "siempre facturable"; para SouthPoint Internal es
@@ -64,7 +64,9 @@ Horas por encima de lo contratado (allocation `overage`); se pagan al contractor
 no se facturan al cliente. Nace cuando el **consumido acumulado** (horas
 `bill_to_client` aprobadas) supera el **Budget** y ese excedente NO se absorbe con
 un change request: entonces se clasifica como `overage` en vez de subir el Budget.
-No aplica a SouthPoint Internal (no tiene Budget que superar).
+Por dominio no aplica a SouthPoint Internal (no tiene Budget que superar), así que
+no deberían existir horas `overage` en proyectos internos; el motor no lo impide,
+solo refleja lo que venga clasificado.
 
 **Week**:
 La semana física de facturación, **domingo → sábado**, identificada por el domingo
