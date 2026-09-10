@@ -17,7 +17,7 @@ test('pendingToBill: suma horas Approved bill_to_client NO facturadas', () => {
   assert.equal(r.pendingCount, 2)
 })
 
-test('pendingToBill excluye facturadas y no-aprobadas; consumed las incluye a las aprobadas', () => {
+test('pendingToBill excluye facturadas y no-aprobadas', () => {
   const billToClient = [
     e('1', 5), // pendiente
     e('2', 3), // facturada
@@ -30,8 +30,6 @@ test('pendingToBill excluye facturadas y no-aprobadas; consumed las incluye a la
   })
   assert.equal(r.pendingToBill, 5) // solo la 1
   assert.equal(r.pendingCount, 1)
-  // consumed = aprobadas bill_to_client (facturadas + pendientes), sin la rechazada.
-  assert.equal(r.consumed, 8)
 })
 
 test('invoiced: suma cualquier hora facturada, incl. allocation null (pre-triage)', () => {
@@ -55,13 +53,14 @@ test('unallocated: Approved con allocation falsy y SIN facturar', () => {
   assert.equal(r.unallocated, 7) // 5 + 2
 })
 
-test('overage: suma Approved con allocation overage', () => {
+test('overage: suma Approved con allocation overage, sin facturar', () => {
   const all = [
     e('1', 6, { allocation: 'overage' }),
     e('2', 2, { allocation: 'overage', status: 'Pending' }), // no aprobada → excluida
     e('3', 3, { allocation: 'sp_internal' }), // otra allocation → excluida
+    e('4', 5, { allocation: 'overage' }), // facturada → excluida (mismo criterio que unallocated)
   ]
-  const r = billingKpis({ billToClient: [], allAllocations: all, invoicedIds: new Set() })
+  const r = billingKpis({ billToClient: [], allAllocations: all, invoicedIds: new Set(['4']) })
   assert.equal(r.overage, 6)
 })
 
@@ -73,6 +72,5 @@ test('listas vacías → todo en cero', () => {
     invoiced: 0,
     unallocated: 0,
     overage: 0,
-    consumed: 0,
   })
 })

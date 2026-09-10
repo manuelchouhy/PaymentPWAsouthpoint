@@ -465,16 +465,32 @@ export function BillingPage() {
     return { ...kpis, classifiable }
   }, [filtered, filteredAllAllocations, invoiceByEntryId])
 
-  // Budget efectivo del cuadro #2: sólo cuando el filtro deja UN proyecto en scope
-  // (un único projectNumber). Con varios o ninguno → null y el cuadro muestra "—".
-  const singleProjectBudget = useMemo(() => {
+  // Cuadro #2: sólo tiene sentido cuando el filtro deja UN proyecto en scope (un único
+  // projectNumber). Devuelve su budget efectivo y su consumed. Con varios/ninguno →
+  // null y el cuadro muestra "—".
+  const singleProject = useMemo(() => {
     const nums = new Set(filteredAllAllocations.map((e) => e.projectNumber).filter(Boolean))
     if (nums.size !== 1) return null
     const [num] = [...nums]
     const project = projects.find((p) => p.projectNumber === num)
     if (!project) return null
-    return effectiveBudgetHours(project.baseBudgetHours, crsByProject.get(String(project.id)) ?? [])
-  }, [filteredAllAllocations, projects, crsByProject])
+    const budget = effectiveBudgetHours(
+      project.baseBudgetHours,
+      crsByProject.get(String(project.id)) ?? [],
+    )
+    // Consumed del PROYECTO COMPLETO (todas las semanas), NO el subconjunto que dejan
+    // los otros filtros (semana/contractor): así el ratio consumed/budget es coherente
+    // (comparar el consumido total contra el budget total). Aprobadas bill_to_client de
+    // ese projectNumber sobre TODAS las entries, no sobre `filtered`.
+    let consumed = 0
+    for (const en of entriesConCliente) {
+      if (en.projectNumber !== num) continue
+      if (en.status !== 'Approved') continue
+      if (en.allocation !== 'bill_to_client') continue
+      consumed += Number(en.hours) || 0
+    }
+    return { budget, consumed }
+  }, [filteredAllAllocations, projects, crsByProject, entriesConCliente])
 
   // Las horas facturables ordenadas por cliente → semana domingo→sábado → filas
   // proveedor·proyecto·task (billingGrouping). "Sin cliente" queda arriba, no es
@@ -1062,13 +1078,13 @@ export function BillingPage() {
                 <span className="dash-kpi__label">Selected + consumed / budget</span>
               </div>
               <span className="dash-kpi__value">
-                {isActive || selectedHours > 0 ? (
+                {singleProject ? (
                   <>
                     {formatHours(selectedHours)}
                     <span className="dash-kpi__unit"> + </span>
-                    {formatHours(cards.consumed)}
+                    {formatHours(singleProject.consumed)}
                     <span className="dash-kpi__unit"> / </span>
-                    {singleProjectBudget != null ? formatHours(singleProjectBudget) : '—'}
+                    {formatHours(singleProject.budget)}
                     <span className="dash-kpi__unit"> h</span>
                   </>
                 ) : (
@@ -1076,7 +1092,7 @@ export function BillingPage() {
                 )}
               </span>
               <span className="dash-kpi__hint">
-                selected + consumed / budget{singleProjectBudget == null ? ' (filter 1 project)' : ''}
+                {singleProject ? 'selected + consumed / budget' : 'filter to one project'}
               </span>
             </div>
             <div className="dash-kpi dash-kpi--static">
