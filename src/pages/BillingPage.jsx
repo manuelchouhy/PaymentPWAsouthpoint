@@ -737,8 +737,10 @@ export function BillingPage() {
             projectNumber: project.projectNumber ?? '',
             project: project.project,
             task: '',
-            // Bucket "Sin cliente" agrega por proyecto (varios logs) → sin una
-            // fecha única que exportar.
+            // Bucket "Sin cliente" agrega por proyecto (varios logs) → sin una fecha
+            // ni un task/id únicos que exportar. Task # explícito en '' por paridad con
+            // los otros push (la columna existe) y porque un id agregado sería engañoso.
+            taskNumber: '',
             date: '',
             reason: reasonLabel(project.reason),
             hours: project.hours,
