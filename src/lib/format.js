@@ -252,6 +252,21 @@ export function distinctWeekCount(isoDates = []) {
 }
 
 /**
+ * Rótulo de un task para la fila de una hora: "<id> · <nombre>" (el id adelante,
+ * convención tipo ticket). Si no hay id (taskNumber vacío) devuelve sólo el nombre;
+ * si no hay nombre, sólo el id; si no hay ninguno, cadena vacía.
+ * @param {?string} task nombre del task
+ * @param {?string} taskNumber id del task (entry.taskNumber)
+ * @returns {string}
+ */
+export function formatTaskLabel(task, taskNumber) {
+  const name = task ?? ''
+  const id = taskNumber ?? ''
+  if (id && name) return `${id} · ${name}`
+  return id || name
+}
+
+/**
  * Nombre de archivo legible a partir de un path de Storage. Los paths
  * llevan un prefijo de timestamp para evitar colisiones (ver
  * uploadClientMsa/uploadSowFile) y a veces una carpeta demo/ — ambos se pelan

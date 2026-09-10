@@ -78,7 +78,7 @@ export function EntriesTable({
             <SortTh sortKey="project" sort={sort} onSort={onSort} className="col-project">Project</SortTh>
             <SortTh sortKey="client" sort={sort} onSort={onSort} className="col-client col-optional">Client</SortTh>
             <SortTh sortKey="task" sort={sort} onSort={onSort} className="col-task">Task</SortTh>
-            <th scope="col" className="col-tasknum col-optional">Task #</th>
+            <th scope="col" className="col-tasknum">Task #</th>
             <th scope="col" className="col-pop">Desc.</th>
             <th scope="col" className="col-pop">Notes</th>
             <SortTh sortKey="date" sort={sort} onSort={onSort} className="col-date">Date</SortTh>
@@ -160,7 +160,7 @@ export function EntriesTable({
                   {entry.task}
                 </td>
                 <td
-                  className="col-tasknum col-optional cell-mono"
+                  className="col-tasknum cell-mono"
                   title={entry.taskNumber || undefined}
                 >
                   {entry.taskNumber || '—'}

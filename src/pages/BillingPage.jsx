@@ -3,7 +3,7 @@ import { useOutletContext, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowRight, Info } from 'lucide-react'
 import { api } from '../lib/api'
-import { formatDate, formatHours } from '../lib/format'
+import { formatDate, formatHours, formatTaskLabel } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, sortedUnique, clientFilterOptions, OTHER_CLIENT } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
@@ -146,7 +146,9 @@ function ReadonlyRows({ rows, showProvider = true, onDetail }) {
                   </span>
                 )}
                 {row.project || '—'}
-                {row.task && <div className="cell-soft">{row.task}</div>}
+                {(row.task || row.taskNumber) && (
+                  <div className="cell-soft">{formatTaskLabel(row.task, row.taskNumber)}</div>
+                )}
               </td>
               <td className="cell-mono">{row.date ? formatDate(row.date) : '—'}</td>
               <td className="col-num cell-mono">{formatHours(row.hours)}</td>
@@ -1447,10 +1449,10 @@ export function BillingPage() {
                                                   </td>
                                                   <td>
                                                     {row.project || '—'}
-                                                    {(row.task || sow) && (
+                                                    {(row.task || row.taskNumber || sow) && (
                                                       <div className="cell-soft">
-                                                        {row.task}
-                                                        {row.task && sow && ' · '}
+                                                        {formatTaskLabel(row.task, row.taskNumber)}
+                                                        {(row.task || row.taskNumber) && sow && ' · '}
                                                         {sow}
                                                       </div>
                                                     )}
