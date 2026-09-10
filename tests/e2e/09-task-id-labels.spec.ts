@@ -9,6 +9,11 @@ import { loginAsTestAdmin } from './helpers'
  *
  *  - Entries (/entries): columna "Task #" propia (siempre visible) con el id crudo.
  *  - Billing: rótulo del task en la fila de una hora con el formato "#id · nombre".
+ *
+ * Caveat: son smoke tests contra la base de test viva; asumen que la vista por
+ * defecto (primera página de Entries / filtro "ready to bill" de Billing) tiene al
+ * menos una fila con task id. El comportamiento fino de formatTaskLabel está cubierto
+ * por unit tests (format.test.js); esto sólo confirma el cableado end-to-end.
  */
 
 test.describe('Slice 01 · task id junto al nombre', () => {
@@ -21,7 +26,7 @@ test.describe('Slice 01 · task id junto al nombre', () => {
 
     // La grilla tiene filas en la base de test → la primera celda Task # aparece.
     const taskNumCells = page.locator('td.col-tasknum')
-    await taskNumCells.first().waitFor({ state: 'visible' })
+    await expect(taskNumCells.first()).toBeVisible()
     const count = await taskNumCells.count()
 
     let withId = 0
@@ -42,7 +47,7 @@ test.describe('Slice 01 · task id junto al nombre', () => {
 
     // Espera a que la grilla pinte (sin timeout fijo): el primer rótulo de task.
     const labels = page.locator('.proj-table .cell-soft')
-    await labels.first().waitFor({ state: 'visible' })
+    await expect(labels.first()).toBeVisible()
     const count = await labels.count()
 
     let checked = 0
