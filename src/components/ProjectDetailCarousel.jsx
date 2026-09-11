@@ -916,8 +916,10 @@ function StagesTasksSlide({ tree, loading, error, expanded, onToggle }) {
                 <p className="stage-tree__empty">No tasks in this stage.</p>
               ) : (
                 <ul className="stage-tree__tasks">
-                  {node.tasks.map((t) => (
-                    <li key={t.id} className="stage-tree__task">
+                  {node.tasks.map((t, i) => (
+                    // id ?? i: en data demo/legacy un id nulo o duplicado no debe
+                    // colapsar dos filas (lista read-only, sin reordenamiento).
+                    <li key={t.id ?? i} className="stage-tree__task">
                       <span className="stage-tree__task-name">{t.taskName || '—'}</span>
                       <span className="stage-tree__task-meta">
                         {t.role || '—'}
@@ -1053,7 +1055,10 @@ export function ProjectDetailCarousel({
           loading={
             treeLoading || (project.hasStages && stageCount === null && !stageCountError)
           }
-          error={treeError}
+          // Error si falló la carga de tasks (treeError) O la de stages
+          // (stageCountError): sin lo segundo, un fallo de stages se veía como
+          // "sin stages/tasks" o como tasks sin agrupar, sin aviso.
+          error={treeError || (project.hasStages && stageCountError)}
           expanded={expandedStages}
           onToggle={toggleStage}
         />

@@ -7,6 +7,9 @@
  * NOTA (dominio, 2026-09-11): hoy `ProjectTask` NO tiene `stageId` en el schema (los tasks
  * son a nivel proyecto, no por stage), así que en la práctica TODOS caen bajo "No stage".
  * El módulo ya soporta el nesting por si se agrega el link — ver open item del slice 12.
+ * Para activarlo NO alcanza con la columna en DB: hay que (a) agregar `project_tasks.stage_id`,
+ * (b) incluirla en el `select` de la query y (c) mapearla en `rowToTask` (projectsData.js) a
+ * `stageId`. Sin la mitad de frontend (b+c) los tasks siguen cayendo bajo "No stage".
  *
  * @param {Array<{id:string|number, stageName:string, position?:number}>} stages
  * @param {Array<{id:string|number, taskName:string, stageId?:string|number|null}>} tasks
