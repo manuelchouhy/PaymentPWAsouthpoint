@@ -584,7 +584,9 @@ export function BillingPage() {
       if (e.allocation !== 'bill_to_client') continue
       if (!e.client) continue
       if (!invoiceByEntryId.has(String(e.id))) continue
-      const key = `${enc(e.client)}||${enc(e.project ?? '')}`
+      // Misma clave que el render (projectId(group.client, project)) — reusar el
+      // helper garantiza que ambos lados no se desincronicen si cambia el formato.
+      const key = projectId(e.client, { project: e.project ?? '' })
       m.set(key, (m.get(key) ?? 0) + (Number(e.hours) || 0))
     }
     return m
@@ -1406,19 +1408,24 @@ export function BillingPage() {
                                 )}
                                 {project.project || '—'}
                               </span>
-                              {/* C10: horas ya facturadas de este proyecto, siempre
-                                  visibles (aun con el filtro 'pending'). */}
-                              {(() => {
-                                const inv = invoicedHoursByProject.get(pid)
-                                return inv ? (
-                                  <span
-                                    className="bill-project__invoiced"
-                                    title="Hours already invoiced for this project"
-                                  >
-                                    {formatHours(inv)} h invoiced
-                                  </span>
-                                ) : null
-                              })()}
+                              {/* C10: horas ya facturadas de este proyecto, visibles en
+                                  las vistas 'pending'/'all' (aportan lo que esas vistas
+                                  no muestran). En 'invoiced' la grilla ya es toda
+                                  facturada, así que el badge sería redundante y se
+                                  omite. Umbral 0.05: por debajo formatHours redondea a
+                                  "0.0 h" y sería un cero engañoso. */}
+                              {billStatusFilter !== 'invoiced' &&
+                                (() => {
+                                  const inv = invoicedHoursByProject.get(pid)
+                                  return inv >= 0.05 ? (
+                                    <span
+                                      className="bill-project__invoiced"
+                                      title="Hours already invoiced for this project (all periods)"
+                                    >
+                                      {formatHours(inv)} h invoiced
+                                    </span>
+                                  ) : null
+                                })()}
                               <span className="bill-project__hours">
                                 {formatHours(project.hours)} h
                               </span>
