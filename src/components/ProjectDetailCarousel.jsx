@@ -5,6 +5,7 @@ import { ContractBadge } from './ContractBadge'
 import { contractStatus, daysRemaining } from '../lib/projectsData'
 import { CR_TYPE_LABELS, effectiveBudgetHours } from '../lib/changeRequestsData'
 import { buildProjectTaskTree } from '../lib/projectTaskTree'
+import { mergeProjectTasks } from '../lib/mergeProjectTasks'
 import { api } from '../lib/api'
 import { fileNameFromPath, formatDate, formatDateTime } from '../lib/format'
 import { useScrollLock } from '../lib/useScrollLock'
@@ -877,8 +878,8 @@ function ChangeRequestsSlide({
  * Slide "Stages & Tasks" (slice 12, lote WhatsApp 2026-09-10): vista de árbol de los
  * stages del proyecto y sus tasks. El agrupado lo hace `buildProjectTaskTree` (módulo puro);
  * acá solo se renderiza. Cada nodo es expandible; un click en el header abre/cierra su lista.
- * Los tasks son los REALES del proyecto (los de las horas cargadas, con horas). Como no hay
- * link stage↔task, caen todos en el nodo "Tasks".
+ * Los tasks son el merge de los registrados del SOW (con su stage) y los logueados de las
+ * horas (mergeProjectTasks): cada uno cae bajo su stage, o bajo "No stage" si no está asignado.
  */
 function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggle }) {
   if (loading) return <p className="drawer__empty">Loading stages & tasks…</p>
@@ -934,9 +935,12 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
               ) : (
                 <ul className="stage-tree__tasks">
                   {node.tasks.map((t, i) => (
-                    // id ?? `idx-${i}`: en data demo/legacy un id nulo no debe colapsar
-                    // filas ni chocar con un id real igual al índice (lista read-only).
-                    <li key={t.id ?? `idx-${i}`} className="stage-tree__task">
+                    // taskId (id de project_tasks) es único; el nombre NO (el merge conserva
+                    // project_tasks distintos con el mismo nombre). Fallback a nombre+idx.
+                    <li
+                      key={t.taskId != null ? `id-${t.taskId}` : `nm-${t.taskName}-${i}`}
+                      className="stage-tree__task"
+                    >
                       <span className="stage-tree__task-name">
                         <span className="stage-tree__task-name-text">{t.taskName || '—'}</span>
                         {/* id del task (task_number de Zoho, el mismo de "Task #" en
@@ -1200,30 +1204,39 @@ export function ProjectDetailCarousel({
     }
   }, [project.id, project.hasStages])
 
-  // Tasks del slide "Stages & Tasks" (slice 12). Carga perezosa: recién cuando el
-  // usuario abre el slide (treeRequested). Se traen los tasks REALES del proyecto (los
-  // distintos `task` de sus horas cargadas en Zoho, con sus horas) — NO los task_name
-  // del scope del SOW (project_tasks), que casi nunca se cargan. Por nombre de proyecto,
-  // que es como matchean las horas (no hay FK con project_tasks). Los stages ya los trae
-  // el efecto de arriba.
+  // Tasks del slide "Stages & Tasks". Carga perezosa (treeRequested). Une los tasks
+  // REGISTRADOS del SOW (project_tasks, con su stage asignado) con los LOGUEADOS (los
+  // distintos `task` de las horas de Zoho, con sus horas), matcheando por nombre — así el
+  // árbol muestra cada task bajo su stage (o "No stage" si no tiene) con su consumido. Los
+  // stages ya los trae el efecto de arriba.
   useEffect(() => {
     if (!treeRequested) return
     let cancelled = false
     setTreeLoading(true)
     setTreeError(false)
-    Promise.resolve()
-      .then(() => api.projectTasks.logged(project.projectName))
-      .then((tasks) => !cancelled && setTreeTasks(Array.isArray(tasks) ? tasks : []))
-      .catch((error) => {
+    // allSettled: si falla la lista de registrados (RLS, stub notImplemented del backend
+    // http), los logueados igual se muestran — antes del merge sólo se pedían esos. Sólo
+    // es error si fallan las DOS.
+    Promise.allSettled([
+      Promise.resolve().then(() => api.projectTasks.list(project.id)),
+      Promise.resolve().then(() => api.projectTasks.logged(project.projectName)),
+    ])
+      .then(([registeredRes, loggedRes]) => {
         if (cancelled) return
-        console.error('No se pudieron cargar los tasks del proyecto:', error)
-        setTreeError(true)
+        if (registeredRes.status === 'rejected' && loggedRes.status === 'rejected') {
+          console.error('No se pudieron cargar los tasks del proyecto:', loggedRes.reason)
+          setTreeError(true)
+          return
+        }
+        const registered = registeredRes.status === 'fulfilled' ? registeredRes.value : []
+        const logged = loggedRes.status === 'fulfilled' ? loggedRes.value : []
+        setTreeTasks(mergeProjectTasks(registered ?? [], logged ?? []))
       })
       .finally(() => !cancelled && setTreeLoading(false))
     return () => {
       cancelled = true
     }
-  }, [project.projectName, treeRequested])
+  }, [project.id, project.projectName, treeRequested])
 
   useEffect(() => {
     function onKeyDown(event) {

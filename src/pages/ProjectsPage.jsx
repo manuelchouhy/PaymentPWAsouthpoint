@@ -507,6 +507,9 @@ export function ProjectsPage() {
           taskName: task.taskName,
           role: task.role,
           estimatedHours: task.estimatedHours,
+          // stageId (null = sin asignar) tiene que viajar, si no reasignar el stage de
+          // una task existente sería un no-op silencioso.
+          stageId: task.stageId ?? null,
         }),
       ),
     )

@@ -4,11 +4,10 @@
  * (o cuyo stageId no matchea ningún stage) caen en un nodo sintético "Tasks" al final.
  * Un stage sin tasks igual aparece (con `tasks: []`).
  *
- * NOTA (dominio, 2026-09-11): los tasks que recibe son los REALES del proyecto (los
- * distintos `task` de sus horas cargadas en Zoho — ver getProjectLoggedTasks), NO los
- * task_name del scope del SOW. Esos tasks NO tienen stageId (no hay link stage↔task en
- * el schema ni en las horas), así que en la práctica TODOS caen bajo el nodo "Tasks".
- * El módulo ya soporta el nesting por si algún día se agrega un link stage↔task.
+ * NOTA (dominio, 2026-09-11): los tasks que recibe son el MERGE de los registrados del SOW
+ * (project_tasks, con su `stageId` asignado) y los logueados de las horas de Zoho (ver
+ * mergeProjectTasks). Los que tienen stageId caen bajo su stage; los que no (logueados sin
+ * registrar, o registrados sin asignar) caen bajo el nodo "No stage".
  *
  * @param {Array<{id:string|number, stageName:string, position?:number}>} stages
  * @param {Array<{id:string|number, taskName:string, stageId?:string|number|null}>} tasks
@@ -36,13 +35,13 @@ export function buildProjectTaskTree(stages = [], tasks = []) {
 
   const orphans = byStage.get(null) ?? []
   if (orphans.length) {
-    // Nodo "Tasks": los tasks del proyecto que no están atados a un stage. Hoy TODOS
-    // caen acá (no hay link stage↔task en el schema ni en las horas), así que es la
-    // lista de tasks del proyecto. Si algún día se agrega el link, sólo los sueltos.
+    // Nodo "No stage": los tasks que no están asignados a ningún stage — registrados sin
+    // asignar, o logueados sin registrar (ver mergeProjectTasks). Los que sí tienen stage
+    // caen bajo el suyo.
     stageNodes.push({
       key: 'no-stage',
       stageId: null,
-      label: 'Tasks',
+      label: 'No stage',
       meta: null,
       tasks: orphans,
     })

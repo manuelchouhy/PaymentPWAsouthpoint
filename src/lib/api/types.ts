@@ -227,6 +227,8 @@ export interface ProjectTask {
   taskName: string
   role?: string | null
   estimatedHours: number
+  /** A qué stage del proyecto pertenece la task (null = sin asignar). */
+  stageId: string | number | null
   createdAt: string
   createdBy: string | null
 }
@@ -487,8 +489,13 @@ export interface ApiClient {
     createFromWizard(
       payload: Partial<Project> & {
         sowFile?: File | null
-        stages?: Array<{ stageName: string; sowNumber: string; sowFile: File }>
-        tasks?: Array<{ taskName: string; role?: string | null; estimatedHours: number }>
+        stages?: Array<{ stageName: string; sowNumber: string; sowFile: File | null }>
+        tasks?: Array<{
+          taskName: string
+          role?: string | null
+          estimatedHours: number
+          stageId?: string | number | null
+        }>
       },
       createdBy?: string | null,
     ): Promise<{ project: Project; partialFailure: Error | null }>
@@ -556,12 +563,22 @@ export interface ApiClient {
     >
     create(
       projectId: string | number,
-      tasks: Array<{ taskName: string; role?: string | null; estimatedHours: number }>,
+      tasks: Array<{
+        taskName: string
+        role?: string | null
+        estimatedHours: number
+        stageId?: string | number | null
+      }>,
       createdBy?: string | null,
     ): Promise<ProjectTask[]>
     update(
       current: { id: string | number; projectId: string | number },
-      updates: { taskName?: string; role?: string | null; estimatedHours?: number },
+      updates: {
+        taskName?: string
+        role?: string | null
+        estimatedHours?: number
+        stageId?: string | number | null
+      },
     ): Promise<ProjectTask>
   }
 

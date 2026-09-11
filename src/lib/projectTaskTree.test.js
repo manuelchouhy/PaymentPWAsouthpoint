@@ -26,7 +26,7 @@ test('un stage sin tasks igual aparece con tasks: []', () => {
   assert.deepEqual(tree[0].tasks, [])
 })
 
-test('tasks sin stage (o con stageId inexistente) caen en "Tasks" al final', () => {
+test('tasks sin stage (o con stageId inexistente) caen en "No stage" al final', () => {
   const stages = [stage('s1', 'Stage 1', 0)]
   const tasks = [task('t1', 'A', 's1'), task('t2', 'B', null), task('t3', 'C', 'nope')]
   const tree = buildProjectTaskTree(stages, tasks)
@@ -34,15 +34,15 @@ test('tasks sin stage (o con stageId inexistente) caen en "Tasks" al final', () 
     tree.map((n) => [n.label, n.tasks.map((t) => t.taskName)]),
     [
       ['Stage 1', ['A']],
-      ['Tasks', ['B', 'C']],
+      ['No stage', ['B', 'C']],
     ],
   )
 })
 
-test('sin stages: todos los tasks caen en "Tasks" (realidad actual del schema)', () => {
+test('sin stages: todos los tasks caen en "No stage" (realidad actual del schema)', () => {
   const tree = buildProjectTaskTree([], [task('t1', 'A'), task('t2', 'B')])
   assert.equal(tree.length, 1)
-  assert.equal(tree[0].label, 'Tasks')
+  assert.equal(tree[0].label, 'No stage')
   assert.deepEqual(tree[0].tasks.map((t) => t.taskName), ['A', 'B'])
 })
 
@@ -50,5 +50,5 @@ test('sin stages ni tasks → [] (incluye args undefined/null)', () => {
   assert.deepEqual(buildProjectTaskTree([], []), [])
   assert.deepEqual(buildProjectTaskTree(), [])
   assert.deepEqual(buildProjectTaskTree(null, null), [])
-  assert.deepEqual(buildProjectTaskTree(null, [task('t1', 'A')])[0].label, 'Tasks')
+  assert.deepEqual(buildProjectTaskTree(null, [task('t1', 'A')])[0].label, 'No stage')
 })

@@ -894,6 +894,8 @@ function rowToTask(row) {
     taskName: row.task_name,
     role: row.role ?? null,
     estimatedHours: Number(row.estimated_hours),
+    // stage_id: a qué stage del proyecto pertenece la task (opcional; null = sin asignar).
+    stageId: row.stage_id ?? null,
     createdAt: row.created_at,
     createdBy: row.created_by ?? null,
   }
@@ -1095,6 +1097,7 @@ export async function createProjectTasks(projectId, tasks, createdBy) {
       taskName: t.taskName,
       role: t.role ?? null,
       estimatedHours: Number(t.estimatedHours),
+      stageId: t.stageId ?? null,
       createdAt: new Date().toISOString(),
       createdBy: createdBy || null,
     }),
@@ -1103,6 +1106,8 @@ export async function createProjectTasks(projectId, tasks, createdBy) {
       task_name: t.taskName,
       role: t.role || null,
       estimated_hours: Number(t.estimatedHours),
+      // stage_id: puede venir null (task sin asignar) o el id de un stage del proyecto.
+      stage_id: t.stageId ?? null,
       created_by: createdBy || null,
     }),
     rowToEntity: rowToTask,
@@ -1130,6 +1135,8 @@ export async function updateProjectTask(current, updates) {
   if (updates.taskName !== undefined) row.task_name = updates.taskName
   if (updates.role !== undefined) row.role = updates.role || null
   if (updates.estimatedHours !== undefined) row.estimated_hours = Number(updates.estimatedHours)
+  // stage_id: null (sin asignar) es un valor válido, así que se compara con undefined.
+  if (updates.stageId !== undefined) row.stage_id = updates.stageId ?? null
   const { data, error } = await supabase.from('project_tasks').update(row).eq('id', current.id).select().single()
   if (error) throw new Error(error.message)
   return rowToTask(data)
