@@ -19,6 +19,7 @@ import {
   remainingHoursByContractor,
   weekSpanFromSelection,
   selectionScope,
+  cardScopeFromSelection,
 } from '../lib/billingSelection'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { useSyncReload } from '../lib/useSyncReload'
@@ -707,6 +708,48 @@ export function BillingPage() {
   // selectedHours sumaría varios proyectos contra el consumed/budget de uno solo). Sin
   // selección, vale el filtro de proyecto.
   const budgetCardProject = selectedKeys.size > 0 ? selectionProject : singleProject
+
+  // #2: los CINCO cuadros reflejan la SELECCIÓN cuando hay filas tildadas de un solo
+  // cliente — un proyecto → ese proyecto; varios (o alguna sin proyecto) → la suma de
+  // TODOS los proyectos del cliente (cardScopeFromSelection). Se miden sobre el
+  // proyecto/cliente COMPLETO, ignorando semana/contractor, igual criterio que el
+  // cuadro "Selected + consumed / budget". Si la selección cruza clientes o está vacía,
+  // los cuadros siguen el filtro de la barra (`cards`). Memoizado sobre
+  // selectedKeys+billableRows (no sobre selectedRows, que es un array nuevo por render).
+  const cardScope = useMemo(() => {
+    const rows = [...selectedKeys].map((k) => billableRows.get(k)).filter(Boolean)
+    return cardScopeFromSelection(rows)
+  }, [selectedKeys, billableRows])
+  const selectionKpis = useMemo(() => {
+    if (!cardScope) return null
+    const scope = {
+      contractors: [],
+      clients: cardScope.clients,
+      projects: cardScope.projects,
+      projectNumbers: [],
+      tasks: [],
+      billingStatuses: [],
+      statuses: [],
+      allocations: [],
+      dateFrom: '',
+      dateTo: '',
+      week: '',
+      weekStart: '',
+    }
+    const all = applyEntryFilters(entriesConCliente, scope, invoiceByEntryId, masterNames)
+    const bill = all.filter((e) => e.allocation === 'bill_to_client')
+    return billingKpis({
+      billToClient: bill,
+      allAllocations: all,
+      invoicedIds: invoiceByEntryId,
+      paidIds: paidEntryIds,
+    })
+  }, [cardScope, entriesConCliente, invoiceByEntryId, masterNames, paidEntryIds])
+  // Números MOSTRADOS en los 5 cuadros: la selección manda; sin ella, el filtro (`cards`).
+  // Los contadores de las tabs y el empty-state siguen usando `cards` (la grilla refleja
+  // el filtro, no la selección).
+  const kpiCards = selectionKpis ?? cards
+
   const canCreate = can('billing.create')
   // Factura AGRUPADA multi-contractor (slice 03): se emite cuando la selección es de
   // un solo cliente + un solo proyecto (varios contractors permitidos).
@@ -1136,11 +1179,11 @@ export function BillingPage() {
                 <span className="dash-kpi__label">Pending to bill</span>
               </div>
               <span className="dash-kpi__value">
-                {formatHours(cards.pendingToBill)}
+                {formatHours(kpiCards.pendingToBill)}
                 <span className="dash-kpi__unit"> h</span>
               </span>
               <span className="dash-kpi__hint">
-                {cards.pendingCount} approved {cards.pendingCount === 1 ? 'entry' : 'entries'}
+                {kpiCards.pendingCount} approved {kpiCards.pendingCount === 1 ? 'entry' : 'entries'}
               </span>
             </div>
             {/* Cuadro #2: Seleccionadas + Consumidas / Budget. El "+" y el "/" son
@@ -1174,7 +1217,7 @@ export function BillingPage() {
                 <span className="dash-kpi__label">Invoiced</span>
               </div>
               <span className="dash-kpi__value">
-                {formatHours(cards.invoiced)}
+                {formatHours(kpiCards.invoiced)}
                 <span className="dash-kpi__unit"> h</span>
               </span>
               {/* La tarjeta de facturado tiene otro alcance que la grilla y que
@@ -1187,7 +1230,7 @@ export function BillingPage() {
                 <span className="dash-kpi__label">Unallocated</span>
               </div>
               <span className="dash-kpi__value">
-                {formatHours(cards.unallocated)}
+                {formatHours(kpiCards.unallocated)}
                 <span className="dash-kpi__unit"> h</span>
               </span>
               <span className="dash-kpi__hint">approved, not yet classified in Entries</span>
@@ -1197,7 +1240,7 @@ export function BillingPage() {
                 <span className="dash-kpi__label">Overage</span>
               </div>
               <span className="dash-kpi__value">
-                {formatHours(cards.overage)}
+                {formatHours(kpiCards.overage)}
                 <span className="dash-kpi__unit"> h</span>
               </span>
               <span className="dash-kpi__hint">overage hours pending payment</span>
