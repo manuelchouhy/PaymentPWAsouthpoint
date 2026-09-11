@@ -491,15 +491,27 @@ export function PaymentsPage() {
     const ids = new Set()
     for (const r of invoiceRows)
       for (const c of r.contractors) for (const id of c.entryIds ?? []) ids.add(String(id))
-    const addGroupIds = (list) => {
-      for (const g of list) for (const id of g.entryIds ?? []) ids.add(String(id))
+    // Los grupos invoice-less se OCULTAN con un filtro de Estado activo (son de factura):
+    // en ese caso sus horas no deben ofrecer opciones que vaciarían la página.
+    if (paymentStatuses.length === 0) {
+      const addGroupIds = (list) => {
+        for (const g of list) for (const id of g.entryIds ?? []) ids.add(String(id))
+      }
+      addGroupIds(overagePending)
+      addGroupIds(spInternalPending)
+      addGroupIds(overagePaid)
+      addGroupIds(spInternalPaid)
     }
-    addGroupIds(overagePending)
-    addGroupIds(spInternalPending)
-    addGroupIds(overagePaid)
-    addGroupIds(spInternalPaid)
     return enrichedEntries.filter((e) => ids.has(String(e.id)))
-  }, [invoiceRows, overagePending, spInternalPending, overagePaid, spInternalPaid, enrichedEntries])
+  }, [
+    invoiceRows,
+    overagePending,
+    spInternalPending,
+    overagePaid,
+    spInternalPaid,
+    enrichedEntries,
+    paymentStatuses,
+  ])
 
   const filterOptions = useMemo(
     () => buildFilterOptions(displayedEntries, filters, NO_INVOICE_MAP, masterNames),
@@ -547,6 +559,7 @@ export function PaymentsPage() {
           ...g,
           entries,
           entryIds,
+          entryCount: entryIds.length, // recomputar: si no, las paid rows mostrarían el count viejo
           hours: entries.reduce((s, e) => s + (Number(e.hours) || 0), 0),
           meta: formatGroupMeta(summarizeEntries(entries)),
         }
@@ -601,26 +614,20 @@ export function PaymentsPage() {
     let overdue = 0
     let dueThisWeek = 0
     let pendingHours = 0
+    // Las facturas son unidades atómicas multi-contractor: la grilla muestra la factura
+    // ENTERA (todos sus contractors) cuando pasa el filtro, así que el KPI cuenta igual —
+    // todas las horas pendientes de las facturas mostradas — para que header y grilla no
+    // divergan. "Filtrar por contractor" = ver las facturas que lo incluyen (enteras).
     for (const r of filteredInvoiceRows) {
       if (!isPayable(r.inv.status)) continue
-      // Horas pendientes de ESTA factura que cuentan bajo el filtro: contractors no
-      // pagados cuyas horas matchean (con filtro activo). Sin filtro, todos los pendientes.
-      const invPending = r.contractors.reduce((s, ic) => {
-        if (ic.paid) return s
-        if (matchingEntryIds && !(ic.entryIds ?? []).some((id) => matchingEntryIds.has(String(id))))
-          return s
-        return s + (Number(ic.hours) || 0)
-      }, 0)
-      pendingHours += invPending
-      // Overdue/Due sólo cuentan si la factura tiene horas pendientes que matchean el
-      // filtro: si el único contractor que matchea ya está pagado, no es "pendiente".
-      if (r.dueDate && invPending > 0) {
+      pendingHours += r.contractors.reduce((s, ic) => s + (ic.paid ? 0 : Number(ic.hours) || 0), 0)
+      if (r.dueDate) {
         if (r.alertLevel === 'overdue') overdue += 1
         if (r.daysUntilDue >= 0 && r.daysUntilDue <= 7) dueThisWeek += 1
       }
     }
     return { overdue, dueThisWeek, pendingHours }
-  }, [filteredInvoiceRows, matchingEntryIds])
+  }, [filteredInvoiceRows])
 
   const rows = useMemo(() => {
     const filtered = filteredInvoiceRows.filter((r) => {
@@ -867,6 +874,9 @@ export function PaymentsPage() {
                                   .filter((e) => {
                                     const k = String(e.id)
                                     if (pendingIds.has(k) || seen.has(k)) return false
+                                    // Respetar el filtro de la barra: no mostrar historial
+                                    // pagado de otros clientes/proyectos cuando hay filtro.
+                                    if (matchingEntryIds && !matchingEntryIds.has(k)) return false
                                     seen.add(k)
                                     return true
                                   })
