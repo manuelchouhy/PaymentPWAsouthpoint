@@ -19,40 +19,25 @@ test('Billing: el badge "invoiced" aparece en la grilla sin togglear a Invoiced'
 
   const badges = page.locator('.bill-project__invoiced')
 
-  // Contamos los badges en la vista 'all' (ahí aparecen todos los proyectos con
-  // horas facturadas): es el techo de lo que puede verse.
+  // En la data de test hay proyectos con horas facturadas Y pendientes, así que el
+  // badge tiene que verse en la vista por defecto ('pending') SIN togglear. Este es
+  // el corazón del slice: lo facturado presente sin cambiar de vista.
+  await expect(badges.first()).toBeVisible()
+  await expect(statusSelect).toHaveValue('pending')
+  await expect(badges.first()).toHaveText(/[\d.]+\s*h invoiced/)
+
+  const countPending = await badges.count()
+  expect(countPending).toBeGreaterThan(0)
+
+  // Consistencia con el toggle: en 'all' aparecen todos los proyectos facturados, así
+  // que la cantidad de badges no puede ser menor que en 'pending'.
   await statusSelect.selectOption('all')
   await expect(statusSelect).toHaveValue('all')
-  // Esperar a que la grilla se re-renderice.
-  await page.waitForTimeout(300)
-  const badgesInAll = await badges.count()
+  await expect(badges.first()).toBeVisible()
+  expect(await badges.count()).toBeGreaterThanOrEqual(countPending)
 
-  // Volver a la vista por defecto (pendiente): el badge tiene que seguir apareciendo
-  // para los proyectos que además tienen horas pendientes — SIN togglear a Invoiced.
+  // Y volviendo a 'pending' se mantienen (no dependían del toggle).
   await statusSelect.selectOption('pending')
   await expect(statusSelect).toHaveValue('pending')
-  await page.waitForTimeout(300)
-
-  const badgesInPending = await badges.count()
-
-  if (badgesInAll === 0) {
-    // No hay horas facturadas en la data de test: nada que verificar más allá de que
-    // el mecanismo no rompe la grilla. (Documentado como límite de la data.)
-    test.info().annotations.push({ type: 'note', text: 'Sin horas invoiced en la data de test' })
-    return
-  }
-
-  // Hay facturadas: al menos un badge y, si hay proyectos mixtos, se ven en 'pending'.
-  const first = badges.first()
-  if (badgesInPending > 0) {
-    await expect(first).toBeVisible()
-    await expect(first).toHaveText(/[\d.]+\s*h invoiced/)
-  } else {
-    // Todos los proyectos facturados están 100% facturados (sin filas pendientes):
-    // no aparecen en 'pending'. Es el open item conocido; el KPI global los cubre.
-    test.info().annotations.push({
-      type: 'note',
-      text: 'Proyectos 100% facturados no aparecen en vista pending (open item)',
-    })
-  }
+  await expect(badges).toHaveCount(countPending)
 })

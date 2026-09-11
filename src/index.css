@@ -1059,22 +1059,24 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 .bill-project__hours { color: var(--text-soft); font-family: var(--mono); font-size: 12px; }
 /* C10: horas ya facturadas del proyecto, siempre visibles. Pill atenuado para no
    competir con las horas pendientes (que es lo accionable). margin-left: auto lo
-   agrupa a la derecha junto a las horas. */
+   empuja (junto con las horas que le siguen) a la derecha; sin badge, la fila queda
+   como antes (nombre y horas a la izquierda, sin tocar el layout existente).
+   align-self: center porque el toggle alinea por baseline y el pill tiene padding.
+   Borde con --line-stronger: --line-strong coincide con --surface-3 en light (mismo
+   #E4E4E7) y el borde no se vería. */
 .bill-project__invoiced {
   margin-left: auto;
+  align-self: center;
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--surface-3);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line-stronger);
   color: var(--text-soft);
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
 }
-/* Sin badge, las horas pendientes se van solas a la derecha. */
-.bill-project__invoiced + .bill-project__hours { margin-left: 0; }
-.bill-project__hours { margin-left: auto; }
 .bill-project .bill-week { padding-left: 12px; }
 /* Respiración vertical de la tabla anidada: que las filas no queden pegadas al
    header de la semana ni al borde inferior de la tarjeta / a la siguiente semana. */

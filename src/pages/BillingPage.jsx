@@ -569,21 +569,26 @@ export function BillingPage() {
 
   // Horas ya facturadas por proyecto (C10): para mostrar un badge "X h invoiced" en
   // el header de cada proyecto SIEMPRE, incluso con el filtro 'pending', así el
-  // analista tiene presente lo facturado sin cambiar de vista. Se calcula sobre
-  // `filtered` (mismas filas que alimentan la grilla, antes del statusFilter), así que
-  // es independiente del toggle. Clave = projectId(client, project) para que el lookup
-  // en el render matchee exacto. Nota: un proyecto 100% facturado no aparece en la
-  // vista 'pending' (no tiene filas pendientes); ahí sólo lo refleja el KPI Invoiced.
+  // analista tiene presente lo facturado sin cambiar de vista (independiente del
+  // toggle billStatusFilter). Es el TOTAL del proyecto: se computa sobre
+  // entriesConCliente (TODAS, no las filtradas — igual que pendingByContractor), así
+  // el número no cambia al filtrar por semana/contractor. Mismos guards que la grilla
+  // (billingGrouping): allocation bill_to_client + status Approved. Clave =
+  // projectId(client, project) para que el lookup en el render matchee exacto.
+  // Nota: un proyecto 100% facturado no aparece en la vista 'pending' (no tiene filas
+  // pendientes); ahí sólo lo refleja el KPI Invoiced.
   const invoicedHoursByProject = useMemo(() => {
     const m = new Map()
-    for (const e of filtered) {
-      if (!invoiceByEntryId.has(String(e.id))) continue
+    for (const e of entriesConCliente) {
+      if (e.status !== 'Approved') continue
+      if (e.allocation !== 'bill_to_client') continue
       if (!e.client) continue
+      if (!invoiceByEntryId.has(String(e.id))) continue
       const key = `${enc(e.client)}||${enc(e.project ?? '')}`
       m.set(key, (m.get(key) ?? 0) + (Number(e.hours) || 0))
     }
     return m
-  }, [filtered, invoiceByEntryId])
+  }, [entriesConCliente, invoiceByEntryId])
 
   // Horas pendientes de facturar por cliente+proyecto+contractor, sobre TODAS las
   // entries (NO las filtradas). El aviso del modal tiene que reflejar lo que realmente
