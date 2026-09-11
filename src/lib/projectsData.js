@@ -1025,11 +1025,13 @@ export async function getProjectTasks(projectId) {
  * proyecto" en el resto de la app — NO los task_name del scope del SOW (project_tasks),
  * que casi nunca se cargan y NO tienen FK con las horas. Ver getProjectTaskNames.
  *
- * Se agrupa por nombre de task; `hours` suma TODAS (cualquier estado) para reflejar la
- * actividad real, y `approvedHours` sólo las Approved.
+ * Se agrupa por nombre de task; `hours` suma TODAS (cualquier estado) y `approvedHours`
+ * sólo las Approved. `allApproved` es true sólo si TODAS las entries del task están
+ * Approved (flag explícito, no comparar sumas: con correcciones negativas approvedHours
+ * podría superar a hours sin que todo esté aprobado).
  *
  * @param {string} projectName
- * @returns {Promise<Array<{ id: string, taskName: string, hours: number, approvedHours: number }>>}
+ * @returns {Promise<Array<{ id: string, taskName: string, hours: number, approvedHours: number, allApproved: boolean }>>}
  */
 export async function getProjectLoggedTasks(projectName) {
   if (!projectName) return []
@@ -1039,35 +1041,39 @@ export async function getProjectLoggedTasks(projectName) {
     const entries = await getTimeEntries()
     rows = entries.filter((e) => e.project === projectName)
   } else {
-    // Se pagina para NO truncar el total de horas en proyectos con muchas entries (un
-    // .limit fijo daría un total mal sin aviso). `.order('id')` da un orden ESTABLE
-    // entre páginas (sin él Postgres no garantiza el orden y una fila podría caer en
-    // dos páginas o en ninguna). Se avanza por la cantidad REAL devuelta —no por un
-    // paso fijo— para tolerar un cap del server (db.max-rows) menor al page size.
+    // Se traen TODAS las entries del proyecto (no un .limit fijo, que daría un total mal
+    // sin aviso). Paginación KEYSET por id (.gt(lastId) + order id): estable ante
+    // inserciones/borrados concurrentes —a diferencia del offset, que correría las filas—
+    // y tolera un cap del server (db.max-rows) menor al page size, porque avanza por la
+    // última fila real y corta recién con un batch vacío.
     rows = []
     const page = 1000
-    for (let from = 0; from < 200000 /* tope de seguridad */; ) {
+    let lastId = 0
+    for (let guard = 0; guard < 500 /* tope de seguridad */; guard++) {
       const { data, error } = await supabase
         .from('time_entries')
-        .select('task, hours, status')
+        .select('id, task, hours, status')
         .eq('project', projectName)
+        .gt('id', lastId)
         .order('id')
-        .range(from, from + page - 1)
+        .limit(page)
       if (error) throw new Error(error.message)
       const batch = data ?? []
       rows.push(...batch)
       if (batch.length === 0) break
-      from += batch.length
+      lastId = batch[batch.length - 1].id
     }
   }
   const byTask = new Map()
   for (const row of rows) {
     const name = row.task ?? ''
     if (!name) continue
-    const acc = byTask.get(name) ?? { id: name, taskName: name, hours: 0, approvedHours: 0 }
+    const acc =
+      byTask.get(name) ?? { id: name, taskName: name, hours: 0, approvedHours: 0, allApproved: true }
     const h = Number(row.hours) || 0
     acc.hours += h
     if (row.status === 'Approved') acc.approvedHours += h
+    else acc.allApproved = false
     byTask.set(name, acc)
   }
   return [...byTask.values()].sort((a, b) => a.taskName.localeCompare(b.taskName, 'es', { numeric: true }))

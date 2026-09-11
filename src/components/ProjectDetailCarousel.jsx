@@ -875,10 +875,10 @@ function ChangeRequestsSlide({
 
 /**
  * Slide "Stages & Tasks" (slice 12, lote WhatsApp 2026-09-10): vista de árbol de los
- * stages del proyecto con sus tasks anidados. El agrupado lo hace `buildProjectTaskTree`
- * (módulo puro); acá solo se renderiza. Cada stage es un nodo expandible; un click en el
- * header abre/cierra la lista de tasks. Hoy los tasks no tienen `stageId` en el schema, así
- * que caen todos en el nodo "Sin stage" — ver open item del slice.
+ * stages del proyecto y sus tasks. El agrupado lo hace `buildProjectTaskTree` (módulo puro);
+ * acá solo se renderiza. Cada nodo es expandible; un click en el header abre/cierra su lista.
+ * Los tasks son los REALES del proyecto (los de las horas cargadas, con horas). Como no hay
+ * link stage↔task, caen todos en el nodo "Tasks".
  */
 function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggle }) {
   if (loading) return <p className="drawer__empty">Loading stages & tasks…</p>
@@ -939,22 +939,19 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
                     <li key={t.id ?? `idx-${i}`} className="stage-tree__task">
                       <span className="stage-tree__task-name">{t.taskName || '—'}</span>
                       {/* Horas cargadas del task + estado de aprobación. formatHours
-                          redondea (evita 12.3999… de sumar fracciones); la comparación
-                          va sobre los valores redondeados (no floats crudos). */}
+                          redondea para no mostrar 12.3999… al sumar fracciones. El
+                          "all approved" sale del flag del dato (todas las entries
+                          Approved), no de comparar sumas (robusto ante correcciones
+                          negativas). */}
                       {(() => {
                         const hours = Number(t.hours ?? 0)
-                        const approved = Number(t.approvedHours ?? 0)
-                        // approved ⊆ hours (misma suma), así que approved >= hours es
-                        // exacto cuando TODO está aprobado — sin falsos "all approved"
-                        // por redondeo. Los valores mostrados sí van redondeados.
-                        const allApproved = approved >= hours
                         return (
                           <span className="stage-tree__task-meta">
                             {hours > 0 ? `${formatHours(hours)} h` : '—'}
                             {hours > 0 &&
-                              (allApproved
+                              (t.allApproved
                                 ? ' · all approved'
-                                : ` · ${formatHours(approved)} h approved`)}
+                                : ` · ${formatHours(Number(t.approvedHours ?? 0))} h approved`)}
                           </span>
                         )
                       })()}
