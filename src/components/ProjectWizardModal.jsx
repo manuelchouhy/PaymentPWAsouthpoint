@@ -364,9 +364,9 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
 
   // Una stage recién agregada en esta sesión (form.stages) necesita sus 3
   // campos; una ya persistida (existingStages, issue 03b) no puede perder
-  // nombre/número (sigue siendo `text not null`), pero su SOW File es
-  // opcional de reemplazar — el que ya tiene sigue siendo válido.
-  const stageMissing = (s) => !s.stageName.trim() || !s.sowNumber.trim() || !s.sowFile
+  // nombre/número (sigue siendo `text not null`). El SOW File del stage es OPCIONAL
+  // (a pedido del usuario): sólo se exigen nombre y número.
+  const stageMissing = (s) => !s.stageName.trim() || !s.sowNumber.trim()
   const existingStageMissing = (s) => !s.stageName.trim() || !s.sowNumber.trim()
   // En edición ya hay un SOW subido (initial.sowUrl) — no reemplazarlo no es
   // un error, solo "no hay archivo nuevo".
@@ -738,12 +738,14 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
 
               {/* "Has stages?" editable también en edición: se puede pasar un proyecto de
                   simple a multi-stage y viceversa. En alta se gatea por clientId (igual que
-                  el resto del form); en edición el proyecto ya existe, así que va libre. */}
+                  el resto del form). En edición se deshabilita hasta que carguen los stages
+                  existentes (loadingChildren): togglear antes dejaría existingStages en []
+                  y sembraría un stage en blanco espurio. */}
               <label className="settings-check">
                 <input
                   type="checkbox"
                   checked={form.hasStages}
-                  disabled={!isEdit && !form.clientId}
+                  disabled={(!isEdit && !form.clientId) || (isEdit && loadingChildren)}
                   onChange={(e) => toggleHasStages(e.target.checked)}
                 />
                 Has stages?
@@ -847,13 +849,13 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                       <div className="field">
                         <label className="field__label" htmlFor={`wz-stage-sow-file-${s.localId}`}>
                           SOW File
-                          <span className="field__req">required</span>
+                          <span className="field__hint">optional</span>
                         </label>
                         <input
                           id={`wz-stage-sow-file-${s.localId}`}
                           type="file"
                           accept=".docx,application/pdf,.pdf"
-                          className={`field__input field__input--file${touched(0) && step1Missing.stages && !s.sowFile ? ' field__input--error' : ''}`}
+                          className="field__input field__input--file"
                           onChange={(e) => setStageField(s.localId, 'sowFile', e.target.files?.[0] ?? null)}
                         />
                         {s.sowFile && (

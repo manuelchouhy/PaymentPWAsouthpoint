@@ -384,7 +384,9 @@ export async function getProjects() {
     return [...demoProjects]
       .map((p) => ({
         ...p,
-        stageSowNumbers: stageSows(demoStages[p.id]),
+        // Solo si has_stages (igual que el path real): un proyecto que pasó a sin-stages
+        // no muestra sus stages huérfanos como SOW fantasma.
+        stageSowNumbers: p.hasStages ? stageSows(demoStages[p.id]) : [],
       }))
       .sort((a, b) =>
         (a.contractExpirationDate || '9999-99-99').localeCompare(

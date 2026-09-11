@@ -305,6 +305,10 @@ export function ProjectsPage() {
   // consulta falla, se deja como está y se corrige en el próximo getProjects.
   // Ver projectsData.js.
   async function withStageSows(project) {
+    // Solo si el proyecto tiene stages: si pasó a has_stages=false (Edit SOW), sus
+    // project_stages quedan huérfanos en la DB (no hay borrado) y NO deben reaparecer
+    // como SOW fantasma en la columna/filtro. Mismo criterio que getProjects.
+    if (!project.hasStages) return { ...project, stageSowNumbers: [] }
     try {
       const stages = await api.projects.getStages(project.id)
       return { ...project, stageSowNumbers: stageSows(stages) }
