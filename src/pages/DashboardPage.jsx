@@ -15,9 +15,20 @@ import { HoursDonut } from '../components/HoursDonut'
 import { api } from '../lib/api'
 import { useSyncReloadKey } from '../lib/useSyncReload'
 import { ALLOCATION_LABELS } from '../lib/allocations'
+import { deriveEntriesClient } from '../lib/entryClient'
+import {
+  useEntryFilters,
+  applyEntryFilters,
+  buildFilterOptions,
+} from '../lib/useEntryFilters'
+import { EntryFilterBar } from '../components/EntryFilterBar'
 import { ContractsExpiringWidget } from '../components/dashboard/ContractsExpiringWidget'
 import { SupplierContractsWidget } from '../components/dashboard/SupplierContractsWidget'
 import { Sparkline } from '../components/Sparkline'
+
+// "Status" del filtro del Dashboard = estado de FACTURACIÓN de la hora (billingStatuses
+// de useEntryFilters), el estado natural de una entry acá (los widgets son de horas).
+const BILLING_STATUS_OPTIONS = ['Pending', 'Invoiced', 'Collected', 'Paid']
 
 const STATUS_COLORS = {
   Pending: '#52525B',
@@ -102,15 +113,21 @@ export function DashboardPage() {
   useEffect(() => {
     let cancelled = false
     setLoadStatus('loading')
+    // projects/clients sólo resuelven el cliente de cada hora (deriveEntriesClient) para
+    // el filtro; un fallo suyo no debe tirar el dashboard → catch propio que degrada a [].
+    const projectsList = Promise.resolve().then(() => api.projects.list()).catch(() => [])
+    const clientsList = Promise.resolve().then(() => api.clients.list()).catch(() => [])
     Promise.all([
       api.timeEntries.list(),
       api.invoices.list(),
       api.collections.list(),
       api.payments.list(),
+      projectsList,
+      clientsList,
     ])
-      .then(([entries, invoices, collections, payments]) => {
+      .then(([entries, invoices, collections, payments, projects, clients]) => {
         if (cancelled) return
-        setData({ entries, invoices, collections, payments })
+        setData({ entries, invoices, collections, payments, projects, clients })
         setLoadStatus('ready')
       })
       .catch((err) => {
@@ -133,6 +150,37 @@ export function DashboardPage() {
     return m
   }, [data])
 
+  // --- Filtros (misma barra que Billing/Payments) --------------------------------
+  // Filtran los widgets basados en HORAS (donuts, Pending Hours, total). Los tiles de
+  // facturas (Invoices/Collections/Payments) quedan globales. "Status" = billing status.
+  const enrichedEntries = useMemo(
+    () => (data ? deriveEntriesClient(data.entries, data.projects ?? [], data.clients ?? []) : []),
+    [data],
+  )
+  const { filters, toggleValue, clear, isActive } = useEntryFilters()
+  const masterNames = useMemo(
+    () => new Set((data?.clients ?? []).map((c) => c.clientName).filter(Boolean)),
+    [data],
+  )
+  const filterOptions = useMemo(
+    () => buildFilterOptions(enrichedEntries, filters, invoiceByEntryId, masterNames),
+    [enrichedEntries, filters, invoiceByEntryId, masterNames],
+  )
+  const filteredEntries = useMemo(
+    () => applyEntryFilters(enrichedEntries, filters, invoiceByEntryId, masterNames),
+    [enrichedEntries, filters, invoiceByEntryId, masterNames],
+  )
+  const filterDimensions = useMemo(
+    () => [
+      { key: 'clients', label: 'Client', options: filterOptions.clients },
+      { key: 'projectNumbers', label: 'Project #', options: filterOptions.projectNumbers },
+      { key: 'projects', label: 'Project', options: filterOptions.projects },
+      { key: 'contractors', label: 'Contractor', options: filterOptions.contractors },
+      { key: 'billingStatuses', label: 'Status', options: BILLING_STATUS_OPTIONS },
+    ],
+    [filterOptions],
+  )
+
   // Map: invoiceId → last collection date
   const lastCollDateByInvoiceId = useMemo(() => {
     if (!data) return new Map()
@@ -151,7 +199,7 @@ export function DashboardPage() {
 
     // Sólo horas facturables al cliente (ver isBillablePending): las Rejected/Pending
     // y las overage/sp_internal/sin triagear no se facturan al cliente.
-    const pendingHours = data.entries
+    const pendingHours = filteredEntries
       .filter((e) => isBillablePending(e, invoiceByEntryId))
       .reduce((sum, e) => sum + e.hours, 0)
 
@@ -176,13 +224,13 @@ export function DashboardPage() {
     }
 
     return { pendingHours, invoicesThisMonth, collectionsPending, paymentsDueThisWeek }
-  }, [data, invoiceByEntryId, lastCollDateByInvoiceId])
+  }, [data, filteredEntries, invoiceByEntryId, lastCollDateByInvoiceId])
 
   // Micro-visual de cada KPI card: actividad real de los últimos 7 días en el
   // dominio de esa card (no repite el número de la card, da contexto de tendencia).
   const sparklines = useMemo(() => {
     if (!data) return null
-    const unbilled = data.entries.filter((e) => isBillablePending(e, invoiceByEntryId))
+    const unbilled = filteredEntries.filter((e) => isBillablePending(e, invoiceByEntryId))
     return {
       pendingHours: last7DaysSeries(unbilled, 'date', 'hours'),
       // issuedDate = invoice_date o, si falta (facturas agrupadas), la fecha de creación.
@@ -196,12 +244,12 @@ export function DashboardPage() {
       collectionsPending: last7DaysSeries(data.collections, 'collectionDate'),
       paymentsDueThisWeek: last7DaysSeries(data.payments, 'paymentDate'),
     }
-  }, [data, invoiceByEntryId])
+  }, [data, filteredEntries, invoiceByEntryId])
 
   const billingDist = useMemo(() => {
     if (!data) return []
     const sums = { Pending: 0, Invoiced: 0, Collected: 0, Paid: 0 }
-    for (const e of data.entries) {
+    for (const e of filteredEntries) {
       const inv = invoiceByEntryId.get(String(e.id))
       // Facturada → cuenta bajo el estado de su factura (una vez emitida, la factura
       // es la fuente de verdad). Sin factura → sólo entra como "Pending" si es
@@ -217,7 +265,7 @@ export function DashboardPage() {
         value: Number(value.toFixed(1)),
         color: STATUS_COLORS[name] ?? '#6b7280',
       }))
-  }, [data, invoiceByEntryId])
+  }, [data, filteredEntries, invoiceByEntryId])
 
   // Mismas horas que el donut de billing, pero repartidas por allocation en vez de
   // por estado de factura. Las categorías conocidas (null + los 4 valores del CHECK
@@ -227,7 +275,7 @@ export function DashboardPage() {
   const allocationDist = useMemo(() => {
     if (!data) return []
     const sums = new Map()
-    for (const e of data.entries) {
+    for (const e of filteredEntries) {
       const key = e.allocation ?? null
       sums.set(key, (sums.get(key) || 0) + e.hours)
     }
@@ -243,7 +291,7 @@ export function DashboardPage() {
         color: allocationColor(key),
       }))
       .filter((d) => d.value > 0)
-  }, [data])
+  }, [data, filteredEntries])
 
   // Ambos donuts reparten EXACTAMENTE las mismas entries (mismo data.entries,
   // misma suma de e.hours), solo que particionadas distinto (por estado de factura
@@ -263,8 +311,8 @@ export function DashboardPage() {
   // componente (billingDist/allocationDist/kpis): confía en el tipo number, sin
   // guards extra que solo cubrirían este consumidor y no los otros tres.
   const totalHours = useMemo(
-    () => (data ? data.entries.reduce((sum, e) => sum + e.hours, 0) : 0),
-    [data],
+    () => (data ? filteredEntries.reduce((sum, e) => sum + e.hours, 0) : 0),
+    [data, filteredEntries],
   )
 
   const now = new Date()
@@ -304,6 +352,17 @@ export function DashboardPage() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.05 }}
         >
+          {/* Filtra los widgets de HORAS (donuts, Pending Hours, total). Los tiles de
+              facturas (Invoices/Collections/Payments) quedan globales. */}
+          <EntryFilterBar
+            dimensions={filterDimensions}
+            filters={filters}
+            onToggle={toggleValue}
+            onClear={clear}
+            isActive={isActive}
+            title="Dashboard filters"
+          />
+
           {/* KPI Cards */}
           <div className="dash-kpis">
             {can('billing.create') && (
