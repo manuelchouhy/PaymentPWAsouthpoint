@@ -887,13 +887,14 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
     return (
       <p className="drawer__empty">Stages & tasks could not be loaded — try reopening this project.</p>
     )
-  // Nada que mostrar: si fue por un fallo de stages, avisamos que es un error (no
-  // un proyecto vacío); si no, el proyecto realmente no tiene stages ni tasks.
+  // Nada que mostrar. Los tasks cargaron OK (si no, `error` de arriba): la lista
+  // está genuinamente vacía. Si además fallaron los stages, lo aclaramos — así no
+  // se lee como "proyecto sin stages" cuando en realidad no se pudieron cargar.
   if (tree.length === 0)
     return (
       <p className="drawer__empty">
         {stagesError
-          ? 'Stages could not be loaded — try reopening this project.'
+          ? 'No tasks yet, and stages could not be loaded — try reopening this project.'
           : 'This project has no stages or tasks yet.'}
       </p>
     )
