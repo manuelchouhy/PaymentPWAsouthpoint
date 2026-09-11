@@ -1172,14 +1172,15 @@ export function BillingPage() {
 
           {/* Aviso cuando los cuadros dejan de seguir el filtro y pasan a reflejar la
               SELECCIÓN: sin esto, tildar filas cambia los números en silencio y se
-              podrían leer como si siguieran la grilla filtrada (que muestra el filtro).
-              Aclara el scope (proyecto o cliente entero) y que es all-time. */}
+              podrían leer como si siguieran la grilla filtrada. Aclara el scope (proyecto
+              o cliente entero). No afirma "all weeks/contractors" para no contradecir el
+              "Selected +" del cuadro #2, cuya mitad izquierda es el subconjunto tildado. */}
           {cardScope && (
             <p className="state__hint">
               Cards below reflect your selection —{' '}
               <strong>{cardScope.clients[0]}</strong>
-              {cardScope.projects.length ? ` · ${cardScope.projects[0]}` : ' · all projects'} (all
-              weeks and contractors), not the filter above.
+              {cardScope.projects.length ? ` · ${cardScope.projects[0]}` : ' · all projects'} — not
+              the filter above.
             </p>
           )}
 
@@ -1219,7 +1220,11 @@ export function BillingPage() {
                 )}
               </span>
               <span className="dash-kpi__hint">
-                {budgetCardProject ? 'selected + consumed / budget' : 'select or filter one project'}
+                {budgetCardProject
+                  ? 'selected + consumed / budget'
+                  : cardScope
+                    ? 'client scope — select one project for its budget'
+                    : 'select or filter one project'}
               </span>
             </div>
             <div className="dash-kpi dash-kpi--static">
