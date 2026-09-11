@@ -35,9 +35,9 @@ export function buildProjectTaskTree(stages = [], tasks = []) {
 
   const orphans = byStage.get(null) ?? []
   if (orphans.length) {
-    // Nodo "Tasks": los tasks del proyecto que no están atados a un stage. Hoy TODOS
-    // caen acá (no hay link stage↔task en el schema ni en las horas), así que es la
-    // lista de tasks del proyecto. Si algún día se agrega el link, sólo los sueltos.
+    // Nodo "No stage": los tasks que no están asignados a ningún stage — registrados sin
+    // asignar, o logueados sin registrar (ver mergeProjectTasks). Los que sí tienen stage
+    // caen bajo el suyo.
     stageNodes.push({
       key: 'no-stage',
       stageId: null,

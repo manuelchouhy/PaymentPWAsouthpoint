@@ -419,7 +419,9 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
     <select
       className="field__input"
       value={value ?? ''}
-      onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
+      // Se guarda el id CRUDO (string del <option>), sin Number(): así no da NaN si el id
+      // no fuera numérico, y compara igual que buildProjectTaskTree (String()).
+      onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
       aria-label="Stage"
     >
       <option value="">No stage</option>
@@ -539,7 +541,9 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
               t.taskName !== original.taskName ||
               (t.role || null) !== (original.role || null) ||
               Number(t.estimatedHours) !== Number(original.estimatedHours) ||
-              (t.stageId ?? null) !== (original.stageId ?? null)
+              // String() en ambos: el select guarda el id como string y rowToTask lo trae
+              // como número (bigint) — comparar crudo marcaría "cambiado" sin cambio real.
+              String(t.stageId ?? '') !== String(original.stageId ?? '')
             )
           })
           .map((t) => ({

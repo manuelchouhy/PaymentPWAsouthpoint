@@ -25,9 +25,20 @@ test('Editar SOW · Tasks: asignar una task a un stage persiste y se ve anidada 
   await page.goto('/projects')
   await openTasksStep(page)
 
-  // La fila de la task "hola": su dropdown de Stage. Elegir el stage "hola".
-  const holaRow = page.locator('tr', { has: page.locator('input[value="hola"]') }).first()
-  const stageSelect = holaRow.getByRole('combobox', { name: 'Stage' })
+  // La fila de la task "hola": se busca por el VALOR (property) del input de nombre, no por
+  // el atributo [value=] (React controla la property, no el atributo).
+  const taskRows = page.locator('table.table--form tbody tr')
+  const rowCount = await taskRows.count()
+  let holaRow = null
+  for (let i = 0; i < rowCount; i++) {
+    const nameInput = taskRows.nth(i).locator('input[type="text"], input:not([type])').first()
+    if ((await nameInput.inputValue()) === 'hola') {
+      holaRow = taskRows.nth(i)
+      break
+    }
+  }
+  expect(holaRow, 'debería existir la task "hola" en Proyecto Prueba').not.toBeNull()
+  const stageSelect = holaRow!.getByRole('combobox', { name: 'Stage' })
   await expect(stageSelect).toBeVisible()
   await stageSelect.selectOption({ label: 'hola' })
 
