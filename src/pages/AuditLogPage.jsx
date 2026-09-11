@@ -128,9 +128,6 @@ export function AuditLogPage() {
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Audit Log</h1>
-        <p className="masthead__sub">
-          Immutable record of all critical actions. Only visible to Administrators.
-        </p>
       </motion.header>
 
       {status === 'error' && (

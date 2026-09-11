@@ -362,9 +362,6 @@ export function DashboardPage() {
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Dashboard</h1>
-        <p className="masthead__sub">
-          Operations overview. Click any KPI to navigate to that section.
-        </p>
       </motion.header>
 
       {loadStatus === 'error' && (

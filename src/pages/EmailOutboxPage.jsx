@@ -74,10 +74,6 @@ export function EmailOutboxPage() {
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Email Outbox</h1>
-        <p className="masthead__sub">
-          Emails queued for delivery via Resend. Processed every 5 minutes by the{' '}
-          <code>process-email-outbox</code> edge function.
-        </p>
       </header>
 
       {loadStatus === 'error' && (

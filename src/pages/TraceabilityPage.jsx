@@ -82,10 +82,6 @@ export function TraceabilityPage() {
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Traceability</h1>
-        <p className="masthead__sub">
-          Full lifecycle of each logged hour, from Zoho to contractor payment.
-          Click any row to see the complete timeline.
-        </p>
       </motion.header>
 
       {status === 'error' && (

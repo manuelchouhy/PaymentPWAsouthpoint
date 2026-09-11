@@ -290,10 +290,6 @@ export function CapacityPage() {
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Capacity</h1>
-        <p className="masthead__sub">
-          Contracted hours against what is actually being logged, and the pace the open SOWs
-          demand. Usage is the average over the last {USAGE_WEEKS} weeks.
-        </p>
       </motion.header>
 
       {status === 'loading' && <p className="state__hint">Loading capacity…</p>}

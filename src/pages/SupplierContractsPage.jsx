@@ -171,10 +171,6 @@ export function SupplierContractsPage() {
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Vendors Contracts</h1>
-        <p className="masthead__sub">
-          Supplier (contractor) contracts, sorted by expiration date.
-          southpointlabs receives priority treatment.
-        </p>
       </motion.header>
 
       <AnimatePresence>

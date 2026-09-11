@@ -78,11 +78,6 @@ export function SupplierAlertSettingsPage() {
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Supplier Contract Alerts</h1>
-        <p className="masthead__sub">
-          Warning thresholds and recipients. Priority suppliers (southpointlabs)
-          use their own recipient list and receive daily alerts until the contract
-          is renewed or marked as renewal in progress.
-        </p>
       </motion.header>
 
       {status === 'loading' && <p className="state__hint">Loading settings…</p>}

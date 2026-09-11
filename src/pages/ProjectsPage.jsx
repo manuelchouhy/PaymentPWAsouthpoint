@@ -534,10 +534,6 @@ export function ProjectsPage() {
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Projects and SOW</h1>
-        <p className="masthead__sub">
-          Master list of projects and their SOWs, with client, budget hours and
-          scope.
-        </p>
       </motion.header>
 
       {status === 'loading' && <p className="state__hint">Loading projects…</p>}

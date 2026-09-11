@@ -1093,10 +1093,6 @@ export function BillingPage() {
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Billing</h1>
-        <p className="masthead__sub">
-          Hours classified as bill to client, ready to enter the existing invoice pipeline. The
-          invoiced totals cover every allocation, including hours billed before triage existed.
-        </p>
       </motion.header>
 
       {/* El aviso NO se oculta cuando la página falla: la factura ya está

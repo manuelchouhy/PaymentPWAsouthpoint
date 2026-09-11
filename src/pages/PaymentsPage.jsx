@@ -996,12 +996,6 @@ export function PaymentsPage() {
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Payments</h1>
-        <p className="masthead__sub">
-          Pay each contractor of an issued invoice separately. Load their supplier
-          invoice number and date. The invoice moves to Paid once every contractor is
-          paid. Overage and SP internal hours are paid here too, per contractor and
-          without an invoice, and they freeze once paid. Everything is in hours.
-        </p>
       </motion.header>
 
       {status === 'loading' && <p className="state__hint">Loading invoices…</p>}

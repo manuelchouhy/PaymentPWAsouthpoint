@@ -497,10 +497,6 @@ export default function App() {
             <span className="masthead__rule" aria-hidden="true" />
           </div>
           <h1 className="masthead__title">Time Entries</h1>
-          <p className="masthead__sub">
-            Review the hours logged per contractor, select the corresponding
-            entries and process the payment.
-          </p>
         </motion.header>
 
         {status === 'loading' && <LoadingState />}
