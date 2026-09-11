@@ -567,6 +567,24 @@ export function BillingPage() {
     [clientGroups],
   )
 
+  // Horas ya facturadas por proyecto (C10): para mostrar un badge "X h invoiced" en
+  // el header de cada proyecto SIEMPRE, incluso con el filtro 'pending', así el
+  // analista tiene presente lo facturado sin cambiar de vista. Se calcula sobre
+  // `filtered` (mismas filas que alimentan la grilla, antes del statusFilter), así que
+  // es independiente del toggle. Clave = projectId(client, project) para que el lookup
+  // en el render matchee exacto. Nota: un proyecto 100% facturado no aparece en la
+  // vista 'pending' (no tiene filas pendientes); ahí sólo lo refleja el KPI Invoiced.
+  const invoicedHoursByProject = useMemo(() => {
+    const m = new Map()
+    for (const e of filtered) {
+      if (!invoiceByEntryId.has(String(e.id))) continue
+      if (!e.client) continue
+      const key = `${enc(e.client)}||${enc(e.project ?? '')}`
+      m.set(key, (m.get(key) ?? 0) + (Number(e.hours) || 0))
+    }
+    return m
+  }, [filtered, invoiceByEntryId])
+
   // Horas pendientes de facturar por cliente+proyecto+contractor, sobre TODAS las
   // entries (NO las filtradas). El aviso del modal tiene que reflejar lo que realmente
   // le queda al contractor en ese proyecto, no lo que el filtro de Proyecto/fecha deja
@@ -1383,6 +1401,19 @@ export function BillingPage() {
                                 )}
                                 {project.project || '—'}
                               </span>
+                              {/* C10: horas ya facturadas de este proyecto, siempre
+                                  visibles (aun con el filtro 'pending'). */}
+                              {(() => {
+                                const inv = invoicedHoursByProject.get(pid)
+                                return inv ? (
+                                  <span
+                                    className="bill-project__invoiced"
+                                    title="Hours already invoiced for this project"
+                                  >
+                                    {formatHours(inv)} h invoiced
+                                  </span>
+                                ) : null
+                              })()}
                               <span className="bill-project__hours">
                                 {formatHours(project.hours)} h
                               </span>

@@ -1057,6 +1057,24 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
    mono y atenuado para que el nombre siga siendo lo dominante. */
 .bill-project__num { color: var(--text-soft); font-family: var(--mono); font-size: 12px; font-weight: 600; margin-right: 8px; }
 .bill-project__hours { color: var(--text-soft); font-family: var(--mono); font-size: 12px; }
+/* C10: horas ya facturadas del proyecto, siempre visibles. Pill atenuado para no
+   competir con las horas pendientes (que es lo accionable). margin-left: auto lo
+   agrupa a la derecha junto a las horas. */
+.bill-project__invoiced {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-strong);
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* Sin badge, las horas pendientes se van solas a la derecha. */
+.bill-project__invoiced + .bill-project__hours { margin-left: 0; }
+.bill-project__hours { margin-left: auto; }
 .bill-project .bill-week { padding-left: 12px; }
 /* Respiración vertical de la tabla anidada: que las filas no queden pegadas al
    header de la semana ni al borde inferior de la tarjeta / a la siguiente semana. */
