@@ -714,9 +714,8 @@ export function BillingPage() {
   // Cuadro #2 (consumed/budget) por selección: SÓLO cuando el scope es de un proyecto
   // (un cliente + un proyecto). Pasa el cliente del scope a projectStatsFor para no sumar
   // un homónimo de otro cliente y coincidir con los otros cuatro cuadros. Con scope de
-  // cliente entero (projects:[]) va null → el cuadro muestra "—" (el budget es por
-  // proyecto, no por cliente). Mismo gate (cardScope) que los otros cuatro: los cinco
-  // hablan siempre del mismo scope.
+  // cliente entero (projects:[]) o selección que cruza clientes (cardScope null) va null
+  // → el cuadro muestra "—" (el budget es por proyecto, no por cliente).
   const selectionProject = useMemo(
     () =>
       cardScope && cardScope.projects.length === 1
@@ -724,7 +723,11 @@ export function BillingPage() {
         : null,
     [cardScope, projectStatsFor],
   )
-  const budgetCardProject = cardScope ? selectionProject : singleProject
+  // El fallback al filtro (singleProject) es SÓLO sin selección: con algo tildado el
+  // cuadro muestra selectionProject —"—" si la selección no es un proyecto único—, nunca
+  // el filtro. Si no, la mitad izquierda "Selected" (selectedHours de la selección)
+  // quedaría al lado de un consumed/budget del scope del FILTRO: dos scopes en un cuadro.
+  const budgetCardProject = selectedKeys.size > 0 ? selectionProject : singleProject
   const selectionKpis = useMemo(() => {
     if (!cardScope) return null
     // cardScope.clients trae el nombre de cliente CRUDO ya resuelto (group.client), no

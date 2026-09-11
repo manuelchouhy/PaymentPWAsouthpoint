@@ -288,3 +288,10 @@ test('cardScopeFromSelection: un cliente pero una fila sin proyecto → scope de
   const sel = [row({ id: 1, project: 'P1' }), row({ id: 2, project: '' })]
   assert.deepEqual(cardScopeFromSelection(sel), { clients: ['HSS'], projects: [] })
 })
+
+test('cardScopeFromSelection: un cliente y TODAS las filas sin proyecto ({\'\'}) → scope del cliente, no {projects:[\'\']}', () => {
+  // projects Set === {''}: size 1 pero el guard !projects.has('') lo manda a scope de
+  // cliente entero (projects:[]), no a un scope del "proyecto vacío".
+  const sel = [row({ id: 1, project: '' }), row({ id: 2, project: '' })]
+  assert.deepEqual(cardScopeFromSelection(sel), { clients: ['HSS'], projects: [] })
+})
