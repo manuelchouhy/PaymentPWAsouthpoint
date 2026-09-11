@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CalendarClock, ChevronRight } from 'lucide-react'
 import { contractStatus, daysRemaining } from '../../lib/projectsData'
@@ -11,35 +11,44 @@ import { formatDate } from '../../lib/format'
  * vencimiento, con link directo a la grilla.
  *
  * Si el Dashboard le pasa `projects` (ya filtrados por Cliente/Proyecto), usa esa lista
- * y NO fetchea: así el widget respeta el filtro del Dashboard. Sin la prop (montado
+ * y NO fetchea: así el widget respeta el filtro del Dashboard. En ese modo el Dashboard
+ * controla el estado de carga con la prop `loading` (mientras filterData no cargó, para no
+ * mostrar "No contracts" con la lista todavía vacía). Sin la prop `projects` (montado
  * suelto) fetchea todos los proyectos como antes.
  *
- * @param {{ limit?: number, projects?: Array }} props
+ * @param {{ limit?: number, projects?: Array, loading?: boolean }} props
  */
-export function ContractsExpiringWidget({ limit = 5, projects: projectsProp }) {
+export function ContractsExpiringWidget({ limit = 5, projects: projectsProp, loading: loadingProp = false }) {
   const [fetched, setFetched] = useState(null)
-  const [loading, setLoading] = useState(projectsProp == null)
+  const [fetchLoading, setFetchLoading] = useState(projectsProp == null)
 
   useEffect(() => {
     // Con projects provistos por el Dashboard no se fetchea (la lista ya viene filtrada).
     if (projectsProp != null) return
     let cancelled = false
-    setLoading(true)
+    setFetchLoading(true)
     api.projects.list()
       .then((projects) => !cancelled && setFetched(projects))
       .catch(() => !cancelled && setFetched([]))
-      .finally(() => !cancelled && setLoading(false))
+      .finally(() => !cancelled && setFetchLoading(false))
     return () => {
       cancelled = true
     }
   }, [projectsProp])
 
+  // En modo controlado (projects provisto) el loading lo dice el Dashboard; en modo suelto,
+  // el fetch propio.
+  const loading = projectsProp != null ? loadingProp : fetchLoading
   const source = projectsProp ?? fetched ?? []
   // Solo los que tienen contrato, por proximidad de vencimiento.
-  const top = source
-    .filter((p) => p.contractExpirationDate)
-    .sort((a, b) => a.contractExpirationDate.localeCompare(b.contractExpirationDate))
-    .slice(0, limit)
+  const top = useMemo(
+    () =>
+      source
+        .filter((p) => p.contractExpirationDate)
+        .sort((a, b) => a.contractExpirationDate.localeCompare(b.contractExpirationDate))
+        .slice(0, limit),
+    [source, limit],
+  )
 
   return (
     <section className="dash-widget" aria-label="Contracts expiring">

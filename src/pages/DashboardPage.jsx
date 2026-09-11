@@ -113,13 +113,21 @@ export function DashboardPage() {
   // — si se mergearan al `data` core con setData(prev=>...), un race donde llegan antes que
   // el core los perdería (prev === null).
   const [filterData, setFilterData] = useState({ projects: [], clients: [] })
+  // ¿Ya cargó al menos una vez projects/clients? Alimenta el filtro Y el scope de los
+  // widgets (masterNames sale de filterData.clients). Se usa para NO mostrar un estado
+  // vacío en el widget de contratos mientras carga, y queda true entre reloads.
+  const [filtersLoaded, setFiltersLoaded] = useState(false)
   const [loadStatus, setLoadStatus] = useState('loading')
 
   const reloadKey = useSyncReloadKey()
   useEffect(() => {
     let cancelled = false
     setLoadStatus('loading')
-    setFilterData({ projects: [], clients: [] }) // reset en cada (re)carga
+    // NO se resetea filterData en cada recarga: si se vaciara, masterNames quedaría vacío
+    // y —con un filtro de Cliente activo— matchesClient mandaría TODAS las facturas/
+    // proyectos al centinela Others → los tiles de plata y los contratos parpadearían a 0
+    // durante el refresh (con `data` todavía viejo). Se conserva el filterData previo y el
+    // nuevo fetch lo pisa al resolver (los proyectos/clientes casi no cambian entre syncs).
     // Datos CORE (KPIs y donuts): bloquean el first paint.
     Promise.all([
       api.timeEntries.list(),
@@ -148,6 +156,7 @@ export function DashboardPage() {
     ]).then(([projects, clients]) => {
       if (cancelled) return
       setFilterData({ projects, clients })
+      setFiltersLoaded(true)
     })
     return () => {
       cancelled = true
@@ -227,6 +236,9 @@ export function DashboardPage() {
   )
   // Facturas en scope (invoice.client / invoice.project). Cobros y pagos siguen a su
   // factura (invoiceId), así heredan el mismo recorte de cliente/proyecto.
+  // invoice.client se persiste al emitir como el cliente MAESTRO ya resuelto (createGrouped
+  // lo toma de la selección de la grilla, que usa el mismo resolver), así que matchear el
+  // crudo con clientFilterKey es consistente con el camino resuelto de los proyectos.
   const scopedInvoices = useMemo(
     () =>
       data
@@ -534,7 +546,7 @@ export function DashboardPage() {
               el filtro Cliente/Proyecto (scopedProjects); Supplier Contracts sólo el de
               Contractor (no tiene cliente en los datos). */}
           <div className="dash-secondary">
-            <ContractsExpiringWidget limit={5} projects={scopedProjects} />
+            <ContractsExpiringWidget limit={5} projects={scopedProjects} loading={!filtersLoaded} />
             <SupplierContractsWidget contractorFilter={filters.contractors} />
           </div>
 

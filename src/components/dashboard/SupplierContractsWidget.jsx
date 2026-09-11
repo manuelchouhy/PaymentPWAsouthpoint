@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight, Star, Truck } from 'lucide-react'
 import { daysRemaining } from '../../lib/projectsData'
@@ -42,9 +42,17 @@ export function SupplierContractsWidget({ contractorFilter }) {
   }, [])
 
   // Filtro por Contractor del Dashboard (los supplier contracts no tienen cliente): con
-  // nombres elegidos, sólo los proveedores en esa lista; vacío/ausente → todos.
-  const scoped =
-    contractorFilter?.length ? contracts.filter((c) => contractorFilter.includes(c.supplierName)) : contracts
+  // nombres elegidos, sólo los proveedores cuyo supplierName está en esa lista; vacío/
+  // ausente → todos. Match por igualdad exacta de nombre: si un contractor no es un
+  // proveedor (o el nombre difiere), no matchea → contadores en 0 (no hay contrato de ese
+  // proveedor), que es la lectura correcta.
+  const scoped = useMemo(
+    () =>
+      contractorFilter?.length
+        ? contracts.filter((c) => contractorFilter.includes(c.supplierName))
+        : contracts,
+    [contracts, contractorFilter],
+  )
 
   const counts = COUNTED.reduce((acc, s) => ({ ...acc, [s]: 0 }), {})
   for (const c of scoped) {
