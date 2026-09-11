@@ -13,13 +13,14 @@ test('Billing: la barra de filtros compartida renderiza, filtra y limpia', async
   const bar = page.locator('.filterbar')
   await expect(bar).toBeVisible()
 
-  // Las 4 dimensiones de Billing (match EXACTO: 'Project' no debe matchear 'Project #').
+  // Las 4 dimensiones de Billing, ancladas al span de label con match EXACTO
+  // (regex ^label$): 'Project' no debe matchear 'Project #', y no se cuela un value.
   for (const label of ['Client', 'Project #', 'Project', 'Contractor']) {
-    await expect(bar.getByText(label, { exact: true })).toBeVisible()
+    await expect(bar.locator('.filterfield__label', { hasText: new RegExp(`^${label}$`) })).toBeVisible()
   }
 
-  // Abrir el dropdown de Client y tildar la primera opción.
-  const clientField = bar.locator('.filterfield').filter({ hasText: 'Client' })
+  // Abrir el dropdown de Client (localizado por su label exacto) y tildar la 1ra opción.
+  const clientField = bar.locator('.filterfield', { has: page.getByText('Client', { exact: true }) })
   await clientField.locator('.msel__btn').click()
   // Scopeado al panel del campo Client (no page-wide). La base de test tiene clientes.
   const firstOpt = clientField.locator('.msel__panel .msel__opt').first()
