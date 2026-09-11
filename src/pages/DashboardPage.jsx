@@ -24,7 +24,7 @@ import {
   OTHER_CLIENT,
 } from '../lib/useEntryFilters'
 import { buildClientResolver } from '../lib/clientResolver'
-import { allowedProjectNames, matchesClient, matchesProjectName } from '../lib/dashboardScope'
+import { matchesProjectFilter } from '../lib/dashboardScope'
 import { EntryFilterBar } from '../components/EntryFilterBar'
 import { BILLING_STATUSES } from '../lib/data'
 import { ContractsExpiringWidget } from '../components/dashboard/ContractsExpiringWidget'
@@ -150,12 +150,19 @@ export function DashboardPage() {
     // filtro: NO bloquean el first paint (los KPIs/donuts se ven ya) y sólo hidratan las
     // opciones del filtro cuando llegan. Estado propio (filterData), así que no hay race con
     // el core. Un fallo suyo degrada a [] (filtro con menos opciones), sin tirar el dashboard.
+    // Centinela null en el catch (NO []): un fetch que FALLA no debe pisar el filterData
+    // previo con vacío — eso vaciaría masterNames y, con un filtro de cliente activo,
+    // mandaría todo al centinela Others (tiles/contratos a 0). Con null se conserva lo que
+    // ya había; sólo un fetch EXITOSO (incluso [] genuino) sobrescribe.
     Promise.all([
-      Promise.resolve().then(() => api.projects.list()).catch(() => []),
-      Promise.resolve().then(() => api.clients.list()).catch(() => []),
+      Promise.resolve().then(() => api.projects.list()).catch(() => null),
+      Promise.resolve().then(() => api.clients.list()).catch(() => null),
     ]).then(([projects, clients]) => {
       if (cancelled) return
-      setFilterData({ projects, clients })
+      setFilterData((prev) => ({
+        projects: projects ?? prev.projects,
+        clients: clients ?? prev.clients,
+      }))
       setFiltersLoaded(true)
     })
     return () => {
@@ -216,48 +223,52 @@ export function DashboardPage() {
   // Las dimensiones Cliente + Proyecto (incluye Project#) filtran también los tiles de
   // plata (Invoices/Collections/Payments) y los contratos de proyecto — no sólo los
   // widgets de horas. Contractor/Status siguen aplicando sólo a horas (y Contractor a
-  // Supplier Contracts, por supplierName). Sin filtro de cliente/proyecto, los predicados
-  // dejan pasar todo (matchesClient/matchesProjectName → true), así el default no cambia.
+  // Supplier Contracts, por supplierName). ¿Hay algún filtro de cliente/proyecto activo?
+  // Si no, no se recorta nada (default = todo, sin regresión).
+  const clientProjectActive =
+    filters.clients.length > 0 || filters.projects.length > 0 || filters.projectNumbers.length > 0
   const resolveProjectClient = useMemo(() => buildClientResolver(filterData.clients), [filterData.clients])
-  const scopeAllowedNames = useMemo(
-    () => allowedProjectNames(filters, filterData.projects),
-    [filters, filterData.projects],
-  )
+
+  // Facturas/cobros/pagos: se recortan por INTERSECCIÓN con las horas ya filtradas por
+  // Cliente/Proyecto (NO por contractor/status). Reusar applyEntryFilters garantiza el
+  // MISMO criterio que las horas: mismo resolver de cliente (deriveEntriesClient) y la
+  // misma semántica AND entre Proyecto y Project#. Una factura entra si alguna de sus
+  // horas pasa el filtro (todas comparten cliente+proyecto, así que es todo-o-nada).
+  const scopedEntryIds = useMemo(() => {
+    if (!clientProjectActive) return null // sin filtro → sin recorte
+    const cpFilters = { ...filters, contractors: [], billingStatuses: [] }
+    const scoped = applyEntryFilters(enrichedEntries, cpFilters, invoiceByEntryId, masterNames)
+    return new Set(scoped.map((e) => String(e.id)))
+  }, [clientProjectActive, filters, enrichedEntries, invoiceByEntryId, masterNames])
+
+  const scopedInvoices = useMemo(() => {
+    if (!data) return []
+    if (scopedEntryIds == null) return data.invoices // sin filtro → todas
+    return data.invoices.filter((inv) => inv.entryIds.some((id) => scopedEntryIds.has(String(id))))
+  }, [data, scopedEntryIds])
+  const scopedInvoiceIds = useMemo(() => new Set(scopedInvoices.map((i) => i.id)), [scopedInvoices])
+  const scopedCollections = useMemo(() => {
+    if (!data) return []
+    if (scopedEntryIds == null) return data.collections
+    return data.collections.filter((c) => scopedInvoiceIds.has(c.invoiceId))
+  }, [data, scopedEntryIds, scopedInvoiceIds])
+  const scopedPayments = useMemo(() => {
+    if (!data) return []
+    if (scopedEntryIds == null) return data.payments
+    return data.payments.filter((p) => scopedInvoiceIds.has(p.invoiceId))
+  }, [data, scopedEntryIds, scopedInvoiceIds])
+
   // Proyectos que pasan el filtro Cliente/Proyecto: alimentan el widget de contratos por
-  // vencimiento (un contrato pertenece al cliente de SU proyecto, resuelto por grupo).
+  // vencimiento (un contrato pertenece al cliente de SU proyecto, resuelto por grupo). Se
+  // matchean directo (un contrato puede no tener horas). Se muestra el cliente RESUELTO
+  // (no el crudo p.client, que puede venir vacío/alias) para que la fila no contradiga el
+  // filtro activo.
   const scopedProjects = useMemo(
     () =>
-      filterData.projects.filter(
-        (p) =>
-          matchesClient(resolveProjectClient(p).client ?? '', filters.clients, masterNames) &&
-          matchesProjectName(p.projectName, scopeAllowedNames),
-      ),
-    [filterData.projects, resolveProjectClient, filters.clients, masterNames, scopeAllowedNames],
-  )
-  // Facturas en scope (invoice.client / invoice.project). Cobros y pagos siguen a su
-  // factura (invoiceId), así heredan el mismo recorte de cliente/proyecto.
-  // invoice.client se persiste al emitir como el cliente MAESTRO ya resuelto (createGrouped
-  // lo toma de la selección de la grilla, que usa el mismo resolver), así que matchear el
-  // crudo con clientFilterKey es consistente con el camino resuelto de los proyectos.
-  const scopedInvoices = useMemo(
-    () =>
-      data
-        ? data.invoices.filter(
-            (inv) =>
-              matchesClient(inv.client ?? '', filters.clients, masterNames) &&
-              matchesProjectName(inv.project, scopeAllowedNames),
-          )
-        : [],
-    [data, filters.clients, masterNames, scopeAllowedNames],
-  )
-  const scopedInvoiceIds = useMemo(() => new Set(scopedInvoices.map((i) => i.id)), [scopedInvoices])
-  const scopedCollections = useMemo(
-    () => (data ? data.collections.filter((c) => scopedInvoiceIds.has(c.invoiceId)) : []),
-    [data, scopedInvoiceIds],
-  )
-  const scopedPayments = useMemo(
-    () => (data ? data.payments.filter((p) => scopedInvoiceIds.has(p.invoiceId)) : []),
-    [data, scopedInvoiceIds],
+      filterData.projects
+        .filter((p) => matchesProjectFilter(p, filters, masterNames, resolveProjectClient))
+        .map((p) => ({ ...p, client: resolveProjectClient(p).client || p.client })),
+    [filterData.projects, filters, masterNames, resolveProjectClient],
   )
 
   // Map: invoiceId → last collection date (sobre los cobros en scope: el KPI de pagos

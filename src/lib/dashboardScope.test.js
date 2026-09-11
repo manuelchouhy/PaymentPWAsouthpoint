@@ -1,33 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { allowedProjectNames, matchesClient, matchesProjectName } from './dashboardScope.js'
+import { matchesClient, matchesProjectFilter } from './dashboardScope.js'
 
 const masters = new Set(['HSS', 'GS3'])
-
-test('allowedProjectNames: sin filtro de proyecto → null (sin restricción)', () => {
-  assert.equal(allowedProjectNames({ projects: [], projectNumbers: [] }, []), null)
-  assert.equal(allowedProjectNames({}, []), null)
-})
-
-test('allowedProjectNames: por nombre → ese set', () => {
-  const s = allowedProjectNames({ projects: ['P1'], projectNumbers: [] }, [])
-  assert.deepEqual([...s], ['P1'])
-})
-
-test('allowedProjectNames: por número → resuelve el nombre desde la lista de proyectos', () => {
-  const projects = [
-    { projectName: 'Alpha', projectNumber: 'SP-1' },
-    { projectName: 'Beta', projectNumber: 'SP-2' },
-  ]
-  const s = allowedProjectNames({ projects: [], projectNumbers: ['SP-2'] }, projects)
-  assert.deepEqual([...s], ['Beta'])
-})
-
-test('allowedProjectNames: nombre + número se unen', () => {
-  const projects = [{ projectName: 'Beta', projectNumber: 'SP-2' }]
-  const s = allowedProjectNames({ projects: ['P1'], projectNumbers: ['SP-2'] }, projects)
-  assert.deepEqual([...s].sort(), ['Beta', 'P1'])
-})
+// Resolver de juguete: proyecto.client crudo → cliente maestro (simula buildClientResolver).
+const resolver = (rawToMaster) => (p) => ({ client: rawToMaster[p?.client] ?? p?.client ?? null })
 
 test('matchesClient: sin filtro → true', () => {
   assert.equal(matchesClient('HSS', [], masters), true)
@@ -39,19 +16,44 @@ test('matchesClient: cliente maestro elegido matchea', () => {
   assert.equal(matchesClient('GS3', ['HSS'], masters), false)
 })
 
-test('matchesClient: cliente fuera del maestro (o vacío) → clave Others', () => {
-  // Con "Others (not in Clients)" elegido, un cliente legacy/vacío pasa.
+test('matchesClient: fuera del maestro (o vacío) → clave Others', () => {
   const OTHERS = 'Others (not in Clients)'
   assert.equal(matchesClient('LegacyCo', [OTHERS], masters), true)
   assert.equal(matchesClient('', [OTHERS], masters), true)
-  // Pero con HSS elegido, el legacy NO pasa.
   assert.equal(matchesClient('LegacyCo', ['HSS'], masters), false)
 })
 
-test('matchesProjectName: null (sin filtro) → true; con set filtra', () => {
-  assert.equal(matchesProjectName('anything', null), true)
-  const allowed = new Set(['Beta'])
-  assert.equal(matchesProjectName('Beta', allowed), true)
-  assert.equal(matchesProjectName('Alpha', allowed), false)
-  assert.equal(matchesProjectName(null, allowed), false)
+test('matchesProjectFilter: sin filtros → true', () => {
+  const p = { projectName: 'Alpha', projectNumber: 'SP-1', client: 'HSS' }
+  assert.equal(matchesProjectFilter(p, {}, masters, resolver({})), true)
+})
+
+test('matchesProjectFilter: cliente resuelto (no el crudo) decide', () => {
+  // El crudo es un alias legacy 'Velociti' que resuelve a GS3.
+  const p = { projectName: 'Alpha', projectNumber: 'SP-1', client: 'Velociti' }
+  const res = resolver({ Velociti: 'GS3' })
+  assert.equal(matchesProjectFilter(p, { clients: ['GS3'] }, masters, res), true)
+  assert.equal(matchesProjectFilter(p, { clients: ['HSS'] }, masters, res), false)
+})
+
+test('matchesProjectFilter: Proyecto y Project# se INTERSECTAN (AND), no se unen', () => {
+  const alpha = { projectName: 'Alpha', projectNumber: 'SP-1', client: 'HSS' }
+  const beta = { projectName: 'Beta', projectNumber: 'SP-2', client: 'HSS' }
+  const filters = { projects: ['Alpha'], projectNumbers: ['SP-2'] }
+  // Alpha matchea el nombre pero no el número; Beta el número pero no el nombre → ninguno.
+  assert.equal(matchesProjectFilter(alpha, filters, masters, resolver({})), false)
+  assert.equal(matchesProjectFilter(beta, filters, masters, resolver({})), false)
+  // Con nombre y número del MISMO proyecto → true.
+  assert.equal(
+    matchesProjectFilter(alpha, { projects: ['Alpha'], projectNumbers: ['SP-1'] }, masters, resolver({})),
+    true,
+  )
+})
+
+test('matchesProjectFilter: sólo por nombre / sólo por número', () => {
+  const beta = { projectName: 'Beta', projectNumber: 'SP-2', client: 'HSS' }
+  assert.equal(matchesProjectFilter(beta, { projects: ['Beta'] }, masters, resolver({})), true)
+  assert.equal(matchesProjectFilter(beta, { projects: ['Alpha'] }, masters, resolver({})), false)
+  assert.equal(matchesProjectFilter(beta, { projectNumbers: ['SP-2'] }, masters, resolver({})), true)
+  assert.equal(matchesProjectFilter(beta, { projectNumbers: ['SP-9'] }, masters, resolver({})), false)
 })
