@@ -1110,11 +1110,16 @@ export function ProjectDetailCarousel({
       ),
     },
   ]
-  // slideIndex siempre está clampeado a [0, len-1] (goToSlide y el teclado clampan),
-  // así que el acceso directo es seguro.
-  const slide = slides[slideIndex]
-  const prevSlide = slides[slideIndex - 1]
-  const nextSlide = slides[slideIndex + 1]
+  // Índice clampeado a [0, len-1], usado de forma consistente para el slide activo,
+  // los vecinos y los extremos. goToSlide y el teclado ya clampan, pero derivarlo acá
+  // también protege si en el futuro algún slide se vuelve condicional (el array cambia
+  // de largo y slideIndex podría quedar fuera de rango).
+  const safeIndex = Math.max(0, Math.min(slideIndex, slides.length - 1))
+  const slide = slides[safeIndex]
+  const prevSlide = slides[safeIndex - 1]
+  const nextSlide = slides[safeIndex + 1]
+  const atFirst = safeIndex === 0
+  const atLast = safeIndex === slides.length - 1
 
   // Carga perezosa del árbol: marcamos treeRequested la primera vez que el usuario
   // ve el slide "Stages & Tasks" (no antes — el default es Overview).
@@ -1284,7 +1289,7 @@ export function ProjectDetailCarousel({
           <div className="carousel__head">
             <strong className="carousel__title">{slide.label}</strong>
             <span className="carousel__pos">
-              {slideIndex + 1} / {slides.length}
+              {safeIndex + 1} / {slides.length}
             </span>
           </div>
           <div className="carousel__body">{slide.content}</div>
@@ -1296,9 +1301,9 @@ export function ProjectDetailCarousel({
                 al <body>. goToSlide clampa, así que el click en el extremo es no-op. */}
             <button
               type="button"
-              className={`carousel__arrow${slideIndex === 0 ? ' is-disabled' : ''}`}
-              onClick={() => goToSlide(slideIndex - 1)}
-              aria-disabled={slideIndex === 0}
+              className={`carousel__arrow${atFirst ? ' is-disabled' : ''}`}
+              onClick={() => goToSlide(safeIndex - 1)}
+              aria-disabled={atFirst}
               aria-label={
                 prevSlide ? `Previous section: ${prevSlide.label}` : 'Previous section'
               }
@@ -1312,18 +1317,18 @@ export function ProjectDetailCarousel({
                   key={s.key}
                   type="button"
                   role="tab"
-                  aria-selected={i === slideIndex}
+                  aria-selected={i === safeIndex}
                   aria-label={s.label}
-                  className={`carousel__dot${i === slideIndex ? ' is-active' : ''}`}
+                  className={`carousel__dot${i === safeIndex ? ' is-active' : ''}`}
                   onClick={() => goToSlide(i)}
                 />
               ))}
             </div>
             <button
               type="button"
-              className={`carousel__arrow${slideIndex === slides.length - 1 ? ' is-disabled' : ''}`}
-              onClick={() => goToSlide(slideIndex + 1)}
-              aria-disabled={slideIndex === slides.length - 1}
+              className={`carousel__arrow${atLast ? ' is-disabled' : ''}`}
+              onClick={() => goToSlide(safeIndex + 1)}
+              aria-disabled={atLast}
               aria-label={nextSlide ? `Next section: ${nextSlide.label}` : 'Next section'}
             >
               <span className="carousel__arrow-label">{nextSlide ? nextSlide.label : ''}</span>
