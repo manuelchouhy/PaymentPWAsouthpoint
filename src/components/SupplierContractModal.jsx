@@ -1,24 +1,11 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, BellOff, Pencil, RefreshCw, Star, X } from 'lucide-react'
+import { BellOff, Pencil, RefreshCw, Star, X } from 'lucide-react'
 import { SupplierStatusBadge } from './SupplierStatusBadge'
 import { displaySupplierStatus } from '../lib/supplierContractsData'
 import { daysRemaining } from '../lib/projectsData'
 import { api } from '../lib/api'
 import { formatDate, formatDateTime } from '../lib/format'
 import { useScrollLock } from '../lib/useScrollLock'
-
-const FIELD_LABELS = {
-  supplierName: 'Contractor Name',
-  contractNumber: 'Contract #',
-  role: 'Role',
-  startDate: 'Start Date',
-  expirationDate: 'Expiration Date',
-  renewalDate: 'Renewal Date',
-  paymentTerms: 'Payment Terms',
-  renewalType: 'Renewal Type',
-  isPrioritySupplier: 'Priority Supplier',
-  weeklyContractedHours: 'Contracted Hours/Week',
-}
 
 const ACTION_LABELS = {
   renew: 'Renewed',
@@ -50,7 +37,6 @@ function alertLabel(a) {
  *           onRenew?: () => void, onMarkRenewal?: () => void }} props
  */
 export function SupplierContractModal({ contract, onClose, onEdit, onRenew, onMarkRenewal }) {
-  const [history, setHistory] = useState([])
   const [renewals, setRenewals] = useState([])
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -66,13 +52,11 @@ export function SupplierContractModal({ contract, onClose, onEdit, onRenew, onMa
     let cancelled = false
     setLoading(true)
     Promise.all([
-      api.supplierContracts.getHistory(contract.id),
       api.supplierContracts.getRenewalHistory(contract),
       api.supplierContracts.getAlertHistory(contract.id),
     ])
-      .then(([h, r, a]) => {
+      .then(([r, a]) => {
         if (cancelled) return
-        setHistory(h)
         setRenewals(r)
         setAlerts(a)
       })
@@ -171,34 +155,6 @@ export function SupplierContractModal({ contract, onClose, onEdit, onRenew, onMa
                   </span>
                   <span className="drawer__history-meta">
                     {formatDate(r.startDate)} → {formatDate(r.expirationDate)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="drawer__section">
-          <span className="drawer__section-label">Audit log</span>
-          {loading ? (
-            <p className="drawer__empty">Loading…</p>
-          ) : history.length === 0 ? (
-            <p className="drawer__empty">No changes recorded.</p>
-          ) : (
-            <ul className="drawer__history">
-              {history.map((row) => (
-                <li key={row.id} className="drawer__history-row">
-                  <span className="drawer__history-status">
-                    <strong>{FIELD_LABELS[row.fieldName] ?? row.fieldName}</strong>
-                  </span>
-                  <span className="drawer__history-status">
-                    <span className="drawer__history-from">{row.oldValue || '—'}</span>
-                    <ArrowRight size={12} aria-hidden="true" />
-                    {row.newValue || '—'}
-                  </span>
-                  <span className="drawer__history-meta">
-                    {formatDateTime(row.changedAt)}
-                    {row.changedBy ? ` · ${row.changedBy}` : ''}
                   </span>
                 </li>
               ))}
