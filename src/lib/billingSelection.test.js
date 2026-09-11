@@ -7,6 +7,7 @@ import {
   remainingHoursByContractor,
   weekSpanFromSelection,
   projectsForContractWarnings,
+  cardScopeFromSelection,
 } from './billingSelection.js'
 
 // Una fila facturable = un log. Helper con overrides.
@@ -259,4 +260,38 @@ test('projectsForContractWarnings: fallback sin cliente o sin resolver → match
     projectsForContractWarnings(projects, [ent({ project: 'P1' })], 'HSS', null).map((p) => p.id),
     [1],
   )
+})
+
+// --- cardScopeFromSelection: alcance de los 5 cuadros según la selección --------
+// row del helper de arriba: { user:'Ana', client:'HSS', project:'P1', ... }
+test('cardScopeFromSelection: selección vacía → null (los cuadros siguen el filtro)', () => {
+  assert.equal(cardScopeFromSelection([]), null)
+  assert.equal(cardScopeFromSelection(undefined), null)
+})
+
+test('cardScopeFromSelection: un cliente + un proyecto → scope de ese proyecto', () => {
+  const sel = [row({ id: 1, project: 'P1' }), row({ id: 2, project: 'P1', user: 'Bob' })]
+  assert.deepEqual(cardScopeFromSelection(sel), { clients: ['HSS'], projects: ['P1'] })
+})
+
+test('cardScopeFromSelection: un cliente + varios proyectos → scope del cliente (todos los proyectos)', () => {
+  const sel = [row({ id: 1, project: 'P1' }), row({ id: 2, project: 'P2' })]
+  assert.deepEqual(cardScopeFromSelection(sel), { clients: ['HSS'], projects: [] })
+})
+
+test('cardScopeFromSelection: varios clientes → null (ambiguo, no se sobreescriben los cuadros)', () => {
+  const sel = [row({ id: 1, client: 'HSS' }), row({ id: 2, client: 'GS3' })]
+  assert.equal(cardScopeFromSelection(sel), null)
+})
+
+test('cardScopeFromSelection: un cliente pero una fila sin proyecto → scope del cliente (todos)', () => {
+  const sel = [row({ id: 1, project: 'P1' }), row({ id: 2, project: '' })]
+  assert.deepEqual(cardScopeFromSelection(sel), { clients: ['HSS'], projects: [] })
+})
+
+test('cardScopeFromSelection: un cliente y TODAS las filas sin proyecto ({\'\'}) → scope del cliente, no {projects:[\'\']}', () => {
+  // projects Set === {''}: size 1 pero el guard !projects.has('') lo manda a scope de
+  // cliente entero (projects:[]), no a un scope del "proyecto vacío".
+  const sel = [row({ id: 1, project: '' }), row({ id: 2, project: '' })]
+  assert.deepEqual(cardScopeFromSelection(sel), { clients: ['HSS'], projects: [] })
 })

@@ -27,6 +27,40 @@ export function selectionScope(selectedRows) {
   return { clients, projects }
 }
 
+/**
+ * Alcance de los 5 cuadros de Billing derivado de la SELECCIÓN de filas (no del filtro
+ * de la barra). Cuando el usuario tilda horas, los cuadros pasan a mostrar la info de
+ * "ese proyecto o cliente": si la selección es de UN cliente y UN proyecto, el scope es
+ * ese proyecto; si es de UN cliente pero varios proyectos (o alguna fila sin proyecto),
+ * el scope es el cliente ENTERO (todos sus proyectos). Si la selección cruza clientes
+ * (o está vacía) devuelve null: ahí los cuadros siguen el filtro de la barra, no la
+ * selección (una suma de varios clientes no es "info de un cliente").
+ *
+ * El scope se expresa como { clients, projects } (arrays) para alimentar directamente
+ * applyEntryFilters: `projects: []` = sin recorte por proyecto = todos los del cliente.
+ * Ignora semana/contractor a propósito (igual que el cuadro #2 / projectStatsFor): la
+ * idea es el estado del proyecto/cliente completo, no el subconjunto tildado.
+ *
+ * @returns {?{ clients: string[], projects: string[] }}
+ */
+export function cardScopeFromSelection(selectedRows) {
+  const rows = selectedRows ?? []
+  if (rows.length === 0) return null
+  const { clients, projects } = selectionScope(rows)
+  // El bucket "sin cliente" no es facturable (no llega a billableRows), pero por las
+  // dudas un '' no debe pasar como cliente: sin cliente único no hay scope.
+  clients.delete('')
+  if (clients.size !== 1) return null
+  const client = [...clients][0]
+  // Un único proyecto real y ninguna fila sin proyecto → scope de ESE proyecto. Un solo
+  // valor no vacío (size 1 sin '') garantiza ambas cosas: el caso mixto {P1, ''} tiene
+  // size 2 y cae al scope del cliente entero, igual que varios proyectos.
+  if (projects.size === 1 && !projects.has('')) {
+    return { clients: [client], projects: [...projects] }
+  }
+  return { clients: [client], projects: [] }
+}
+
 // Domingos (ISO) que abren la(s) semana(s) de la selección. Un valor por semana
 // distinta; '' si alguna hora no tiene fecha resoluble.
 export function selectionWeekStarts(selectedRows) {

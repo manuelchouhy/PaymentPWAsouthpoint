@@ -19,6 +19,7 @@ import {
   remainingHoursByContractor,
   weekSpanFromSelection,
   selectionScope,
+  cardScopeFromSelection,
 } from '../lib/billingSelection'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { useSyncReload } from '../lib/useSyncReload'
@@ -74,6 +75,28 @@ const enc = (s) => encodeURIComponent(s ?? '')
 const projectId = (client, project) => `${enc(client)}||${enc(project.project)}`
 const weekId = (client, project, week) => `${projectId(client, project)}||${week.weekId}`
 const rowId = (client, project, week, row) => `${weekId(client, project, week)}||${row.key}`
+
+// Scope de applyEntryFilters con sólo cliente/proyecto/número seteados y el resto de
+// las dimensiones vacías: base de las métricas "del proyecto/cliente COMPLETO" (ignoran
+// semana/contractor/estado). Lo comparten el cuadro #2 (projectStatsFor) y los cuadros
+// por selección (selectionKpis), así la forma vacía vive en un solo lugar y no se
+// desincroniza si se agrega una dimensión de filtro.
+function projectClientScope({ clients = [], projects = [], projectNumbers = [] }) {
+  return {
+    contractors: [],
+    clients,
+    projects,
+    projectNumbers,
+    tasks: [],
+    billingStatuses: [],
+    statuses: [],
+    allocations: [],
+    dateFrom: '',
+    dateTo: '',
+    week: '',
+    weekStart: '',
+  }
+}
 
 // Por qué una hora quedó "sin cliente" (motivo que expone clientResolver).
 const REASON_LABEL = {
@@ -486,30 +509,19 @@ export function BillingPage() {
   // Cuadro #2: consumed (Approved bill_to_client del proyecto COMPLETO) + budget efectivo
   // de UN proyecto identificado por nombre y/o número. Ignora semana/contractor/estado.
   // Devuelve null si el scope abarca 0 o >1 proyecto. Lo usan tanto el filtro de proyecto
-  // (singleProject) como la selección de filas (selectionProject).
+  // (singleProject, sin cliente) como la selección de filas (selectionProject, que pasa
+  // el cliente del scope). `clients` acota el consumed a ESE cliente para no sumar un
+  // proyecto homónimo de otro cliente; se compara por cliente CRUDO (sin masterNames,
+  // igual que selectionKpis) para matchear también clientes legacy/Others.
   const projectStatsFor = useCallback(
     (projectSel) => {
       if (!projectSel.projects.length && !projectSel.projectNumbers.length) return null
-      const projectScope = {
-        contractors: [],
-        clients: [],
+      const projectScope = projectClientScope({
+        clients: projectSel.clients ?? [],
         projects: projectSel.projects,
         projectNumbers: projectSel.projectNumbers,
-        tasks: [],
-        billingStatuses: [],
-        statuses: [],
-        allocations: [],
-        dateFrom: '',
-        dateTo: '',
-        week: '',
-        weekStart: '',
-      }
-      const projectEntries = applyEntryFilters(
-        entriesConCliente,
-        projectScope,
-        invoiceByEntryId,
-        masterNames,
-      )
+      })
+      const projectEntries = applyEntryFilters(entriesConCliente, projectScope, invoiceByEntryId)
       // Consumed = Approved bill_to_client. sp_internal NO cuenta acá (va en su sección
       // aparte, decisión del usuario) — a diferencia de Client Summary, que sí lo suma.
       let consumed = 0
@@ -539,7 +551,7 @@ export function BillingPage() {
       }
       return { budget, consumed }
     },
-    [entriesConCliente, invoiceByEntryId, masterNames, projects, crsByProject, crsLoaded],
+    [entriesConCliente, invoiceByEntryId, projects, crsByProject, crsLoaded],
   )
 
   // Cuadro #2 por FILTRO: cuando el usuario filtró EXPLÍCITAMENTE por proyecto (nombre o
@@ -679,34 +691,65 @@ export function BillingPage() {
     }
   }, [clientGroups])
 
-  const selectedRows = [...selectedKeys].map((k) => billableRows.get(k)).filter(Boolean)
-  const selectedEntries = selectedRows.flatMap((r) => r.entries)
-  const selectedHours = selectedRows.reduce((sum, r) => sum + r.hours, 0)
-  // Cuadro #2 por SELECCIÓN: cuando tildás filas de UN solo proyecto (aunque no haya
-  // filtro de proyecto). Deriva el nombre del proyecto de las filas seleccionadas y
-  // reusa projectStatsFor para su consumed/budget completos. Memoizado sobre
-  // selectedKeys+billableRows (no sobre selectedRows, que es un array nuevo por render).
-  const selectionProjectNames = useMemo(() => {
-    const names = new Set()
-    for (const k of selectedKeys) {
-      const r = billableRows.get(k)
-      if (r?.project) names.add(r.project)
-    }
-    return [...names]
-  }, [selectedKeys, billableRows])
+  // Filas seleccionadas, memoizadas: la MISMA proyección selección→filas que consumen
+  // selectedEntries/selectedHours y cardScope, materializada una vez por cambio de
+  // selección en vez de en cada render.
+  const selectedRows = useMemo(
+    () => [...selectedKeys].map((k) => billableRows.get(k)).filter(Boolean),
+    [selectedKeys, billableRows],
+  )
+  const selectedEntries = useMemo(() => selectedRows.flatMap((r) => r.entries), [selectedRows])
+  const selectedHours = useMemo(
+    () => selectedRows.reduce((sum, r) => sum + r.hours, 0),
+    [selectedRows],
+  )
+
+  // #2: alcance de los CINCO cuadros derivado de la SELECCIÓN (cardScopeFromSelection):
+  // un cliente + un proyecto → ese proyecto; un cliente + varios (o alguna fila sin
+  // proyecto) → TODOS los proyectos del cliente; si cruza clientes o está vacía → null
+  // (los cuadros siguen el filtro de la barra). Se miden sobre el proyecto/cliente
+  // COMPLETO, ignorando semana/contractor. Se deriva de selectedRows (ya memoizado).
+  const cardScope = useMemo(() => cardScopeFromSelection(selectedRows), [selectedRows])
+
+  // Cuadro #2 (consumed/budget) por selección: SÓLO cuando el scope es de un proyecto
+  // (un cliente + un proyecto). Pasa el cliente del scope a projectStatsFor para no sumar
+  // un homónimo de otro cliente y coincidir con los otros cuatro cuadros. Con scope de
+  // cliente entero (projects:[]) o selección que cruza clientes (cardScope null) va null
+  // → el cuadro muestra "—" (el budget es por proyecto, no por cliente).
   const selectionProject = useMemo(
     () =>
-      selectionProjectNames.length
-        ? projectStatsFor({ projects: selectionProjectNames, projectNumbers: [] })
+      cardScope && cardScope.projects.length === 1
+        ? projectStatsFor({ clients: cardScope.clients, projects: cardScope.projects, projectNumbers: [] })
         : null,
-    [selectionProjectNames, projectStatsFor],
+    [cardScope, projectStatsFor],
   )
-  // El cuadro #2 muestra números con selección de un proyecto O con filtro a un proyecto
-  // (las dos cosas). Con selección manda la selección: si abarca varios proyectos,
-  // selectionProject es null y el cuadro va "—" (no se cae al filtro, porque
-  // selectedHours sumaría varios proyectos contra el consumed/budget de uno solo). Sin
-  // selección, vale el filtro de proyecto.
+  // El fallback al filtro (singleProject) es SÓLO sin selección: con algo tildado el
+  // cuadro muestra selectionProject —"—" si la selección no es un proyecto único—, nunca
+  // el filtro. Si no, la mitad izquierda "Selected" (selectedHours de la selección)
+  // quedaría al lado de un consumed/budget del scope del FILTRO: dos scopes en un cuadro.
   const budgetCardProject = selectedKeys.size > 0 ? selectionProject : singleProject
+  const selectionKpis = useMemo(() => {
+    if (!cardScope) return null
+    // cardScope.clients trae el nombre de cliente CRUDO ya resuelto (group.client), no
+    // una clave de filtro maestro, así que se filtra por cliente crudo: applyEntryFilters
+    // SIN masterNames compara entry.client === scope.client (línea `clientValue`), y así
+    // matchea tanto los clientes del maestro como los legacy/Others (que canonicalizados
+    // caerían todos en el centinela y no matchearían un nombre puntual).
+    const scope = projectClientScope({ clients: cardScope.clients, projects: cardScope.projects })
+    const all = applyEntryFilters(entriesConCliente, scope, invoiceByEntryId)
+    const bill = all.filter((e) => e.allocation === 'bill_to_client')
+    return billingKpis({
+      billToClient: bill,
+      allAllocations: all,
+      invoicedIds: invoiceByEntryId,
+      paidIds: paidEntryIds,
+    })
+  }, [cardScope, entriesConCliente, invoiceByEntryId, paidEntryIds])
+  // Números MOSTRADOS en los 5 cuadros: la selección manda; sin ella, el filtro (`cards`).
+  // Los contadores de las tabs y el empty-state siguen usando `cards` (la grilla refleja
+  // el filtro, no la selección).
+  const kpiCards = selectionKpis ?? cards
+
   const canCreate = can('billing.create')
   // Factura AGRUPADA multi-contractor (slice 03): se emite cuando la selección es de
   // un solo cliente + un solo proyecto (varios contractors permitidos).
@@ -1130,17 +1173,31 @@ export function BillingPage() {
             isActive={isActive}
           />
 
+          {/* Aviso cuando los cuadros dejan de seguir el filtro y pasan a reflejar la
+              SELECCIÓN: sin esto, tildar filas cambia los números en silencio y se
+              podrían leer como si siguieran la grilla filtrada. Aclara el scope (proyecto
+              o cliente entero). No afirma "all weeks/contractors" para no contradecir el
+              "Selected +" del cuadro #2, cuya mitad izquierda es el subconjunto tildado. */}
+          {cardScope && (
+            <p className="state__hint">
+              Cards below reflect your selection —{' '}
+              <strong>{cardScope.clients[0]}</strong>
+              {cardScope.projects.length ? ` · ${cardScope.projects[0]}` : ' · all projects'} — not
+              the filter above.
+            </p>
+          )}
+
           <div className="dash-kpis">
             <div className="dash-kpi dash-kpi--static dash-kpi--accent">
               <div className="dash-kpi__head">
                 <span className="dash-kpi__label">Pending to bill</span>
               </div>
               <span className="dash-kpi__value">
-                {formatHours(cards.pendingToBill)}
+                {formatHours(kpiCards.pendingToBill)}
                 <span className="dash-kpi__unit"> h</span>
               </span>
               <span className="dash-kpi__hint">
-                {cards.pendingCount} approved {cards.pendingCount === 1 ? 'entry' : 'entries'}
+                {kpiCards.pendingCount} approved {kpiCards.pendingCount === 1 ? 'entry' : 'entries'}
               </span>
             </div>
             {/* Cuadro #2: Seleccionadas + Consumidas / Budget. El "+" y el "/" son
@@ -1166,7 +1223,11 @@ export function BillingPage() {
                 )}
               </span>
               <span className="dash-kpi__hint">
-                {budgetCardProject ? 'selected + consumed / budget' : 'select or filter one project'}
+                {budgetCardProject
+                  ? 'selected + consumed / budget'
+                  : cardScope
+                    ? 'client scope — select one project for its budget'
+                    : 'select or filter one project'}
               </span>
             </div>
             <div className="dash-kpi dash-kpi--static">
@@ -1174,7 +1235,7 @@ export function BillingPage() {
                 <span className="dash-kpi__label">Invoiced</span>
               </div>
               <span className="dash-kpi__value">
-                {formatHours(cards.invoiced)}
+                {formatHours(kpiCards.invoiced)}
                 <span className="dash-kpi__unit"> h</span>
               </span>
               {/* La tarjeta de facturado tiene otro alcance que la grilla y que
@@ -1187,7 +1248,7 @@ export function BillingPage() {
                 <span className="dash-kpi__label">Unallocated</span>
               </div>
               <span className="dash-kpi__value">
-                {formatHours(cards.unallocated)}
+                {formatHours(kpiCards.unallocated)}
                 <span className="dash-kpi__unit"> h</span>
               </span>
               <span className="dash-kpi__hint">approved, not yet classified in Entries</span>
@@ -1197,7 +1258,7 @@ export function BillingPage() {
                 <span className="dash-kpi__label">Overage</span>
               </div>
               <span className="dash-kpi__value">
-                {formatHours(cards.overage)}
+                {formatHours(kpiCards.overage)}
                 <span className="dash-kpi__unit"> h</span>
               </span>
               <span className="dash-kpi__hint">overage hours pending payment</span>
