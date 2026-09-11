@@ -1,5 +1,5 @@
-import { test, expect, type Page } from '@playwright/test'
-import { loginAsTestAdmin } from './helpers'
+import { test, expect } from '@playwright/test'
+import { loginAsTestAdmin, fieldOf, optionsOf } from './helpers'
 
 /**
  * Dos regresiones de UI, ambas de solo lectura (no escriben nada en la base):
@@ -61,15 +61,6 @@ test.describe('Projects and SOW · scroll de fondo', () => {
   })
 })
 
-// Se ancla en el <span> del label con match exacto: `hasText` sobre el .msel
-// entero mira también el valor elegido y, con el panel abierto, las opciones —
-// un proyecto llamado "Contractor…" bindearía el dropdown equivocado.
-const fieldOf = (page: Page, label: string) =>
-  page
-    .locator('.msel')
-    .filter({ has: page.locator('.filterfield__label', { hasText: new RegExp(`^${label}$`) }) })
-    .first()
-
 test.describe('Entries · listas de filtros entrelazadas', () => {
   test('elegir un proyecto recorta los contractors a los que cargaron horas ahí', async ({
     page,
@@ -78,17 +69,11 @@ test.describe('Entries · listas de filtros entrelazadas', () => {
     await page.goto('/entries')
 
     const field = (label: string) => fieldOf(page, label)
-    const optionsOf = async (label: string) => {
-      await field(label).locator('.msel__btn').click()
-      const values = await field(label).locator('.msel__opt-label').allInnerTexts()
-      await page.keyboard.press('Escape')
-      return values
-    }
 
     // Se afirma que el fixture tiene datos en vez de skipear: un skip acá daría
     // verde justo cuando las aserciones de abajo no se corrieron.
-    const allContractors = await optionsOf('Contractor')
-    const projects = await optionsOf('Project')
+    const allContractors = await optionsOf(page, 'Contractor')
+    const projects = await optionsOf(page, 'Project')
     expect(projects.length, 'el fixture no tiene proyectos con horas').toBeGreaterThan(0)
     expect(allContractors.length, 'el fixture no tiene contractors con horas').toBeGreaterThan(0)
 
@@ -97,7 +82,7 @@ test.describe('Entries · listas de filtros entrelazadas', () => {
     await field('Project').locator('.msel__opt').first().click()
     await page.keyboard.press('Escape')
 
-    const scopedContractors = await optionsOf('Contractor')
+    const scopedContractors = await optionsOf(page, 'Contractor')
     expect(scopedContractors.length).toBeGreaterThan(0)
     expect(scopedContractors.length).toBeLessThanOrEqual(allContractors.length)
     for (const contractor of scopedContractors) {
@@ -112,7 +97,7 @@ test.describe('Entries · listas de filtros entrelazadas', () => {
 
     // Y el ya tildado sigue listado aunque el cruce lo excluyera, para poder
     // destildarlo (si no, la pantalla quedaría trabada).
-    const stillListed = await optionsOf('Contractor')
+    const stillListed = await optionsOf(page, 'Contractor')
     const selected = await field('Contractor').locator('.msel__value').innerText()
     expect(stillListed).toContain(selected)
   })
@@ -149,8 +134,7 @@ test.describe('Entries · listas de filtros entrelazadas', () => {
       .click()
     await page.keyboard.press('Escape')
 
-    await field('Contractor').locator('.msel__btn').click()
-    await expect(field('Contractor').locator('.msel__empty')).toBeVisible()
-    await expect(field('Contractor').locator('.msel__opt')).toHaveCount(0)
+    // La grilla no puede mostrar nada → el dropdown de Contractor queda vacío.
+    expect(await optionsOf(page, 'Contractor')).toEqual([])
   })
 })
