@@ -204,8 +204,8 @@ export function DashboardPage() {
   // (Pending Hours) y su sparkline — el único KPI que responde al filtro (el resto son de
   // facturas y quedan globales, por eso aparte, para no recomputarlos en cada toggle).
   const unbilledEntries = useMemo(
-    () => (data ? filteredEntries.filter((e) => isBillablePending(e, invoiceByEntryId)) : []),
-    [data, filteredEntries, invoiceByEntryId],
+    () => filteredEntries.filter((e) => isBillablePending(e, invoiceByEntryId)),
+    [filteredEntries, invoiceByEntryId],
   )
   const pendingHours = useMemo(
     () => unbilledEntries.reduce((sum, e) => sum + e.hours, 0),
@@ -269,7 +269,6 @@ export function DashboardPage() {
   // ESE total como centro, no totalHours: si no, las horas no-facturables (overage/
   // sp_internal/sin triagear) inflarían el centro sobre la suma de sus slices.
   const billing = useMemo(() => {
-    if (!data) return { dist: [], total: 0 }
     const sums = { Pending: 0, Invoiced: 0, Collected: 0, Paid: 0 }
     let total = 0
     for (const e of filteredEntries) {
@@ -294,7 +293,7 @@ export function DashboardPage() {
         color: STATUS_COLORS[name] ?? '#6b7280',
       }))
     return { dist, total: Number(total.toFixed(1)) }
-  }, [data, filteredEntries, invoiceByEntryId])
+  }, [filteredEntries, invoiceByEntryId])
 
   // Mismas horas que el donut de billing, pero repartidas por allocation en vez de
   // por estado de factura. Las categorías conocidas (null + los 4 valores del CHECK
@@ -302,7 +301,6 @@ export function DashboardPage() {
   // (p. ej. si el CHECK se ampliara) se agrega al final en vez de descartar sus horas
   // en silencio. El color sale de la KEY estable, no del label visible.
   const allocationDist = useMemo(() => {
-    if (!data) return []
     const sums = new Map()
     for (const e of filteredEntries) {
       const key = e.allocation ?? null
@@ -320,7 +318,7 @@ export function DashboardPage() {
         color: allocationColor(key),
       }))
       .filter((d) => d.value > 0)
-  }, [data, filteredEntries])
+  }, [filteredEntries])
 
   // Total del centro del donut de ALLOCATION: reparte TODAS las horas filtradas, así que
   // su suma = este total. Se calcula UNA vez sobre las horas crudas y se redondea una sola
@@ -329,8 +327,8 @@ export function DashboardPage() {
   // (billing.total), que excluye las no-facturables, para que centro y slices coincidan.
   // Memoizado sobre [data, filteredEntries].
   const totalHours = useMemo(
-    () => (data ? filteredEntries.reduce((sum, e) => sum + e.hours, 0) : 0),
-    [data, filteredEntries],
+    () => filteredEntries.reduce((sum, e) => sum + e.hours, 0),
+    [filteredEntries],
   )
 
   const now = new Date()
@@ -452,9 +450,11 @@ export function DashboardPage() {
 
           {/* Dos donuts: horas por estado de factura y por allocation, lado a lado. */}
           <div className="dash-main">
+            {/* Título aclara "billable hours": este donut cuenta sólo las facturables, así
+                que su centro puede ser menor que el del donut de Allocation (todas las horas). */}
             <HoursDonut
               icon={<TrendingUp size={14} />}
-              title="Billing Status Distribution"
+              title="Billing Status (billable hours)"
               data={billing.dist}
               total={billing.total}
             />

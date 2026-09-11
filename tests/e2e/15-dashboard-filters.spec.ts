@@ -20,22 +20,25 @@ test('Dashboard: barra de filtros con 5 dimensiones; Status = billing status; fi
     await expect(bar.locator('.filterfield__label', { hasText: new RegExp(`^${label}$`) })).toBeVisible()
   }
 
-  // Status ofrece los 4 estados de facturación.
+  // El filtro CAMBIA un widget: Status='Paid' → las horas pagadas no son facturables-
+  // pendientes, así que "Pending Hours" pasa a 0.0 (aserción determinística de que el
+  // filtro efectivamente acota los widgets de horas).
+  const pendingValue = page
+    .locator('.dash-kpi', { hasText: 'Pending Hours' })
+    .locator('.dash-kpi__value')
+  await expect(pendingValue).toBeVisible()
+
   const statusField = bar.locator('.filterfield', { has: page.getByText('Status', { exact: true }) })
   await statusField.locator('.msel__btn').click()
   for (const s of ['Pending', 'Invoiced', 'Collected', 'Paid']) {
     await expect(statusField.getByRole('option', { name: s })).toBeVisible()
   }
+  await statusField.getByRole('option', { name: 'Paid' }).click()
   await page.keyboard.press('Escape')
 
-  // Filtrar por Client hace aparecer Clear; Clear limpia.
-  const clientField = bar.locator('.filterfield', { has: page.getByText('Client', { exact: true }) })
-  await clientField.locator('.msel__btn').click()
-  const firstOpt = clientField.locator('.msel__panel .msel__opt').first()
-  await firstOpt.waitFor({ state: 'visible' })
-  await firstOpt.click()
-  await page.keyboard.press('Escape')
+  await expect(pendingValue).toContainText('0.0')
 
+  // Clear limpia (y desaparece).
   const clear = bar.locator('.filterbar__clear')
   await expect(clear).toBeVisible()
   await clear.click()
