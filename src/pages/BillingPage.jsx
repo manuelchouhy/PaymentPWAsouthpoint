@@ -76,6 +76,28 @@ const projectId = (client, project) => `${enc(client)}||${enc(project.project)}`
 const weekId = (client, project, week) => `${projectId(client, project)}||${week.weekId}`
 const rowId = (client, project, week, row) => `${weekId(client, project, week)}||${row.key}`
 
+// Scope de applyEntryFilters con sólo cliente/proyecto/número seteados y el resto de
+// las dimensiones vacías: base de las métricas "del proyecto/cliente COMPLETO" (ignoran
+// semana/contractor/estado). Lo comparten el cuadro #2 (projectStatsFor) y los cuadros
+// por selección (selectionKpis), así la forma vacía vive en un solo lugar y no se
+// desincroniza si se agrega una dimensión de filtro.
+function projectClientScope({ clients = [], projects = [], projectNumbers = [] }) {
+  return {
+    contractors: [],
+    clients,
+    projects,
+    projectNumbers,
+    tasks: [],
+    billingStatuses: [],
+    statuses: [],
+    allocations: [],
+    dateFrom: '',
+    dateTo: '',
+    week: '',
+    weekStart: '',
+  }
+}
+
 // Por qué una hora quedó "sin cliente" (motivo que expone clientResolver).
 const REASON_LABEL = {
   'group-unclaimed': 'Project group has no client assigned',
@@ -491,20 +513,10 @@ export function BillingPage() {
   const projectStatsFor = useCallback(
     (projectSel) => {
       if (!projectSel.projects.length && !projectSel.projectNumbers.length) return null
-      const projectScope = {
-        contractors: [],
-        clients: [],
+      const projectScope = projectClientScope({
         projects: projectSel.projects,
         projectNumbers: projectSel.projectNumbers,
-        tasks: [],
-        billingStatuses: [],
-        statuses: [],
-        allocations: [],
-        dateFrom: '',
-        dateTo: '',
-        week: '',
-        weekStart: '',
-      }
+      })
       const projectEntries = applyEntryFilters(
         entriesConCliente,
         projectScope,
@@ -680,7 +692,13 @@ export function BillingPage() {
     }
   }, [clientGroups])
 
-  const selectedRows = [...selectedKeys].map((k) => billableRows.get(k)).filter(Boolean)
+  // Filas seleccionadas, memoizadas: es la MISMA proyección selección→filas que usan
+  // selectionProjectNames y cardScope, así se materializa una vez por cambio de
+  // selección en vez de tres veces por render.
+  const selectedRows = useMemo(
+    () => [...selectedKeys].map((k) => billableRows.get(k)).filter(Boolean),
+    [selectedKeys, billableRows],
+  )
   const selectedEntries = selectedRows.flatMap((r) => r.entries)
   const selectedHours = selectedRows.reduce((sum, r) => sum + r.hours, 0)
   // Cuadro #2 por SELECCIÓN: cuando tildás filas de UN solo proyecto (aunque no haya
@@ -689,12 +707,11 @@ export function BillingPage() {
   // selectedKeys+billableRows (no sobre selectedRows, que es un array nuevo por render).
   const selectionProjectNames = useMemo(() => {
     const names = new Set()
-    for (const k of selectedKeys) {
-      const r = billableRows.get(k)
+    for (const r of selectedRows) {
       if (r?.project) names.add(r.project)
     }
     return [...names]
-  }, [selectedKeys, billableRows])
+  }, [selectedRows])
   const selectionProject = useMemo(
     () =>
       selectionProjectNames.length
@@ -716,27 +733,16 @@ export function BillingPage() {
   // cuadro "Selected + consumed / budget". Si la selección cruza clientes o está vacía,
   // los cuadros siguen el filtro de la barra (`cards`). Memoizado sobre
   // selectedKeys+billableRows (no sobre selectedRows, que es un array nuevo por render).
-  const cardScope = useMemo(() => {
-    const rows = [...selectedKeys].map((k) => billableRows.get(k)).filter(Boolean)
-    return cardScopeFromSelection(rows)
-  }, [selectedKeys, billableRows])
+  const cardScope = useMemo(() => cardScopeFromSelection(selectedRows), [selectedRows])
   const selectionKpis = useMemo(() => {
     if (!cardScope) return null
-    const scope = {
-      contractors: [],
-      clients: cardScope.clients,
-      projects: cardScope.projects,
-      projectNumbers: [],
-      tasks: [],
-      billingStatuses: [],
-      statuses: [],
-      allocations: [],
-      dateFrom: '',
-      dateTo: '',
-      week: '',
-      weekStart: '',
-    }
-    const all = applyEntryFilters(entriesConCliente, scope, invoiceByEntryId, masterNames)
+    // cardScope.clients trae el nombre de cliente CRUDO ya resuelto (group.client), no
+    // una clave de filtro maestro, así que se filtra por cliente crudo: applyEntryFilters
+    // SIN masterNames compara entry.client === scope.client (línea `clientValue`), y así
+    // matchea tanto los clientes del maestro como los legacy/Others (que canonicalizados
+    // caerían todos en el centinela y no matchearían un nombre puntual).
+    const scope = projectClientScope({ clients: cardScope.clients, projects: cardScope.projects })
+    const all = applyEntryFilters(entriesConCliente, scope, invoiceByEntryId)
     const bill = all.filter((e) => e.allocation === 'bill_to_client')
     return billingKpis({
       billToClient: bill,
@@ -744,7 +750,7 @@ export function BillingPage() {
       invoicedIds: invoiceByEntryId,
       paidIds: paidEntryIds,
     })
-  }, [cardScope, entriesConCliente, invoiceByEntryId, masterNames, paidEntryIds])
+  }, [cardScope, entriesConCliente, invoiceByEntryId, paidEntryIds])
   // Números MOSTRADOS en los 5 cuadros: la selección manda; sin ella, el filtro (`cards`).
   // Los contadores de las tabs y el empty-state siguen usando `cards` (la grilla refleja
   // el filtro, no la selección).
