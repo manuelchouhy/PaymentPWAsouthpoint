@@ -18,16 +18,31 @@
  * @returns {Array<{taskId:(string|number|null), taskName:string, taskNumber:(string|null),
  *   stageId:(string|number|null), estimatedHours:number, hours:number, consumedHours:number, registered:boolean}>}
  */
-const norm = (name) => String(name ?? '').trim()
+// Clave de matcheo: trim + colapsar espacios internos + lowercase, para que "Backend ",
+// "Backend" y "backend" (SOW vs Zoho) matcheen la misma task en vez de partirse en dos.
+const norm = (name) => String(name ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
 const toNum = (v) => (v != null && String(v) !== '' ? String(v) : null)
 
 export function mergeProjectTasks(registered = [], logged = []) {
-  // Logueados por nombre normalizado (ya vienen deduplicados por aggregateLoggedTasks).
+  // Logueados por nombre normalizado. Si dos logueados colapsan a la misma clave (ej.
+  // "Backend" y "Backend "), se SUMAN sus horas (no se descarta el segundo).
   const loggedByKey = new Map()
   for (const l of logged ?? []) {
     const key = norm(l?.taskName)
-    if (!key || loggedByKey.has(key)) continue
-    loggedByKey.set(key, l)
+    if (!key) continue
+    const acc = loggedByKey.get(key)
+    if (acc) {
+      acc.hours += Number(l.hours) || 0
+      acc.consumedHours += Number(l.consumedHours) || 0
+      if (acc.taskNumber == null) acc.taskNumber = toNum(l.taskNumber)
+    } else {
+      loggedByKey.set(key, {
+        taskName: l.taskName ?? '',
+        taskNumber: toNum(l.taskNumber),
+        hours: Number(l.hours) || 0,
+        consumedHours: Number(l.consumedHours) || 0,
+      })
+    }
   }
 
   const out = []

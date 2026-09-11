@@ -71,6 +71,29 @@ test('matchea por nombre normalizado (trim): "Backend " logueado matchea "Backen
   assert.equal(out[0].registered, true)
 })
 
+test('matchea case-insensitive: "backend" logueado matchea "Backend" registrado', () => {
+  const out = mergeProjectTasks(
+    [{ id: 1, taskName: 'Backend', stageId: 3 }],
+    [{ taskName: 'backend', hours: 10, consumedHours: 10 }],
+  )
+  assert.equal(out.length, 1)
+  assert.equal(out[0].consumedHours, 10)
+  assert.equal(out[0].registered, true)
+})
+
+test('dos logueados que colapsan a la misma clave SUMAN sus horas (no se descarta el 2do)', () => {
+  const out = mergeProjectTasks(
+    [],
+    [
+      { taskName: 'Backend', hours: 4, consumedHours: 4 },
+      { taskName: 'Backend ', hours: 6, consumedHours: 5 },
+    ],
+  )
+  assert.equal(out.length, 1)
+  assert.equal(out[0].hours, 10) // 4 + 6
+  assert.equal(out[0].consumedHours, 9) // 4 + 5
+})
+
 test('vacío / undefined → []', () => {
   assert.deepEqual(mergeProjectTasks([], []), [])
   assert.deepEqual(mergeProjectTasks(), [])

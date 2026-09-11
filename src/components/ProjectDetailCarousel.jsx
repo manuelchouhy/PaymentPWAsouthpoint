@@ -935,9 +935,12 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
               ) : (
                 <ul className="stage-tree__tasks">
                   {node.tasks.map((t, i) => (
-                    // taskName es único dentro del merge (se agrupa por nombre); fallback a
-                    // idx por si acaso (lista read-only).
-                    <li key={t.taskName || `idx-${i}`} className="stage-tree__task">
+                    // taskId (id de project_tasks) es único; el nombre NO (el merge conserva
+                    // project_tasks distintos con el mismo nombre). Fallback a nombre+idx.
+                    <li
+                      key={t.taskId != null ? `id-${t.taskId}` : `nm-${t.taskName}-${i}`}
+                      className="stage-tree__task"
+                    >
                       <span className="stage-tree__task-name">
                         <span className="stage-tree__task-name-text">{t.taskName || '—'}</span>
                         {/* id del task (task_number de Zoho, el mismo de "Task #" en
