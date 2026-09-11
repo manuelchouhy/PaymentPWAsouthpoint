@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CalendarClock, ChevronRight } from 'lucide-react'
 import { contractStatus, daysRemaining } from '../../lib/projectsData'
@@ -8,33 +8,52 @@ import { formatDate } from '../../lib/format'
 
 /**
  * Widget "Contracts expiring" (FR-08). Top 5 contratos por proximidad de
- * vencimiento, con link directo a la grilla. Listo para montar en el dashboard
- * (que se construye en otra fase).
+ * vencimiento, con link directo a la grilla.
  *
- * @param {{ limit?: number }} props
+ * Si el Dashboard le pasa `projects` (ya filtrados por Cliente/Proyecto), usa esa lista
+ * y NO fetchea: así el widget respeta el filtro del Dashboard. En ese modo el Dashboard
+ * controla el estado de carga con la prop `loading` (mientras filterData no cargó, para no
+ * mostrar "No contracts" con la lista todavía vacía). Sin la prop `projects` (montado
+ * suelto) fetchea todos los proyectos como antes.
+ *
+ * @param {{ limit?: number, projects?: Array, loading?: boolean, filtered?: boolean }} props
  */
-export function ContractsExpiringWidget({ limit = 5 }) {
-  const [top, setTop] = useState([])
-  const [loading, setLoading] = useState(true)
+export function ContractsExpiringWidget({
+  limit = 5,
+  projects: projectsProp,
+  loading: loadingProp = false,
+  filtered = false,
+}) {
+  const [fetched, setFetched] = useState(null)
+  const [fetchLoading, setFetchLoading] = useState(projectsProp == null)
 
   useEffect(() => {
+    // Con projects provistos por el Dashboard no se fetchea (la lista ya viene filtrada).
+    if (projectsProp != null) return
     let cancelled = false
+    setFetchLoading(true)
     api.projects.list()
-      .then((projects) => {
-        if (cancelled) return
-        // Solo los que tienen contrato, por proximidad de vencimiento.
-        const withContract = projects.filter((p) => p.contractExpirationDate)
-        const sorted = withContract.sort((a, b) =>
-          a.contractExpirationDate.localeCompare(b.contractExpirationDate),
-        )
-        setTop(sorted.slice(0, limit))
-      })
-      .catch(() => !cancelled && setTop([]))
-      .finally(() => !cancelled && setLoading(false))
+      .then((projects) => !cancelled && setFetched(projects))
+      .catch(() => !cancelled && setFetched([]))
+      .finally(() => !cancelled && setFetchLoading(false))
     return () => {
       cancelled = true
     }
-  }, [limit])
+  }, [projectsProp])
+
+  // En modo controlado (projects provisto) el loading lo dice el Dashboard; en modo suelto,
+  // el fetch propio.
+  const loading = projectsProp != null ? loadingProp : fetchLoading
+  const source = projectsProp ?? fetched ?? []
+  // Solo los que tienen contrato, por proximidad de vencimiento.
+  const top = useMemo(
+    () =>
+      source
+        .filter((p) => p.contractExpirationDate)
+        .sort((a, b) => a.contractExpirationDate.localeCompare(b.contractExpirationDate))
+        .slice(0, limit),
+    [source, limit],
+  )
 
   return (
     <section className="dash-widget" aria-label="Contracts expiring">
@@ -51,7 +70,11 @@ export function ContractsExpiringWidget({ limit = 5 }) {
       {loading ? (
         <p className="dash-widget__empty">Loading…</p>
       ) : top.length === 0 ? (
-        <p className="dash-widget__empty">No contracts expiring soon.</p>
+        // Empty-state consciente del filtro: con un filtro activo, "no hay para este
+        // filtro" (no "no hay en toda la org"), igual criterio que Supplier Contracts.
+        <p className="dash-widget__empty">
+          {filtered ? 'No contracts for the current filter.' : 'No contracts expiring soon.'}
+        </p>
       ) : (
         <ul className="dash-widget__list">
           {top.map((p) => {

@@ -23,6 +23,8 @@ import {
   clientFilterOptions,
   OTHER_CLIENT,
 } from '../lib/useEntryFilters'
+import { buildClientResolver } from '../lib/clientResolver'
+import { matchesProjectFilter } from '../lib/dashboardScope'
 import { EntryFilterBar } from '../components/EntryFilterBar'
 import { BILLING_STATUSES } from '../lib/data'
 import { ContractsExpiringWidget } from '../components/dashboard/ContractsExpiringWidget'
@@ -111,13 +113,21 @@ export function DashboardPage() {
   // — si se mergearan al `data` core con setData(prev=>...), un race donde llegan antes que
   // el core los perdería (prev === null).
   const [filterData, setFilterData] = useState({ projects: [], clients: [] })
+  // ¿Ya cargó al menos una vez projects/clients? Alimenta el filtro Y el scope de los
+  // widgets (masterNames sale de filterData.clients). Se usa para NO mostrar un estado
+  // vacío en el widget de contratos mientras carga, y queda true entre reloads.
+  const [filtersLoaded, setFiltersLoaded] = useState(false)
   const [loadStatus, setLoadStatus] = useState('loading')
 
   const reloadKey = useSyncReloadKey()
   useEffect(() => {
     let cancelled = false
     setLoadStatus('loading')
-    setFilterData({ projects: [], clients: [] }) // reset en cada (re)carga
+    // NO se resetea filterData en cada recarga: si se vaciara, masterNames quedaría vacío
+    // y —con un filtro de Cliente activo— matchesClient mandaría TODAS las facturas/
+    // proyectos al centinela Others → los tiles de plata y los contratos parpadearían a 0
+    // durante el refresh (con `data` todavía viejo). Se conserva el filterData previo y el
+    // nuevo fetch lo pisa al resolver (los proyectos/clientes casi no cambian entre syncs).
     // Datos CORE (KPIs y donuts): bloquean el first paint.
     Promise.all([
       api.timeEntries.list(),
@@ -140,12 +150,25 @@ export function DashboardPage() {
     // filtro: NO bloquean el first paint (los KPIs/donuts se ven ya) y sólo hidratan las
     // opciones del filtro cuando llegan. Estado propio (filterData), así que no hay race con
     // el core. Un fallo suyo degrada a [] (filtro con menos opciones), sin tirar el dashboard.
+    // Centinela null en el catch (NO []): un fetch que FALLA no debe pisar el filterData
+    // previo con vacío — eso vaciaría masterNames y, con un filtro de cliente activo,
+    // mandaría todo al centinela Others (tiles/contratos a 0). Con null se conserva lo que
+    // ya había; sólo un fetch EXITOSO (incluso [] genuino) sobrescribe.
     Promise.all([
-      Promise.resolve().then(() => api.projects.list()).catch(() => []),
-      Promise.resolve().then(() => api.clients.list()).catch(() => []),
+      Promise.resolve().then(() => api.projects.list()).catch(() => null),
+      Promise.resolve().then(() => api.clients.list()).catch(() => null),
     ]).then(([projects, clients]) => {
       if (cancelled) return
-      setFilterData({ projects, clients })
+      setFilterData((prev) => ({
+        projects: projects ?? prev.projects,
+        clients: clients ?? prev.clients,
+      }))
+      // Se marca "cargado" al terminar el INTENTO (los fetches ya cachearon null en su
+      // catch, así que este .then siempre corre): así el widget de contratos nunca queda
+      // pegado en "Loading…" para siempre. Si ambos fallaron en la 1ra carga muestra su
+      // vacío ("No contracts"), mejor que un spinner infinito — el fallo es raro y el resto
+      // del dashboard ya renderizó.
+      setFiltersLoaded(true)
     })
     return () => {
       cancelled = true
@@ -201,16 +224,115 @@ export function DashboardPage() {
     [clientOptions, filterOptions],
   )
 
-  // Map: invoiceId → last collection date
+  // --- Alcance Cliente/Proyecto para TODOS los widgets --------------------------
+  // Las dimensiones Cliente + Proyecto (incluye Project#) filtran también los tiles de
+  // plata (Invoices/Collections/Payments) y los contratos de proyecto — no sólo los
+  // widgets de horas. Contractor/Status siguen aplicando sólo a horas (y Contractor a
+  // Supplier Contracts, por supplierName). ¿Hay algún filtro de cliente/proyecto activo?
+  // Si no, no se recorta nada (default = todo, sin regresión).
+  const clientProjectActive =
+    filters.clients.length > 0 || filters.projects.length > 0 || filters.projectNumbers.length > 0
+  const resolveProjectClient = useMemo(() => buildClientResolver(filterData.clients), [filterData.clients])
+
+  // Facturas/cobros/pagos: se recortan por INTERSECCIÓN con las horas ya filtradas por
+  // Cliente/Proyecto (NO por contractor/status). Reusar applyEntryFilters da el MISMO
+  // criterio que las horas y la misma semántica AND entre Proyecto y Project#. Una factura
+  // entra si alguna de sus horas pasa el filtro (todas comparten cliente+proyecto → todo-o-
+  // nada). Nota: las horas resuelven cliente con deriveEntriesClient (que arranca por
+  // entry.client y cae a grupo) y los contratos con buildClientResolver (grupo→legacy);
+  // como en este sistema time_entries.client viene VACÍO, ambos caen a la resolución por
+  // grupo y coinciden — sólo divergirían con un entry.client legacy no vacío.
+  const scopedEntryIds = useMemo(() => {
+    if (!clientProjectActive) return null // sin filtro → sin recorte
+    // Sólo las dimensiones Cliente/Proyecto (el resto vacío): así togglear Contractor o
+    // Status —excluidos de este scope— no invalida el memo (las deps son las 3 dims, no el
+    // objeto `filters` entero) ni cambia el resultado.
+    const cpFilters = {
+      clients: filters.clients,
+      projects: filters.projects,
+      projectNumbers: filters.projectNumbers,
+      contractors: [],
+      tasks: [],
+      statuses: [],
+      billingStatuses: [],
+      allocations: [],
+      dateFrom: '',
+      dateTo: '',
+      week: '',
+    }
+    const scoped = applyEntryFilters(enrichedEntries, cpFilters, invoiceByEntryId, masterNames)
+    return new Set(scoped.map((e) => String(e.id)))
+  }, [
+    clientProjectActive,
+    filters.clients,
+    filters.projects,
+    filters.projectNumbers,
+    enrichedEntries,
+    invoiceByEntryId,
+    masterNames,
+  ])
+
+  const scopedInvoices = useMemo(() => {
+    if (!data) return []
+    if (scopedEntryIds == null) return data.invoices // sin filtro → todas
+    return data.invoices.filter((inv) => inv.entryIds.some((id) => scopedEntryIds.has(String(id))))
+  }, [data, scopedEntryIds])
+  const scopedInvoiceIds = useMemo(() => new Set(scopedInvoices.map((i) => i.id)), [scopedInvoices])
+  const scopedCollections = useMemo(() => {
+    if (!data) return []
+    if (scopedEntryIds == null) return data.collections
+    return data.collections.filter((c) => scopedInvoiceIds.has(c.invoiceId))
+  }, [data, scopedEntryIds, scopedInvoiceIds])
+  const scopedPayments = useMemo(() => {
+    if (!data) return []
+    if (scopedEntryIds == null) return data.payments
+    // Un pago entra por su factura O por sus horas: los pagos invoice-less (overage /
+    // sp_internal, sin invoiceId pero con entryIds de las horas pagadas) no tienen factura
+    // que matchear, así que se recortan por sus horas contra el mismo scope de entradas.
+    return data.payments.filter(
+      (p) =>
+        scopedInvoiceIds.has(p.invoiceId) ||
+        (p.entryIds ?? []).some((id) => scopedEntryIds.has(String(id))),
+    )
+  }, [data, scopedEntryIds, scopedInvoiceIds])
+
+  // Proyectos que pasan el filtro Cliente/Proyecto: alimentan el widget de contratos por
+  // vencimiento (un contrato pertenece al cliente de SU proyecto, resuelto por grupo). Se
+  // matchean directo (un contrato puede no tener horas). Se muestra el cliente RESUELTO
+  // (no el crudo p.client, que puede venir vacío/alias) para que la fila no contradiga el
+  // filtro activo.
+  const scopedProjects = useMemo(() => {
+    // Se recorta sólo si hay filtro Cliente/Proyecto activo. El match del proyecto por
+    // NOMBRE usa project.projectName; el filtro de "Project" sale de entry.project (join
+    // hora↔proyecto por id de Zoho, que tolera renames), así que un proyecto renombrado
+    // podría no matchear su contrato aunque sí sus horas — caso borde aceptado (el uso
+    // principal es filtrar por Cliente, que resuelve por grupo y sí coincide).
+    const base = clientProjectActive
+      ? filterData.projects.filter((p) => matchesProjectFilter(p, filters, masterNames, resolveProjectClient))
+      : filterData.projects
+    // Se muestra SIEMPRE el cliente resuelto (filtrado o no) para que la etiqueta de la
+    // fila no cambie al togglear el filtro y no muestre un alias/vacío legacy.
+    return base.map((p) => ({ ...p, client: resolveProjectClient(p).client || p.client }))
+  }, [
+    clientProjectActive,
+    filterData.projects,
+    filters.clients,
+    filters.projects,
+    filters.projectNumbers,
+    masterNames,
+    resolveProjectClient,
+  ])
+
+  // Map: invoiceId → last collection date (sobre los cobros en scope: el KPI de pagos
+  // por vencer sólo mira facturas en scope, así que alcanza con los cobros de esas).
   const lastCollDateByInvoiceId = useMemo(() => {
-    if (!data) return new Map()
     const m = new Map()
-    for (const c of data.collections) {
+    for (const c of scopedCollections) {
       const prev = m.get(c.invoiceId)
       if (!prev || c.collectionDate > prev) m.set(c.invoiceId, c.collectionDate)
     }
     return m
-  }, [data])
+  }, [scopedCollections])
 
   // Horas facturables pendientes (isBillablePending): Rejected/Pending y overage/
   // sp_internal/sin triagear no se facturan al cliente. Un solo memo alimenta el número
@@ -234,14 +356,14 @@ export function DashboardPage() {
     // de emisión (created_at) como fecha de la factura para el KPI/sparkline.
     const issuedDateOf = (i) =>
       i.invoiceDate ?? (i.createdAt ? String(i.createdAt).slice(0, 10) : '')
-    const invoicesThisMonth = data.invoices.filter((i) =>
+    const invoicesThisMonth = scopedInvoices.filter((i) =>
       issuedDateOf(i).startsWith(thisMonth),
     ).length
 
-    const collectionsPending = data.invoices.filter((i) => i.status === 'Invoiced').length
+    const collectionsPending = scopedInvoices.filter((i) => i.status === 'Invoiced').length
 
     let paymentsDueThisWeek = 0
-    for (const inv of data.invoices) {
+    for (const inv of scopedInvoices) {
       if (inv.status !== 'Collected') continue
       const lastCol = lastCollDateByInvoiceId.get(inv.id) ?? inv.invoiceDate
       if (!lastCol) continue
@@ -251,7 +373,7 @@ export function DashboardPage() {
     }
 
     return { invoicesThisMonth, collectionsPending, paymentsDueThisWeek }
-  }, [data, lastCollDateByInvoiceId])
+  }, [data, scopedInvoices, lastCollDateByInvoiceId])
 
   // Sparkline de Pending Hours: sobre el mismo subconjunto filtrado.
   const pendingHoursSparkline = useMemo(
@@ -265,17 +387,18 @@ export function DashboardPage() {
     if (!data) return null
     return {
       // issuedDate = invoice_date o, si falta (facturas agrupadas), la fecha de creación.
+      // Sobre las listas EN SCOPE, para que la tendencia acompañe al número filtrado.
       invoicesThisMonth: last7DaysSeries(
-        data.invoices.map((i) => ({
+        scopedInvoices.map((i) => ({
           ...i,
           issuedDate: i.invoiceDate ?? (i.createdAt ? String(i.createdAt).slice(0, 10) : null),
         })),
         'issuedDate',
       ),
-      collectionsPending: last7DaysSeries(data.collections, 'collectionDate'),
-      paymentsDueThisWeek: last7DaysSeries(data.payments, 'paymentDate'),
+      collectionsPending: last7DaysSeries(scopedCollections, 'collectionDate'),
+      paymentsDueThisWeek: last7DaysSeries(scopedPayments, 'paymentDate'),
     }
-  }, [data])
+  }, [data, scopedInvoices, scopedCollections, scopedPayments])
 
   // Donut de billing: horas por estado de factura. Devuelve las slices Y su total propio
   // (suma de las horas que reparte = facturadas + facturables-pendientes). El donut usa
@@ -380,8 +503,9 @@ export function DashboardPage() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.05 }}
         >
-          {/* Filtra los widgets de HORAS (donuts, Pending Hours, total). Los tiles de
-              facturas (Invoices/Collections/Payments) quedan globales. */}
+          {/* Client / Project filtran TODO el dashboard (KPIs, donuts, facturas/cobros/
+              pagos y contratos). Contractor / Status siguen aplicando sólo a los widgets
+              de horas; Contractor además filtra Supplier Contracts (por proveedor). */}
           <EntryFilterBar
             dimensions={filterDimensions}
             filters={filters}
@@ -392,8 +516,10 @@ export function DashboardPage() {
           />
           {isActive && (
             <p className="dash-filter-scope">
-              Filters apply to the hours widgets (the two donuts and hours totals). The
-              Invoices / Collections / Payments tiles stay org-wide.
+              Client and Project filters scope the whole dashboard. Contractor and Status
+              apply to the hours widgets (the two donuts and hours totals); Contractor also
+              filters Supplier Contracts. Supplier Contracts have no client, so the Client
+              filter doesn’t affect them.
             </p>
           )}
 
@@ -479,10 +605,17 @@ export function DashboardPage() {
           </div>
 
           {/* Contracts + Supplier Contracts en dos columnas, para equilibrar el
-              ancho debajo de los donuts en vez de dejar la derecha vacía. */}
+              ancho debajo de los donuts en vez de dejar la derecha vacía. Contracts sigue
+              el filtro Cliente/Proyecto (scopedProjects); Supplier Contracts sólo el de
+              Contractor (no tiene cliente en los datos). */}
           <div className="dash-secondary">
-            <ContractsExpiringWidget limit={5} />
-            <SupplierContractsWidget />
+            <ContractsExpiringWidget
+              limit={5}
+              projects={scopedProjects}
+              loading={!filtersLoaded}
+              filtered={clientProjectActive}
+            />
+            <SupplierContractsWidget contractorFilter={filters.contractors} />
           </div>
 
           {/* Quick Actions */}

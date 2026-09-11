@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight, Star, Truck } from 'lucide-react'
 import { daysRemaining } from '../../lib/projectsData'
@@ -8,12 +8,28 @@ import { formatDate } from '../../lib/format'
 
 const COUNTED = ['Expired', 'Critical', 'Expiring Soon', 'Active']
 
+// Normaliza un nombre para comparar contractor (time_entries.user) contra supplierName
+// (supplier_contracts): sin acentos, espacios colapsados, minúsculas.
+const normalizeName = (s) =>
+  (s ?? '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+
 /**
  * Widget "Supplier Contracts" (FR-16). Contadores por estado y, si hay
  * proveedores priority en alerta, los destaca arriba con su nombre.
- * Listo para montar en el dashboard (se arma en otra fase).
+ *
+ * Los supplier contracts NO tienen cliente en los datos, así que el filtro de Cliente
+ * del Dashboard no los toca. Sí responden al filtro de **Contractor**: si el Dashboard
+ * pasa `contractorFilter` (nombres elegidos), los contadores/priority se calculan sólo
+ * sobre los contratos cuyo supplierName está en esa lista. Vacío/ausente → todos.
+ *
+ * @param {{ contractorFilter?: string[] }} props
  */
-export function SupplierContractsWidget() {
+export function SupplierContractsWidget({ contractorFilter }) {
   const [contracts, setContracts] = useState([])
   const [widestThreshold, setWidestThreshold] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -35,15 +51,27 @@ export function SupplierContractsWidget() {
     }
   }, [])
 
+  // Filtro por Contractor del Dashboard (los supplier contracts no tienen cliente): con
+  // nombres elegidos, sólo los proveedores cuyo supplierName matchea alguno. El match
+  // NORMALIZA ambos lados (sin acentos, espacios colapsados, minúsculas) porque el nombre
+  // del contractor viene de time_entries.user y el del proveedor de supplier_contracts:
+  // una diferencia de acento/espaciado no debe vaciar el widget. Si aún así no matchea,
+  // los contadores quedan en 0 (ese contractor no tiene contrato) — la lectura correcta.
+  const scoped = useMemo(() => {
+    if (!contractorFilter?.length) return contracts
+    const wanted = new Set(contractorFilter.map(normalizeName))
+    return contracts.filter((c) => wanted.has(normalizeName(c.supplierName)))
+  }, [contracts, contractorFilter])
+
   const counts = COUNTED.reduce((acc, s) => ({ ...acc, [s]: 0 }), {})
-  for (const c of contracts) {
+  for (const c of scoped) {
     const st = displaySupplierStatus(c)
     if (st in counts) counts[st] += 1
   }
   // El banner de priority espera a que el umbral guardado cargue (o falle a 90) para
   // no mostrar un contrato "en alerta" con el default y luego esconderlo (flicker).
   // Los contadores no esperan: dependen sólo de list().
-  const priority = widestThreshold == null ? [] : priorityAlertContracts(contracts, widestThreshold)
+  const priority = widestThreshold == null ? [] : priorityAlertContracts(scoped, widestThreshold)
   const topDays = priority.length > 0 ? daysRemaining(priority[0].expirationDate) : null
 
   return (
@@ -60,6 +88,10 @@ export function SupplierContractsWidget() {
 
       {loading ? (
         <p className="dash-widget__empty">Loading…</p>
+      ) : contractorFilter?.length && scoped.length === 0 ? (
+        // Con un Contractor filtrado que no es proveedor (o no tiene contrato), en vez de
+        // cuatro ceros mudos se aclara que el filtro los dejó afuera.
+        <p className="dash-widget__empty">No supplier contracts for the selected contractor.</p>
       ) : (
         <>
           {priority.length > 0 && (
