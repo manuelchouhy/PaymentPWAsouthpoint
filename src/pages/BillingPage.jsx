@@ -9,6 +9,8 @@ import { useEntryFilters, applyEntryFilters, buildFilterOptions, sortedUnique, c
 import { deriveEntriesClient } from '../lib/entryClient'
 import { buildClientResolver } from '../lib/clientResolver'
 import { groupBillToClient, groupReadonly } from '../lib/billingGrouping'
+import { billingKpis } from '../lib/billingKpis'
+import { effectiveBudgetHours } from '../lib/effectiveBudget'
 import {
   canBillSelection,
   billBlockReason,
@@ -177,6 +179,12 @@ export function BillingPage() {
   // projects + clients alimentan deriveEntriesClient (cadena hora→proyecto→grupo→
   // cliente). Ver entryClient.js / clientResolver.js.
   const [projects, setProjects] = useState([])
+  // Change requests por proyecto (Map<String(project.id), CR[]>): alimentan el budget
+  // efectivo del cuadro #2 cuando el filtro deja un único proyecto. Ver Client Summary.
+  const [crsByProject, setCrsByProject] = useState(() => new Map())
+  // Los CRs cargan en una cadena async aparte: hasta que estén, el budget del cuadro #2
+  // no es confiable (sería sólo el base, sin las expansiones aprobadas) → se muestra "—".
+  const [crsLoaded, setCrsLoaded] = useState(false)
   const [clients, setClients] = useState([])
   const [status, setStatus] = useState('loading')
   const [reloadKey, setReloadKey] = useState(0)
@@ -217,6 +225,10 @@ export function BillingPage() {
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
+    // Reset en cada (re)carga: hasta que los CRs vuelvan, el budget del cuadro #2 no es
+    // confiable (mostraría el base con CRs viejos). Sin esto, un reload por sync dejaría
+    // crsLoaded en true con el crsByProject anterior.
+    setCrsLoaded(false)
     // Los proyectos son sólo para etiquetar el SOW de cada fila: van aparte de
     // Promise.all y con catch propio para que un fallo suyo no tire la pantalla
     // entera, que sí puede facturar sin ese dato.
@@ -258,6 +270,19 @@ export function BillingPage() {
         setProjects(projectRows)
       })
       .catch((error) => console.error('No se pudieron cargar los SOW de Billing:', error))
+
+    // Change requests para el budget efectivo del cuadro #2. Aparte y con catch propio:
+    // un fallo suyo no debe tirar la pantalla (Billing factura sin ese dato).
+    Promise.resolve()
+      .then(() => api.changeRequests.listByProject())
+      .then((crMap) => {
+        if (cancelled) return
+        setCrsByProject(crMap)
+        setCrsLoaded(true)
+      })
+      .catch((error) =>
+        console.error('No se pudieron cargar los change requests de Billing:', error),
+      )
 
     Promise.all([api.timeEntries.list(), api.invoices.list(), api.clients.list(), api.payments.list()])
       .then(([entryRows, invoiceRows, clientRows, paymentRows]) => {
@@ -425,33 +450,18 @@ export function BillingPage() {
     setBillStatusFilter('pending')
   }, [tab])
 
+  // Métricas de los cuadros (billingKpis, módulo puro): pendingToBill, invoiced,
+  // unallocated, overage y consumed. classifiable queda acá porque lo usa el
+  // empty-state (decidir si mandar a Entries), no un cuadro.
   const cards = useMemo(() => {
-    let pendingToBill = 0
-    let pendingCount = 0
-    let invoiced = 0
-
-    // "Pending to bill" mira SÓLO bill_to_client: es lo que está por entrar al
-    // pipeline, y overage o SP internal no se le cobran a nadie acá.
-    for (const entry of filtered) {
-      if (invoiceByEntryId.has(String(entry.id))) continue
-      // Sólo las aprobadas están listas para facturar: una hora rechazada no
-      // se le cobra al cliente.
-      if (entry.status !== 'Approved') continue
-      pendingToBill += Number(entry.hours) || 0
-      pendingCount += 1
-    }
-
-    // La tarjeta Invoiced NO filtra por allocation, a diferencia de la grilla.
-    // Las facturas viejas son anteriores al triage de horas y sus entries tienen
-    // allocation en null: exigirles 'bill_to_client' dejaría la tarjeta en cero
-    // para siempre (808 h facturadas en la base, "Invoiced 0.0 h" en pantalla).
-    // Una hora que ya se facturó está facturada, sin importar cómo se la haya
-    // clasificado después.
-    for (const entry of filteredAllAllocations) {
-      if (!invoiceByEntryId.has(String(entry.id))) continue
-      invoiced += Number(entry.hours) || 0
-    }
-
+    // invoiceByEntryId ya es un Map con .has(String(id)); billingKpis sólo lo usa así,
+    // así que se pasa tal cual (sin copiarlo a un Set).
+    const kpis = billingKpis({
+      billToClient: filtered,
+      allAllocations: filteredAllAllocations,
+      invoicedIds: invoiceByEntryId,
+      paidIds: paidEntryIds,
+    })
     // Filas que el usuario TODAVÍA PUEDE clasificar bajo el filtro actual:
     // aprobadas, sin factura (setEntriesAllocation congela sólo las facturadas)
     // y que aún no son bill_to_client. Es lo que decide si tiene sentido
@@ -463,14 +473,69 @@ export function BillingPage() {
       if (entry.allocation === 'bill_to_client') continue
       classifiable += 1
     }
+    return { ...kpis, classifiable }
+  }, [filtered, filteredAllAllocations, invoiceByEntryId, paidEntryIds])
 
-    return {
-      pendingToBill,
-      pendingCount,
-      invoiced,
-      classifiable,
+  // Cuadro #2: sólo tiene sentido cuando el usuario filtró EXPLÍCITAMENTE por proyecto
+  // (nombre o número) y el scope queda en UN solo proyecto. Devuelve su budget efectivo
+  // y su consumed (del proyecto completo). Con varios/ninguno → null y el cuadro "—".
+  const singleProject = useMemo(() => {
+    // Un filtro de contractor/estado que por casualidad deja un solo proyecto NO cuenta
+    // como "el proyecto que estoy mirando": exigimos filtro de proyecto explícito.
+    if (!filters.projects.length && !filters.projectNumbers.length) return null
+    // Horas del/los proyecto(s) filtrado(s) IGNORANDO los demás filtros (semana,
+    // contractor, estado): se aplican SÓLO las dimensiones de proyecto sobre todas las
+    // entries. Así el consumed es del proyecto COMPLETO y usa el mismo matcheo (por
+    // nombre y/o número) que la grilla — sin perder las horas viejas sin projectNumber
+    // (que un join por número descartaría) ni cambiar con la semana/contractor filtrados.
+    const projectScope = {
+      ...filters,
+      contractors: [],
+      clients: [],
+      tasks: [],
+      billingStatuses: [],
+      statuses: [],
+      allocations: [],
+      dateFrom: '',
+      dateTo: '',
+      week: '',
+      weekStart: '',
     }
-  }, [filtered, filteredAllAllocations, invoiceByEntryId])
+    const projectEntries = applyEntryFilters(
+      entriesConCliente,
+      projectScope,
+      invoiceByEntryId,
+      masterNames,
+    )
+    // Consumed = Approved bill_to_client. sp_internal NO cuenta acá (va en su sección
+    // aparte, decisión del usuario) — a diferencia de Client Summary, que sí lo suma.
+    let consumed = 0
+    const names = new Set()
+    const nums = new Set()
+    for (const en of projectEntries) {
+      if (en.project) names.add(en.project)
+      if (en.projectNumber) nums.add(en.projectNumber)
+      if (en.status === 'Approved' && en.allocation === 'bill_to_client') {
+        consumed += Number(en.hours) || 0
+      }
+    }
+    // Si el scope abarca varios proyectos (por nombre o número) no es "un proyecto" → "—".
+    if (names.size > 1 || nums.size > 1) return null
+    // Budget: con un projectNumber real, tiene que matchear EXACTAMENTE un proyecto. Si
+    // el número está DUPLICADO (id49/id50), consumed mezclaría los dos y el budget saldría
+    // de uno → ambiguo, se descarta todo el cuadro ("—"). Con projectNumber vacío (proyecto
+    // legacy filtrado por nombre) no hay budget pero el consumed sí vale → "consumed / —".
+    let budget = null
+    if (nums.size === 1) {
+      const [num] = [...nums]
+      const matches = projects.filter((p) => p.projectNumber === num)
+      if (matches.length !== 1) return null
+      budget = crsLoaded
+        ? effectiveBudgetHours(matches[0].baseBudgetHours, crsByProject.get(String(matches[0].id)) ?? [])
+        : null
+    }
+    return { budget, consumed }
+  }, [filters, entriesConCliente, invoiceByEntryId, masterNames, projects, crsByProject, crsLoaded])
 
   // Las horas facturables ordenadas por cliente → semana domingo→sábado → filas
   // proveedor·proyecto·task (billingGrouping). "Sin cliente" queda arriba, no es
@@ -489,23 +554,6 @@ export function BillingPage() {
     () => clientGroups.filter((g) => !g.isUnassigned).length,
     [clientGroups],
   )
-
-  // Tarjetas (No client / Clients to bill): resumen de lo PENDIENTE (aprobado,
-  // bill_to_client, sin facturar), calculado directo de `filtered` en una sola
-  // pasada. No dependen del filtro de estado de la grilla (que puede mostrar
-  // facturadas) ni requieren un segundo grouping.
-  const { billableClientCount, sinClienteHours } = useMemo(() => {
-    const clients = new Set()
-    let unassignedHours = 0
-    for (const e of filtered) {
-      if (e.status !== 'Approved') continue
-      if (invoiceByEntryId.has(String(e.id))) continue
-      const client = e.client || ''
-      if (client === '') unassignedHours += Number(e.hours) || 0
-      else clients.add(client)
-    }
-    return { billableClientCount: clients.size, sinClienteHours: unassignedHours }
-  }, [filtered, invoiceByEntryId])
 
   // Horas pendientes de facturar por cliente+proyecto+contractor, sobre TODAS las
   // entries (NO las filtradas). El aviso del modal tiene que reflejar lo que realmente
@@ -1066,15 +1114,31 @@ export function BillingPage() {
                 {cards.pendingCount} approved {cards.pendingCount === 1 ? 'entry' : 'entries'}
               </span>
             </div>
+            {/* Cuadro #2: Seleccionadas + Consumidas / Budget. El "+" y el "/" son
+                formato de texto (no operaciones). Consumed y budget se muestran con un
+                filtro activo aunque no haya selección; sin filtro ni selección → "—".
+                Budget sólo cuando el filtro deja un único proyecto (singleProjectBudget). */}
             <div className="dash-kpi dash-kpi--static">
               <div className="dash-kpi__head">
-                <span className="dash-kpi__label">No client</span>
+                <span className="dash-kpi__label">Selected + consumed / budget</span>
               </div>
               <span className="dash-kpi__value">
-                {formatHours(sinClienteHours)}
-                <span className="dash-kpi__unit"> h</span>
+                {singleProject ? (
+                  <>
+                    {formatHours(selectedHours)}
+                    <span className="dash-kpi__unit"> + </span>
+                    {formatHours(singleProject.consumed)}
+                    <span className="dash-kpi__unit"> / </span>
+                    {singleProject.budget != null ? formatHours(singleProject.budget) : '—'}
+                    <span className="dash-kpi__unit"> h</span>
+                  </>
+                ) : (
+                  '—'
+                )}
               </span>
-              <span className="dash-kpi__hint">bill-to-client with no resolved client</span>
+              <span className="dash-kpi__hint">
+                {singleProject ? 'selected + consumed / budget' : 'filter to one project'}
+              </span>
             </div>
             <div className="dash-kpi dash-kpi--static">
               <div className="dash-kpi__head">
@@ -1091,12 +1155,23 @@ export function BillingPage() {
             </div>
             <div className="dash-kpi dash-kpi--static">
               <div className="dash-kpi__head">
-                <span className="dash-kpi__label">Clients to bill</span>
+                <span className="dash-kpi__label">Unallocated</span>
               </div>
-              <span className="dash-kpi__value">{billableClientCount}</span>
-              <span className="dash-kpi__hint">
-                {billableClientCount === 1 ? 'client with' : 'clients with'} pending hours
+              <span className="dash-kpi__value">
+                {formatHours(cards.unallocated)}
+                <span className="dash-kpi__unit"> h</span>
               </span>
+              <span className="dash-kpi__hint">approved, not yet classified in Entries</span>
+            </div>
+            <div className="dash-kpi dash-kpi--static">
+              <div className="dash-kpi__head">
+                <span className="dash-kpi__label">Overage</span>
+              </div>
+              <span className="dash-kpi__value">
+                {formatHours(cards.overage)}
+                <span className="dash-kpi__unit"> h</span>
+              </span>
+              <span className="dash-kpi__hint">overage hours pending payment</span>
             </div>
           </div>
 
