@@ -175,11 +175,12 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
     // allSettled, no all: un fallo en una de las dos no debe tirar la otra —
     // si no, "sin stages/tasks" (vacío real) queda indistinguible de "no se
     // pudo cargar" (fetch falló), y el usuario ve la lista vacía sin saber
-    // cuál de las dos pasó. Stages solo se pide si el proyecto las tiene —
-    // pedirlas siempre es una query de más para la mayoría de los proyectos
-    // (sin stages), que ni se renderiza.
+    // cuál de las dos pasó. Los stages se piden SIEMPRE (no solo si has_stages):
+    // un proyecto puede tener project_stages huérfanos (quedó de un Yes→No, sin
+    // borrado), y al re-activar "Has stages?" (No→Yes) hay que verlos para no
+    // colisionar de posición ni resucitarlos de forma ambigua.
     Promise.allSettled([
-      initial.hasStages ? api.projects.getStages(initial.id) : Promise.resolve([]),
+      api.projects.getStages(initial.id),
       api.projectTasks.list(initial.id),
     ]).then(([stagesResult, tasksResult]) => {
       if (cancelled) return
@@ -280,7 +281,12 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
     setForm((prev) => ({
       ...prev,
       hasStages: checked,
-      stages: checked && prev.stages.length === 0 ? [emptyStage()] : prev.stages,
+      // Siembra un stage vacío al activar SÓLO si no hay ninguno (ni nuevo ni existente):
+      // al re-activar un proyecto que ya tenía stages (orphans), no agrega uno en blanco.
+      stages:
+        checked && prev.stages.length === 0 && existingStages.length === 0
+          ? [emptyStage()]
+          : prev.stages,
     }))
   }
 
@@ -357,11 +363,10 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
     (isEdit ? existingTasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0) : 0)
 
   // Una stage recién agregada en esta sesión (form.stages) necesita sus 3
-  // campos; una ya persistida (existingStages, issue 03b) no puede perder
-  // nombre/número (sigue siendo `text not null`), pero su SOW File es
-  // opcional de reemplazar — el que ya tiene sigue siendo válido.
-  const stageMissing = (s) => !s.stageName.trim() || !s.sowNumber.trim() || !s.sowFile
-  const existingStageMissing = (s) => !s.stageName.trim() || !s.sowNumber.trim()
+  // Un stage (nuevo o existente) es inválido si le falta nombre o número (`text not null`).
+  // El SOW File es OPCIONAL (a pedido del usuario). Mismo predicado para ambos.
+  const stageMissing = (s) => !s.stageName.trim() || !s.sowNumber.trim()
+  const existingStageMissing = stageMissing
   // En edición ya hay un SOW subido (initial.sowUrl) — no reemplazarlo no es
   // un error, solo "no hay archivo nuevo".
   const hasSowFileNow = isEdit ? Boolean(initial.sowUrl) || Boolean(form.sowFile) : Boolean(form.sowFile)
@@ -379,7 +384,9 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
       // hasta reabrir el modal (el error ya se muestra en la sección).
       ((isEdit && (Boolean(stagesLoadError) || existingStages.some(existingStageMissing))) ||
         form.stages.some(stageMissing) ||
-        (!isEdit && form.stages.length === 0)),
+        // Con stages, tiene que haber AL MENOS uno (existente o nuevo) — cubre el caso de
+        // edición donde se pasó de "sin stages" a "con stages" sin cargar ninguno todavía.
+        existingStages.length + form.stages.length === 0),
   }
   // Budget: requerido y > 0 (a diferencia del form de edición, que permite vacío
   // y 0 como corrección). parseBudgetInput —fuente única compartida— lo expresa
@@ -452,9 +459,21 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
           baseBudgetHours: Number(form.budgetHours),
           periodStart: form.periodStart,
           periodEnd: form.periodEnd,
+          // Se puede cambiar si el proyecto tiene stages o no (persiste has_stages).
+          hasStages: form.hasStages,
           ...maintenanceFields(),
         }
-        if (!form.hasStages) updates.sowNumber = form.sowNumber.trim()
+        // Sin stages, el SOW vive a nivel proyecto (sowNumber). Con stages, el SOW va por
+        // stage: se LIMPIA el SOW a nivel proyecto (si venía de No→Yes) para que no quede
+        // un SOW fantasma junto a los de los stages. Los project_stages viejos quedan (no
+        // hay política de borrado) pero se ignoran mientras has_stages sea false (ver
+        // getProjects, que sólo enriquece stageSowNumbers si has_stages).
+        if (form.hasStages) {
+          updates.sowNumber = null
+          updates.sowUrl = null
+        } else {
+          updates.sowNumber = form.sowNumber.trim()
+        }
 
         // Stages (issue 03b): solo se manda update de las que realmente
         // cambiaron (nombre/número/archivo) contra el snapshot del fetch —
@@ -716,24 +735,25 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                 </>
               )}
 
-              {isEdit ? (
-                <div className="field">
-                  <label className="field__label">Has stages?</label>
-                  <div className="field__input" style={{ color: 'var(--text-soft)' }}>
-                    {form.hasStages ? 'Yes' : 'No'}
-                  </div>
-                </div>
-              ) : (
-                <label className="settings-check">
-                  <input
-                    type="checkbox"
-                    checked={form.hasStages}
-                    disabled={!form.clientId}
-                    onChange={(e) => toggleHasStages(e.target.checked)}
-                  />
-                  Has stages?
-                </label>
-              )}
+              {/* "Has stages?" editable también en edición: se puede pasar un proyecto de
+                  simple a multi-stage y viceversa. En alta se gatea por clientId (igual que
+                  el resto del form). En edición se deshabilita hasta que carguen los stages
+                  existentes (loadingChildren) —togglear antes dejaría existingStages en []
+                  y sembraría un stage en blanco espurio— y si su carga FALLÓ
+                  (stagesLoadError): sin conocer los stages reales, togglear a "No" los
+                  orphanaría en silencio. */}
+              <label className="settings-check">
+                <input
+                  type="checkbox"
+                  checked={form.hasStages}
+                  disabled={
+                    (!isEdit && !form.clientId) ||
+                    (isEdit && (loadingChildren || Boolean(stagesLoadError)))
+                  }
+                  onChange={(e) => toggleHasStages(e.target.checked)}
+                />
+                Has stages?
+              </label>
 
               {form.hasStages && (
                 <div className="stage-list">
@@ -833,13 +853,13 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                       <div className="field">
                         <label className="field__label" htmlFor={`wz-stage-sow-file-${s.localId}`}>
                           SOW File
-                          <span className="field__req">required</span>
+                          <span className="field__hint">optional</span>
                         </label>
                         <input
                           id={`wz-stage-sow-file-${s.localId}`}
                           type="file"
                           accept=".docx,application/pdf,.pdf"
-                          className={`field__input field__input--file${touched(0) && step1Missing.stages && !s.sowFile ? ' field__input--error' : ''}`}
+                          className="field__input field__input--file"
                           onChange={(e) => setStageField(s.localId, 'sowFile', e.target.files?.[0] ?? null)}
                         />
                         {s.sowFile && (

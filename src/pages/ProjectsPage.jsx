@@ -305,6 +305,10 @@ export function ProjectsPage() {
   // consulta falla, se deja como está y se corrige en el próximo getProjects.
   // Ver projectsData.js.
   async function withStageSows(project) {
+    // Solo si el proyecto tiene stages: si pasó a has_stages=false (Edit SOW), sus
+    // project_stages quedan huérfanos en la DB (no hay borrado) y NO deben reaparecer
+    // como SOW fantasma en la columna/filtro. Mismo criterio que getProjects.
+    if (!project.hasStages) return { ...project, stageSowNumbers: [] }
     try {
       const stages = await api.projects.getStages(project.id)
       return { ...project, stageSowNumbers: stageSows(stages) }
@@ -453,9 +457,11 @@ export function ProjectsPage() {
       // motivo que createProjectFromWizard ya documenta para el alta).
       const uploadResults = await Promise.allSettled(
         childChanges.addedStages.map((s) =>
-          api.projects
-            .uploadSowFile(s.sowFile)
-            .then((sowUrl) => ({ stageName: s.stageName, sowNumber: s.sowNumber, sowUrl })),
+          // SOW File opcional: sin archivo, sowUrl null (no se llama a uploadSowFile,
+          // que tira si el file es null).
+          (s.sowFile ? api.projects.uploadSowFile(s.sowFile) : Promise.resolve(null)).then(
+            (sowUrl) => ({ stageName: s.stageName, sowNumber: s.sowNumber, sowUrl }),
+          ),
         ),
       )
       const firstUploadFailure = uploadResults.find((r) => r.status === 'rejected')
@@ -479,12 +485,16 @@ export function ProjectsPage() {
       }
       await Promise.all(
         createdStages.map((stage, i) =>
-          api.projects.recordDocument({
-            subjectType: 'sow',
-            subjectId: stage.id,
-            fileUrl: uploaded[i].sowUrl,
-            uploadedBy: user?.email ?? null,
-          }),
+          // Solo si el stage tiene archivo (SOW File opcional): file_url es NOT NULL, un
+          // sowUrl null haría fallar el insert best-effort. El guard preserva el índice.
+          uploaded[i].sowUrl
+            ? api.projects.recordDocument({
+                subjectType: 'sow',
+                subjectId: stage.id,
+                fileUrl: uploaded[i].sowUrl,
+                uploadedBy: user?.email ?? null,
+              })
+            : null,
         ),
       )
     }

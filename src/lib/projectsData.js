@@ -384,7 +384,9 @@ export async function getProjects() {
     return [...demoProjects]
       .map((p) => ({
         ...p,
-        stageSowNumbers: stageSows(demoStages[p.id]),
+        // Solo si has_stages (igual que el path real): un proyecto que pasó a sin-stages
+        // no muestra sus stages huérfanos como SOW fantasma.
+        stageSowNumbers: p.hasStages ? stageSows(demoStages[p.id]) : [],
       }))
       .sort((a, b) =>
         (a.contractExpirationDate || '9999-99-99').localeCompare(
@@ -430,7 +432,10 @@ export async function getProjects() {
       sowsByProject.set(row.project_id, list)
     }
     for (const project of projects) {
-      project.stageSowNumbers = sowsByProject.get(project.id) ?? []
+      // Solo los proyectos con has_stages=true muestran sus SOW de stage. Si un proyecto
+      // pasó de "con stages" a "sin stages" (Edit SOW), sus project_stages quedan en la DB
+      // (no hay política de borrado) pero NO deben aparecer como SOW fantasma en la lista.
+      project.stageSowNumbers = project.hasStages ? sowsByProject.get(project.id) ?? [] : []
     }
   }
   return projects
@@ -1157,8 +1162,10 @@ export async function createProjectFromWizard(payload, createdBy) {
   // limpiarlos, cosa que Promise.all no nos da (rechaza sin resultados).
   const stageUploads = payload.hasStages
     ? await Promise.allSettled(
+        // El SOW File del stage es OPCIONAL: si no hay archivo, sowUrl queda null (no se
+        // llama a uploadSowFile, que tira si el file es null).
         (stages ?? []).map((stage) =>
-          uploadSowFile(stage.sowFile).then((url) => ({
+          (stage.sowFile ? uploadSowFile(stage.sowFile) : Promise.resolve(null)).then((url) => ({
             stageName: stage.stageName,
             sowNumber: stage.sowNumber,
             sowUrl: url,
@@ -1202,12 +1209,17 @@ export async function createProjectFromWizard(payload, createdBy) {
       const createdStages = await createProjectStages(project.id, stagesWithUrls, createdBy)
       await Promise.all(
         createdStages.map((stage, i) =>
-          recordProjectDocument({
-            subjectType: 'sow',
-            subjectId: stage.id,
-            fileUrl: stagesWithUrls[i].sowUrl,
-            uploadedBy: createdBy,
-          }),
+          // Solo se registra documento si el stage tiene archivo: con SOW File opcional,
+          // sowUrl puede ser null y project_documents.file_url es NOT NULL (el insert
+          // fallaría, aunque best-effort lo trague). El guard preserva el índice.
+          stagesWithUrls[i].sowUrl
+            ? recordProjectDocument({
+                subjectType: 'sow',
+                subjectId: stage.id,
+                fileUrl: stagesWithUrls[i].sowUrl,
+                uploadedBy: createdBy,
+              })
+            : null,
         ),
       )
     }
