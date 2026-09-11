@@ -509,20 +509,19 @@ export function BillingPage() {
   // Cuadro #2: consumed (Approved bill_to_client del proyecto COMPLETO) + budget efectivo
   // de UN proyecto identificado por nombre y/o número. Ignora semana/contractor/estado.
   // Devuelve null si el scope abarca 0 o >1 proyecto. Lo usan tanto el filtro de proyecto
-  // (singleProject) como la selección de filas (selectionProject).
+  // (singleProject, sin cliente) como la selección de filas (selectionProject, que pasa
+  // el cliente del scope). `clients` acota el consumed a ESE cliente para no sumar un
+  // proyecto homónimo de otro cliente; se compara por cliente CRUDO (sin masterNames,
+  // igual que selectionKpis) para matchear también clientes legacy/Others.
   const projectStatsFor = useCallback(
     (projectSel) => {
       if (!projectSel.projects.length && !projectSel.projectNumbers.length) return null
       const projectScope = projectClientScope({
+        clients: projectSel.clients ?? [],
         projects: projectSel.projects,
         projectNumbers: projectSel.projectNumbers,
       })
-      const projectEntries = applyEntryFilters(
-        entriesConCliente,
-        projectScope,
-        invoiceByEntryId,
-        masterNames,
-      )
+      const projectEntries = applyEntryFilters(entriesConCliente, projectScope, invoiceByEntryId)
       // Consumed = Approved bill_to_client. sp_internal NO cuenta acá (va en su sección
       // aparte, decisión del usuario) — a diferencia de Client Summary, que sí lo suma.
       let consumed = 0
@@ -552,7 +551,7 @@ export function BillingPage() {
       }
       return { budget, consumed }
     },
-    [entriesConCliente, invoiceByEntryId, masterNames, projects, crsByProject, crsLoaded],
+    [entriesConCliente, invoiceByEntryId, projects, crsByProject, crsLoaded],
   )
 
   // Cuadro #2 por FILTRO: cuando el usuario filtró EXPLÍCITAMENTE por proyecto (nombre o
@@ -692,47 +691,39 @@ export function BillingPage() {
     }
   }, [clientGroups])
 
-  // Filas seleccionadas, memoizadas: es la MISMA proyección selección→filas que usan
-  // selectionProjectNames y cardScope, así se materializa una vez por cambio de
-  // selección en vez de tres veces por render.
+  // Filas seleccionadas, memoizadas: la MISMA proyección selección→filas que consumen
+  // selectedEntries/selectedHours y cardScope, materializada una vez por cambio de
+  // selección en vez de en cada render.
   const selectedRows = useMemo(
     () => [...selectedKeys].map((k) => billableRows.get(k)).filter(Boolean),
     [selectedKeys, billableRows],
   )
-  const selectedEntries = selectedRows.flatMap((r) => r.entries)
-  const selectedHours = selectedRows.reduce((sum, r) => sum + r.hours, 0)
-  // Cuadro #2 por SELECCIÓN: cuando tildás filas de UN solo proyecto (aunque no haya
-  // filtro de proyecto). Deriva el nombre del proyecto de las filas seleccionadas y
-  // reusa projectStatsFor para su consumed/budget completos. Se deriva de selectedRows
-  // (ya memoizado), así el memo no re-corre si la selección no cambió.
-  const selectionProjectNames = useMemo(() => {
-    const names = new Set()
-    for (const r of selectedRows) {
-      if (r?.project) names.add(r.project)
-    }
-    return [...names]
-  }, [selectedRows])
-  const selectionProject = useMemo(
-    () =>
-      selectionProjectNames.length
-        ? projectStatsFor({ projects: selectionProjectNames, projectNumbers: [] })
-        : null,
-    [selectionProjectNames, projectStatsFor],
+  const selectedEntries = useMemo(() => selectedRows.flatMap((r) => r.entries), [selectedRows])
+  const selectedHours = useMemo(
+    () => selectedRows.reduce((sum, r) => sum + r.hours, 0),
+    [selectedRows],
   )
 
-  // #2: los CINCO cuadros reflejan la SELECCIÓN cuando hay filas tildadas de un solo
-  // cliente — un proyecto → ese proyecto; varios (o alguna sin proyecto) → la suma de
-  // TODOS los proyectos del cliente (cardScopeFromSelection). Se miden sobre el
-  // proyecto/cliente COMPLETO, ignorando semana/contractor, igual criterio que el
-  // cuadro "Selected + consumed / budget". Si la selección cruza clientes o está vacía,
-  // los cuadros siguen el filtro de la barra. Se deriva de selectedRows (ya memoizado).
+  // #2: alcance de los CINCO cuadros derivado de la SELECCIÓN (cardScopeFromSelection):
+  // un cliente + un proyecto → ese proyecto; un cliente + varios (o alguna fila sin
+  // proyecto) → TODOS los proyectos del cliente; si cruza clientes o está vacía → null
+  // (los cuadros siguen el filtro de la barra). Se miden sobre el proyecto/cliente
+  // COMPLETO, ignorando semana/contractor. Se deriva de selectedRows (ya memoizado).
   const cardScope = useMemo(() => cardScopeFromSelection(selectedRows), [selectedRows])
-  // El cuadro #2 usa el MISMO gate que los otros cuatro (cardScope): con selección de un
-  // solo cliente manda la selección; si cruza clientes o está vacía, vale el filtro. Así
-  // los cinco cuadros hablan siempre del mismo scope (antes #2 cambiaba con cualquier
-  // selección y podía discrepar con los otros cuatro en una selección multi-cliente).
-  // Con cliente único y varios proyectos, selectionProject es null → #2 va "—" mientras
-  // los otros muestran la suma del cliente (el budget es por proyecto, no por cliente).
+
+  // Cuadro #2 (consumed/budget) por selección: SÓLO cuando el scope es de un proyecto
+  // (un cliente + un proyecto). Pasa el cliente del scope a projectStatsFor para no sumar
+  // un homónimo de otro cliente y coincidir con los otros cuatro cuadros. Con scope de
+  // cliente entero (projects:[]) va null → el cuadro muestra "—" (el budget es por
+  // proyecto, no por cliente). Mismo gate (cardScope) que los otros cuatro: los cinco
+  // hablan siempre del mismo scope.
+  const selectionProject = useMemo(
+    () =>
+      cardScope && cardScope.projects.length === 1
+        ? projectStatsFor({ clients: cardScope.clients, projects: cardScope.projects, projectNumbers: [] })
+        : null,
+    [cardScope, projectStatsFor],
+  )
   const budgetCardProject = cardScope ? selectionProject : singleProject
   const selectionKpis = useMemo(() => {
     if (!cardScope) return null
