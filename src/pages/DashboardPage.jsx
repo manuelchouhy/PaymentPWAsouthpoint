@@ -609,7 +609,12 @@ export function DashboardPage() {
               el filtro Cliente/Proyecto (scopedProjects); Supplier Contracts sólo el de
               Contractor (no tiene cliente en los datos). */}
           <div className="dash-secondary">
-            <ContractsExpiringWidget limit={5} projects={scopedProjects} loading={!filtersLoaded} />
+            <ContractsExpiringWidget
+              limit={5}
+              projects={scopedProjects}
+              loading={!filtersLoaded}
+              filtered={clientProjectActive}
+            />
             <SupplierContractsWidget contractorFilter={filters.contractors} />
           </div>
 

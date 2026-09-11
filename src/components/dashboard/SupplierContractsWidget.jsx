@@ -8,6 +8,16 @@ import { formatDate } from '../../lib/format'
 
 const COUNTED = ['Expired', 'Critical', 'Expiring Soon', 'Active']
 
+// Normaliza un nombre para comparar contractor (time_entries.user) contra supplierName
+// (supplier_contracts): sin acentos, espacios colapsados, minúsculas.
+const normalizeName = (s) =>
+  (s ?? '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+
 /**
  * Widget "Supplier Contracts" (FR-16). Contadores por estado y, si hay
  * proveedores priority en alerta, los destaca arriba con su nombre.
@@ -42,17 +52,16 @@ export function SupplierContractsWidget({ contractorFilter }) {
   }, [])
 
   // Filtro por Contractor del Dashboard (los supplier contracts no tienen cliente): con
-  // nombres elegidos, sólo los proveedores cuyo supplierName está en esa lista; vacío/
-  // ausente → todos. Match por igualdad exacta de nombre: si un contractor no es un
-  // proveedor (o el nombre difiere), no matchea → contadores en 0 (no hay contrato de ese
-  // proveedor), que es la lectura correcta.
-  const scoped = useMemo(
-    () =>
-      contractorFilter?.length
-        ? contracts.filter((c) => contractorFilter.includes(c.supplierName))
-        : contracts,
-    [contracts, contractorFilter],
-  )
+  // nombres elegidos, sólo los proveedores cuyo supplierName matchea alguno. El match
+  // NORMALIZA ambos lados (sin acentos, espacios colapsados, minúsculas) porque el nombre
+  // del contractor viene de time_entries.user y el del proveedor de supplier_contracts:
+  // una diferencia de acento/espaciado no debe vaciar el widget. Si aún así no matchea,
+  // los contadores quedan en 0 (ese contractor no tiene contrato) — la lectura correcta.
+  const scoped = useMemo(() => {
+    if (!contractorFilter?.length) return contracts
+    const wanted = new Set(contractorFilter.map(normalizeName))
+    return contracts.filter((c) => wanted.has(normalizeName(c.supplierName)))
+  }, [contracts, contractorFilter])
 
   const counts = COUNTED.reduce((acc, s) => ({ ...acc, [s]: 0 }), {})
   for (const c of scoped) {

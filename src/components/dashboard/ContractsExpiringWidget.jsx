@@ -16,9 +16,14 @@ import { formatDate } from '../../lib/format'
  * mostrar "No contracts" con la lista todavía vacía). Sin la prop `projects` (montado
  * suelto) fetchea todos los proyectos como antes.
  *
- * @param {{ limit?: number, projects?: Array, loading?: boolean }} props
+ * @param {{ limit?: number, projects?: Array, loading?: boolean, filtered?: boolean }} props
  */
-export function ContractsExpiringWidget({ limit = 5, projects: projectsProp, loading: loadingProp = false }) {
+export function ContractsExpiringWidget({
+  limit = 5,
+  projects: projectsProp,
+  loading: loadingProp = false,
+  filtered = false,
+}) {
   const [fetched, setFetched] = useState(null)
   const [fetchLoading, setFetchLoading] = useState(projectsProp == null)
 
@@ -65,7 +70,11 @@ export function ContractsExpiringWidget({ limit = 5, projects: projectsProp, loa
       {loading ? (
         <p className="dash-widget__empty">Loading…</p>
       ) : top.length === 0 ? (
-        <p className="dash-widget__empty">No contracts expiring soon.</p>
+        // Empty-state consciente del filtro: con un filtro activo, "no hay para este
+        // filtro" (no "no hay en toda la org"), igual criterio que Supplier Contracts.
+        <p className="dash-widget__empty">
+          {filtered ? 'No contracts for the current filter.' : 'No contracts expiring soon.'}
+        </p>
       ) : (
         <ul className="dash-widget__list">
           {top.map((p) => {
