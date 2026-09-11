@@ -1305,8 +1305,13 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 
 .selbar__count {
   font-family: var(--mono);
-  font-size: 12px;
-  color: var(--text-faint);
+  font-size: 16px;
+  color: var(--text);
+}
+/* Las horas seleccionadas se leen grandes (como el valor de los cuadros KPI). */
+.selbar__count b {
+  font-size: 21px;
+  font-weight: 600;
 }
 
 /* Métrica de selección de Entries: mismo estilo big-number que las KPI cards del
