@@ -210,6 +210,8 @@ export const httpApiClient = {
   projectTasks: {
     // GET /api/projects/:id/tasks → ProjectTask[]
     list: () => notImplemented('projectTasks.list'),
+    // GET /api/projects/:name/logged-tasks → tasks reales (de horas cargadas)
+    logged: () => notImplemented('projectTasks.logged'),
     // POST /api/projects/:id/tasks → ProjectTask[]
     create: () => notImplemented('projectTasks.create'),
     // PATCH /api/projects/tasks/:id → ProjectTask

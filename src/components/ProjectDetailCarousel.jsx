@@ -875,10 +875,10 @@ function ChangeRequestsSlide({
 
 /**
  * Slide "Stages & Tasks" (slice 12, lote WhatsApp 2026-09-10): vista de árbol de los
- * stages del proyecto con sus tasks anidados. El agrupado lo hace `buildProjectTaskTree`
- * (módulo puro); acá solo se renderiza. Cada stage es un nodo expandible; un click en el
- * header abre/cierra la lista de tasks. Hoy los tasks no tienen `stageId` en el schema, así
- * que caen todos en el nodo "Sin stage" — ver open item del slice.
+ * stages del proyecto y sus tasks. El agrupado lo hace `buildProjectTaskTree` (módulo puro);
+ * acá solo se renderiza. Cada nodo es expandible; un click en el header abre/cierra su lista.
+ * Los tasks son los REALES del proyecto (los de las horas cargadas, con horas). Como no hay
+ * link stage↔task, caen todos en el nodo "Tasks".
  */
 function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggle }) {
   if (loading) return <p className="drawer__empty">Loading stages & tasks…</p>
@@ -938,15 +938,23 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
                     // filas ni chocar con un id real igual al índice (lista read-only).
                     <li key={t.id ?? `idx-${i}`} className="stage-tree__task">
                       <span className="stage-tree__task-name">{t.taskName || '—'}</span>
-                      <span className="stage-tree__task-meta">
-                        {t.role || '—'}
-                        {/* rowToTask coacciona estimated_hours con Number(): un valor
-                            ausente llega como 0 o NaN, no null — así que filtramos por
-                            "finito y > 0" para no mostrar " · 0 h"/" · NaN h". */}
-                        {Number.isFinite(t.estimatedHours) && t.estimatedHours > 0
-                          ? ` · ${t.estimatedHours} h`
-                          : ''}
-                      </span>
+                      {/* Horas cargadas del task + estado de aprobación. formatHours
+                          redondea para no mostrar 12.3999… al sumar fracciones. El
+                          "all approved" sale del flag del dato (todas las entries
+                          Approved), no de comparar sumas (robusto ante correcciones
+                          negativas). */}
+                      {(() => {
+                        const hours = Number(t.hours ?? 0)
+                        return (
+                          <span className="stage-tree__task-meta">
+                            {hours > 0 ? `${formatHours(hours)} h` : '—'}
+                            {hours > 0 &&
+                              (t.allApproved
+                                ? ' · all approved'
+                                : ` · ${formatHours(Number(t.approvedHours ?? 0))} h approved`)}
+                          </span>
+                        )
+                      })()}
                     </li>
                   ))}
                 </ul>
@@ -1181,16 +1189,18 @@ export function ProjectDetailCarousel({
   }, [project.id, project.hasStages])
 
   // Tasks del slide "Stages & Tasks" (slice 12). Carga perezosa: recién cuando el
-  // usuario abre el slide (treeRequested) — no todos los que abren el pop up van al
-  // árbol. Los stages ya los trae el efecto de arriba. Si `hasStages` es false igual
-  // se muestran los tasks bajo "Sin stage".
+  // usuario abre el slide (treeRequested). Se traen los tasks REALES del proyecto (los
+  // distintos `task` de sus horas cargadas en Zoho, con sus horas) — NO los task_name
+  // del scope del SOW (project_tasks), que casi nunca se cargan. Por nombre de proyecto,
+  // que es como matchean las horas (no hay FK con project_tasks). Los stages ya los trae
+  // el efecto de arriba.
   useEffect(() => {
     if (!treeRequested) return
     let cancelled = false
     setTreeLoading(true)
     setTreeError(false)
     Promise.resolve()
-      .then(() => api.projectTasks.list(project.id))
+      .then(() => api.projectTasks.logged(project.projectName))
       .then((tasks) => !cancelled && setTreeTasks(Array.isArray(tasks) ? tasks : []))
       .catch((error) => {
         if (cancelled) return
@@ -1201,7 +1211,7 @@ export function ProjectDetailCarousel({
     return () => {
       cancelled = true
     }
-  }, [project.id, treeRequested])
+  }, [project.projectName, treeRequested])
 
   useEffect(() => {
     function onKeyDown(event) {

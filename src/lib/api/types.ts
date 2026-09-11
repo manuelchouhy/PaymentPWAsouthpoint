@@ -542,6 +542,18 @@ export interface ApiClient {
 
   projectTasks: {
     list(projectId: string | number): Promise<ProjectTask[]>
+    /** Tasks REALES del proyecto: los `task` de sus horas cargadas, con horas. */
+    logged(
+      projectName: string,
+    ): Promise<
+      Array<{
+        id: string
+        taskName: string
+        hours: number
+        approvedHours: number
+        allApproved: boolean
+      }>
+    >
     create(
       projectId: string | number,
       tasks: Array<{ taskName: string; role?: string | null; estimatedHours: number }>,
