@@ -3224,15 +3224,14 @@ th.col-pop { text-align: center; }
 }
 /* id del task (task_number de Zoho, largo): mono, atenuado y truncado con ellipsis.
    No se encoge por debajo de su caja (flex-shrink: 0) para no desaparecer. */
+/* id del task (task_number de Zoho): se muestra ENTERO (a pedido del usuario), sin
+   truncar. Mono/atenuado; no se encoge (flex-shrink: 0). */
 .stage-tree__task-id {
   flex-shrink: 0;
   font-family: var(--mono);
   font-size: 11px;
   color: var(--text-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 12ch;
 }
 .stage-tree__task-meta {
   font-size: 12px;
