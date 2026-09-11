@@ -163,9 +163,12 @@ export function DashboardPage() {
         projects: projects ?? prev.projects,
         clients: clients ?? prev.clients,
       }))
-      // Sólo se marca "cargado" si ALGÚN fetch trajo datos: si los dos fallaron (null) en
-      // la primera carga, queda en loading en vez de mostrar un "No contracts" engañoso.
-      if (projects != null || clients != null) setFiltersLoaded(true)
+      // Se marca "cargado" al terminar el INTENTO (los fetches ya cachearon null en su
+      // catch, así que este .then siempre corre): así el widget de contratos nunca queda
+      // pegado en "Loading…" para siempre. Si ambos fallaron en la 1ra carga muestra su
+      // vacío ("No contracts"), mejor que un spinner infinito — el fallo es raro y el resto
+      // del dashboard ya renderizó.
+      setFiltersLoaded(true)
     })
     return () => {
       cancelled = true
@@ -241,10 +244,33 @@ export function DashboardPage() {
   // grupo y coinciden — sólo divergirían con un entry.client legacy no vacío.
   const scopedEntryIds = useMemo(() => {
     if (!clientProjectActive) return null // sin filtro → sin recorte
-    const cpFilters = { ...filters, contractors: [], billingStatuses: [] }
+    // Sólo las dimensiones Cliente/Proyecto (el resto vacío): así togglear Contractor o
+    // Status —excluidos de este scope— no invalida el memo (las deps son las 3 dims, no el
+    // objeto `filters` entero) ni cambia el resultado.
+    const cpFilters = {
+      clients: filters.clients,
+      projects: filters.projects,
+      projectNumbers: filters.projectNumbers,
+      contractors: [],
+      tasks: [],
+      statuses: [],
+      billingStatuses: [],
+      allocations: [],
+      dateFrom: '',
+      dateTo: '',
+      week: '',
+    }
     const scoped = applyEntryFilters(enrichedEntries, cpFilters, invoiceByEntryId, masterNames)
     return new Set(scoped.map((e) => String(e.id)))
-  }, [clientProjectActive, filters, enrichedEntries, invoiceByEntryId, masterNames])
+  }, [
+    clientProjectActive,
+    filters.clients,
+    filters.projects,
+    filters.projectNumbers,
+    enrichedEntries,
+    invoiceByEntryId,
+    masterNames,
+  ])
 
   const scopedInvoices = useMemo(() => {
     if (!data) return []
@@ -276,14 +302,26 @@ export function DashboardPage() {
   // (no el crudo p.client, que puede venir vacío/alias) para que la fila no contradiga el
   // filtro activo.
   const scopedProjects = useMemo(() => {
-    // Sin filtro de cliente/proyecto no se recorta ni se re-mapea: lista tal cual (el
-    // widget muestra p.client crudo, como antes). Con filtro, se recorta y se muestra el
-    // cliente resuelto para que la fila no contradiga el filtro.
-    if (!clientProjectActive) return filterData.projects
-    return filterData.projects
-      .filter((p) => matchesProjectFilter(p, filters, masterNames, resolveProjectClient))
-      .map((p) => ({ ...p, client: resolveProjectClient(p).client || p.client }))
-  }, [clientProjectActive, filterData.projects, filters, masterNames, resolveProjectClient])
+    // Se recorta sólo si hay filtro Cliente/Proyecto activo. El match del proyecto por
+    // NOMBRE usa project.projectName; el filtro de "Project" sale de entry.project (join
+    // hora↔proyecto por id de Zoho, que tolera renames), así que un proyecto renombrado
+    // podría no matchear su contrato aunque sí sus horas — caso borde aceptado (el uso
+    // principal es filtrar por Cliente, que resuelve por grupo y sí coincide).
+    const base = clientProjectActive
+      ? filterData.projects.filter((p) => matchesProjectFilter(p, filters, masterNames, resolveProjectClient))
+      : filterData.projects
+    // Se muestra SIEMPRE el cliente resuelto (filtrado o no) para que la etiqueta de la
+    // fila no cambie al togglear el filtro y no muestre un alias/vacío legacy.
+    return base.map((p) => ({ ...p, client: resolveProjectClient(p).client || p.client }))
+  }, [
+    clientProjectActive,
+    filterData.projects,
+    filters.clients,
+    filters.projects,
+    filters.projectNumbers,
+    masterNames,
+    resolveProjectClient,
+  ])
 
   // Map: invoiceId → last collection date (sobre los cobros en scope: el KPI de pagos
   // por vencer sólo mira facturas en scope, así que alcanza con los cobros de esas).

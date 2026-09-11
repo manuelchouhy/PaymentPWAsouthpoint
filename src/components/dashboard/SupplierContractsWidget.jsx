@@ -79,6 +79,10 @@ export function SupplierContractsWidget({ contractorFilter }) {
 
       {loading ? (
         <p className="dash-widget__empty">Loading…</p>
+      ) : contractorFilter?.length && scoped.length === 0 ? (
+        // Con un Contractor filtrado que no es proveedor (o no tiene contrato), en vez de
+        // cuatro ceros mudos se aclara que el filtro los dejó afuera.
+        <p className="dash-widget__empty">No supplier contracts for the selected contractor.</p>
       ) : (
         <>
           {priority.length > 0 && (
