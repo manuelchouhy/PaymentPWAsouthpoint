@@ -1,15 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, ArrowLeft, FileUp, Loader2, Plus, Save, X } from 'lucide-react'
+import { ArrowRight, ArrowLeft, FileUp, Plus, Save, X } from 'lucide-react'
 import { ClientPicker } from './ClientPicker'
-import { parseSowDocument } from '../lib/sowParser'
 import { parseBudgetInput } from '../lib/budgetInput'
-import { isGenericFileType } from '../lib/projectsData'
 import { fileNameFromPath } from '../lib/format'
 import { api } from '../lib/api'
 import { useScrollLock } from '../lib/useScrollLock'
-
-const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
 const STEPS = ['Identification', 'Scope', 'Maintenance', 'Tasks']
 
@@ -128,8 +124,6 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
   const [step, setStep] = useState(0)
   const [form, setForm] = useState(() => initialFormState(initial))
   const [touchedSteps, setTouchedSteps] = useState([])
-  const [parsing, setParsing] = useState(false)
-  const [parseWarnings, setParseWarnings] = useState([])
   const [replacingSow, setReplacingSow] = useState(false)
   const [existingStages, setExistingStages] = useState([])
   const [existingTasks, setExistingTasks] = useState([])
@@ -144,7 +138,6 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const dialogRef = useRef(null)
-  const sowPickTokenRef = useRef(0)
   // Snapshot de como llegaron las stages/tasks del fetch — para el submit,
   // solo se manda update() de las que realmente cambiaron, no todas en cada
   // guardado.
@@ -222,59 +215,11 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
-  async function onPickSowFile(file) {
-    setParseWarnings([])
-    // Token de la selección actual: si el usuario cambia de archivo antes de
-    // que este parse termine, el resultado viejo no debe pisar el form —
-    // parseSowDocument no tiene forma de cancelarse a mitad de camino.
-    const token = ++sowPickTokenRef.current
-    // Cualquier selección nueva invalida un parse anterior en vuelo, así que
-    // apaga su spinner ya mismo — su propio finally también chequea el
-    // token, pero si esta selección no llega a setParsing(true) (los early
-    // return de abajo) nadie más lo va a apagar.
-    setParsing(false)
-    if (!file) {
-      set('sowFile', null)
-      return
-    }
-    set('sowFile', file)
-    // El navegador no siempre resuelve el MIME type de un .docx (falta la
-    // asociación en el SO → llega '' o 'application/octet-stream'); en ese
-    // caso confiamos en la extensión, igual que uploadSowFile en projectsData.js.
-    const isDocx =
-      file.type === DOCX_MIME || (isGenericFileType(file.type) && file.name.toLowerCase().endsWith('.docx'))
-    if (!isDocx) return // PDF: sin auto-extract, se completa a mano
-
-    setParsing(true)
-    try {
-      const parsed = await parseSowDocument(file)
-      if (sowPickTokenRef.current !== token) return // el usuario ya eligió otro archivo
-      const parsedBudgetHours = parsed.budgetHours != null ? String(parsed.budgetHours) : ''
-      setForm((prev) =>
-        isEdit
-          // Reemplazo explícito en edición: el usuario acaba de elegir ESTE
-          // documento a propósito — lo parseado gana sobre lo que ya estaba
-          // precargado del proyecto (initialFormState), si no un replace
-          // nunca actualizaría nada porque esos campos ya vienen no-vacíos.
-          ? {
-              ...prev,
-              sowNumber: parsed.sowNumber || prev.sowNumber || '',
-              budgetHours: parsedBudgetHours || prev.budgetHours || '',
-              periodStart: parsed.periodStart || prev.periodStart || '',
-              periodEnd: parsed.periodEnd || prev.periodEnd || '',
-            }
-          : {
-              ...prev,
-              sowNumber: prev.sowNumber || parsed.sowNumber || '',
-              budgetHours: prev.budgetHours || parsedBudgetHours,
-              periodStart: prev.periodStart || parsed.periodStart || '',
-              periodEnd: prev.periodEnd || parsed.periodEnd || '',
-            },
-      )
-      setParseWarnings(parsed.warnings)
-    } finally {
-      if (sowPickTokenRef.current === token) setParsing(false)
-    }
+  function onPickSowFile(file) {
+    // El archivo del SOW se adjunta como documento del proyecto pero YA NO se lee/parsea:
+    // todos los datos del SOW (número, fechas estimadas, horas) se cargan a mano. Antes un
+    // .docx del template autocompletaba el paso Scope; esa lectura se removió a pedido.
+    set('sowFile', file ?? null)
   }
 
   function toggleHasStages(checked) {
@@ -717,7 +662,7 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                     <label className="field__label" htmlFor="wz-sow-file">
                       SOW File
                       {!isEdit && <span className="field__req">required</span>}
-                      <span className="field__hint">.docx (auto-fills Scope) or PDF</span>
+                      <span className="field__hint">.docx or PDF (attachment only)</span>
                     </label>
                     {isEdit && !replacingSow ? (
                       <div className="field__input" style={{ justifyContent: 'space-between' }}>
@@ -736,12 +681,7 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                         onChange={(e) => onPickSowFile(e.target.files?.[0] ?? null)}
                       />
                     )}
-                    {parsing && (
-                      <span className="field__hint">
-                        <Loader2 size={13} className="icon-spin" aria-hidden="true" /> Reading SOW…
-                      </span>
-                    )}
-                    {form.sowFile && !parsing && (
+                    {form.sowFile && (
                       <span className="field__filename">
                         <FileUp size={13} aria-hidden="true" /> {form.sowFile.name}
                       </span>
@@ -749,11 +689,6 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                     {touched(0) && step1Missing.sowFile && (
                       <span className="field__error">The SOW file is required.</span>
                     )}
-                    {parseWarnings.map((w, i) => (
-                      <span className="field__error" key={i}>
-                        {w}
-                      </span>
-                    ))}
                     {isEdit && replacingSow && (
                       <span className="field__hint">
                         Replacing uploads a new version — the previous one stays in history, never deleted.
