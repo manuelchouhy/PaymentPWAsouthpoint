@@ -739,13 +739,18 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
               {/* "Has stages?" editable también en edición: se puede pasar un proyecto de
                   simple a multi-stage y viceversa. En alta se gatea por clientId (igual que
                   el resto del form). En edición se deshabilita hasta que carguen los stages
-                  existentes (loadingChildren): togglear antes dejaría existingStages en []
-                  y sembraría un stage en blanco espurio. */}
+                  existentes (loadingChildren) —togglear antes dejaría existingStages en []
+                  y sembraría un stage en blanco espurio— y si su carga FALLÓ
+                  (stagesLoadError): sin conocer los stages reales, togglear a "No" los
+                  orphanaría en silencio. */}
               <label className="settings-check">
                 <input
                   type="checkbox"
                   checked={form.hasStages}
-                  disabled={(!isEdit && !form.clientId) || (isEdit && loadingChildren)}
+                  disabled={
+                    (!isEdit && !form.clientId) ||
+                    (isEdit && (loadingChildren || Boolean(stagesLoadError)))
+                  }
                   onChange={(e) => toggleHasStages(e.target.checked)}
                 />
                 Has stages?

@@ -1162,8 +1162,10 @@ export async function createProjectFromWizard(payload, createdBy) {
   // limpiarlos, cosa que Promise.all no nos da (rechaza sin resultados).
   const stageUploads = payload.hasStages
     ? await Promise.allSettled(
+        // El SOW File del stage es OPCIONAL: si no hay archivo, sowUrl queda null (no se
+        // llama a uploadSowFile, que tira si el file es null).
         (stages ?? []).map((stage) =>
-          uploadSowFile(stage.sowFile).then((url) => ({
+          (stage.sowFile ? uploadSowFile(stage.sowFile) : Promise.resolve(null)).then((url) => ({
             stageName: stage.stageName,
             sowNumber: stage.sowNumber,
             sowUrl: url,

@@ -457,9 +457,11 @@ export function ProjectsPage() {
       // motivo que createProjectFromWizard ya documenta para el alta).
       const uploadResults = await Promise.allSettled(
         childChanges.addedStages.map((s) =>
-          api.projects
-            .uploadSowFile(s.sowFile)
-            .then((sowUrl) => ({ stageName: s.stageName, sowNumber: s.sowNumber, sowUrl })),
+          // SOW File opcional: sin archivo, sowUrl null (no se llama a uploadSowFile,
+          // que tira si el file es null).
+          (s.sowFile ? api.projects.uploadSowFile(s.sowFile) : Promise.resolve(null)).then(
+            (sowUrl) => ({ stageName: s.stageName, sowNumber: s.sowNumber, sowUrl }),
+          ),
         ),
       )
       const firstUploadFailure = uploadResults.find((r) => r.status === 'rejected')
