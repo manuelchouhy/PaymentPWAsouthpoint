@@ -141,55 +141,61 @@ export function ProjectsPage() {
   // menos uno EN EL SCOPE de status — o si ya está seleccionado, para que siga
   // siendo destildable aunque el toggle de status lo saque del scope (mismo criterio
   // que las otras opciones). Mismo armado que Entries y Billing.
+  // Predicado ÚNICO de match de un proyecto contra los filtros (multi-selects + rango de
+  // exp + tarjeta de estado). `skip` (opcional) omite una dimensión, para cruzar SUS
+  // opciones. Lo usan tanto la grilla (filteredIgnoringActive, sin skip) como el
+  // interlazado de opciones (optionScope, con skip) — una sola fuente de verdad para que
+  // las opciones nunca ofrezcan valores que la grilla filtra a cero.
+  const matchesProject = useCallback(
+    (p, skip) => {
+      if (
+        skip !== 'clients' &&
+        filters.clients.length &&
+        !filters.clients.includes(clientFilterKey(p.resolvedClient, masterNames))
+      )
+        return false
+      if (
+        skip !== 'projectNames' &&
+        filters.projectNames.length &&
+        !filters.projectNames.includes(p.projectName)
+      )
+        return false
+      if (
+        skip !== 'projectNumbers' &&
+        filters.projectNumbers.length &&
+        !filters.projectNumbers.includes(p.projectNumber)
+      )
+        return false
+      if (skip !== 'sows' && filters.sows.length) {
+        const sows = projectSows(p)
+        if (!filters.sows.some((s) => sows.includes(s))) return false
+      }
+      if (
+        skip !== 'leadDevelopers' &&
+        filters.leadDevelopers.length &&
+        !filters.leadDevelopers.includes(p.leadDeveloper)
+      )
+        return false
+      if (filters.expFrom && p.contractExpirationDate < filters.expFrom) return false
+      if (filters.expTo && p.contractExpirationDate > filters.expTo) return false
+      if (
+        statusFilter &&
+        contractStatus(daysRemaining(p.contractExpirationDate)) !== statusFilter
+      )
+        return false
+      return true
+    },
+    [filters, masterNames, statusFilter],
+  )
+
   // Interlazado de las opciones (igual que Billing/Dashboard con buildFilterOptions):
   // las opciones de cada dimensión se derivan de los proyectos que pasan TODOS los
   // OTROS filtros (menos el de la propia dimensión), para que elegir un Cliente recorte
-  // Project/Project#/SOW/Lead Dev y no ofrezca combinaciones que dan cero. La propia
-  // dimensión se excluye del cruce (si no, tildar un valor dejaría su lista con un solo
-  // elemento). Base: optionWithClient (ya scopeado por el toggle de status).
+  // Project/Project#/SOW/Lead Dev y no ofrezca combinaciones que dan cero. Base:
+  // optionWithClient (ya scopeado por el toggle de status).
   const optionScope = useCallback(
-    (exceptKey) =>
-      optionWithClient.filter((p) => {
-        if (
-          exceptKey !== 'clients' &&
-          filters.clients.length &&
-          !filters.clients.includes(clientFilterKey(p.resolvedClient, masterNames))
-        )
-          return false
-        if (
-          exceptKey !== 'projectNames' &&
-          filters.projectNames.length &&
-          !filters.projectNames.includes(p.projectName)
-        )
-          return false
-        if (
-          exceptKey !== 'projectNumbers' &&
-          filters.projectNumbers.length &&
-          !filters.projectNumbers.includes(p.projectNumber)
-        )
-          return false
-        if (exceptKey !== 'sows' && filters.sows.length) {
-          const sows = projectSows(p)
-          if (!filters.sows.some((s) => sows.includes(s))) return false
-        }
-        if (
-          exceptKey !== 'leadDevelopers' &&
-          filters.leadDevelopers.length &&
-          !filters.leadDevelopers.includes(p.leadDeveloper)
-        )
-          return false
-        if (filters.expFrom && p.contractExpirationDate < filters.expFrom) return false
-        if (filters.expTo && p.contractExpirationDate > filters.expTo) return false
-        // La tarjeta de estado de contrato activa (statusFilter) también acota la grilla,
-        // así que las opciones deben respetarla para no ofrecer valores que dan cero.
-        if (
-          statusFilter &&
-          contractStatus(daysRemaining(p.contractExpirationDate)) !== statusFilter
-        )
-          return false
-        return true
-      }),
-    [optionWithClient, filters, masterNames, statusFilter],
+    (exceptKey) => optionWithClient.filter((p) => matchesProject(p, exceptKey)),
+    [optionWithClient, matchesProject],
   )
 
   const clientOptions = useMemo(
@@ -237,39 +243,9 @@ export function ProjectsPage() {
   // `visible` (agregándole el filtro de status) como el empty-state hint: si esto
   // tiene filas pero `visible` no, el vacío se debe al filtro de status.
   const filteredIgnoringActive = useMemo(() => {
-    const filtered = withClient.filter((p) => {
-      if (filters.clients.length) {
-        // La clave del proyecto es su cliente del maestro, o el centinela Others si
-        // resuelve fuera de él (legacy o sin cliente) — mismo criterio que
-        // applyEntryFilters usa en Entries/Billing (clientFilterKey).
-        if (!filters.clients.includes(clientFilterKey(p.resolvedClient, masterNames))) {
-          return false
-        }
-      }
-      if (filters.projectNames.length && !filters.projectNames.includes(p.projectName))
-        return false
-      if (filters.projectNumbers.length && !filters.projectNumbers.includes(p.projectNumber))
-        return false
-      if (filters.sows.length) {
-        const sows = projectSows(p)
-        if (!filters.sows.some((s) => sows.includes(s))) return false
-      }
-      if (
-        filters.leadDevelopers.length &&
-        !filters.leadDevelopers.includes(p.leadDeveloper)
-      )
-        return false
-      if (filters.expFrom && p.contractExpirationDate < filters.expFrom) return false
-      if (filters.expTo && p.contractExpirationDate > filters.expTo) return false
-      if (
-        statusFilter &&
-        contractStatus(daysRemaining(p.contractExpirationDate)) !== statusFilter
-      )
-        return false
-      return true
-    })
-    return sortByExp(filtered)
-  }, [withClient, filters, statusFilter, masterNames])
+    // Mismo predicado que el interlazado de opciones, sin omitir ninguna dimensión.
+    return sortByExp(withClient.filter((p) => matchesProject(p)))
+  }, [withClient, matchesProject])
 
   // Grilla final: agrega el filtro de status (sólo activos salvo "Show all
   // statuses"). Los manuales (sin zohoProjectId) nunca se ocultan (isActiveProject).
