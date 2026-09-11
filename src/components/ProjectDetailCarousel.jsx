@@ -1111,6 +1111,8 @@ export function ProjectDetailCarousel({
     },
   ]
   const slide = slides[Math.min(slideIndex, slides.length - 1)]
+  const prevSlide = slides[slideIndex - 1]
+  const nextSlide = slides[slideIndex + 1]
 
   // Carga perezosa del árbol: marcamos treeRequested la primera vez que el usuario
   // ve el slide "Stages & Tasks" (no antes — el default es Overview).
@@ -1118,8 +1120,11 @@ export function ProjectDetailCarousel({
     if (slide.key === 'stages-tasks') setTreeRequested(true)
   }, [slide.key])
 
+  // Navegación no-cíclica (slice 13): clamp a [0, len-1] en vez de dar la vuelta.
+  // Así el primer/último slide es un tope real y las flechas de los extremos se
+  // deshabilitan, que es más intuitivo que el wrap-around.
   function goToSlide(i) {
-    setSlideIndex((i + slides.length) % slides.length)
+    setSlideIndex(Math.max(0, Math.min(i, slides.length - 1)))
   }
 
   useScrollLock()
@@ -1282,14 +1287,19 @@ export function ProjectDetailCarousel({
           </div>
           <div className="carousel__body">{slide.content}</div>
           <div className="carousel__nav">
+            {/* Flechas con el nombre del slide destino: se entiende hacia dónde
+                navegan. En los extremos van deshabilitadas (nav no-cíclica). */}
             <button
               type="button"
               className="carousel__arrow"
               onClick={() => goToSlide(slideIndex - 1)}
-              disabled={slides.length <= 1}
-              aria-label="Previous section"
+              disabled={slideIndex === 0}
+              aria-label={
+                prevSlide ? `Previous section: ${prevSlide.label}` : 'Previous section'
+              }
             >
               <ChevronLeft size={16} aria-hidden="true" />
+              <span className="carousel__arrow-label">{prevSlide ? prevSlide.label : ''}</span>
             </button>
             <div className="carousel__dots" role="tablist" aria-label="Project detail sections">
               {slides.map((s, i) => (
@@ -1308,9 +1318,10 @@ export function ProjectDetailCarousel({
               type="button"
               className="carousel__arrow"
               onClick={() => goToSlide(slideIndex + 1)}
-              disabled={slides.length <= 1}
-              aria-label="Next section"
+              disabled={slideIndex === slides.length - 1}
+              aria-label={nextSlide ? `Next section: ${nextSlide.label}` : 'Next section'}
             >
+              <span className="carousel__arrow-label">{nextSlide ? nextSlide.label : ''}</span>
               <ChevronRight size={16} aria-hidden="true" />
             </button>
           </div>

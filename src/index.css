@@ -4877,18 +4877,30 @@ th.col-pop { text-align: center; }
 }
 .carousel__dot.is-active { background: var(--accent); transform: scaleX(1); }
 .carousel__arrow {
-  width: 30px;
+  min-width: 30px;
   height: 30px;
-  border-radius: 50%;
+  padding: 0 10px;
+  border-radius: 999px;
   border: 1px solid var(--line-strong);
   background: var(--surface);
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
   cursor: pointer;
   color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 600;
+  max-width: 42%;
 }
-.carousel__arrow:hover { background: var(--surface-2); }
+.carousel__arrow-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Sin label (extremo o slide único) queda como el botón circular original. */
+.carousel__arrow-label:empty { display: none; }
+.carousel__arrow:has(.carousel__arrow-label:empty) { padding: 0; width: 30px; min-width: 30px; justify-content: center; }
+.carousel__arrow:not(:disabled):hover { background: var(--surface-2); }
 .carousel__arrow:disabled { opacity: .4; cursor: default; }
 
 /* --- KPI chips por estado de contrato (FR-08) ---------------------------- */
