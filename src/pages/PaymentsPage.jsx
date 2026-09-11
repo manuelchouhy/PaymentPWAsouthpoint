@@ -511,26 +511,22 @@ export function PaymentsPage() {
     return { overage: overage.map(decorate), spInternal: spInternal.map(decorate) }
   }, [payments, enrichedEntries, entryById])
 
-  // Grupos/pagos invoice-less que pasan el filtro de HORAS (memoizados para no rehacer
-  // el cruce en cada render). El "Estado" de pago no aplica a lo invoice-less; se filtran
-  // sólo por cliente/proyecto/#/contractor. Se incluyen los PAGADOS (renderPaid) para que
-  // el filtro sea consistente en toda la página, no sólo en las facturas y lo pendiente.
-  const overagePendingF = useMemo(
-    () => overagePending.filter((g) => passesEntryFilter(g.entryIds)),
-    [overagePending, matchingEntryIds],
+  // Filtra una lista de filas invoice-less (cada una con .entryIds) por el filtro de
+  // HORAS. Helper único para no repetir el cruce en las 4 secciones.
+  const filterByEntries = useCallback(
+    (list) => (list ?? []).filter((x) => passesEntryFilter(x.entryIds)),
+    // passesEntryFilter sólo depende de matchingEntryIds.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [matchingEntryIds],
   )
-  const spInternalPendingF = useMemo(
-    () => spInternalPending.filter((g) => passesEntryFilter(g.entryIds)),
-    [spInternalPending, matchingEntryIds],
-  )
-  const overagePaidF = useMemo(
-    () => overagePaid.filter((r) => passesEntryFilter(r.entryIds)),
-    [overagePaid, matchingEntryIds],
-  )
-  const spInternalPaidF = useMemo(
-    () => spInternalPaid.filter((r) => passesEntryFilter(r.entryIds)),
-    [spInternalPaid, matchingEntryIds],
-  )
+  // Grupos/pagos invoice-less que pasan el filtro de HORAS (memoizados). El "Estado" de
+  // pago no aplica a lo invoice-less; se filtran sólo por cliente/proyecto/#/contractor.
+  // Se incluyen los PAGADOS (renderPaid) para que el filtro sea consistente en toda la
+  // página, no sólo en las facturas y lo pendiente.
+  const overagePendingF = useMemo(() => filterByEntries(overagePending), [filterByEntries, overagePending])
+  const spInternalPendingF = useMemo(() => filterByEntries(spInternalPending), [filterByEntries, spInternalPending])
+  const overagePaidF = useMemo(() => filterByEntries(overagePaid), [filterByEntries, overagePaid])
+  const spInternalPaidF = useMemo(() => filterByEntries(spInternalPaid), [filterByEntries, spInternalPaid])
 
   // Ids (string) de las horas YA pagadas: lo usa el picker "Hours to pay" para
   // marcar el estado de cada hora (entryPaymentStatus). Las pendientes que muestra
@@ -545,6 +541,13 @@ export function PaymentsPage() {
   // Facturas que pasan la BARRA de filtros (horas: cliente/proyecto/#/contractor, +
   // Estado de pago), SIN el filtro de alertas (que lo manejan los chips). Es la base
   // común de los KPIs y de la grilla, para que el header y las filas no diverjan.
+  // LIMITACIÓN conocida: el filtro de horas mira el cliente/proyecto DERIVADO de las
+  // horas (matchingEntryIds), no el inv.client/inv.project crudo de la factura. Si las
+  // horas de una factura no resuelven al mismo cliente que muestra su header (nombre
+  // legacy, cadena sin resolver, o horas más allá del cap de sync), esa factura puede no
+  // matchear un filtro por ese cliente. Es el mismo criterio de resolución que Billing.
+  // Además, un filtro de Estado explícito manda sobre "Show paid" (si filtrás Invoiced,
+  // no ves Paid aunque el toggle esté on) — es intencional, el filtro es más específico.
   const filteredInvoiceRows = useMemo(
     () =>
       invoiceRows.filter((r) => {
@@ -1134,15 +1137,18 @@ export function PaymentsPage() {
             </div>
           )}
 
-          {/* Horas invoice-less a pagar (sin factura al cliente): overage y sp_internal. */}
-          {/* Los grupos invoice-less se filtran sólo por horas (cliente/proyecto/#/
-              contractor); el "Estado" es de pago de factura y no aplica acá. */}
-          {renderToPay('overage', overagePendingF)}
-          {renderToPay('sp_internal', spInternalPendingF)}
-
-          {/* Pagos invoice-less ya hechos (read-only), separados por allocation. */}
-          {renderPaid('overage', overagePaidF)}
-          {renderPaid('sp_internal', spInternalPaidF)}
+          {/* Secciones invoice-less (overage / sp_internal): se filtran sólo por horas
+              (cliente/proyecto/#/contractor). El "Estado" es de PAGO de factura y no aplica
+              acá, así que con un filtro de Estado activo se ocultan del todo — si no, un
+              filtro "Paid" dejaría a la vista listas de "to pay" (pendientes) contradictorias. */}
+          {paymentStatuses.length === 0 && (
+            <>
+              {renderToPay('overage', overagePendingF)}
+              {renderToPay('sp_internal', spInternalPendingF)}
+              {renderPaid('overage', overagePaidF)}
+              {renderPaid('sp_internal', spInternalPaidF)}
+            </>
+          )}
         </motion.div>
       )}
 
