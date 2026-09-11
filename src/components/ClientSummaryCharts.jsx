@@ -7,6 +7,7 @@ import { HoursDonut } from './HoursDonut'
 const COLOR = {
   budget: '#38bdf8',
   consumed: '#22d3ee',
+  invoiced: '#10b981', // emerald: horas ya facturadas (porción de consumed)
   pending: '#a3a3a3',
   overage: '#f59e0b',
   remaining: '#52525b',
@@ -23,7 +24,7 @@ const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10
  * global, para no netear el consumo de un proyecto contra el budget de otro.
  *
  * @param {{ totals: { budget: number, consumed: number, overage: number,
- *           pending: number, remaining: number, hasBudget: boolean } }} props
+ *           pending: number, invoiced: number, remaining: number, hasBudget: boolean } }} props
  */
 export function ClientSummaryCharts({ totals }) {
   const budget = totals.hasBudget ? round1(totals.budget) : 0
@@ -31,6 +32,11 @@ export function ClientSummaryCharts({ totals }) {
   const overage = round1(totals.overage)
   const pending = round1(totals.pending || 0)
   const remaining = round1(totals.remaining)
+  // invoiced (C11) es una porción de consumed (horas ya facturadas). El resto de
+  // consumed son horas consumidas todavía sin facturar. Se clampa por si un redondeo
+  // dejara invoiced levemente por encima de consumed.
+  const invoiced = Math.min(round1(totals.invoiced || 0), consumed)
+  const consumedUnbilled = round1(Math.max(0, consumed - invoiced))
 
   // La barra Budget solo si hay budget cargado: sin budget, una barra en 0 leería
   // como "budget cero" en vez de "sin budget" (igual criterio que el donut, que
@@ -42,8 +48,21 @@ export function ClientSummaryCharts({ totals }) {
     { name: 'Pending', value: pending, color: COLOR.pending },
     { name: 'Overage', value: overage, color: COLOR.overage },
   ]
+  // El consumido se parte en Invoiced (ya facturado) + Consumed (aún sin facturar)
+  // para que se vea la porción invoiced. Si no hay invoiced, una sola porción
+  // "Consumed" como antes. La suma Invoiced+Consumed sigue siendo el consumido total,
+  // así que loggedHours (centro del donut) no cambia.
   const donutData = [
-    { key: 'consumed', name: 'Consumed', value: consumed, color: COLOR.consumed },
+    ...(invoiced > 0
+      ? [
+          { key: 'invoiced', name: 'Invoiced', value: invoiced, color: COLOR.invoiced },
+          // La porción sin facturar sólo si queda algo: si todo el consumido está
+          // facturado (consumedUnbilled === 0) no se agrega un slice/leyenda en 0.
+          ...(consumedUnbilled > 0
+            ? [{ key: 'consumed', name: 'Consumed (unbilled)', value: consumedUnbilled, color: COLOR.consumed }]
+            : []),
+        ]
+      : [{ key: 'consumed', name: 'Consumed', value: consumed, color: COLOR.consumed }]),
     { key: 'overage', name: 'Overage', value: overage, color: COLOR.overage },
   ]
   // La porción Remaining solo tiene sentido si hay budget cargado: sin budget,
@@ -100,7 +119,7 @@ export function ClientSummaryCharts({ totals }) {
 
       <HoursDonut
         icon={<TrendingUp size={14} />}
-        title="Consumed / Overage / Remaining"
+        title={invoiced > 0 ? 'Invoiced / Consumed / Overage / Remaining' : 'Consumed / Overage / Remaining'}
         // El donut usa SU propio vacío (donutTotal): el pending no es parte del
         // donut, así que un scope solo-pending muestra "No hour data" acá aunque
         // el gráfico de barras sí dibuje su barra Pending.

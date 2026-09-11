@@ -53,9 +53,19 @@ function sowList(project) {
 }
 
 /**
- * @param {{ projects: object[], entries: object[], crsByProject: Map<string, object[]> }} input
+ * @param {{ projects: object[], entries: object[], crsByProject: Map<string, object[]>,
+ *          isInvoiced?: (entry: object) => boolean }} input
+ *   - isInvoiced (C11): marca una hora ya facturada al cliente. `invoiced` es un
+ *     SUBCONJUNTO de `consumed`: sólo horas Approved bill_to_client que además ya se
+ *     facturaron (sp_internal no se factura al cliente, así que nunca cuenta acá aunque
+ *     el predicado la marque). Por semana y total del proyecto.
  */
-export function buildClientSummaryWeekly({ projects = [], entries = [], crsByProject = new Map() }) {
+export function buildClientSummaryWeekly({
+  projects = [],
+  entries = [],
+  crsByProject = new Map(),
+  isInvoiced = () => false,
+}) {
   // Horas por (nombre de proyecto → weekStart) separadas en consumed/overage.
   // Se keyea por NOMBRE de proyecto (entry.project), igual que la página: es la
   // única clave con la que las entries se atan al proyecto.
@@ -93,10 +103,16 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
       consumed: 0,
       overage: 0,
       pending: 0,
+      invoiced: 0,
     }
     if (isPending) acc.pending += hours
     else if (e.allocation === 'overage') acc.overage += hours
-    else acc.consumed += hours // bill_to_client o sp_internal Approved
+    else {
+      acc.consumed += hours // bill_to_client o sp_internal Approved
+      // invoiced ⊆ consumed: sólo bill_to_client facturada (sp_internal no se
+      // factura al cliente aunque el predicado la marcara).
+      if (e.allocation === 'bill_to_client' && isInvoiced(e)) acc.invoiced += hours
+    }
     weeks.set(weekStart, acc)
   }
 
@@ -120,6 +136,7 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
     let consumedTotal = 0
     let overageTotal = 0
     let pendingTotal = 0
+    let invoicedTotal = 0
     for (const w of weeks) {
       cumulative += w.consumed
       w.cumulative = cumulative
@@ -127,6 +144,7 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
       consumedTotal += w.consumed
       overageTotal += w.overage
       pendingTotal += w.pending
+      invoicedTotal += w.invoiced
     }
 
     const sows = sowList(project)
@@ -141,6 +159,7 @@ export function buildClientSummaryWeekly({ projects = [], entries = [], crsByPro
       consumed: consumedTotal,
       overage: overageTotal,
       pending: pendingTotal,
+      invoiced: invoicedTotal,
       weeks,
     }
 
