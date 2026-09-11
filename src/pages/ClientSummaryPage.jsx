@@ -65,6 +65,7 @@ export function ClientSummaryPage() {
   const [entries, setEntries] = useState([])
   const [crsByProject, setCrsByProject] = useState(() => new Map())
   const [clientMasters, setClientMasters] = useState([])
+  const [invoices, setInvoices] = useState([])
   const [status, setStatus] = useState('loading')
   const [reloadKey, setReloadKey] = useState(0)
   useSyncReload(setReloadKey)
@@ -86,18 +87,26 @@ export function ClientSummaryPage() {
     const clientsList = Promise.resolve()
       .then(() => api.clients.list())
       .catch(() => [])
+    // Las facturas alimentan el reparto "invoiced" de los gráficos (C11). No son
+    // esenciales: si su fetch falla, se degrada a [] y el invoiced cae a 0 sin
+    // romper la página (mismo criterio que clients).
+    const invoicesList = Promise.resolve()
+      .then(() => api.invoices.list())
+      .catch(() => [])
     Promise.all([
       api.projects.list(),
       api.timeEntries.list(),
       api.changeRequests.listByProject(),
       clientsList,
+      invoicesList,
     ])
-      .then(([projectRows, entryRows, crMap, clientRows]) => {
+      .then(([projectRows, entryRows, crMap, clientRows, invoiceRows]) => {
         if (cancelled) return
         setProjects(projectRows)
         setEntries(entryRows)
         setCrsByProject(crMap)
         setClientMasters(clientRows)
+        setInvoices(invoiceRows)
         setStatus('ready')
       })
       .catch((error) => {
@@ -119,12 +128,22 @@ export function ClientSummaryPage() {
     return projects.map((p) => ({ ...p, resolvedClient: resolve(p).client ?? '' }))
   }, [projects, clientMasters])
 
-  // Toda la agregación semanal (consumed/overage/cumulative/remaining por semana,
-  // budget del proyecto) vive en el motor puro clientSummaryWeekly. Agrupa por el
-  // cliente resuelto (resolvedClient).
+  // Índice entry→factura, igual que Billing: una hora está facturada si aparece en
+  // el entryIds de alguna factura. Alimenta el predicado isInvoiced del motor (C11).
+  const isInvoiced = useMemo(() => {
+    const invoicedIds = new Set()
+    for (const invoice of invoices) {
+      for (const entryId of invoice.entryIds ?? []) invoicedIds.add(String(entryId))
+    }
+    return (entry) => invoicedIds.has(String(entry.id))
+  }, [invoices])
+
+  // Toda la agregación semanal (consumed/overage/invoiced/cumulative/remaining por
+  // semana, budget del proyecto) vive en el motor puro clientSummaryWeekly. Agrupa
+  // por el cliente resuelto (resolvedClient).
   const summary = useMemo(
-    () => buildClientSummaryWeekly({ projects: resolvedProjects, entries, crsByProject }),
-    [resolvedProjects, entries, crsByProject],
+    () => buildClientSummaryWeekly({ projects: resolvedProjects, entries, crsByProject, isInvoiced }),
+    [resolvedProjects, entries, crsByProject, isInvoiced],
   )
 
   // Opciones de cada filtro, derivadas de la salida COMPLETA del motor (misma

@@ -112,6 +112,53 @@ test('cuenta las horas bill_to_client Pending como pending (no como consumed)', 
   assert.equal(proj.weeks[0].cumulative, 10)
 })
 
+test('invoiced: cuenta las horas Approved bill_to_client marcadas por isInvoiced (subconjunto de consumed)', () => {
+  const invoicedIds = new Set(['a', 'b'])
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project()],
+    entries: [
+      entry({ id: 'a', hours: 10 }), // Approved bill_to_client, facturada
+      entry({ id: 'b', hours: 5 }), // Approved bill_to_client, facturada
+      entry({ id: 'c', hours: 8 }), // Approved bill_to_client, NO facturada
+      entry({ id: 'd', hours: 4, status: 'Pending' }), // Pending: nunca invoiced
+    ],
+    crsByProject: new Map(),
+    isInvoiced: (e) => invoicedIds.has(e.id),
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.consumed, 23) // 10 + 5 + 8 (Approved bill_to_client)
+  assert.equal(proj.invoiced, 15) // 10 + 5 (facturadas) — subconjunto de consumed
+  assert.ok(proj.invoiced <= proj.consumed)
+  assert.equal(proj.weeks[0].invoiced, 15)
+})
+
+test('invoiced: sin isInvoiced (default) es 0', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project()],
+    entries: [entry({ id: 'a', hours: 10 })],
+    crsByProject: new Map(),
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.consumed, 10)
+  assert.equal(proj.invoiced, 0)
+})
+
+test('invoiced: sp_internal Approved marcada no cuenta (sólo bill_to_client se factura)', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project()],
+    entries: [
+      entry({ id: 'a', hours: 10, allocation: 'bill_to_client' }),
+      entry({ id: 's', hours: 7, allocation: 'sp_internal' }),
+    ],
+    crsByProject: new Map(),
+    // Aunque el predicado marque ambas, sp_internal no es facturable al cliente.
+    isInvoiced: () => true,
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.consumed, 17) // 10 bill_to_client + 7 sp_internal
+  assert.equal(proj.invoiced, 10) // sólo la bill_to_client
+})
+
 test('cuenta las horas sp_internal Pending como pending (no como consumed)', () => {
   const { clients } = buildClientSummaryWeekly({
     projects: [project()],

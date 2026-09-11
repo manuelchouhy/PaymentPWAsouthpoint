@@ -85,12 +85,13 @@ export function projectRowTotals(project) {
  * un proyecto contra el budget de otro.
  */
 export function chartTotals(clients) {
-  const t = { budget: 0, consumed: 0, overage: 0, pending: 0, remaining: 0, hasBudget: false }
+  const t = { budget: 0, consumed: 0, overage: 0, pending: 0, invoiced: 0, remaining: 0, hasBudget: false }
   for (const group of clients) {
     for (const p of group.projects) {
       t.consumed += p.consumed
       t.overage += p.overage
       t.pending += p.pending || 0
+      t.invoiced += p.invoiced || 0
       if (p.budget != null) {
         t.budget += p.budget
         t.hasBudget = true

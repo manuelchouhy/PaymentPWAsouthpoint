@@ -70,6 +70,23 @@ test('chartTotals suma pending all-time por proyecto', () => {
   assert.equal(chartTotals(clients).pending, 17)
 })
 
+test('chartTotals suma invoiced all-time por proyecto (subconjunto de consumed)', () => {
+  const clients = [
+    { client: 'HSS', projects: [
+      { id: 1, budget: 120, consumed: 30, overage: 0, invoiced: 18, weeks: [] },
+      { id: 2, budget: null, consumed: 5, overage: 0, invoiced: 5, weeks: [] },
+    ] },
+  ]
+  const t = chartTotals(clients)
+  assert.equal(t.invoiced, 23) // 18 + 5
+  assert.ok(t.invoiced <= t.consumed) // 23 <= 35
+})
+
+test('chartTotals: invoiced default 0 si el proyecto no lo trae', () => {
+  const t = chartTotals([{ client: 'X', projects: [{ id: 1, budget: 10, consumed: 4, overage: 0, weeks: [] }] }])
+  assert.equal(t.invoiced, 0)
+})
+
 test('chartTotals no netea el sobreconsumo de un proyecto contra otro', () => {
   const clients = [
     {
