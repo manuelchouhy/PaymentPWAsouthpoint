@@ -23,6 +23,7 @@
 
 import { supabase, isSupabaseConfigured } from './supabase'
 import { getTimeEntries } from './data'
+import { aggregateLoggedTasks } from './projectLoggedTasks'
 import { demoDate } from './demoDates'
 import { stageSows } from './projectSows'
 
@@ -1025,13 +1026,14 @@ export async function getProjectTasks(projectId) {
  * proyecto" en el resto de la app — NO los task_name del scope del SOW (project_tasks),
  * que casi nunca se cargan y NO tienen FK con las horas. Ver getProjectTaskNames.
  *
- * Se agrupa por nombre de task; `hours` suma TODAS (cualquier estado) y `approvedHours`
- * sólo las Approved. `allApproved` es true sólo si TODAS las entries del task están
- * Approved (flag explícito, no comparar sumas: con correcciones negativas approvedHours
- * podría superar a hours sin que todo esté aprobado).
+ * Se agrupa por nombre de task; `taskNumber` es el id de la task en Zoho (time_entries.
+ * task_number, el mismo de la columna "Task #" de Entries). `hours` suma TODAS las horas
+ * cargadas (cualquier estado/allocation = "logged"). `consumedHours` es "consumido" con el
+ * MISMO criterio que el resto de la app (clientSummaryWeekly): horas Approved de allocation
+ * bill_to_client o sp_internal (el overage y lo no facturable NO se cuentan como consumido).
  *
  * @param {string} projectName
- * @returns {Promise<Array<{ id: string, taskName: string, hours: number, approvedHours: number, allApproved: boolean }>>}
+ * @returns {Promise<Array<{ id: string, taskName: string, taskNumber: (string|null), hours: number, consumedHours: number }>>}
  */
 export async function getProjectLoggedTasks(projectName) {
   if (!projectName) return []
@@ -1052,7 +1054,7 @@ export async function getProjectLoggedTasks(projectName) {
     for (let guard = 0; guard < 500 /* tope de seguridad */; guard++) {
       const { data, error } = await supabase
         .from('time_entries')
-        .select('id, task, hours, status')
+        .select('id, task, task_number, hours, status, allocation')
         .eq('project', projectName)
         .gt('id', lastId)
         .order('id')
@@ -1064,19 +1066,9 @@ export async function getProjectLoggedTasks(projectName) {
       lastId = batch[batch.length - 1].id
     }
   }
-  const byTask = new Map()
-  for (const row of rows) {
-    const name = row.task ?? ''
-    if (!name) continue
-    const acc =
-      byTask.get(name) ?? { id: name, taskName: name, hours: 0, approvedHours: 0, allApproved: true }
-    const h = Number(row.hours) || 0
-    acc.hours += h
-    if (row.status === 'Approved') acc.approvedHours += h
-    else acc.allApproved = false
-    byTask.set(name, acc)
-  }
-  return [...byTask.values()].sort((a, b) => a.taskName.localeCompare(b.taskName, 'es', { numeric: true }))
+  // La agregación (agrupar por nombre, sumar hours/consumed, resolver taskNumber) vive en
+  // el módulo puro projectLoggedTasks, testeable sin red.
+  return aggregateLoggedTasks(rows)
 }
 
 /**

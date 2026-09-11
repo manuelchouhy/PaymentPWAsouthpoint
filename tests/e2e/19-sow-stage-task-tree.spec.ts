@@ -35,12 +35,27 @@ test('Projects & SOW: el slide "Stages & Tasks" muestra los tasks reales del pro
   })
   await expect(tasksNode).toBeVisible()
 
-  // Expandir: aparece al menos un task real con su meta de horas.
+  // Expandir: cada task muestra nombre + id (task_number) + horas consumidas.
   await tasksNode.locator('.stage-tree__header').click()
   const taskRows = tasksNode.locator('.stage-tree__task')
   await expect(taskRows.first()).toBeVisible()
   expect(await taskRows.count()).toBeGreaterThan(0)
-  await expect(tasksNode.locator('.stage-tree__task-meta').first()).toContainText('h')
+  // Nombre.
+  await expect(tasksNode.locator('.stage-tree__task-name').first()).not.toHaveText('')
+  // Id del task (task_number de Zoho, prefijado con #). El span solo aparece si la task
+  // tiene task_number; "Proyecto Prueba" lo tiene, así que debe haber al menos uno.
+  const idSpans = tasksNode.locator('.stage-tree__task-id')
+  expect(await idSpans.count()).toBeGreaterThan(0)
+  await expect(idSpans.first()).toContainText('#')
+  // Horas consumidas: "Proyecto Prueba" tiene horas Approved bill_to_client, así que
+  // ALGUNA task muestra consumido > 0 (verifica que la agregación de consumido corre, no
+  // sólo que existe el texto "consumed"). Se busca en cualquier task, no la primera.
+  await expect(
+    tasksNode
+      .locator('.stage-tree__task-meta')
+      .filter({ hasText: /[1-9]\d*(\.\d+)? h consumed/ })
+      .first(),
+  ).toBeVisible()
 
   await page.keyboard.press('Escape')
 })

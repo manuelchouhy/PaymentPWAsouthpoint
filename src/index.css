@@ -3208,11 +3208,37 @@ th.col-pop { text-align: center; }
 }
 .stage-tree__task-name {
   font-size: 13px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+/* El nombre trunca con ellipsis y cede espacio al id. */
+.stage-tree__task-name-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* id del task (task_number de Zoho, largo): mono, atenuado y truncado con ellipsis.
+   No se encoge por debajo de su caja (flex-shrink: 0) para no desaparecer. */
+.stage-tree__task-id {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 12ch;
 }
 .stage-tree__task-meta {
   font-size: 12px;
   color: var(--text-faint);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 .stage-tree__empty {
   margin: 4px 0 2px;

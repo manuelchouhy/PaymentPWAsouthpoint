@@ -937,21 +937,33 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
                     // id ?? `idx-${i}`: en data demo/legacy un id nulo no debe colapsar
                     // filas ni chocar con un id real igual al índice (lista read-only).
                     <li key={t.id ?? `idx-${i}`} className="stage-tree__task">
-                      <span className="stage-tree__task-name">{t.taskName || '—'}</span>
-                      {/* Horas cargadas del task + estado de aprobación. formatHours
-                          redondea para no mostrar 12.3999… al sumar fracciones. El
-                          "all approved" sale del flag del dato (todas las entries
-                          Approved), no de comparar sumas (robusto ante correcciones
-                          negativas). */}
+                      <span className="stage-tree__task-name">
+                        <span className="stage-tree__task-name-text">{t.taskName || '—'}</span>
+                        {/* id del task (task_number de Zoho, el mismo de "Task #" en
+                            Entries). Es largo → mono, atenuado y truncado, con tooltip. */}
+                        {t.taskNumber ? (
+                          <span className="stage-tree__task-id" title={`Task #${t.taskNumber}`}>
+                            #{t.taskNumber}
+                          </span>
+                        ) : null}
+                      </span>
+                      {/* Horas CONSUMIDAS (Approved bill_to_client/sp_internal, mismo
+                          criterio que Client Summary) + total logged como contexto cuando
+                          difiere (así un task con horas rechazadas/overage no queda como
+                          "0 h consumed" a secas). formatHours redondea. */}
                       {(() => {
-                        const hours = Number(t.hours ?? 0)
+                        const consumed = Number(t.consumedHours ?? 0)
+                        const total = Number(t.hours ?? 0)
+                        // Sin horas: '—' (no "0 h consumed"). Comparación sobre los valores
+                        // MOSTRADOS (redondeados): sin "10 h consumed · 10 h logged"
+                        // redundante por una diferencia sub-0.05; "logged" si difieren.
+                        const consumedLabel = formatHours(consumed)
+                        const totalLabel = formatHours(total)
                         return (
                           <span className="stage-tree__task-meta">
-                            {hours > 0 ? `${formatHours(hours)} h` : '—'}
-                            {hours > 0 &&
-                              (t.allApproved
-                                ? ' · all approved'
-                                : ` · ${formatHours(Number(t.approvedHours ?? 0))} h approved`)}
+                            {total === 0 && consumed === 0
+                              ? '—'
+                              : `${consumedLabel} h consumed${consumedLabel !== totalLabel ? ` · ${totalLabel} h logged` : ''}`}
                           </span>
                         )
                       })()}

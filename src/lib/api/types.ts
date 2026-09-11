@@ -549,9 +549,9 @@ export interface ApiClient {
       Array<{
         id: string
         taskName: string
+        taskNumber: string | null
         hours: number
-        approvedHours: number
-        allApproved: boolean
+        consumedHours: number
       }>
     >
     create(
