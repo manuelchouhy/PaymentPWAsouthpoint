@@ -881,7 +881,7 @@ function ChangeRequestsSlide({
  * que caen todos en el nodo "Sin stage" — ver open item del slice.
  */
 function StagesTasksSlide({ tree, loading, error, expanded, onToggle }) {
-  if (loading) return <p className="drawer__empty">Loading stages…</p>
+  if (loading) return <p className="drawer__empty">Loading stages & tasks…</p>
   if (error)
     return (
       <p className="drawer__empty">Stages & tasks could not be loaded — try reopening this project.</p>
@@ -1006,7 +1006,8 @@ export function ProjectDetailCarousel({
   const toggleStage = (key) =>
     setExpandedStages((prev) => {
       const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
 
@@ -1046,7 +1047,12 @@ export function ProjectDetailCarousel({
       content: (
         <StagesTasksSlide
           tree={taskTree}
-          loading={treeLoading}
+          // Los stages los trae el efecto de stageCount (stageCount === null mientras
+          // están en vuelo): sin esto, si los tasks resuelven antes que los stages el
+          // slide parpadea a "sin stages/tasks" o los muestra sin agrupar.
+          loading={
+            treeLoading || (project.hasStages && stageCount === null && !stageCountError)
+          }
           error={treeError}
           expanded={expandedStages}
           onToggle={toggleStage}
