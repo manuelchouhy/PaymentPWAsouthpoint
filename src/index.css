@@ -4885,23 +4885,33 @@ th.col-pop { text-align: center; }
   background: var(--surface);
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   cursor: pointer;
   color: var(--text-soft);
   font-size: 12px;
   font-weight: 600;
-  max-width: 42%;
+  max-width: 38%;
+  overflow: hidden;
 }
 .carousel__arrow-label {
+  min-width: 0; /* imprescindible para que text-overflow: ellipsis dispare en flex */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Sin label (extremo o slide único) queda como el botón circular original. */
+/* Sin label (extremo o slide único) queda como el botón circular original. El
+   justify-content: center de base ya centra el ícono aun sin :has(). */
 .carousel__arrow-label:empty { display: none; }
-.carousel__arrow:has(.carousel__arrow-label:empty) { padding: 0; width: 30px; min-width: 30px; justify-content: center; }
-.carousel__arrow:not(:disabled):hover { background: var(--surface-2); }
-.carousel__arrow:disabled { opacity: .4; cursor: default; }
+.carousel__arrow:has(.carousel__arrow-label:empty) { padding: 0; width: 30px; min-width: 30px; }
+.carousel__arrow:not(.is-disabled):hover { background: var(--surface-2); }
+.carousel__arrow.is-disabled { opacity: .4; cursor: default; }
+/* En viewports angostos los labels no entran junto a los dots: se ocultan y las
+   flechas vuelven a ser círculos. */
+@media (max-width: 460px) {
+  .carousel__arrow-label { display: none; }
+  .carousel__arrow { padding: 0; width: 30px; min-width: 30px; max-width: 30px; }
+}
 
 /* --- KPI chips por estado de contrato (FR-08) ---------------------------- */
 .proj-kpis {

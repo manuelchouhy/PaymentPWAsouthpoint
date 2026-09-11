@@ -1110,7 +1110,9 @@ export function ProjectDetailCarousel({
       ),
     },
   ]
-  const slide = slides[Math.min(slideIndex, slides.length - 1)]
+  // slideIndex siempre está clampeado a [0, len-1] (goToSlide y el teclado clampan),
+  // así que el acceso directo es seguro.
+  const slide = slides[slideIndex]
   const prevSlide = slides[slideIndex - 1]
   const nextSlide = slides[slideIndex + 1]
 
@@ -1289,11 +1291,14 @@ export function ProjectDetailCarousel({
           <div className="carousel__nav">
             {/* Flechas con el nombre del slide destino: se entiende hacia dónde
                 navegan. En los extremos van deshabilitadas (nav no-cíclica). */}
+            {/* aria-disabled (no el atributo `disabled`): en los extremos el botón se
+                atenúa pero sigue enfocable — deshabilitar el que tiene foco lo tiraría
+                al <body>. goToSlide clampa, así que el click en el extremo es no-op. */}
             <button
               type="button"
-              className="carousel__arrow"
+              className={`carousel__arrow${slideIndex === 0 ? ' is-disabled' : ''}`}
               onClick={() => goToSlide(slideIndex - 1)}
-              disabled={slideIndex === 0}
+              aria-disabled={slideIndex === 0}
               aria-label={
                 prevSlide ? `Previous section: ${prevSlide.label}` : 'Previous section'
               }
@@ -1316,9 +1321,9 @@ export function ProjectDetailCarousel({
             </div>
             <button
               type="button"
-              className="carousel__arrow"
+              className={`carousel__arrow${slideIndex === slides.length - 1 ? ' is-disabled' : ''}`}
               onClick={() => goToSlide(slideIndex + 1)}
-              disabled={slideIndex === slides.length - 1}
+              aria-disabled={slideIndex === slides.length - 1}
               aria-label={nextSlide ? `Next section: ${nextSlide.label}` : 'Next section'}
             >
               <span className="carousel__arrow-label">{nextSlide ? nextSlide.label : ''}</span>
