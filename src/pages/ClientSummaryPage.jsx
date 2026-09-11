@@ -204,7 +204,10 @@ export function ClientSummaryPage() {
     for (const p of projectScoped.flatMap((c) => c.projects)) {
       for (const w of p.weeks) byLabel.set(weekLabel(w), w.weekStart)
     }
-    for (const w of selectedWeeks) if (!byLabel.has(w)) byLabel.set(w, '￿') // ya elegida: al final
+    // ya elegida pero fuera del scope actual: se conserva para poder destildarla y se
+    // manda al final con una fecha-centinela lejana (orden determinístico por
+    // localeCompare de dígitos ASCII, a diferencia de un noncharacter U+FFFF).
+    for (const w of selectedWeeks) if (!byLabel.has(w)) byLabel.set(w, '9999-12-31')
     return [...byLabel.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([label]) => label)
   }, [projectScoped, selectedWeeks])
 

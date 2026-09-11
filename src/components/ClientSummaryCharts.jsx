@@ -67,10 +67,9 @@ export function ClientSummaryCharts({ totals }) {
   // El título del widget lista exactamente las barras dibujadas, en su orden real:
   // así nunca anuncia "Invoiced" si no hay barra Invoiced, ni contradice el orden.
   const barTitle = barData.map((d) => d.name).join(' · ')
-  // El consumido se parte en Invoiced (ya facturado) + Consumed (aún sin facturar)
-  // para que se vea la porción invoiced. Si no hay invoiced, una sola porción
-  // "Consumed" como antes. La suma Invoiced+Consumed sigue siendo el consumido total,
-  // así que loggedHours (centro del donut) no cambia.
+  // El donut aplica la MISMA partición del consumido que la barra (ver comentario
+  // arriba): Invoiced + Consumed(unbilled), así que loggedHours (centro del donut,
+  // consumed + overage) no cambia.
   const donutData = [
     ...(invoiced > 0
       ? [
@@ -99,6 +98,10 @@ export function ClientSummaryCharts({ totals }) {
   // Un solo criterio de "sin datos" para las dos gráficas, así no muestran estados
   // vacíos distintos lado a lado.
   const noData = budget === 0 && consumed === 0 && overage === 0 && pending === 0
+  // El título del donut lista exactamente las porciones dibujadas, en su orden real
+  // (igual criterio que barTitle): así no anuncia "Remaining" sin budget ni
+  // "Consumed" cuando todo el consumido está facturado.
+  const donutTitle = donutData.map((d) => d.name).join(' / ')
 
   return (
     <section className="cs-charts">
@@ -138,7 +141,7 @@ export function ClientSummaryCharts({ totals }) {
 
       <HoursDonut
         icon={<TrendingUp size={14} />}
-        title={invoiced > 0 ? 'Invoiced / Consumed / Overage / Remaining' : 'Consumed / Overage / Remaining'}
+        title={donutTitle}
         // El donut usa SU propio vacío (donutTotal): el pending no es parte del
         // donut, así que un scope solo-pending muestra "No hour data" acá aunque
         // el gráfico de barras sí dibuje su barra Pending.
