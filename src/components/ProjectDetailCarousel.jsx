@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ChevronLeft, ChevronRight, FileText, Pencil, Plus, Settings2, Upload, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, FileText, Pencil, Plus, Settings2, Upload, X } from 'lucide-react'
 import { ContractBadge } from './ContractBadge'
 import { contractStatus, daysRemaining } from '../lib/projectsData'
 import { CR_TYPE_LABELS, effectiveBudgetHours } from '../lib/changeRequestsData'
+import { buildProjectTaskTree } from '../lib/projectTaskTree'
 import { api } from '../lib/api'
 import { fileNameFromPath, formatDate, formatDateTime } from '../lib/format'
 import { useScrollLock } from '../lib/useScrollLock'
@@ -873,6 +874,92 @@ function ChangeRequestsSlide({
 }
 
 /**
+ * Slide "Stages & Tasks" (slice 12, lote WhatsApp 2026-09-10): vista de árbol de los
+ * stages del proyecto con sus tasks anidados. El agrupado lo hace `buildProjectTaskTree`
+ * (módulo puro); acá solo se renderiza. Cada stage es un nodo expandible; un click en el
+ * header abre/cierra la lista de tasks. Hoy los tasks no tienen `stageId` en el schema, así
+ * que caen todos en el nodo "Sin stage" — ver open item del slice.
+ */
+function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggle }) {
+  if (loading) return <p className="drawer__empty">Loading stages & tasks…</p>
+  // error = falló la carga de tasks: sin tasks no hay árbol que mostrar.
+  if (error)
+    return (
+      <p className="drawer__empty">Stages & tasks could not be loaded — try reopening this project.</p>
+    )
+  // Nada que mostrar. Los tasks cargaron OK (si no, `error` de arriba): la lista
+  // está genuinamente vacía. Si además fallaron los stages, lo aclaramos — así no
+  // se lee como "proyecto sin stages" cuando en realidad no se pudieron cargar.
+  if (tree.length === 0)
+    return (
+      <p className="drawer__empty">
+        {stagesError
+          ? 'No tasks yet, and stages could not be loaded — try reopening this project.'
+          : 'This project has no stages or tasks yet.'}
+      </p>
+    )
+
+  return (
+    <>
+      {/* Fallo solo de stages con tasks disponibles: se muestran igual, ungrouped. */}
+      {stagesError && (
+        <p className="stage-tree__warn">
+          Stages could not be loaded — tasks are shown ungrouped.
+        </p>
+      )}
+      <ul className="stage-tree">
+      {tree.map((node) => {
+        const isOpen = expanded.has(node.key)
+        return (
+          <li key={node.key} className="stage-tree__node">
+            <button
+              type="button"
+              className="stage-tree__header"
+              aria-expanded={isOpen}
+              onClick={() => onToggle(node.key)}
+            >
+              {isOpen ? (
+                <ChevronDown size={15} aria-hidden="true" />
+              ) : (
+                <ChevronRight size={15} aria-hidden="true" />
+              )}
+              <span className="stage-tree__label">{node.label}</span>
+              <span className="stage-tree__count">
+                {node.tasks.length} {node.tasks.length === 1 ? 'task' : 'tasks'}
+              </span>
+            </button>
+            {isOpen &&
+              (node.tasks.length === 0 ? (
+                <p className="stage-tree__empty">No tasks in this stage.</p>
+              ) : (
+                <ul className="stage-tree__tasks">
+                  {node.tasks.map((t, i) => (
+                    // id ?? `idx-${i}`: en data demo/legacy un id nulo no debe colapsar
+                    // filas ni chocar con un id real igual al índice (lista read-only).
+                    <li key={t.id ?? `idx-${i}`} className="stage-tree__task">
+                      <span className="stage-tree__task-name">{t.taskName || '—'}</span>
+                      <span className="stage-tree__task-meta">
+                        {t.role || '—'}
+                        {/* rowToTask coacciona estimated_hours con Number(): un valor
+                            ausente llega como 0 o NaN, no null — así que filtramos por
+                            "finito y > 0" para no mostrar " · 0 h"/" · NaN h". */}
+                        {Number.isFinite(t.estimatedHours) && t.estimatedHours > 0
+                          ? ` · ${t.estimatedHours} h`
+                          : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ))}
+          </li>
+        )
+      })}
+      </ul>
+    </>
+  )
+}
+
+/**
  * Carrusel de detalle de proyecto (Projects and SOW · issue 04). Reemplaza a
  * ProjectDetailDrawer — arranca con un solo slide real (Overview); las
  * issues 05/06/07 agregan Documentos/Asignaciones/Change Requests a este
@@ -901,6 +988,16 @@ export function ProjectDetailCarousel({
 }) {
   const [stageCount, setStageCount] = useState(null)
   const [stageCountError, setStageCountError] = useState(false)
+  // Árbol stage → tasks (slice 12). Los tasks son a nivel proyecto (sin stageId en el
+  // schema), así que hoy caen todos bajo "Sin stage"; ver open item. Los stages los
+  // reusa el efecto de stageCount (no se re-piden); los tasks se cargan perezosamente
+  // recién cuando se ve el slide (treeRequested).
+  const [treeStages, setTreeStages] = useState([])
+  const [treeTasks, setTreeTasks] = useState([])
+  const [treeLoading, setTreeLoading] = useState(true)
+  const [treeError, setTreeError] = useState(false)
+  const [treeRequested, setTreeRequested] = useState(false)
+  const [expandedStages, setExpandedStages] = useState(() => new Set())
   const [changeRequests, setChangeRequests] = useState([])
   const [loadingCrs, setLoadingCrs] = useState(true)
   const [crsLoadError, setCrsLoadError] = useState(false)
@@ -921,6 +1018,22 @@ export function ProjectDetailCarousel({
   const canEditSow = Boolean(project.clientId && onEditSow)
   const budgetHours = effectiveBudgetHours(project.baseBudgetHours, changeRequests)
   const budgetExpanded = budgetHours != null && budgetHours !== Number(project.baseBudgetHours)
+
+  const taskTree = useMemo(
+    () => buildProjectTaskTree(treeStages, treeTasks),
+    [treeStages, treeTasks],
+  )
+  // Estado de la carga de stages para el slide del árbol (los stages los trae el
+  // efecto de stageCount). Extraído para no repetir la regla en loading/error.
+  const stagesPending = project.hasStages && stageCount === null && !stageCountError
+  const stagesFailed = project.hasStages && stageCountError
+  const toggleStage = (key) =>
+    setExpandedStages((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
 
   async function handleCreateChangeRequest(payload) {
     const created = await api.changeRequests.create({ ...payload, projectId: project.id }, uploadedBy)
@@ -953,6 +1066,25 @@ export function ProjectDetailCarousel({
       ),
     },
     {
+      key: 'stages-tasks',
+      label: 'Stages & Tasks',
+      content: (
+        <StagesTasksSlide
+          tree={taskTree}
+          // stagesPending evita el parpadeo a "sin stages/tasks" si los tasks
+          // resuelven antes que los stages.
+          loading={treeLoading || stagesPending}
+          // Error duro solo si fallan los TASKS (sin ellos no hay nada que mostrar).
+          // Un fallo solo de stages no blanquea la sección: los tasks igual se
+          // muestran (hoy son todos orphans) con un aviso — ver stagesError.
+          error={treeError}
+          stagesError={stagesFailed}
+          expanded={expandedStages}
+          onToggle={toggleStage}
+        />
+      ),
+    },
+    {
       key: 'documents',
       label: 'Documentos',
       content: <DocumentsSlide project={project} uploadedBy={uploadedBy} />,
@@ -979,6 +1111,12 @@ export function ProjectDetailCarousel({
     },
   ]
   const slide = slides[Math.min(slideIndex, slides.length - 1)]
+
+  // Carga perezosa del árbol: marcamos treeRequested la primera vez que el usuario
+  // ve el slide "Stages & Tasks" (no antes — el default es Overview).
+  useEffect(() => {
+    if (slide.key === 'stages-tasks') setTreeRequested(true)
+  }, [slide.key])
 
   function goToSlide(i) {
     setSlideIndex((i + slides.length) % slides.length)
@@ -1014,7 +1152,12 @@ export function ProjectDetailCarousel({
     // excepción sin capturar que tumbaría el efecto entero.
     Promise.resolve()
       .then(() => api.projects.getStages(project.id))
-      .then((stages) => !cancelled && setStageCount(stages.length))
+      .then((stages) => {
+        if (cancelled) return
+        setStageCount(stages.length)
+        // Reusamos estos stages para el árbol (slide 12) en vez de re-pedirlos.
+        setTreeStages(Array.isArray(stages) ? stages : [])
+      })
       .catch((error) => {
         if (cancelled) return
         console.error('No se pudo cargar la cantidad de stages del proyecto:', error)
@@ -1024,6 +1167,29 @@ export function ProjectDetailCarousel({
       cancelled = true
     }
   }, [project.id, project.hasStages])
+
+  // Tasks del slide "Stages & Tasks" (slice 12). Carga perezosa: recién cuando el
+  // usuario abre el slide (treeRequested) — no todos los que abren el pop up van al
+  // árbol. Los stages ya los trae el efecto de arriba. Si `hasStages` es false igual
+  // se muestran los tasks bajo "Sin stage".
+  useEffect(() => {
+    if (!treeRequested) return
+    let cancelled = false
+    setTreeLoading(true)
+    setTreeError(false)
+    Promise.resolve()
+      .then(() => api.projectTasks.list(project.id))
+      .then((tasks) => !cancelled && setTreeTasks(Array.isArray(tasks) ? tasks : []))
+      .catch((error) => {
+        if (cancelled) return
+        console.error('No se pudieron cargar los tasks del proyecto:', error)
+        setTreeError(true)
+      })
+      .finally(() => !cancelled && setTreeLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [project.id, treeRequested])
 
   useEffect(() => {
     function onKeyDown(event) {
