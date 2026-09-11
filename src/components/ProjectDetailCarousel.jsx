@@ -947,15 +947,17 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
                           </span>
                         ) : null}
                       </span>
-                      {/* Horas CONSUMIDAS (Approved) del task + las Pending si las hay (las
-                          Rejected no cuentan). formatHours redondea para no mostrar 12.3999…. */}
+                      {/* Horas CONSUMIDAS (Approved bill_to_client/sp_internal, mismo
+                          criterio que Client Summary) + total logged como contexto cuando
+                          difiere (así un task con horas rechazadas/overage no queda como
+                          "0 h consumed" a secas). formatHours redondea. */}
                       {(() => {
-                        const consumed = Number(t.approvedHours ?? 0)
-                        const pending = Number(t.pendingHours ?? 0)
+                        const consumed = Number(t.consumedHours ?? 0)
+                        const total = Number(t.hours ?? 0)
                         return (
                           <span className="stage-tree__task-meta">
                             {`${formatHours(consumed)} h consumed`}
-                            {pending > 0 ? ` · ${formatHours(pending)} h pending` : ''}
+                            {total > consumed ? ` · ${formatHours(total)} h logged` : ''}
                           </span>
                         )
                       })()}

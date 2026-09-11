@@ -551,8 +551,7 @@ export interface ApiClient {
         taskName: string
         taskNumber: string | null
         hours: number
-        approvedHours: number
-        pendingHours: number
+        consumedHours: number
       }>
     >
     create(
