@@ -42,12 +42,22 @@ export function ClientSummaryCharts({ totals }) {
   // como "budget cero" en vez de "sin budget" (igual criterio que el donut, que
   // suelta la porción Remaining en ese caso). Pending (horas facturables sin
   // aprobar) va como barra propia para que también se vea en el gráfico.
+  // El consumido se PARTE (no se duplica) en la barra: Invoiced (ya facturado) +
+  // Consumed (la porción aún sin facturar), igual que el donut. Así Invoiced+Consumed
+  // suman el consumido total y las dos gráficas dicen lo mismo; una barra Invoiced
+  // aparte del Consumed completo leería como el doble de horas. Sin invoiced, una
+  // sola barra "Consumed" como antes.
   const barData = [
     ...(totals.hasBudget ? [{ name: 'Budget', value: budget, color: COLOR.budget }] : []),
-    { name: 'Consumed', value: consumed, color: COLOR.consumed },
-    // Invoiced es una porción de Consumed (ya facturado); barra propia sólo si hay algo,
-    // para que se vea también acá (además del donut).
-    ...(invoiced > 0 ? [{ name: 'Invoiced', value: invoiced, color: COLOR.invoiced }] : []),
+    ...(invoiced > 0
+      ? [
+          { name: 'Invoiced', value: invoiced, color: COLOR.invoiced },
+          // La porción sin facturar sólo si queda algo (mismo criterio que el donut).
+          ...(consumedUnbilled > 0
+            ? [{ name: 'Consumed', value: consumedUnbilled, color: COLOR.consumed }]
+            : []),
+        ]
+      : [{ name: 'Consumed', value: consumed, color: COLOR.consumed }]),
     { name: 'Pending', value: pending, color: COLOR.pending },
     { name: 'Overage', value: overage, color: COLOR.overage },
   ]
