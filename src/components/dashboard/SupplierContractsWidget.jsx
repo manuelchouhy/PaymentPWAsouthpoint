@@ -11,9 +11,15 @@ const COUNTED = ['Expired', 'Critical', 'Expiring Soon', 'Active']
 /**
  * Widget "Supplier Contracts" (FR-16). Contadores por estado y, si hay
  * proveedores priority en alerta, los destaca arriba con su nombre.
- * Listo para montar en el dashboard (se arma en otra fase).
+ *
+ * Los supplier contracts NO tienen cliente en los datos, así que el filtro de Cliente
+ * del Dashboard no los toca. Sí responden al filtro de **Contractor**: si el Dashboard
+ * pasa `contractorFilter` (nombres elegidos), los contadores/priority se calculan sólo
+ * sobre los contratos cuyo supplierName está en esa lista. Vacío/ausente → todos.
+ *
+ * @param {{ contractorFilter?: string[] }} props
  */
-export function SupplierContractsWidget() {
+export function SupplierContractsWidget({ contractorFilter }) {
   const [contracts, setContracts] = useState([])
   const [widestThreshold, setWidestThreshold] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -35,15 +41,20 @@ export function SupplierContractsWidget() {
     }
   }, [])
 
+  // Filtro por Contractor del Dashboard (los supplier contracts no tienen cliente): con
+  // nombres elegidos, sólo los proveedores en esa lista; vacío/ausente → todos.
+  const scoped =
+    contractorFilter?.length ? contracts.filter((c) => contractorFilter.includes(c.supplierName)) : contracts
+
   const counts = COUNTED.reduce((acc, s) => ({ ...acc, [s]: 0 }), {})
-  for (const c of contracts) {
+  for (const c of scoped) {
     const st = displaySupplierStatus(c)
     if (st in counts) counts[st] += 1
   }
   // El banner de priority espera a que el umbral guardado cargue (o falle a 90) para
   // no mostrar un contrato "en alerta" con el default y luego esconderlo (flicker).
   // Los contadores no esperan: dependen sólo de list().
-  const priority = widestThreshold == null ? [] : priorityAlertContracts(contracts, widestThreshold)
+  const priority = widestThreshold == null ? [] : priorityAlertContracts(scoped, widestThreshold)
   const topDays = priority.length > 0 ? daysRemaining(priority[0].expirationDate) : null
 
   return (

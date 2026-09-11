@@ -8,33 +8,38 @@ import { formatDate } from '../../lib/format'
 
 /**
  * Widget "Contracts expiring" (FR-08). Top 5 contratos por proximidad de
- * vencimiento, con link directo a la grilla. Listo para montar en el dashboard
- * (que se construye en otra fase).
+ * vencimiento, con link directo a la grilla.
  *
- * @param {{ limit?: number }} props
+ * Si el Dashboard le pasa `projects` (ya filtrados por Cliente/Proyecto), usa esa lista
+ * y NO fetchea: así el widget respeta el filtro del Dashboard. Sin la prop (montado
+ * suelto) fetchea todos los proyectos como antes.
+ *
+ * @param {{ limit?: number, projects?: Array }} props
  */
-export function ContractsExpiringWidget({ limit = 5 }) {
-  const [top, setTop] = useState([])
-  const [loading, setLoading] = useState(true)
+export function ContractsExpiringWidget({ limit = 5, projects: projectsProp }) {
+  const [fetched, setFetched] = useState(null)
+  const [loading, setLoading] = useState(projectsProp == null)
 
   useEffect(() => {
+    // Con projects provistos por el Dashboard no se fetchea (la lista ya viene filtrada).
+    if (projectsProp != null) return
     let cancelled = false
+    setLoading(true)
     api.projects.list()
-      .then((projects) => {
-        if (cancelled) return
-        // Solo los que tienen contrato, por proximidad de vencimiento.
-        const withContract = projects.filter((p) => p.contractExpirationDate)
-        const sorted = withContract.sort((a, b) =>
-          a.contractExpirationDate.localeCompare(b.contractExpirationDate),
-        )
-        setTop(sorted.slice(0, limit))
-      })
-      .catch(() => !cancelled && setTop([]))
+      .then((projects) => !cancelled && setFetched(projects))
+      .catch(() => !cancelled && setFetched([]))
       .finally(() => !cancelled && setLoading(false))
     return () => {
       cancelled = true
     }
-  }, [limit])
+  }, [projectsProp])
+
+  const source = projectsProp ?? fetched ?? []
+  // Solo los que tienen contrato, por proximidad de vencimiento.
+  const top = source
+    .filter((p) => p.contractExpirationDate)
+    .sort((a, b) => a.contractExpirationDate.localeCompare(b.contractExpirationDate))
+    .slice(0, limit)
 
   return (
     <section className="dash-widget" aria-label="Contracts expiring">
