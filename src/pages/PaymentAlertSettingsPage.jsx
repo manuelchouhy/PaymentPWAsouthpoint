@@ -67,9 +67,6 @@ export function PaymentAlertSettingsPage() {
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Payment Alerts</h1>
-        <p className="masthead__sub">
-          Warning threshold and recipients for overdue contractor payment alerts.
-        </p>
       </motion.header>
 
       {status === 'loading' && <p className="state__hint">Loading settings…</p>}

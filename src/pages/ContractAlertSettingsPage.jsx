@@ -84,10 +84,6 @@ export function ContractAlertSettingsPage() {
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Contract alert settings</h1>
-        <p className="masthead__sub">
-          Warning thresholds and recipients for client contract expiration
-          alerts.
-        </p>
       </motion.header>
 
       {status === 'loading' && <p className="state__hint">Loading settings…</p>}

@@ -1,0 +1,3 @@
+# Normaliza los fin de línea a LF en el repo (evita que ediciones en Windows con
+# core.autocrlf=true reescriban archivos enteros a CRLF y contaminen los diffs).
+* text=auto eol=lf

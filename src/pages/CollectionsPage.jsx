@@ -237,10 +237,6 @@ export function CollectionsPage() {
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Collections</h1>
-        <p className="masthead__sub">
-          Issued invoices and their collection status. Register full or partial
-          collections; once completed, the invoice moves to Collected.
-        </p>
       </motion.header>
 
       {status === 'loading' && <p className="state__hint">Loading invoices…</p>}

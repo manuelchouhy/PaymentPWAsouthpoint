@@ -151,10 +151,6 @@ export function ClientsPage() {
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Clients</h1>
-        <p className="masthead__sub">
-          Master list of clients, with their MSA on file. Projects and SO
-          look up their MSA from here.
-        </p>
       </motion.header>
 
       {status === 'loading' && <p className="state__hint">Loading clients…</p>}

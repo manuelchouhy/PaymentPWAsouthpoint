@@ -303,12 +303,6 @@ export function ClientSummaryPage() {
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Client Summary</h1>
-        <p className="masthead__sub">
-          Weekly view per project. Budget is the estimated hours (SOW plus approved change
-          requests). Consumed counts approved hours — bill-to-client for clients, plus internal
-          hours for SouthPoint Internal (no budget); Pending shows those hours not yet approved
-          in Zoho; Overage sits in its own column.
-        </p>
       </motion.header>
 
       {status === 'loading' && <p className="state__hint">Loading client summary…</p>}

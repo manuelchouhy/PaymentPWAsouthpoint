@@ -438,10 +438,6 @@ export function EntriesPage() {
           <span className="masthead__rule" aria-hidden="true" />
         </div>
         <h1 className="masthead__title">Entries</h1>
-        <p className="masthead__sub">
-          Every logged hour, classified by hand. Unallocated hours come first. Nothing is
-          classified automatically.
-        </p>
       </motion.header>
 
       {/* Fuera del bloque `ready`: este aviso lo dispara un Apply que además
