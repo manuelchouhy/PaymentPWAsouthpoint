@@ -247,11 +247,17 @@ export function fieldOf(page: Page, label: string): Locator {
     .first()
 }
 
-/** Abre un dropdown del filtro, devuelve las etiquetas de sus opciones y lo cierra. */
+/**
+ * Abre un dropdown del filtro, devuelve las etiquetas de sus opciones y lo cierra.
+ * Espera a que el panel RESUELVA su contenido —una opción O el estado vacío— antes de
+ * leer: leer `allInnerTexts` apenas se abre es un race (puede devolver [] o una lista
+ * parcial si las opciones aún no renderizaron); esperar sólo el panel no alcanza porque
+ * aparece antes que las opciones. Un dropdown vacío (.msel__empty) devuelve [].
+ */
 export async function optionsOf(page: Page, label: string): Promise<string[]> {
   const field = fieldOf(page, label)
   await field.locator('.msel__btn').click()
-  await expect(field.locator('.msel__opt-label').first()).toBeVisible()
+  await field.locator('.msel__opt-label, .msel__empty').first().waitFor({ state: 'visible' })
   const values = await field.locator('.msel__opt-label').allInnerTexts()
   await page.keyboard.press('Escape')
   return values
