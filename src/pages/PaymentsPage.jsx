@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, BellRing, ChevronDown, ChevronRight, Download } from 'lucide-react'
@@ -13,6 +13,12 @@ import {
 import { invoiceCompletion } from '../lib/invoiceCompletion'
 import { entryPaymentStatus } from '../lib/entryPaymentStatus'
 import { buildProjectIndex, deriveEntriesClient } from '../lib/entryClient'
+import {
+  useEntryFilters,
+  applyEntryFilters,
+  buildFilterOptions,
+} from '../lib/useEntryFilters'
+import { EntryFilterBar } from '../components/EntryFilterBar'
 import { api } from '../lib/api'
 import { downloadPaymentReceipt } from '../lib/paymentReceipt'
 import {
@@ -62,6 +68,14 @@ const PAY_LABELS = {
   overage: { low: 'overage', cap: 'Overage' },
   sp_internal: { low: 'SP internal', cap: 'SP internal' },
 }
+
+// Map vacío compartido para applyEntryFilters/buildFilterOptions: sólo lo usan para
+// resolver el filtro Billing Status (que en Payments no se usa — el "Estado" de acá es
+// el de pago de la factura, aparte). Estable para no invalidar memos.
+const NO_INVOICE_MAP = new Map()
+
+// Opciones de la dimensión "Estado" en Payments = estado de PAGO de la factura.
+const PAYMENT_STATUS_OPTIONS = ['Invoiced', 'Paid']
 
 // Tope de horas YA pagadas que el picker "Hours to pay" muestra como contexto
 // (las más recientes). Evita que el historial pagado —sin límite— sepulte las
@@ -309,6 +323,52 @@ export function PaymentsPage() {
   const entriesForIds = (entryIds) =>
     (entryIds ?? []).map((id) => entryById.get(String(id))).filter(Boolean)
 
+  // --- Barra de filtros (misma que Billing) --------------------------------------
+  // Dimensiones de horas (cliente/proyecto/#/contractor) sobre enrichedEntries, más
+  // "Estado" = estado de PAGO de la factura (Invoiced/Paid), que es propio de Payments
+  // y no vive en useEntryFilters (por eso paymentStatuses aparte). Filtra facturas y
+  // grupos overage/sp_internal por las horas que contienen.
+  const { filters, toggleValue, clear, isActive } = useEntryFilters()
+  const [paymentStatuses, setPaymentStatuses] = useState([])
+  const masterNames = useMemo(
+    () => new Set(clients.map((c) => c.clientName).filter(Boolean)),
+    [clients],
+  )
+  const entryDimsActive =
+    filters.clients.length > 0 ||
+    filters.projects.length > 0 ||
+    filters.projectNumbers.length > 0 ||
+    filters.contractors.length > 0
+
+  const paymentFilterActive = isActive || paymentStatuses.length > 0
+  // Callbacks estables + filters memoizado: así el EntryFilterBar (React.memo) no se
+  // re-renderiza en renders no relacionados de la página.
+  const onFilterToggle = useCallback(
+    (key, value) => {
+      if (key === 'paymentStatuses') {
+        setPaymentStatuses((prev) =>
+          prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+        )
+      } else {
+        toggleValue(key, value)
+      }
+    },
+    [toggleValue],
+  )
+  const onFilterClear = useCallback(() => {
+    clear()
+    setPaymentStatuses([])
+  }, [clear])
+  const combinedFilters = useMemo(
+    () => ({ ...filters, paymentStatuses }),
+    [filters, paymentStatuses],
+  )
+  // NOTA: las OPCIONES del filtro y el matching (matchingEntryIds/passesEntryFilter/
+  // filterDimensions) se computan MÁS ABAJO, sobre el universo REALMENTE mostrado
+  // (facturas pagables/Paid + grupos invoice-less), no sobre todas las horas — si no, un
+  // dropdown ofrecería contractors/proyectos con horas aún no facturadas que vaciarían la
+  // página al elegirlos. Ver `displayedEntries`.
+
   const isExpanded = (key) => expandedKeys.has(key)
   const toggleExpand = (key) =>
     setExpandedKeys((prev) => {
@@ -350,8 +410,11 @@ export function PaymentsPage() {
   // transitorio antes de que la RPC flipee a Paid) no tiene pendientes → se oculta.
   const invoiceRows = useMemo(() => {
     const rows = []
+    // Las Paid se incluyen si el toggle "Show paid" está on O si el filtro de Estado
+    // pide 'Paid' (sin esto, filtrar Estado='Paid' daría la grilla vacía).
+    const includePaid = showPaid || paymentStatuses.includes('Paid')
     for (const inv of invoices) {
-      if (!(isPayable(inv.status) || (showPaid && inv.status === 'Paid'))) continue
+      if (!(isPayable(inv.status) || (includePaid && inv.status === 'Paid'))) continue
       const completion = invoiceCompletion(contractorsByInvoice.get(inv.id) ?? [], payments)
       // Decora cada contractor una sola vez (acá, memoizado) con su desglose de horas
       // y el rango de semanas: así el render no rejoinea/reagrega en cada toggle/toast.
@@ -393,7 +456,7 @@ export function PaymentsPage() {
       })
     }
     return rows
-  }, [invoices, contractorsByInvoice, payments, showPaid, warningBefore, entryById])
+  }, [invoices, contractorsByInvoice, payments, showPaid, paymentStatuses, warningBefore, entryById])
 
   // Horas invoice-less pendientes de pago, por contractor (overage / sp_internal).
   // El meta condensado (proyecto/cliente/semana) de cada grupo se computa acá, una vez,
@@ -420,6 +483,101 @@ export function PaymentsPage() {
     return { overage: overage.map(decorate), spInternal: spInternal.map(decorate) }
   }, [payments, enrichedEntries, entryById])
 
+  // Universo de horas REALMENTE mostrado en Payments: las que respaldan una factura
+  // pagable/Paid o un grupo invoice-less. Las opciones del filtro y el matching se
+  // calculan sobre esto (no sobre TODAS las horas) para que un dropdown nunca ofrezca un
+  // valor con horas aún no facturadas que vaciaría la página al elegirlo (finding review).
+  const displayedEntries = useMemo(() => {
+    const ids = new Set()
+    for (const r of invoiceRows)
+      for (const c of r.contractors) for (const id of c.entryIds ?? []) ids.add(String(id))
+    // Los grupos invoice-less se OCULTAN con un filtro de Estado activo (son de factura):
+    // en ese caso sus horas no deben ofrecer opciones que vaciarían la página.
+    if (paymentStatuses.length === 0) {
+      const addGroupIds = (list) => {
+        for (const g of list) for (const id of g.entryIds ?? []) ids.add(String(id))
+      }
+      addGroupIds(overagePending)
+      addGroupIds(spInternalPending)
+      addGroupIds(overagePaid)
+      addGroupIds(spInternalPaid)
+    }
+    return enrichedEntries.filter((e) => ids.has(String(e.id)))
+  }, [
+    invoiceRows,
+    overagePending,
+    spInternalPending,
+    overagePaid,
+    spInternalPaid,
+    enrichedEntries,
+    paymentStatuses,
+  ])
+
+  const filterOptions = useMemo(
+    () => buildFilterOptions(displayedEntries, filters, NO_INVOICE_MAP, masterNames),
+    [displayedEntries, filters, masterNames],
+  )
+  // Ids (string) de las horas MOSTRADAS que pasan el filtro de dimensiones. null = ninguna
+  // dimensión de horas activa → no se filtra por horas.
+  const matchingEntryIds = useMemo(() => {
+    if (!entryDimsActive) return null
+    return new Set(
+      applyEntryFilters(displayedEntries, filters, NO_INVOICE_MAP, masterNames).map((e) =>
+        String(e.id),
+      ),
+    )
+  }, [entryDimsActive, displayedEntries, filters, masterNames])
+  // Una factura/grupo pasa el filtro de horas si tiene al menos una hora mostrada que matchea.
+  const passesEntryFilter = (entryIds) =>
+    !matchingEntryIds || (entryIds ?? []).some((id) => matchingEntryIds.has(String(id)))
+  const filterDimensions = useMemo(
+    () => [
+      // Todas las dimensiones (Client incluido) salen de displayedEntries → los dropdowns
+      // sólo ofrecen valores que respaldan algo mostrado (no vacían la página).
+      { key: 'clients', label: 'Client', options: filterOptions.clients },
+      { key: 'projectNumbers', label: 'Project #', options: filterOptions.projectNumbers },
+      { key: 'projects', label: 'Project', options: filterOptions.projects },
+      { key: 'contractors', label: 'Contractor', options: filterOptions.contractors },
+      { key: 'paymentStatuses', label: 'Status', options: PAYMENT_STATUS_OPTIONS },
+    ],
+    [filterOptions],
+  )
+
+  // Filtra las filas invoice-less (cada una con .entryIds/.entries/.hours) por el filtro
+  // de HORAS y, con un filtro activo, las ACOTA a las horas que matchean: un grupo por
+  // contractor puede cruzar clientes/proyectos, así que además de decidir si se ve, se le
+  // recortan las horas/entradas/meta al cliente/proyecto filtrado (si no, mostraría el
+  // total cruzado del contractor y el picker pre-pagaría horas de otro cliente).
+  const filterByEntries = useCallback(
+    (list) => {
+      const kept = (list ?? []).filter((x) => passesEntryFilter(x.entryIds))
+      if (!matchingEntryIds) return kept
+      return kept.map((g) => {
+        const entries = (g.entries ?? []).filter((e) => matchingEntryIds.has(String(e.id)))
+        const entryIds = (g.entryIds ?? []).filter((id) => matchingEntryIds.has(String(id)))
+        return {
+          ...g,
+          entries,
+          entryIds,
+          entryCount: entryIds.length, // recomputar: si no, las paid rows mostrarían el count viejo
+          hours: entries.reduce((s, e) => s + (Number(e.hours) || 0), 0),
+          meta: formatGroupMeta(summarizeEntries(entries)),
+        }
+      })
+    },
+    // passesEntryFilter/narrow sólo dependen de matchingEntryIds.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [matchingEntryIds],
+  )
+  // Grupos/pagos invoice-less que pasan el filtro de HORAS (memoizados). El "Estado" de
+  // pago no aplica a lo invoice-less; se filtran sólo por cliente/proyecto/#/contractor.
+  // Se incluyen los PAGADOS (renderPaid) para que el filtro sea consistente en toda la
+  // página, no sólo en las facturas y lo pendiente.
+  const overagePendingF = useMemo(() => filterByEntries(overagePending), [filterByEntries, overagePending])
+  const spInternalPendingF = useMemo(() => filterByEntries(spInternalPending), [filterByEntries, spInternalPending])
+  const overagePaidF = useMemo(() => filterByEntries(overagePaid), [filterByEntries, overagePaid])
+  const spInternalPaidF = useMemo(() => filterByEntries(spInternalPaid), [filterByEntries, spInternalPaid])
+
   // Ids (string) de las horas YA pagadas: lo usa el picker "Hours to pay" para
   // marcar el estado de cada hora (entryPaymentStatus). Las pendientes que muestra
   // el picker dan 'pending'; una ya pagada daría 'paid' (defensivo).
@@ -430,28 +588,49 @@ export function PaymentsPage() {
   // el display y en el submit para que no puedan divergir.
   const isPending = (entry) => entryPaymentStatus(entry, paidEntryIds) === 'pending'
 
-  // KPIs sobre las facturas pendientes de pago. Total pendiente en HORAS (suma de las
-  // horas de los contractors todavía sin pagar en las facturas pagables).
+  // Facturas que pasan la BARRA de filtros (horas: cliente/proyecto/#/contractor, +
+  // Estado de pago), SIN el filtro de alertas (que lo manejan los chips). Es la base
+  // común de los KPIs y de la grilla, para que el header y las filas no diverjan.
+  // LIMITACIÓN conocida: el filtro de horas mira el cliente/proyecto DERIVADO de las
+  // horas (matchingEntryIds), no el inv.client/inv.project crudo de la factura. Si las
+  // horas de una factura no resuelven al mismo cliente que muestra su header (nombre
+  // legacy, cadena sin resolver, o horas más allá del cap de sync), esa factura puede no
+  // matchear un filtro por ese cliente. Es el mismo criterio de resolución que Billing.
+  // Además, un filtro de Estado explícito manda sobre "Show paid" (si filtrás Invoiced,
+  // no ves Paid aunque el toggle esté on) — es intencional, el filtro es más específico.
+  const filteredInvoiceRows = useMemo(
+    () =>
+      invoiceRows.filter((r) => {
+        if (paymentStatuses.length > 0 && !paymentStatuses.includes(r.inv.status)) return false
+        const entryIds = r.contractors.flatMap((c) => c.entryIds ?? [])
+        return passesEntryFilter(entryIds)
+      }),
+    [invoiceRows, paymentStatuses, matchingEntryIds],
+  )
+
+  // KPIs sobre las facturas FILTRADAS pendientes de pago. Total pendiente en HORAS (suma
+  // de las horas de los contractors todavía sin pagar en las facturas pagables).
   const kpis = useMemo(() => {
     let overdue = 0
     let dueThisWeek = 0
     let pendingHours = 0
-    for (const r of invoiceRows) {
+    // Las facturas son unidades atómicas multi-contractor: la grilla muestra la factura
+    // ENTERA (todos sus contractors) cuando pasa el filtro, así que el KPI cuenta igual —
+    // todas las horas pendientes de las facturas mostradas — para que header y grilla no
+    // divergan. "Filtrar por contractor" = ver las facturas que lo incluyen (enteras).
+    for (const r of filteredInvoiceRows) {
       if (!isPayable(r.inv.status)) continue
-      pendingHours += r.contractors.reduce(
-        (s, ic) => s + (ic.paid ? 0 : Number(ic.hours) || 0),
-        0,
-      )
+      pendingHours += r.contractors.reduce((s, ic) => s + (ic.paid ? 0 : Number(ic.hours) || 0), 0)
       if (r.dueDate) {
         if (r.alertLevel === 'overdue') overdue += 1
         if (r.daysUntilDue >= 0 && r.daysUntilDue <= 7) dueThisWeek += 1
       }
     }
     return { overdue, dueThisWeek, pendingHours }
-  }, [invoiceRows])
+  }, [filteredInvoiceRows])
 
   const rows = useMemo(() => {
-    const filtered = invoiceRows.filter((r) => {
+    const filtered = filteredInvoiceRows.filter((r) => {
       if (alertFilter === 'overdue') return r.alertLevel === 'overdue'
       if (alertFilter === 'dueThisWeek')
         return Boolean(r.dueDate) && r.daysUntilDue >= 0 && r.daysUntilDue <= 7
@@ -465,7 +644,7 @@ export function PaymentsPage() {
         ALERT_RANK[a.alertLevel] - ALERT_RANK[b.alertLevel] ||
         (a.dueDate ?? '9999-12-31').localeCompare(b.dueDate ?? '9999-12-31'),
     )
-  }, [invoiceRows, alertFilter])
+  }, [filteredInvoiceRows, alertFilter])
 
   // Pago de UN contractor de una factura agrupada. Al completar el último, la factura
   // pasa a Paid. Maneja carreras (already_paid / not_payable / stale) recargando.
@@ -695,6 +874,9 @@ export function PaymentsPage() {
                                   .filter((e) => {
                                     const k = String(e.id)
                                     if (pendingIds.has(k) || seen.has(k)) return false
+                                    // Respetar el filtro de la barra: no mostrar historial
+                                    // pagado de otros clientes/proyectos cuando hay filtro.
+                                    if (matchingEntryIds && !matchingEntryIds.has(k)) return false
                                     seen.add(k)
                                     return true
                                   })
@@ -709,7 +891,13 @@ export function PaymentsPage() {
                                   entries: [...group.entries, ...paidEntries],
                                   pendingCount: group.entries.length,
                                 })
-                                setPaySelectedIds(new Set(group.entryIds.map(String)))
+                                // Pre-seleccionar SÓLO las horas que pasan el filtro de la
+                                // barra: con un filtro de cliente/proyecto activo, no
+                                // pre-pagar las horas del grupo que quedan fuera del filtro.
+                                const preselect = matchingEntryIds
+                                  ? group.entryIds.filter((id) => matchingEntryIds.has(String(id)))
+                                  : group.entryIds
+                                setPaySelectedIds(new Set(preselect.map(String)))
                               }}
                             >
                               Pay {label.low}
@@ -830,6 +1018,15 @@ export function PaymentsPage() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.05 }}
         >
+          <EntryFilterBar
+            dimensions={filterDimensions}
+            filters={combinedFilters}
+            onToggle={onFilterToggle}
+            onClear={onFilterClear}
+            isActive={paymentFilterActive}
+            title="Payment filters"
+          />
+
           <div className="proj-kpis">
             <div className="proj-kpis__chips" role="group" aria-label="Payment alerts">
               <button
@@ -1000,13 +1197,18 @@ export function PaymentsPage() {
             </div>
           )}
 
-          {/* Horas invoice-less a pagar (sin factura al cliente): overage y sp_internal. */}
-          {renderToPay('overage', overagePending)}
-          {renderToPay('sp_internal', spInternalPending)}
-
-          {/* Pagos invoice-less ya hechos (read-only), separados por allocation. */}
-          {renderPaid('overage', overagePaid)}
-          {renderPaid('sp_internal', spInternalPaid)}
+          {/* Secciones invoice-less (overage / sp_internal): se filtran sólo por horas
+              (cliente/proyecto/#/contractor). El "Estado" es de PAGO de factura y no aplica
+              acá, así que con un filtro de Estado activo se ocultan del todo — si no, un
+              filtro "Paid" dejaría a la vista listas de "to pay" (pendientes) contradictorias. */}
+          {paymentStatuses.length === 0 && (
+            <>
+              {renderToPay('overage', overagePendingF)}
+              {renderToPay('sp_internal', spInternalPendingF)}
+              {renderPaid('overage', overagePaidF)}
+              {renderPaid('sp_internal', spInternalPaidF)}
+            </>
+          )}
         </motion.div>
       )}
 
