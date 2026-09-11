@@ -37,7 +37,7 @@ function emptyStage() {
 }
 
 function emptyTask() {
-  return { localId: newLocalId('task'), taskName: '', role: '', estimatedHours: '' }
+  return { localId: newLocalId('task'), taskName: '', role: '', estimatedHours: '', stageId: null }
 }
 
 function emptyForm() {
@@ -409,6 +409,27 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
   const hoursInvalid = (hours) => !(Number(hours) >= 0)
   const existingTaskMissing = (t) => !t.taskName.trim() || hoursInvalid(t.estimatedHours)
   const newTaskInvalid = (t) => t.taskName.trim() && hoursInvalid(t.estimatedHours)
+  // Columna "Stage" en el paso Tasks: se puede asignar cada task a un stage YA GUARDADO
+  // del proyecto (existingStages). Los stages nuevos de esta misma sesión no tienen id
+  // todavía, así que no se ofrecen como destino hasta guardar (limitación conocida). Se
+  // muestra la columna sólo si hay stages a los que asignar.
+  const stageAssignOptions = existingStages
+  const showStageCol = form.hasStages && stageAssignOptions.length > 0
+  const stageSelect = (value, onChange) => (
+    <select
+      className="field__input"
+      value={value ?? ''}
+      onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
+      aria-label="Stage"
+    >
+      <option value="">No stage</option>
+      {stageAssignOptions.map((s) => (
+        <option key={s.id} value={s.id}>
+          {s.stageName || '—'}
+        </option>
+      ))}
+    </select>
+  )
   const step4Missing = {
     tasks:
       (isEdit && (Boolean(tasksLoadError) || existingTasks.some(existingTaskMissing))) ||
@@ -517,7 +538,8 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
               !original ||
               t.taskName !== original.taskName ||
               (t.role || null) !== (original.role || null) ||
-              Number(t.estimatedHours) !== Number(original.estimatedHours)
+              Number(t.estimatedHours) !== Number(original.estimatedHours) ||
+              (t.stageId ?? null) !== (original.stageId ?? null)
             )
           })
           .map((t) => ({
@@ -538,6 +560,7 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
             taskName: t.taskName.trim(),
             role: t.role.trim() || null,
             estimatedHours: Number(t.estimatedHours) || 0,
+            stageId: t.stageId ?? null,
           }))
 
         await onSubmit(updates, form.hasStages ? null : form.sowFile, {
@@ -577,6 +600,7 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
               taskName: t.taskName.trim(),
               role: t.role.trim() || null,
               estimatedHours: Number(t.estimatedHours) || 0,
+              stageId: t.stageId ?? null,
             })),
         })
       }
@@ -1127,6 +1151,7 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                       <tr>
                         <th scope="col">Task Name</th>
                         <th scope="col">Role</th>
+                        {showStageCol && <th scope="col">Stage</th>}
                         <th scope="col" className="col-num">Est. Hours</th>
                         <th scope="col" aria-label="Remove" />
                       </tr>
@@ -1153,6 +1178,9 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                                   autoComplete="off"
                                 />
                               </td>
+                              {showStageCol && (
+                                <td>{stageSelect(t.stageId, (v) => setExistingTaskField(t.id, 'stageId', v))}</td>
+                              )}
                               <td>
                                 <input
                                   type="number"
@@ -1185,6 +1213,9 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                               autoComplete="off"
                             />
                           </td>
+                          {showStageCol && (
+                            <td>{stageSelect(t.stageId, (v) => setTaskField(t.localId, 'stageId', v))}</td>
+                          )}
                           <td>
                             <input
                               type="number"
@@ -1210,7 +1241,7 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td colSpan={2}>Total</td>
+                        <td colSpan={showStageCol ? 3 : 2}>Total</td>
                         <td className="col-num">{tasksTotalHours}</td>
                         <td />
                       </tr>
