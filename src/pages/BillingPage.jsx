@@ -521,18 +521,18 @@ export function BillingPage() {
     }
     // Si el scope abarca varios proyectos (por nombre o número) no es "un proyecto" → "—".
     if (names.size > 1 || nums.size > 1) return null
-    // Budget: sólo con un projectNumber real que matchee EXACTAMENTE un proyecto (evita
-    // el duplicado id49/id50) y con los CRs ya cargados; si no, null → la JSX muestra "—".
+    // Budget: con un projectNumber real, tiene que matchear EXACTAMENTE un proyecto. Si
+    // el número está DUPLICADO (id49/id50), consumed mezclaría los dos y el budget saldría
+    // de uno → ambiguo, se descarta todo el cuadro ("—"). Con projectNumber vacío (proyecto
+    // legacy filtrado por nombre) no hay budget pero el consumed sí vale → "consumed / —".
     let budget = null
-    if (crsLoaded && nums.size === 1) {
+    if (nums.size === 1) {
       const [num] = [...nums]
       const matches = projects.filter((p) => p.projectNumber === num)
-      if (matches.length === 1) {
-        budget = effectiveBudgetHours(
-          matches[0].baseBudgetHours,
-          crsByProject.get(String(matches[0].id)) ?? [],
-        )
-      }
+      if (matches.length !== 1) return null
+      budget = crsLoaded
+        ? effectiveBudgetHours(matches[0].baseBudgetHours, crsByProject.get(String(matches[0].id)) ?? [])
+        : null
     }
     return { budget, consumed }
   }, [filters, entriesConCliente, invoiceByEntryId, masterNames, projects, crsByProject, crsLoaded])
