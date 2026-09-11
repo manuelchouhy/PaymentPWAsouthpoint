@@ -147,9 +147,12 @@ export function ClientSummaryPage() {
 
   // Opciones INTERLAZADAS: cada dimensión deriva sus opciones de los clientes/proyectos
   // que pasan TODOS los OTROS filtros de proyecto (menos el propio), para que elegir un
-  // Cliente recorte Project/Project#/SOW y no ofrezca combinaciones que dan cero. Se
-  // reusa el mismo filterClientSummary que la tabla. La propia dimensión se excluye del
-  // cruce; los valores ya elegidos se unen siempre (para poder destildarlos).
+  // Cliente recorte Project/Project#/SOW a lo compatible. Mismo patrón de una sola
+  // dimensión excluida que buildFilterOptions (Entries/Billing): recorta los ceros de
+  // UNA dimensión a la vez, no toda combinación cruzada (dos filtros ya elegidos e
+  // incompatibles entre sí pueden aún vaciar la tabla; el Clear los limpia). Se reusa
+  // el mismo filterClientSummary que la tabla; los valores ya elegidos se unen siempre
+  // (para poder destildarlos).
   const optionScope = useCallback(
     (except) =>
       filterClientSummary(summary.clients, {

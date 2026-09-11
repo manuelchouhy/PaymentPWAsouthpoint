@@ -53,14 +53,20 @@ export function ClientSummaryCharts({ totals }) {
       ? [
           { name: 'Invoiced', value: invoiced, color: COLOR.invoiced },
           // La porción sin facturar sólo si queda algo (mismo criterio que el donut).
+          // Se rotula "Consumed (unbilled)" igual que el donut: cuando se parte, la
+          // barra Consumed ya no es el consumido total sino la porción sin facturar,
+          // así que el label lo dice para no leerse como "consumido = 12h".
           ...(consumedUnbilled > 0
-            ? [{ name: 'Consumed', value: consumedUnbilled, color: COLOR.consumed }]
+            ? [{ name: 'Consumed (unbilled)', value: consumedUnbilled, color: COLOR.consumed }]
             : []),
         ]
       : [{ name: 'Consumed', value: consumed, color: COLOR.consumed }]),
     { name: 'Pending', value: pending, color: COLOR.pending },
     { name: 'Overage', value: overage, color: COLOR.overage },
   ]
+  // El título del widget lista exactamente las barras dibujadas, en su orden real:
+  // así nunca anuncia "Invoiced" si no hay barra Invoiced, ni contradice el orden.
+  const barTitle = barData.map((d) => d.name).join(' · ')
   // El consumido se parte en Invoiced (ya facturado) + Consumed (aún sin facturar)
   // para que se vea la porción invoiced. Si no hay invoiced, una sola porción
   // "Consumed" como antes. La suma Invoiced+Consumed sigue siendo el consumido total,
@@ -104,7 +110,7 @@ export function ClientSummaryCharts({ totals }) {
         <div className="dash-widget__head">
           <span className="dash-widget__title">
             <TrendingUp size={14} />
-            Budget · Consumed · Invoiced · Pending · Overage
+            {barTitle}
           </span>
         </div>
         {noData ? (
