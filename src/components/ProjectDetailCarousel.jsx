@@ -878,8 +878,8 @@ function ChangeRequestsSlide({
  * Slide "Stages & Tasks" (slice 12, lote WhatsApp 2026-09-10): vista de árbol de los
  * stages del proyecto y sus tasks. El agrupado lo hace `buildProjectTaskTree` (módulo puro);
  * acá solo se renderiza. Cada nodo es expandible; un click en el header abre/cierra su lista.
- * Los tasks son los REALES del proyecto (los de las horas cargadas, con horas). Como no hay
- * link stage↔task, caen todos en el nodo "Tasks".
+ * Los tasks son el merge de los registrados del SOW (con su stage) y los logueados de las
+ * horas (mergeProjectTasks): cada uno cae bajo su stage, o bajo "No stage" si no está asignado.
  */
 function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggle }) {
   if (loading) return <p className="drawer__empty">Loading stages & tasks…</p>
@@ -1211,18 +1211,23 @@ export function ProjectDetailCarousel({
     let cancelled = false
     setTreeLoading(true)
     setTreeError(false)
-    Promise.all([
+    // allSettled: si falla la lista de registrados (RLS, stub notImplemented del backend
+    // http), los logueados igual se muestran — antes del merge sólo se pedían esos. Sólo
+    // es error si fallan las DOS.
+    Promise.allSettled([
       Promise.resolve().then(() => api.projectTasks.list(project.id)),
       Promise.resolve().then(() => api.projectTasks.logged(project.projectName)),
     ])
-      .then(([registered, logged]) => {
+      .then(([registeredRes, loggedRes]) => {
         if (cancelled) return
+        if (registeredRes.status === 'rejected' && loggedRes.status === 'rejected') {
+          console.error('No se pudieron cargar los tasks del proyecto:', loggedRes.reason)
+          setTreeError(true)
+          return
+        }
+        const registered = registeredRes.status === 'fulfilled' ? registeredRes.value : []
+        const logged = loggedRes.status === 'fulfilled' ? loggedRes.value : []
         setTreeTasks(mergeProjectTasks(registered ?? [], logged ?? []))
-      })
-      .catch((error) => {
-        if (cancelled) return
-        console.error('No se pudieron cargar los tasks del proyecto:', error)
-        setTreeError(true)
       })
       .finally(() => !cancelled && setTreeLoading(false))
     return () => {
