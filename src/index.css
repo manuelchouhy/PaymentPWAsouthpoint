@@ -3198,6 +3198,15 @@ th.col-pop { text-align: center; }
   font-size: 12.5px;
   color: var(--text-faint);
 }
+.stage-tree__warn {
+  margin: 0 0 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  color: var(--text-soft, var(--text-faint));
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+}
 
 /* Timeline vertical: cada evento es un nodo (dot) sobre la línea que conecta
    con el siguiente — misma lógica que NodeStepper, en vertical. */

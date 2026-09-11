@@ -33,12 +33,17 @@ test('Projects & SOW: el pop up muestra el slide "Stages & Tasks" con árbol exp
   const errorMsg = modal.getByText('Stages & tasks could not be loaded', { exact: false })
   const nodeCount = await nodes.count()
   if (nodeCount > 0) {
-    // Un stage node se expande al clickear su header y muestra sus tasks (o el
-    // vacío "No tasks in this stage.").
-    const firstHeader = nodes.first().locator('.stage-tree__header')
+    // Un stage node se expande al clickear su header y muestra su contenido: una
+    // lista de tasks (.stage-tree__task) o el vacío "No tasks in this stage.".
+    const firstNode = nodes.first()
+    const firstHeader = firstNode.locator('.stage-tree__header')
     await expect(firstHeader).toHaveAttribute('aria-expanded', 'false')
     await firstHeader.click()
     await expect(firstHeader).toHaveAttribute('aria-expanded', 'true')
+    // El contenido del nodo expandido efectivamente se renderiza (no solo el flag).
+    await expect(
+      firstNode.locator('.stage-tree__task, .stage-tree__empty').first(),
+    ).toBeVisible()
   } else {
     // Sin nodos: tiene que estar visible el vacío o el error, no una pantalla en blanco.
     expect((await empty.count()) + (await errorMsg.count())).toBeGreaterThan(0)

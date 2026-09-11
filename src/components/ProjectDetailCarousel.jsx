@@ -880,17 +880,33 @@ function ChangeRequestsSlide({
  * header abre/cierra la lista de tasks. Hoy los tasks no tienen `stageId` en el schema, así
  * que caen todos en el nodo "Sin stage" — ver open item del slice.
  */
-function StagesTasksSlide({ tree, loading, error, expanded, onToggle }) {
+function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggle }) {
   if (loading) return <p className="drawer__empty">Loading stages & tasks…</p>
+  // error = falló la carga de tasks: sin tasks no hay árbol que mostrar.
   if (error)
     return (
       <p className="drawer__empty">Stages & tasks could not be loaded — try reopening this project.</p>
     )
+  // Nada que mostrar: si fue por un fallo de stages, avisamos que es un error (no
+  // un proyecto vacío); si no, el proyecto realmente no tiene stages ni tasks.
   if (tree.length === 0)
-    return <p className="drawer__empty">This project has no stages or tasks yet.</p>
+    return (
+      <p className="drawer__empty">
+        {stagesError
+          ? 'Stages could not be loaded — try reopening this project.'
+          : 'This project has no stages or tasks yet.'}
+      </p>
+    )
 
   return (
-    <ul className="stage-tree">
+    <>
+      {/* Fallo solo de stages con tasks disponibles: se muestran igual, ungrouped. */}
+      {stagesError && (
+        <p className="stage-tree__warn">
+          Stages could not be loaded — tasks are shown ungrouped.
+        </p>
+      )}
+      <ul className="stage-tree">
       {tree.map((node) => {
         const isOpen = expanded.has(node.key)
         return (
@@ -917,9 +933,9 @@ function StagesTasksSlide({ tree, loading, error, expanded, onToggle }) {
               ) : (
                 <ul className="stage-tree__tasks">
                   {node.tasks.map((t, i) => (
-                    // id ?? i: en data demo/legacy un id nulo o duplicado no debe
-                    // colapsar dos filas (lista read-only, sin reordenamiento).
-                    <li key={t.id ?? i} className="stage-tree__task">
+                    // id ?? `idx-${i}`: en data demo/legacy un id nulo no debe colapsar
+                    // filas ni chocar con un id real igual al índice (lista read-only).
+                    <li key={t.id ?? `idx-${i}`} className="stage-tree__task">
                       <span className="stage-tree__task-name">{t.taskName || '—'}</span>
                       <span className="stage-tree__task-meta">
                         {t.role || '—'}
@@ -937,7 +953,8 @@ function StagesTasksSlide({ tree, loading, error, expanded, onToggle }) {
           </li>
         )
       })}
-    </ul>
+      </ul>
+    </>
   )
 }
 
@@ -1005,6 +1022,10 @@ export function ProjectDetailCarousel({
     () => buildProjectTaskTree(treeStages, treeTasks),
     [treeStages, treeTasks],
   )
+  // Estado de la carga de stages para el slide del árbol (los stages los trae el
+  // efecto de stageCount). Extraído para no repetir la regla en loading/error.
+  const stagesPending = project.hasStages && stageCount === null && !stageCountError
+  const stagesFailed = project.hasStages && stageCountError
   const toggleStage = (key) =>
     setExpandedStages((prev) => {
       const next = new Set(prev)
@@ -1049,16 +1070,14 @@ export function ProjectDetailCarousel({
       content: (
         <StagesTasksSlide
           tree={taskTree}
-          // Los stages los trae el efecto de stageCount (stageCount === null mientras
-          // están en vuelo): sin esto, si los tasks resuelven antes que los stages el
-          // slide parpadea a "sin stages/tasks" o los muestra sin agrupar.
-          loading={
-            treeLoading || (project.hasStages && stageCount === null && !stageCountError)
-          }
-          // Error si falló la carga de tasks (treeError) O la de stages
-          // (stageCountError): sin lo segundo, un fallo de stages se veía como
-          // "sin stages/tasks" o como tasks sin agrupar, sin aviso.
-          error={treeError || (project.hasStages && stageCountError)}
+          // stagesPending evita el parpadeo a "sin stages/tasks" si los tasks
+          // resuelven antes que los stages.
+          loading={treeLoading || stagesPending}
+          // Error duro solo si fallan los TASKS (sin ellos no hay nada que mostrar).
+          // Un fallo solo de stages no blanquea la sección: los tasks igual se
+          // muestran (hoy son todos orphans) con un aviso — ver stagesError.
+          error={treeError}
+          stagesError={stagesFailed}
           expanded={expandedStages}
           onToggle={toggleStage}
         />
