@@ -1209,12 +1209,17 @@ export async function createProjectFromWizard(payload, createdBy) {
       const createdStages = await createProjectStages(project.id, stagesWithUrls, createdBy)
       await Promise.all(
         createdStages.map((stage, i) =>
-          recordProjectDocument({
-            subjectType: 'sow',
-            subjectId: stage.id,
-            fileUrl: stagesWithUrls[i].sowUrl,
-            uploadedBy: createdBy,
-          }),
+          // Solo se registra documento si el stage tiene archivo: con SOW File opcional,
+          // sowUrl puede ser null y project_documents.file_url es NOT NULL (el insert
+          // fallaría, aunque best-effort lo trague). El guard preserva el índice.
+          stagesWithUrls[i].sowUrl
+            ? recordProjectDocument({
+                subjectType: 'sow',
+                subjectId: stage.id,
+                fileUrl: stagesWithUrls[i].sowUrl,
+                uploadedBy: createdBy,
+              })
+            : null,
         ),
       )
     }

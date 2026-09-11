@@ -363,11 +363,10 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
     (isEdit ? existingTasks.reduce((sum, t) => sum + (Number(t.estimatedHours) || 0), 0) : 0)
 
   // Una stage recién agregada en esta sesión (form.stages) necesita sus 3
-  // campos; una ya persistida (existingStages, issue 03b) no puede perder
-  // nombre/número (sigue siendo `text not null`). El SOW File del stage es OPCIONAL
-  // (a pedido del usuario): sólo se exigen nombre y número.
+  // Un stage (nuevo o existente) es inválido si le falta nombre o número (`text not null`).
+  // El SOW File es OPCIONAL (a pedido del usuario). Mismo predicado para ambos.
   const stageMissing = (s) => !s.stageName.trim() || !s.sowNumber.trim()
-  const existingStageMissing = (s) => !s.stageName.trim() || !s.sowNumber.trim()
+  const existingStageMissing = stageMissing
   // En edición ya hay un SOW subido (initial.sowUrl) — no reemplazarlo no es
   // un error, solo "no hay archivo nuevo".
   const hasSowFileNow = isEdit ? Boolean(initial.sowUrl) || Boolean(form.sowFile) : Boolean(form.sowFile)

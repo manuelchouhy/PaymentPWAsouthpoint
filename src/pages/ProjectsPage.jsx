@@ -485,12 +485,16 @@ export function ProjectsPage() {
       }
       await Promise.all(
         createdStages.map((stage, i) =>
-          api.projects.recordDocument({
-            subjectType: 'sow',
-            subjectId: stage.id,
-            fileUrl: uploaded[i].sowUrl,
-            uploadedBy: user?.email ?? null,
-          }),
+          // Solo si el stage tiene archivo (SOW File opcional): file_url es NOT NULL, un
+          // sowUrl null haría fallar el insert best-effort. El guard preserva el índice.
+          uploaded[i].sowUrl
+            ? api.projects.recordDocument({
+                subjectType: 'sow',
+                subjectId: stage.id,
+                fileUrl: uploaded[i].sowUrl,
+                uploadedBy: user?.email ?? null,
+              })
+            : null,
         ),
       )
     }
