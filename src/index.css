@@ -1305,11 +1305,17 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 
 .selbar__count {
   font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-faint);
+}
+/* Variante grande SÓLO para "Selected to bill" de Billing (la clase base la comparte
+   la SelectionBar de Entries, que debe quedar como caption chico). Las horas grandes
+   como el valor de los cuadros KPI. */
+.selbar__count--lg {
   font-size: 16px;
   color: var(--text);
 }
-/* Las horas seleccionadas se leen grandes (como el valor de los cuadros KPI). */
-.selbar__count b {
+.selbar__count--lg b {
   font-size: 21px;
   font-weight: 600;
 }

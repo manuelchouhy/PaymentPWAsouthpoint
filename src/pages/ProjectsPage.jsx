@@ -180,9 +180,16 @@ export function ProjectsPage() {
           return false
         if (filters.expFrom && p.contractExpirationDate < filters.expFrom) return false
         if (filters.expTo && p.contractExpirationDate > filters.expTo) return false
+        // La tarjeta de estado de contrato activa (statusFilter) también acota la grilla,
+        // así que las opciones deben respetarla para no ofrecer valores que dan cero.
+        if (
+          statusFilter &&
+          contractStatus(daysRemaining(p.contractExpirationDate)) !== statusFilter
+        )
+          return false
         return true
       }),
-    [optionWithClient, filters, masterNames],
+    [optionWithClient, filters, masterNames, statusFilter],
   )
 
   const clientOptions = useMemo(

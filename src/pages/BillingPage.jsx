@@ -684,11 +684,16 @@ export function BillingPage() {
   const selectedHours = selectedRows.reduce((sum, r) => sum + r.hours, 0)
   // Cuadro #2 por SELECCIÓN: cuando tildás filas de UN solo proyecto (aunque no haya
   // filtro de proyecto). Deriva el nombre del proyecto de las filas seleccionadas y
-  // reusa projectStatsFor para su consumed/budget completos.
-  const selectionProjectNames = useMemo(
-    () => [...new Set(selectedRows.map((r) => r.project).filter(Boolean))],
-    [selectedRows],
-  )
+  // reusa projectStatsFor para su consumed/budget completos. Memoizado sobre
+  // selectedKeys+billableRows (no sobre selectedRows, que es un array nuevo por render).
+  const selectionProjectNames = useMemo(() => {
+    const names = new Set()
+    for (const k of selectedKeys) {
+      const r = billableRows.get(k)
+      if (r?.project) names.add(r.project)
+    }
+    return [...names]
+  }, [selectedKeys, billableRows])
   const selectionProject = useMemo(
     () =>
       selectionProjectNames.length
@@ -696,9 +701,12 @@ export function BillingPage() {
         : null,
     [selectionProjectNames, projectStatsFor],
   )
-  // El cuadro #2 muestra números si hay selección de un proyecto O filtro a un proyecto
-  // (las dos cosas). La selección manda: es lo más específico que está mirando el usuario.
-  const budgetCardProject = selectionProject ?? singleProject
+  // El cuadro #2 muestra números con selección de un proyecto O con filtro a un proyecto
+  // (las dos cosas). Con selección manda la selección: si abarca varios proyectos,
+  // selectionProject es null y el cuadro va "—" (no se cae al filtro, porque
+  // selectedHours sumaría varios proyectos contra el consumed/budget de uno solo). Sin
+  // selección, vale el filtro de proyecto.
+  const budgetCardProject = selectedKeys.size > 0 ? selectionProject : singleProject
   const canCreate = can('billing.create')
   // Factura AGRUPADA multi-contractor (slice 03): se emite cuando la selección es de
   // un solo cliente + un solo proyecto (varios contractors permitidos).
@@ -1280,7 +1288,7 @@ export function BillingPage() {
               {canCreate && selectedKeys.size > 0 && (
                 <div className="selbar-wrap">
                   <div className="selbar selbar--active">
-                    <span className="selbar__count">
+                    <span className="selbar__count selbar__count--lg">
                       Selected to bill: <b>{formatHours(selectedHours)} h</b> ·{' '}
                       {selectedEntries.length} {selectedEntries.length === 1 ? 'entry' : 'entries'}
                     </span>
