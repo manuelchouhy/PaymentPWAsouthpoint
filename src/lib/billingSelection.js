@@ -52,11 +52,11 @@ export function cardScopeFromSelection(selectedRows) {
   clients.delete('')
   if (clients.size !== 1) return null
   const client = [...clients][0]
-  // Un único proyecto real Y ninguna fila sin proyecto (projects.size === 1 excluye el
-  // caso mixto {P1, ''}) → scope de proyecto. Si no, todo el cliente.
-  const realProjects = [...projects].filter((p) => p !== '')
-  if (realProjects.length === 1 && projects.size === 1) {
-    return { clients: [client], projects: realProjects }
+  // Un único proyecto real y ninguna fila sin proyecto → scope de ESE proyecto. Un solo
+  // valor no vacío (size 1 sin '') garantiza ambas cosas: el caso mixto {P1, ''} tiene
+  // size 2 y cae al scope del cliente entero, igual que varios proyectos.
+  if (projects.size === 1 && !projects.has('')) {
+    return { clients: [client], projects: [...projects] }
   }
   return { clients: [client], projects: [] }
 }

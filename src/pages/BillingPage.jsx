@@ -703,8 +703,8 @@ export function BillingPage() {
   const selectedHours = selectedRows.reduce((sum, r) => sum + r.hours, 0)
   // Cuadro #2 por SELECCIÓN: cuando tildás filas de UN solo proyecto (aunque no haya
   // filtro de proyecto). Deriva el nombre del proyecto de las filas seleccionadas y
-  // reusa projectStatsFor para su consumed/budget completos. Memoizado sobre
-  // selectedKeys+billableRows (no sobre selectedRows, que es un array nuevo por render).
+  // reusa projectStatsFor para su consumed/budget completos. Se deriva de selectedRows
+  // (ya memoizado), así el memo no re-corre si la selección no cambió.
   const selectionProjectNames = useMemo(() => {
     const names = new Set()
     for (const r of selectedRows) {
@@ -719,21 +719,21 @@ export function BillingPage() {
         : null,
     [selectionProjectNames, projectStatsFor],
   )
-  // El cuadro #2 muestra números con selección de un proyecto O con filtro a un proyecto
-  // (las dos cosas). Con selección manda la selección: si abarca varios proyectos,
-  // selectionProject es null y el cuadro va "—" (no se cae al filtro, porque
-  // selectedHours sumaría varios proyectos contra el consumed/budget de uno solo). Sin
-  // selección, vale el filtro de proyecto.
-  const budgetCardProject = selectedKeys.size > 0 ? selectionProject : singleProject
 
   // #2: los CINCO cuadros reflejan la SELECCIÓN cuando hay filas tildadas de un solo
   // cliente — un proyecto → ese proyecto; varios (o alguna sin proyecto) → la suma de
   // TODOS los proyectos del cliente (cardScopeFromSelection). Se miden sobre el
   // proyecto/cliente COMPLETO, ignorando semana/contractor, igual criterio que el
   // cuadro "Selected + consumed / budget". Si la selección cruza clientes o está vacía,
-  // los cuadros siguen el filtro de la barra (`cards`). Memoizado sobre
-  // selectedKeys+billableRows (no sobre selectedRows, que es un array nuevo por render).
+  // los cuadros siguen el filtro de la barra. Se deriva de selectedRows (ya memoizado).
   const cardScope = useMemo(() => cardScopeFromSelection(selectedRows), [selectedRows])
+  // El cuadro #2 usa el MISMO gate que los otros cuatro (cardScope): con selección de un
+  // solo cliente manda la selección; si cruza clientes o está vacía, vale el filtro. Así
+  // los cinco cuadros hablan siempre del mismo scope (antes #2 cambiaba con cualquier
+  // selección y podía discrepar con los otros cuatro en una selección multi-cliente).
+  // Con cliente único y varios proyectos, selectionProject es null → #2 va "—" mientras
+  // los otros muestran la suma del cliente (el budget es por proyecto, no por cliente).
+  const budgetCardProject = cardScope ? selectionProject : singleProject
   const selectionKpis = useMemo(() => {
     if (!cardScope) return null
     // cardScope.clients trae el nombre de cliente CRUDO ya resuelto (group.client), no
@@ -1178,6 +1178,19 @@ export function BillingPage() {
             onClear={clear}
             isActive={isActive}
           />
+
+          {/* Aviso cuando los cuadros dejan de seguir el filtro y pasan a reflejar la
+              SELECCIÓN: sin esto, tildar filas cambia los números en silencio y se
+              podrían leer como si siguieran la grilla filtrada (que muestra el filtro).
+              Aclara el scope (proyecto o cliente entero) y que es all-time. */}
+          {cardScope && (
+            <p className="state__hint">
+              Cards below reflect your selection —{' '}
+              <strong>{cardScope.clients[0]}</strong>
+              {cardScope.projects.length ? ` · ${cardScope.projects[0]}` : ' · all projects'} (all
+              weeks and contractors), not the filter above.
+            </p>
+          )}
 
           <div className="dash-kpis">
             <div className="dash-kpi dash-kpi--static dash-kpi--accent">
