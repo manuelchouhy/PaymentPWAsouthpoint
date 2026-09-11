@@ -35,12 +35,17 @@ test('Projects & SOW: el slide "Stages & Tasks" muestra los tasks reales del pro
   })
   await expect(tasksNode).toBeVisible()
 
-  // Expandir: aparece al menos un task real con su meta de horas.
+  // Expandir: cada task muestra nombre + id (task_number) + horas consumidas.
   await tasksNode.locator('.stage-tree__header').click()
   const taskRows = tasksNode.locator('.stage-tree__task')
   await expect(taskRows.first()).toBeVisible()
   expect(await taskRows.count()).toBeGreaterThan(0)
-  await expect(tasksNode.locator('.stage-tree__task-meta').first()).toContainText('h')
+  // Nombre.
+  await expect(tasksNode.locator('.stage-tree__task-name').first()).not.toHaveText('')
+  // Id del task (task_number de Zoho, prefijado con #).
+  await expect(tasksNode.locator('.stage-tree__task-id').first()).toContainText('#')
+  // Horas consumidas.
+  await expect(tasksNode.locator('.stage-tree__task-meta').first()).toContainText('consumed')
 
   await page.keyboard.press('Escape')
 })

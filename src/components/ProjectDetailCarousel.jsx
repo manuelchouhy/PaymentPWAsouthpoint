@@ -937,21 +937,26 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
                     // id ?? `idx-${i}`: en data demo/legacy un id nulo no debe colapsar
                     // filas ni chocar con un id real igual al índice (lista read-only).
                     <li key={t.id ?? `idx-${i}`} className="stage-tree__task">
-                      <span className="stage-tree__task-name">{t.taskName || '—'}</span>
-                      {/* Horas cargadas del task + estado de aprobación. formatHours
-                          redondea para no mostrar 12.3999… al sumar fracciones. El
-                          "all approved" sale del flag del dato (todas las entries
-                          Approved), no de comparar sumas (robusto ante correcciones
-                          negativas). */}
+                      <span className="stage-tree__task-name">
+                        {t.taskName || '—'}
+                        {/* id del task (task_number de Zoho, el mismo de "Task #" en
+                            Entries). Es largo → mono, atenuado y truncado, con tooltip. */}
+                        {t.taskNumber ? (
+                          <span className="stage-tree__task-id" title={`Task #${t.taskNumber}`}>
+                            #{t.taskNumber}
+                          </span>
+                        ) : null}
+                      </span>
+                      {/* Horas CONSUMIDAS (Approved) del task + las pendientes si las hay.
+                          formatHours redondea para no mostrar 12.3999… al sumar fracciones. */}
                       {(() => {
-                        const hours = Number(t.hours ?? 0)
+                        const total = Number(t.hours ?? 0)
+                        const consumed = Number(t.approvedHours ?? 0)
+                        const pending = Math.max(0, total - consumed)
                         return (
                           <span className="stage-tree__task-meta">
-                            {hours > 0 ? `${formatHours(hours)} h` : '—'}
-                            {hours > 0 &&
-                              (t.allApproved
-                                ? ' · all approved'
-                                : ` · ${formatHours(Number(t.approvedHours ?? 0))} h approved`)}
+                            {`${formatHours(consumed)} h consumed`}
+                            {pending > 0 ? ` · ${formatHours(pending)} h pending` : ''}
                           </span>
                         )
                       })()}
