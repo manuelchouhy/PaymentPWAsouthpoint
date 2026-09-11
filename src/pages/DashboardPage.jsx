@@ -106,12 +106,18 @@ function last7DaysSeries(items, dateKey, valueKey) {
 export function DashboardPage() {
   const { can } = useOutletContext()
   const [data, setData] = useState(null)
+  // projects/clients viven APARTE del data core: cargan en su propia cadena (no bloquean
+  // el first paint) y se guardan acá para alimentar el filtro. Estado separado a propósito
+  // — si se mergearan al `data` core con setData(prev=>...), un race donde llegan antes que
+  // el core los perdería (prev === null).
+  const [filterData, setFilterData] = useState({ projects: [], clients: [] })
   const [loadStatus, setLoadStatus] = useState('loading')
 
   const reloadKey = useSyncReloadKey()
   useEffect(() => {
     let cancelled = false
     setLoadStatus('loading')
+    setFilterData({ projects: [], clients: [] }) // reset en cada (re)carga
     // Datos CORE (KPIs y donuts): bloquean el first paint.
     Promise.all([
       api.timeEntries.list(),
@@ -121,7 +127,7 @@ export function DashboardPage() {
     ])
       .then(([entries, invoices, collections, payments]) => {
         if (cancelled) return
-        setData({ entries, invoices, collections, payments, projects: [], clients: [] })
+        setData({ entries, invoices, collections, payments })
         setLoadStatus('ready')
       })
       .catch((err) => {
@@ -132,14 +138,14 @@ export function DashboardPage() {
 
     // projects/clients sólo resuelven el cliente de cada hora (deriveEntriesClient) para el
     // filtro: NO bloquean el first paint (los KPIs/donuts se ven ya) y sólo hidratan las
-    // opciones del filtro cuando llegan. Un fallo suyo degrada a [] (filtro con menos
-    // opciones), sin tirar el dashboard.
+    // opciones del filtro cuando llegan. Estado propio (filterData), así que no hay race con
+    // el core. Un fallo suyo degrada a [] (filtro con menos opciones), sin tirar el dashboard.
     Promise.all([
       Promise.resolve().then(() => api.projects.list()).catch(() => []),
       Promise.resolve().then(() => api.clients.list()).catch(() => []),
     ]).then(([projects, clients]) => {
       if (cancelled) return
-      setData((prev) => (prev ? { ...prev, projects, clients } : prev))
+      setFilterData({ projects, clients })
     })
     return () => {
       cancelled = true
@@ -160,13 +166,13 @@ export function DashboardPage() {
   // Filtran los widgets basados en HORAS (donuts, Pending Hours, total). Los tiles de
   // facturas (Invoices/Collections/Payments) quedan globales. "Status" = billing status.
   const enrichedEntries = useMemo(
-    () => (data ? deriveEntriesClient(data.entries, data.projects ?? [], data.clients ?? []) : []),
-    [data],
+    () => (data ? deriveEntriesClient(data.entries, filterData.projects, filterData.clients) : []),
+    [data, filterData],
   )
   const { filters, toggleValue, clear, isActive } = useEntryFilters()
   const masterNames = useMemo(
-    () => new Set((data?.clients ?? []).map((c) => c.clientName).filter(Boolean)),
-    [data],
+    () => new Set(filterData.clients.map((c) => c.clientName).filter(Boolean)),
+    [filterData],
   )
   const filterOptions = useMemo(
     () => buildFilterOptions(enrichedEntries, filters, invoiceByEntryId, masterNames),
@@ -179,8 +185,8 @@ export function DashboardPage() {
   // Client dropdown = maestro de clientes (mismo criterio que Billing/Entries/Projects):
   // lista todos los clientes de la página Clients + el centinela Others si aplica.
   const clientOptions = useMemo(
-    () => clientFilterOptions(data?.clients ?? [], filterOptions.clients.includes(OTHER_CLIENT)),
-    [data, filterOptions.clients],
+    () => clientFilterOptions(filterData.clients, filterOptions.clients.includes(OTHER_CLIENT)),
+    [filterData, filterOptions.clients],
   )
   const filterDimensions = useMemo(
     () => [
@@ -331,7 +337,9 @@ export function DashboardPage() {
   // su suma = este total. Se calcula UNA vez sobre las horas crudas y se redondea una sola
   // vez, para que el centro no drifte por el redondeo por-bucket (dos entries de 0.25 h dan
   // 0.5 juntas pero 0.3+0.3=0.6 separadas). El donut de BILLING usa su propio total
-  // (billing.total), que excluye las no-facturables, para que centro y slices coincidan.
+  // (billing.total), que excluye las no-facturables — así su centro no incluye horas que
+  // sus slices no muestran (puede diferir 0.1 de la suma de la leyenda por el redondeo
+  // por-bucket, el mismo compromiso que el donut de Allocation).
   // Memoizado sobre [filteredEntries] (que ya deriva de data).
   const totalHours = useMemo(
     () => filteredEntries.reduce((sum, e) => sum + e.hours, 0),
@@ -387,7 +395,7 @@ export function DashboardPage() {
           />
           {isActive && (
             <p className="dash-filter-scope">
-              Filters apply to the hours widgets (Pending Hours and the two donuts). The
+              Filters apply to the hours widgets (the two donuts and hours totals). The
               Invoices / Collections / Payments tiles stay org-wide.
             </p>
           )}
