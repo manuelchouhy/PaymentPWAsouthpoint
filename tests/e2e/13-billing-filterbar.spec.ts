@@ -21,7 +21,8 @@ test('Billing: la barra de filtros compartida renderiza, filtra y limpia', async
   // Abrir el dropdown de Client y tildar la primera opción.
   const clientField = bar.locator('.filterfield').filter({ hasText: 'Client' })
   await clientField.locator('.msel__btn').click()
-  const firstOpt = page.locator('.msel__panel .msel__opt').first()
+  // Scopeado al panel del campo Client (no page-wide). La base de test tiene clientes.
+  const firstOpt = clientField.locator('.msel__panel .msel__opt').first()
   await firstOpt.waitFor({ state: 'visible' })
   await firstOpt.click()
   await page.keyboard.press('Escape') // cerrar el panel para que no tape a Clear
