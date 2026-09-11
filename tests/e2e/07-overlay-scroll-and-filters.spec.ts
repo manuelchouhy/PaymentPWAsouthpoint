@@ -1,5 +1,5 @@
-import { test, expect, type Page } from '@playwright/test'
-import { loginAsTestAdmin } from './helpers'
+import { test, expect } from '@playwright/test'
+import { loginAsTestAdmin, fieldOf } from './helpers'
 
 /**
  * Dos regresiones de UI, ambas de solo lectura (no escriben nada en la base):
@@ -60,15 +60,6 @@ test.describe('Projects and SOW · scroll de fondo', () => {
       .toBeGreaterThan(0)
   })
 })
-
-// Se ancla en el <span> del label con match exacto: `hasText` sobre el .msel
-// entero mira también el valor elegido y, con el panel abierto, las opciones —
-// un proyecto llamado "Contractor…" bindearía el dropdown equivocado.
-const fieldOf = (page: Page, label: string) =>
-  page
-    .locator('.msel')
-    .filter({ has: page.locator('.filterfield__label', { hasText: new RegExp(`^${label}$`) }) })
-    .first()
 
 test.describe('Entries · listas de filtros entrelazadas', () => {
   test('elegir un proyecto recorta los contractors a los que cargaron horas ahí', async ({

@@ -234,3 +234,25 @@ export async function showPaidInvoices(page: Page) {
 export async function cleanupTestInvoices(page: Page) {
   await page.evaluate(() => window.__api?.test.cleanupTestInvoices())
 }
+
+/**
+ * Ancla un campo del filtro (.msel) por el <span> de su label con match EXACTO — así
+ * `hasText` no bindea el dropdown equivocado por un valor/opción que contenga el label
+ * (p. ej. un proyecto llamado "Contractor…"). Compartido por los specs de filtros.
+ */
+export function fieldOf(page: Page, label: string): Locator {
+  return page
+    .locator('.msel')
+    .filter({ has: page.locator('.filterfield__label', { hasText: new RegExp(`^${label}$`) }) })
+    .first()
+}
+
+/** Abre un dropdown del filtro, devuelve las etiquetas de sus opciones y lo cierra. */
+export async function optionsOf(page: Page, label: string): Promise<string[]> {
+  const field = fieldOf(page, label)
+  await field.locator('.msel__btn').click()
+  await expect(field.locator('.msel__opt-label').first()).toBeVisible()
+  const values = await field.locator('.msel__opt-label').allInnerTexts()
+  await page.keyboard.press('Escape')
+  return values
+}
