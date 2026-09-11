@@ -3133,6 +3133,72 @@ th.col-pop { text-align: center; }
   padding: 8px 2px;
 }
 
+/* Árbol stage → tasks del slide "Stages & Tasks" (slice 12, Projects & SOW). */
+.stage-tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stage-tree__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  background: var(--surface-2, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.stage-tree__header:hover {
+  background: var(--surface-3, rgba(255, 255, 255, 0.06));
+}
+.stage-tree__label {
+  flex: 1;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.stage-tree__count {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.stage-tree__tasks {
+  list-style: none;
+  margin: 4px 0 2px;
+  padding: 0 0 0 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stage-tree__task {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 8px;
+  border-left: 2px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+.stage-tree__task-name {
+  font-size: 13px;
+}
+.stage-tree__task-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.stage-tree__empty {
+  margin: 4px 0 2px;
+  padding: 4px 0 4px 28px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
 /* Timeline vertical: cada evento es un nodo (dot) sobre la línea que conecta
    con el siguiente — misma lógica que NodeStepper, en vertical. */
 .drawer__history {

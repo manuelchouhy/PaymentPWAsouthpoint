@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ChevronLeft, ChevronRight, FileText, Pencil, Plus, Settings2, Upload, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, FileText, Pencil, Plus, Settings2, Upload, X } from 'lucide-react'
 import { ContractBadge } from './ContractBadge'
 import { contractStatus, daysRemaining } from '../lib/projectsData'
 import { CR_TYPE_LABELS, effectiveBudgetHours } from '../lib/changeRequestsData'
+import { buildProjectTaskTree } from '../lib/projectTaskTree'
 import { api } from '../lib/api'
 import { fileNameFromPath, formatDate, formatDateTime } from '../lib/format'
 import { useScrollLock } from '../lib/useScrollLock'
@@ -873,6 +874,65 @@ function ChangeRequestsSlide({
 }
 
 /**
+ * Slide "Stages & Tasks" (slice 12, lote WhatsApp 2026-09-10): vista de árbol de los
+ * stages del proyecto con sus tasks anidados. El agrupado lo hace `buildProjectTaskTree`
+ * (módulo puro); acá solo se renderiza. Cada stage es un nodo expandible; un click en el
+ * header abre/cierra la lista de tasks. Hoy los tasks no tienen `stageId` en el schema, así
+ * que caen todos en el nodo "Sin stage" — ver open item del slice.
+ */
+function StagesTasksSlide({ tree, loading, expanded, onToggle }) {
+  if (loading) return <p className="drawer__empty">Loading stages…</p>
+  if (tree.length === 0)
+    return <p className="drawer__empty">This project has no stages or tasks yet.</p>
+
+  return (
+    <ul className="stage-tree">
+      {tree.map((node) => {
+        const isOpen = expanded.has(node.key)
+        return (
+          <li key={node.key} className="stage-tree__node">
+            <button
+              type="button"
+              className="stage-tree__header"
+              aria-expanded={isOpen}
+              onClick={() => onToggle(node.key)}
+            >
+              {isOpen ? (
+                <ChevronDown size={15} aria-hidden="true" />
+              ) : (
+                <ChevronRight size={15} aria-hidden="true" />
+              )}
+              <span className="stage-tree__label">{node.label}</span>
+              <span className="stage-tree__count">
+                {node.tasks.length} {node.tasks.length === 1 ? 'task' : 'tasks'}
+              </span>
+            </button>
+            {isOpen &&
+              (node.tasks.length === 0 ? (
+                <p className="stage-tree__empty">No tasks in this stage.</p>
+              ) : (
+                <ul className="stage-tree__tasks">
+                  {node.tasks.map((t) => (
+                    <li key={t.id} className="stage-tree__task">
+                      <span className="stage-tree__task-name">{t.taskName || '—'}</span>
+                      <span className="stage-tree__task-meta">
+                        {t.role || '—'}
+                        {t.estimatedHours != null && t.estimatedHours !== ''
+                          ? ` · ${t.estimatedHours} h`
+                          : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ))}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+/**
  * Carrusel de detalle de proyecto (Projects and SOW · issue 04). Reemplaza a
  * ProjectDetailDrawer — arranca con un solo slide real (Overview); las
  * issues 05/06/07 agregan Documentos/Asignaciones/Change Requests a este
@@ -901,6 +961,12 @@ export function ProjectDetailCarousel({
 }) {
   const [stageCount, setStageCount] = useState(null)
   const [stageCountError, setStageCountError] = useState(false)
+  // Árbol stage → tasks (slice 12). Los tasks son a nivel proyecto (sin stageId en el
+  // schema), así que hoy caen todos bajo "Sin stage"; ver open item.
+  const [treeStages, setTreeStages] = useState([])
+  const [treeTasks, setTreeTasks] = useState([])
+  const [treeLoading, setTreeLoading] = useState(true)
+  const [expandedStages, setExpandedStages] = useState(() => new Set())
   const [changeRequests, setChangeRequests] = useState([])
   const [loadingCrs, setLoadingCrs] = useState(true)
   const [crsLoadError, setCrsLoadError] = useState(false)
@@ -921,6 +987,17 @@ export function ProjectDetailCarousel({
   const canEditSow = Boolean(project.clientId && onEditSow)
   const budgetHours = effectiveBudgetHours(project.baseBudgetHours, changeRequests)
   const budgetExpanded = budgetHours != null && budgetHours !== Number(project.baseBudgetHours)
+
+  const taskTree = useMemo(
+    () => buildProjectTaskTree(treeStages, treeTasks),
+    [treeStages, treeTasks],
+  )
+  const toggleStage = (key) =>
+    setExpandedStages((prev) => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
 
   async function handleCreateChangeRequest(payload) {
     const created = await api.changeRequests.create({ ...payload, projectId: project.id }, uploadedBy)
@@ -949,6 +1026,18 @@ export function ProjectDetailCarousel({
           budgetExpanded={budgetExpanded}
           budgetPending={loadingCrs}
           budgetError={crsLoadError}
+        />
+      ),
+    },
+    {
+      key: 'stages-tasks',
+      label: 'Stages & Tasks',
+      content: (
+        <StagesTasksSlide
+          tree={taskTree}
+          loading={treeLoading}
+          expanded={expandedStages}
+          onToggle={toggleStage}
         />
       ),
     },
@@ -1020,6 +1109,33 @@ export function ProjectDetailCarousel({
         console.error('No se pudo cargar la cantidad de stages del proyecto:', error)
         setStageCountError(true)
       })
+    return () => {
+      cancelled = true
+    }
+  }, [project.id, project.hasStages])
+
+  // Árbol stage → tasks del slide "Stages & Tasks" (slice 12). Carga stages y tasks
+  // del proyecto en paralelo; si `hasStages` es false igual traemos los tasks para
+  // mostrarlos bajo "Sin stage".
+  useEffect(() => {
+    let cancelled = false
+    setTreeLoading(true)
+    Promise.all([
+      project.hasStages
+        ? Promise.resolve()
+            .then(() => api.projects.getStages(project.id))
+            .catch(() => [])
+        : Promise.resolve([]),
+      Promise.resolve()
+        .then(() => api.projectTasks.list(project.id))
+        .catch(() => []),
+    ])
+      .then(([stages, tasks]) => {
+        if (cancelled) return
+        setTreeStages(Array.isArray(stages) ? stages : [])
+        setTreeTasks(Array.isArray(tasks) ? tasks : [])
+      })
+      .finally(() => !cancelled && setTreeLoading(false))
     return () => {
       cancelled = true
     }
