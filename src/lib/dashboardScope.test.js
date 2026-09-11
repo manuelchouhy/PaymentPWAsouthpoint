@@ -50,6 +50,12 @@ test('matchesProjectFilter: Proyecto y Project# se INTERSECTAN (AND), no se unen
   )
 })
 
+test('matchesProjectFilter: sin resolveClient cae al project.client crudo', () => {
+  const p = { projectName: 'Alpha', projectNumber: 'SP-1', client: 'HSS' }
+  assert.equal(matchesProjectFilter(p, { clients: ['HSS'] }, masters, undefined), true)
+  assert.equal(matchesProjectFilter(p, { clients: ['GS3'] }, masters, undefined), false)
+})
+
 test('matchesProjectFilter: sólo por nombre / sólo por número', () => {
   const beta = { projectName: 'Beta', projectNumber: 'SP-2', client: 'HSS' }
   assert.equal(matchesProjectFilter(beta, { projects: ['Beta'] }, masters, resolver({})), true)

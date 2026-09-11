@@ -163,7 +163,9 @@ export function DashboardPage() {
         projects: projects ?? prev.projects,
         clients: clients ?? prev.clients,
       }))
-      setFiltersLoaded(true)
+      // Sólo se marca "cargado" si ALGÚN fetch trajo datos: si los dos fallaron (null) en
+      // la primera carga, queda en loading en vez de mostrar un "No contracts" engañoso.
+      if (projects != null || clients != null) setFiltersLoaded(true)
     })
     return () => {
       cancelled = true
@@ -230,10 +232,13 @@ export function DashboardPage() {
   const resolveProjectClient = useMemo(() => buildClientResolver(filterData.clients), [filterData.clients])
 
   // Facturas/cobros/pagos: se recortan por INTERSECCIÓN con las horas ya filtradas por
-  // Cliente/Proyecto (NO por contractor/status). Reusar applyEntryFilters garantiza el
-  // MISMO criterio que las horas: mismo resolver de cliente (deriveEntriesClient) y la
-  // misma semántica AND entre Proyecto y Project#. Una factura entra si alguna de sus
-  // horas pasa el filtro (todas comparten cliente+proyecto, así que es todo-o-nada).
+  // Cliente/Proyecto (NO por contractor/status). Reusar applyEntryFilters da el MISMO
+  // criterio que las horas y la misma semántica AND entre Proyecto y Project#. Una factura
+  // entra si alguna de sus horas pasa el filtro (todas comparten cliente+proyecto → todo-o-
+  // nada). Nota: las horas resuelven cliente con deriveEntriesClient (que arranca por
+  // entry.client y cae a grupo) y los contratos con buildClientResolver (grupo→legacy);
+  // como en este sistema time_entries.client viene VACÍO, ambos caen a la resolución por
+  // grupo y coinciden — sólo divergirían con un entry.client legacy no vacío.
   const scopedEntryIds = useMemo(() => {
     if (!clientProjectActive) return null // sin filtro → sin recorte
     const cpFilters = { ...filters, contractors: [], billingStatuses: [] }
@@ -255,7 +260,14 @@ export function DashboardPage() {
   const scopedPayments = useMemo(() => {
     if (!data) return []
     if (scopedEntryIds == null) return data.payments
-    return data.payments.filter((p) => scopedInvoiceIds.has(p.invoiceId))
+    // Un pago entra por su factura O por sus horas: los pagos invoice-less (overage /
+    // sp_internal, sin invoiceId pero con entryIds de las horas pagadas) no tienen factura
+    // que matchear, así que se recortan por sus horas contra el mismo scope de entradas.
+    return data.payments.filter(
+      (p) =>
+        scopedInvoiceIds.has(p.invoiceId) ||
+        (p.entryIds ?? []).some((id) => scopedEntryIds.has(String(id))),
+    )
   }, [data, scopedEntryIds, scopedInvoiceIds])
 
   // Proyectos que pasan el filtro Cliente/Proyecto: alimentan el widget de contratos por
@@ -263,13 +275,15 @@ export function DashboardPage() {
   // matchean directo (un contrato puede no tener horas). Se muestra el cliente RESUELTO
   // (no el crudo p.client, que puede venir vacío/alias) para que la fila no contradiga el
   // filtro activo.
-  const scopedProjects = useMemo(
-    () =>
-      filterData.projects
-        .filter((p) => matchesProjectFilter(p, filters, masterNames, resolveProjectClient))
-        .map((p) => ({ ...p, client: resolveProjectClient(p).client || p.client })),
-    [filterData.projects, filters, masterNames, resolveProjectClient],
-  )
+  const scopedProjects = useMemo(() => {
+    // Sin filtro de cliente/proyecto no se recorta ni se re-mapea: lista tal cual (el
+    // widget muestra p.client crudo, como antes). Con filtro, se recorta y se muestra el
+    // cliente resuelto para que la fila no contradiga el filtro.
+    if (!clientProjectActive) return filterData.projects
+    return filterData.projects
+      .filter((p) => matchesProjectFilter(p, filters, masterNames, resolveProjectClient))
+      .map((p) => ({ ...p, client: resolveProjectClient(p).client || p.client }))
+  }, [clientProjectActive, filterData.projects, filters, masterNames, resolveProjectClient])
 
   // Map: invoiceId → last collection date (sobre los cobros en scope: el KPI de pagos
   // por vencer sólo mira facturas en scope, así que alcanza con los cobros de esas).
