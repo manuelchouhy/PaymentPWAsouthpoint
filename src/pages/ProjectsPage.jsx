@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, BellRing, Plus } from 'lucide-react'
@@ -141,37 +141,81 @@ export function ProjectsPage() {
   // menos uno EN EL SCOPE de status — o si ya está seleccionado, para que siga
   // siendo destildable aunque el toggle de status lo saque del scope (mismo criterio
   // que las otras opciones). Mismo armado que Entries y Billing.
+  // Interlazado de las opciones (igual que Billing/Dashboard con buildFilterOptions):
+  // las opciones de cada dimensión se derivan de los proyectos que pasan TODOS los
+  // OTROS filtros (menos el de la propia dimensión), para que elegir un Cliente recorte
+  // Project/Project#/SOW/Lead Dev y no ofrezca combinaciones que dan cero. La propia
+  // dimensión se excluye del cruce (si no, tildar un valor dejaría su lista con un solo
+  // elemento). Base: optionWithClient (ya scopeado por el toggle de status).
+  const optionScope = useCallback(
+    (exceptKey) =>
+      optionWithClient.filter((p) => {
+        if (
+          exceptKey !== 'clients' &&
+          filters.clients.length &&
+          !filters.clients.includes(clientFilterKey(p.resolvedClient, masterNames))
+        )
+          return false
+        if (
+          exceptKey !== 'projectNames' &&
+          filters.projectNames.length &&
+          !filters.projectNames.includes(p.projectName)
+        )
+          return false
+        if (
+          exceptKey !== 'projectNumbers' &&
+          filters.projectNumbers.length &&
+          !filters.projectNumbers.includes(p.projectNumber)
+        )
+          return false
+        if (exceptKey !== 'sows' && filters.sows.length) {
+          const sows = projectSows(p)
+          if (!filters.sows.some((s) => sows.includes(s))) return false
+        }
+        if (
+          exceptKey !== 'leadDevelopers' &&
+          filters.leadDevelopers.length &&
+          !filters.leadDevelopers.includes(p.leadDeveloper)
+        )
+          return false
+        if (filters.expFrom && p.contractExpirationDate < filters.expFrom) return false
+        if (filters.expTo && p.contractExpirationDate > filters.expTo) return false
+        return true
+      }),
+    [optionWithClient, filters, masterNames],
+  )
+
   const clientOptions = useMemo(
     () =>
       clientFilterOptions(
         clients,
-        optionWithClient.some((p) => !masterNames.has(p.resolvedClient)) ||
+        optionScope('clients').some((p) => !masterNames.has(p.resolvedClient)) ||
           filters.clients.includes(OTHER_CLIENT),
       ),
-    [clients, optionWithClient, masterNames, filters.clients],
+    [clients, optionScope, masterNames, filters.clients],
   )
-  // Cada lista de opciones UNE el scope de status con lo ya seleccionado: así un
-  // valor elegido sigue siendo destildable aunque el toggle de status lo saque del
-  // scope (si no, quedaría un filtro puesto imposible de quitar salvo con Clear).
+  // Cada lista de opciones UNE el scope (cruzado) con lo ya seleccionado: así un
+  // valor elegido sigue siendo destildable aunque el cruce con las otras dimensiones
+  // lo saque del scope (si no, quedaría un filtro puesto imposible de quitar salvo Clear).
   const leadDevOptions = useMemo(
-    () => sortedUnique([...optionWithClient.map((p) => p.leadDeveloper), ...filters.leadDevelopers]),
-    [optionWithClient, filters.leadDevelopers],
+    () => sortedUnique([...optionScope('leadDevelopers').map((p) => p.leadDeveloper), ...filters.leadDevelopers]),
+    [optionScope, filters.leadDevelopers],
   )
   const projectNameOptions = useMemo(
-    () => sortedUnique([...optionWithClient.map((p) => p.projectName), ...filters.projectNames]),
-    [optionWithClient, filters.projectNames],
+    () => sortedUnique([...optionScope('projectNames').map((p) => p.projectName), ...filters.projectNames]),
+    [optionScope, filters.projectNames],
   )
   // sortedUnique: dedup + orden natural (numeric) — 'PRJ-2' antes de 'PRJ-10'.
   const projectNumberOptions = useMemo(
-    () => sortedUnique([...optionWithClient.map((p) => p.projectNumber), ...filters.projectNumbers]),
-    [optionWithClient, filters.projectNumbers],
+    () => sortedUnique([...optionScope('projectNumbers').map((p) => p.projectNumber), ...filters.projectNumbers]),
+    [optionScope, filters.projectNumbers],
   )
   // Los SOW de un proyecto viven en dos lugares: el sowNumber de proyecto y, si
   // tiene stages, un SOW por stage (stageSowNumbers, cargado en batch por
   // getProjects). El filtro y la columna consideran ambos. Ver projectsData.js.
   const sowOptions = useMemo(
-    () => sortedUnique([...optionWithClient.flatMap((p) => projectSows(p)), ...filters.sows]),
-    [optionWithClient, filters.sows],
+    () => sortedUnique([...optionScope('sows').flatMap((p) => projectSows(p)), ...filters.sows]),
+    [optionScope, filters.sows],
   )
 
   // Las tarjetas de estado de contrato son un monitor de vencimientos (FR-08):
