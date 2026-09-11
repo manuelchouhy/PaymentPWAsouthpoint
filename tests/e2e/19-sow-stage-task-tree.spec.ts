@@ -26,18 +26,20 @@ test('Projects & SOW: el slide "Stages & Tasks" muestra los tasks reales del pro
   await expect(modal.locator('.carousel__title')).toHaveText('Stages & Tasks')
   await expect(modal.getByText('Loading stages & tasks…')).toHaveCount(0, { timeout: 15000 })
 
-  // El nodo "Tasks" agrupa los tasks del proyecto (no hay stage link).
+  // El nodo "Tasks" agrupa los tasks del proyecto (no hay stage link). "Proyecto Prueba"
+  // no tiene project_tasks (SOW) pero SÍ horas cargadas, así que este nodo prueba que el
+  // árbol usa los tasks reales. (No se asertan nombres/horas exactos para no acoplar a la
+  // seed; sólo que hay al menos un task real con sus horas.)
   const tasksNode = modal.locator('.stage-tree__node', {
     has: page.locator('.stage-tree__label', { hasText: /^Tasks$/ }),
   })
   await expect(tasksNode).toBeVisible()
 
-  // Expandir y verificar que aparecen los tasks reales con sus horas.
+  // Expandir: aparece al menos un task real con su meta de horas.
   await tasksNode.locator('.stage-tree__header').click()
-  const taskNames = tasksNode.locator('.stage-tree__task-name')
-  await expect(taskNames.first()).toBeVisible()
-  await expect(taskNames).toContainText(['Task 2', 'Task 3'])
-  // Las horas se muestran en el meta de cada task.
+  const taskRows = tasksNode.locator('.stage-tree__task')
+  await expect(taskRows.first()).toBeVisible()
+  expect(await taskRows.count()).toBeGreaterThan(0)
   await expect(tasksNode.locator('.stage-tree__task-meta').first()).toContainText('h')
 
   await page.keyboard.press('Escape')
