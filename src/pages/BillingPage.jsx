@@ -476,54 +476,66 @@ export function BillingPage() {
     return { ...kpis, classifiable }
   }, [filtered, filteredAllAllocations, invoiceByEntryId, paidEntryIds])
 
-  // Cuadro #2: sólo tiene sentido cuando el filtro deja UN proyecto en scope (un único
-  // projectNumber). Devuelve su budget efectivo y su consumed. Con varios/ninguno →
-  // null y el cuadro muestra "—".
+  // Cuadro #2: sólo tiene sentido cuando el usuario filtró EXPLÍCITAMENTE por proyecto
+  // (nombre o número) y el scope queda en UN solo proyecto. Devuelve su budget efectivo
+  // y su consumed (del proyecto completo). Con varios/ninguno → null y el cuadro "—".
   const singleProject = useMemo(() => {
-    // Sólo cuando el usuario filtró EXPLÍCITAMENTE por proyecto (nombre o número): un
-    // filtro de contractor/estado que por casualidad deja un solo proyecto NO cuenta
-    // como "el proyecto que estoy mirando".
+    // Un filtro de contractor/estado que por casualidad deja un solo proyecto NO cuenta
+    // como "el proyecto que estoy mirando": exigimos filtro de proyecto explícito.
     if (!filters.projects.length && !filters.projectNumbers.length) return null
-    // Con el filtro de proyecto ya activo, el scope está acotado al/los proyecto(s)
-    // elegido(s): las horas sin projectNumber resuelto son de ese proyecto (join viejo)
-    // y se ignoran para no ocultar el cuadro. Si quedan DOS números reales → el filtro
-    // abarca varios proyectos (homónimos) → "—".
-    const nums = new Set(filteredAllAllocations.map((e) => e.projectNumber).filter(Boolean))
-    if (nums.size !== 1) return null
-    const [num] = [...nums]
-    // projectNumber duplicado (dos proyectos con el mismo número, ej. id49/id50): el
-    // budget saldría de uno y el consumed de ambos → ambiguo, mejor "—".
-    const matches = projects.filter((p) => p.projectNumber === num)
-    if (matches.length !== 1) return null
-    const project = matches[0]
-    // budget efectivo; null si el proyecto no tiene base budget o si los CRs todavía no
-    // cargaron (sería sólo el base, engañoso). La JSX lo muestra como "—", no como 0.
-    const budget = crsLoaded
-      ? effectiveBudgetHours(project.baseBudgetHours, crsByProject.get(String(project.id)) ?? [])
-      : null
-    // Consumed del PROYECTO COMPLETO (todas las semanas), NO el subconjunto que dejan
-    // los otros filtros (semana/contractor): así el ratio consumed/budget es coherente
-    // (comparar el consumido total contra el budget total). Aprobadas bill_to_client de
-    // ese projectNumber sobre TODAS las entries, no sobre `filtered`.
-    // NOTA (decisión del usuario): acá el consumed NO incluye sp_internal, a diferencia
-    // de Client Summary (que sí lo cuenta contra el mismo budget). Es intencional.
+    // Horas del/los proyecto(s) filtrado(s) IGNORANDO los demás filtros (semana,
+    // contractor, estado): se aplican SÓLO las dimensiones de proyecto sobre todas las
+    // entries. Así el consumed es del proyecto COMPLETO y usa el mismo matcheo (por
+    // nombre y/o número) que la grilla — sin perder las horas viejas sin projectNumber
+    // (que un join por número descartaría) ni cambiar con la semana/contractor filtrados.
+    const projectScope = {
+      ...filters,
+      contractors: [],
+      clients: [],
+      tasks: [],
+      billingStatuses: [],
+      statuses: [],
+      allocations: [],
+      dateFrom: '',
+      dateTo: '',
+      week: '',
+      weekStart: '',
+    }
+    const projectEntries = applyEntryFilters(
+      entriesConCliente,
+      projectScope,
+      invoiceByEntryId,
+      masterNames,
+    )
+    // Consumed = Approved bill_to_client. sp_internal NO cuenta acá (va en su sección
+    // aparte, decisión del usuario) — a diferencia de Client Summary, que sí lo suma.
     let consumed = 0
-    for (const en of entriesConCliente) {
-      if (en.projectNumber !== num) continue
-      if (en.status !== 'Approved') continue
-      if (en.allocation !== 'bill_to_client') continue
-      consumed += Number(en.hours) || 0
+    const names = new Set()
+    const nums = new Set()
+    for (const en of projectEntries) {
+      if (en.project) names.add(en.project)
+      if (en.projectNumber) nums.add(en.projectNumber)
+      if (en.status === 'Approved' && en.allocation === 'bill_to_client') {
+        consumed += Number(en.hours) || 0
+      }
+    }
+    // Si el scope abarca varios proyectos (por nombre o número) no es "un proyecto" → "—".
+    if (names.size > 1 || nums.size > 1) return null
+    // Budget: sólo con un projectNumber real que matchee EXACTAMENTE un proyecto (evita
+    // el duplicado id49/id50) y con los CRs ya cargados; si no, null → la JSX muestra "—".
+    let budget = null
+    if (crsLoaded && nums.size === 1) {
+      const [num] = [...nums]
+      const matches = projects.filter((p) => p.projectNumber === num)
+      if (matches.length === 1) {
+        budget = effectiveBudgetHours(
+          matches[0].baseBudgetHours,
+          crsByProject.get(String(matches[0].id)) ?? [],
+        )
+      }
     }
     return { budget, consumed }
-  }, [
-    filters.projects,
-    filters.projectNumbers,
-    filteredAllAllocations,
-    projects,
-    crsByProject,
-    crsLoaded,
-    entriesConCliente,
-  ])
+  }, [filters, entriesConCliente, invoiceByEntryId, masterNames, projects, crsByProject, crsLoaded])
 
   // Las horas facturables ordenadas por cliente → semana domingo→sábado → filas
   // proveedor·proyecto·task (billingGrouping). "Sin cliente" queda arriba, no es
