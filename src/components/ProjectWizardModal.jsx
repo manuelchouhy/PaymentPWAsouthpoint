@@ -175,11 +175,12 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
     // allSettled, no all: un fallo en una de las dos no debe tirar la otra —
     // si no, "sin stages/tasks" (vacío real) queda indistinguible de "no se
     // pudo cargar" (fetch falló), y el usuario ve la lista vacía sin saber
-    // cuál de las dos pasó. Stages solo se pide si el proyecto las tiene —
-    // pedirlas siempre es una query de más para la mayoría de los proyectos
-    // (sin stages), que ni se renderiza.
+    // cuál de las dos pasó. Los stages se piden SIEMPRE (no solo si has_stages):
+    // un proyecto puede tener project_stages huérfanos (quedó de un Yes→No, sin
+    // borrado), y al re-activar "Has stages?" (No→Yes) hay que verlos para no
+    // colisionar de posición ni resucitarlos de forma ambigua.
     Promise.allSettled([
-      initial.hasStages ? api.projects.getStages(initial.id) : Promise.resolve([]),
+      api.projects.getStages(initial.id),
       api.projectTasks.list(initial.id),
     ]).then(([stagesResult, tasksResult]) => {
       if (cancelled) return
@@ -280,7 +281,12 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
     setForm((prev) => ({
       ...prev,
       hasStages: checked,
-      stages: checked && prev.stages.length === 0 ? [emptyStage()] : prev.stages,
+      // Siembra un stage vacío al activar SÓLO si no hay ninguno (ni nuevo ni existente):
+      // al re-activar un proyecto que ya tenía stages (orphans), no agrega uno en blanco.
+      stages:
+        checked && prev.stages.length === 0 && existingStages.length === 0
+          ? [emptyStage()]
+          : prev.stages,
     }))
   }
 
@@ -459,9 +465,16 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
           ...maintenanceFields(),
         }
         // Sin stages, el SOW vive a nivel proyecto (sowNumber). Con stages, el SOW va por
-        // stage; los project_stages viejos quedan (no hay política de borrado) pero se
-        // ignoran mientras has_stages sea false.
-        if (!form.hasStages) updates.sowNumber = form.sowNumber.trim()
+        // stage: se LIMPIA el SOW a nivel proyecto (si venía de No→Yes) para que no quede
+        // un SOW fantasma junto a los de los stages. Los project_stages viejos quedan (no
+        // hay política de borrado) pero se ignoran mientras has_stages sea false (ver
+        // getProjects, que sólo enriquece stageSowNumbers si has_stages).
+        if (form.hasStages) {
+          updates.sowNumber = null
+          updates.sowUrl = null
+        } else {
+          updates.sowNumber = form.sowNumber.trim()
+        }
 
         // Stages (issue 03b): solo se manda update de las que realmente
         // cambiaron (nombre/número/archivo) contra el snapshot del fetch —

@@ -430,7 +430,10 @@ export async function getProjects() {
       sowsByProject.set(row.project_id, list)
     }
     for (const project of projects) {
-      project.stageSowNumbers = sowsByProject.get(project.id) ?? []
+      // Solo los proyectos con has_stages=true muestran sus SOW de stage. Si un proyecto
+      // pasó de "con stages" a "sin stages" (Edit SOW), sus project_stages quedan en la DB
+      // (no hay política de borrado) pero NO deben aparecer como SOW fantasma en la lista.
+      project.stageSowNumbers = project.hasStages ? sowsByProject.get(project.id) ?? [] : []
     }
   }
   return projects
