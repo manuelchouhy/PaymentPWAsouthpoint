@@ -379,7 +379,9 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
       // hasta reabrir el modal (el error ya se muestra en la sección).
       ((isEdit && (Boolean(stagesLoadError) || existingStages.some(existingStageMissing))) ||
         form.stages.some(stageMissing) ||
-        (!isEdit && form.stages.length === 0)),
+        // Con stages, tiene que haber AL MENOS uno (existente o nuevo) — cubre el caso de
+        // edición donde se pasó de "sin stages" a "con stages" sin cargar ninguno todavía.
+        existingStages.length + form.stages.length === 0),
   }
   // Budget: requerido y > 0 (a diferencia del form de edición, que permite vacío
   // y 0 como corrección). parseBudgetInput —fuente única compartida— lo expresa
@@ -452,8 +454,13 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
           baseBudgetHours: Number(form.budgetHours),
           periodStart: form.periodStart,
           periodEnd: form.periodEnd,
+          // Se puede cambiar si el proyecto tiene stages o no (persiste has_stages).
+          hasStages: form.hasStages,
           ...maintenanceFields(),
         }
+        // Sin stages, el SOW vive a nivel proyecto (sowNumber). Con stages, el SOW va por
+        // stage; los project_stages viejos quedan (no hay política de borrado) pero se
+        // ignoran mientras has_stages sea false.
         if (!form.hasStages) updates.sowNumber = form.sowNumber.trim()
 
         // Stages (issue 03b): solo se manda update de las que realmente
@@ -716,24 +723,18 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                 </>
               )}
 
-              {isEdit ? (
-                <div className="field">
-                  <label className="field__label">Has stages?</label>
-                  <div className="field__input" style={{ color: 'var(--text-soft)' }}>
-                    {form.hasStages ? 'Yes' : 'No'}
-                  </div>
-                </div>
-              ) : (
-                <label className="settings-check">
-                  <input
-                    type="checkbox"
-                    checked={form.hasStages}
-                    disabled={!form.clientId}
-                    onChange={(e) => toggleHasStages(e.target.checked)}
-                  />
-                  Has stages?
-                </label>
-              )}
+              {/* "Has stages?" editable también en edición: se puede pasar un proyecto de
+                  simple a multi-stage y viceversa. En alta se gatea por clientId (igual que
+                  el resto del form); en edición el proyecto ya existe, así que va libre. */}
+              <label className="settings-check">
+                <input
+                  type="checkbox"
+                  checked={form.hasStages}
+                  disabled={!isEdit && !form.clientId}
+                  onChange={(e) => toggleHasStages(e.target.checked)}
+                />
+                Has stages?
+              </label>
 
               {form.hasStages && (
                 <div className="stage-list">
