@@ -23,6 +23,7 @@
 
 import { sundayWeek, sundayWeekYear, weekStartISO } from './format.js'
 import { effectiveBudgetHours } from './effectiveBudget.js'
+import { isConsumedAllocation } from './allocations.js'
 
 const UNASSIGNED = 'Without client'
 
@@ -74,14 +75,13 @@ export function buildClientSummaryWeekly({
   // con budget) y sp_internal (proyectos internos de la empresa → cliente SouthPoint
   // Internal, sin budget). overage se contabiliza aparte. Ver CONTEXT.md ("Consumed"
   // y "SP internal") y docs/adr/0002.
-  const isConsumedAlloc = (a) => a === 'bill_to_client' || a === 'sp_internal'
   for (const e of entries) {
-    if (!isConsumedAlloc(e.allocation) && e.allocation !== 'overage') continue
+    if (!isConsumedAllocation(e.allocation) && e.allocation !== 'overage') continue
     // Se procesan: Approved (consumed/overage) y Pending de una allocation "consumed"
     // (horas aún sin aprobar en Zoho). Las Rejected, cualquier otro estado y overage
     // Pending se descartan.
     const isApproved = e.status === 'Approved'
-    const isPending = e.status === 'Pending' && isConsumedAlloc(e.allocation)
+    const isPending = e.status === 'Pending' && isConsumedAllocation(e.allocation)
     if (!isApproved && !isPending) continue
     const name = e.project ?? ''
     // Una entry sin nombre de proyecto no se puede atribuir a ningún proyecto:

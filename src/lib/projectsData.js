@@ -23,6 +23,7 @@
 
 import { supabase, isSupabaseConfigured } from './supabase'
 import { getTimeEntries } from './data'
+import { aggregateLoggedTasks } from './projectLoggedTasks'
 import { demoDate } from './demoDates'
 import { stageSows } from './projectSows'
 
@@ -1065,24 +1066,9 @@ export async function getProjectLoggedTasks(projectName) {
       lastId = batch[batch.length - 1].id
     }
   }
-  const isConsumedAlloc = (a) => a === 'bill_to_client' || a === 'sp_internal'
-  const byTask = new Map()
-  for (const row of rows) {
-    const name = row.task ?? ''
-    if (!name) continue
-    const acc =
-      byTask.get(name) ?? { id: name, taskName: name, taskNumber: null, hours: 0, consumedHours: 0 }
-    // task_number (supabase) / taskNumber (demo): el id de Zoho; primero no vacío gana.
-    if (acc.taskNumber == null) {
-      const num = row.task_number ?? row.taskNumber
-      if (num != null && String(num) !== '') acc.taskNumber = String(num)
-    }
-    const h = Number(row.hours) || 0
-    acc.hours += h // total logged (cualquier estado/allocation)
-    if (row.status === 'Approved' && isConsumedAlloc(row.allocation)) acc.consumedHours += h
-    byTask.set(name, acc)
-  }
-  return [...byTask.values()].sort((a, b) => a.taskName.localeCompare(b.taskName, 'es', { numeric: true }))
+  // La agregación (agrupar por nombre, sumar hours/consumed, resolver taskNumber) vive en
+  // el módulo puro projectLoggedTasks, testeable sin red.
+  return aggregateLoggedTasks(rows)
 }
 
 /**

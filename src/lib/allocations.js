@@ -12,6 +12,18 @@ export const ALLOCATION_LABELS = {
 }
 
 /**
+ * Una allocation cuenta como "consumido" (contra el budget del proyecto): bill_to_client
+ * (clientes con budget) o sp_internal (internos → SouthPoint Internal). El overage y lo no
+ * clasificado NO se consumen contra budget. Helper único para que Client Summary y el árbol
+ * de Projects & SOW no difieran en el criterio. Ver docs/adr/0002.
+ * @param {?string} allocation
+ * @returns {boolean}
+ */
+export function isConsumedAllocation(allocation) {
+  return allocation === 'bill_to_client' || allocation === 'sp_internal'
+}
+
+/**
  * Separa un conjunto de horas recién clasificadas según si YA son facturables o
  * no. Billing sólo muestra horas con `status === 'Approved'`; el resto (Pending
  * de aprobación en Zoho, o Rejected) no entra a la grilla hasta aprobarse, y el
