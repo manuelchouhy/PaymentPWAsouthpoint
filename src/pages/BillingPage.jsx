@@ -21,7 +21,7 @@ import {
 } from '../lib/billingSelection'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { useSyncReload } from '../lib/useSyncReload'
-import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
+import { EntryFilterBar } from '../components/EntryFilterBar'
 import { Checkbox } from '../components/Checkbox'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { GroupedBillModal } from '../components/GroupedBillModal'
@@ -369,6 +369,18 @@ export function BillingPage() {
   const clientOptions = useMemo(
     () => clientFilterOptions(clients, options.clients.includes(OTHER_CLIENT)),
     [clients, options.clients],
+  )
+
+  // Dimensiones de la barra de filtros (EntryFilterBar). Memoizadas para no rearmar el
+  // array en cada render y evitar re-renders de la barra y sus dropdowns.
+  const filterDimensions = useMemo(
+    () => [
+      { key: 'clients', label: 'Client', options: clientOptions },
+      { key: 'projectNumbers', label: 'Project #', options: options.projectNumbers },
+      { key: 'projects', label: 'Project', options: options.projects },
+      { key: 'contractors', label: 'Contractor', options: options.contractors },
+    ],
+    [clientOptions, options],
   )
 
   // Todas las filas que pasan los filtros del usuario, sin mirar allocation.
@@ -1064,42 +1076,13 @@ export function BillingPage() {
 
       {status === 'ready' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4, delay: 0.05 }}>
-          <section className="filterbar" aria-label="Filters">
-            <div className="filterbar__head">
-              <span className="filterbar__title">Filters</span>
-            </div>
-            <div className="filterbar__controls">
-              <MultiSelectDropdown
-                label="Client"
-                options={clientOptions}
-                selected={filters.clients}
-                onToggle={(v) => toggleValue('clients', v)}
-              />
-              <MultiSelectDropdown
-                label="Project #"
-                options={options.projectNumbers}
-                selected={filters.projectNumbers}
-                onToggle={(v) => toggleValue('projectNumbers', v)}
-              />
-              <MultiSelectDropdown
-                label="Project"
-                options={options.projects}
-                selected={filters.projects}
-                onToggle={(v) => toggleValue('projects', v)}
-              />
-              <MultiSelectDropdown
-                label="Contractor"
-                options={options.contractors}
-                selected={filters.contractors}
-                onToggle={(v) => toggleValue('contractors', v)}
-              />
-              {isActive && (
-                <button type="button" className="btn btn--ghost filterbar__clear" onClick={clear}>
-                  Clear
-                </button>
-              )}
-            </div>
-          </section>
+          <EntryFilterBar
+            dimensions={filterDimensions}
+            filters={filters}
+            onToggle={toggleValue}
+            onClear={clear}
+            isActive={isActive}
+          />
 
           <div className="dash-kpis">
             <div className="dash-kpi dash-kpi--static dash-kpi--accent">
