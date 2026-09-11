@@ -942,15 +942,19 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
                           redondea (evita 12.3999… de sumar fracciones); la comparación
                           va sobre los valores redondeados (no floats crudos). */}
                       {(() => {
-                        const total = Number(Number(t.hours ?? 0).toFixed(2))
-                        const appr = Number(Number(t.approvedHours ?? 0).toFixed(2))
+                        const hours = Number(t.hours ?? 0)
+                        const approved = Number(t.approvedHours ?? 0)
+                        // approved ⊆ hours (misma suma), así que approved >= hours es
+                        // exacto cuando TODO está aprobado — sin falsos "all approved"
+                        // por redondeo. Los valores mostrados sí van redondeados.
+                        const allApproved = approved >= hours
                         return (
                           <span className="stage-tree__task-meta">
-                            {total > 0 ? `${formatHours(total)} h` : '—'}
-                            {total > 0 &&
-                              (appr >= total
+                            {hours > 0 ? `${formatHours(hours)} h` : '—'}
+                            {hours > 0 &&
+                              (allApproved
                                 ? ' · all approved'
-                                : ` · ${formatHours(appr)} h approved`)}
+                                : ` · ${formatHours(approved)} h approved`)}
                           </span>
                         )
                       })()}

@@ -1040,18 +1040,24 @@ export async function getProjectLoggedTasks(projectName) {
     rows = entries.filter((e) => e.project === projectName)
   } else {
     // Se pagina para NO truncar el total de horas en proyectos con muchas entries (un
-    // .limit fijo daría un total mal sin aviso).
+    // .limit fijo daría un total mal sin aviso). `.order('id')` da un orden ESTABLE
+    // entre páginas (sin él Postgres no garantiza el orden y una fila podría caer en
+    // dos páginas o en ninguna). Se avanza por la cantidad REAL devuelta —no por un
+    // paso fijo— para tolerar un cap del server (db.max-rows) menor al page size.
     rows = []
     const page = 1000
-    for (let from = 0; ; from += page) {
+    for (let from = 0; from < 200000 /* tope de seguridad */; ) {
       const { data, error } = await supabase
         .from('time_entries')
         .select('task, hours, status')
         .eq('project', projectName)
+        .order('id')
         .range(from, from + page - 1)
       if (error) throw new Error(error.message)
-      rows.push(...(data ?? []))
-      if (!data || data.length < page) break
+      const batch = data ?? []
+      rows.push(...batch)
+      if (batch.length === 0) break
+      from += batch.length
     }
   }
   const byTask = new Map()
