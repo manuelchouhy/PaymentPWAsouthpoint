@@ -20,6 +20,8 @@ import {
   useEntryFilters,
   applyEntryFilters,
   buildFilterOptions,
+  clientFilterOptions,
+  OTHER_CLIENT,
 } from '../lib/useEntryFilters'
 import { EntryFilterBar } from '../components/EntryFilterBar'
 import { ContractsExpiringWidget } from '../components/dashboard/ContractsExpiringWidget'
@@ -170,15 +172,21 @@ export function DashboardPage() {
     () => applyEntryFilters(enrichedEntries, filters, invoiceByEntryId, masterNames),
     [enrichedEntries, filters, invoiceByEntryId, masterNames],
   )
+  // Client dropdown = maestro de clientes (mismo criterio que Billing/Entries/Projects):
+  // lista todos los clientes de la página Clients + el centinela Others si aplica.
+  const clientOptions = useMemo(
+    () => clientFilterOptions(data?.clients ?? [], filterOptions.clients.includes(OTHER_CLIENT)),
+    [data, filterOptions.clients],
+  )
   const filterDimensions = useMemo(
     () => [
-      { key: 'clients', label: 'Client', options: filterOptions.clients },
+      { key: 'clients', label: 'Client', options: clientOptions },
       { key: 'projectNumbers', label: 'Project #', options: filterOptions.projectNumbers },
       { key: 'projects', label: 'Project', options: filterOptions.projects },
       { key: 'contractors', label: 'Contractor', options: filterOptions.contractors },
       { key: 'billingStatuses', label: 'Status', options: BILLING_STATUS_OPTIONS },
     ],
-    [filterOptions],
+    [clientOptions, filterOptions],
   )
 
   // Map: invoiceId → last collection date
@@ -192,16 +200,24 @@ export function DashboardPage() {
     return m
   }, [data])
 
+  // Pending Hours: ÚNICO KPI que responde al filtro (los otros son de facturas y quedan
+  // globales). Aparte para no recomputar los KPIs de facturas en cada toggle del filtro.
+  // Sólo horas facturables al cliente (isBillablePending): Rejected/Pending y overage/
+  // sp_internal/sin triagear no se facturan al cliente.
+  const pendingHours = useMemo(
+    () =>
+      data
+        ? filteredEntries
+            .filter((e) => isBillablePending(e, invoiceByEntryId))
+            .reduce((sum, e) => sum + e.hours, 0)
+        : 0,
+    [data, filteredEntries, invoiceByEntryId],
+  )
+
   const kpis = useMemo(() => {
     if (!data) return null
     const now = new Date()
     const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-
-    // Sólo horas facturables al cliente (ver isBillablePending): las Rejected/Pending
-    // y las overage/sp_internal/sin triagear no se facturan al cliente.
-    const pendingHours = filteredEntries
-      .filter((e) => isBillablePending(e, invoiceByEntryId))
-      .reduce((sum, e) => sum + e.hours, 0)
 
     // Las facturas agrupadas (modelo en horas) no cargan invoice_date; se usa la fecha
     // de emisión (created_at) como fecha de la factura para el KPI/sparkline.
@@ -223,16 +239,27 @@ export function DashboardPage() {
       if (d >= 0 && d <= 7) paymentsDueThisWeek += 1
     }
 
-    return { pendingHours, invoicesThisMonth, collectionsPending, paymentsDueThisWeek }
-  }, [data, filteredEntries, invoiceByEntryId, lastCollDateByInvoiceId])
+    return { invoicesThisMonth, collectionsPending, paymentsDueThisWeek }
+  }, [data, invoiceByEntryId, lastCollDateByInvoiceId])
+
+  // Sparkline de Pending Hours: también responde al filtro → memo aparte.
+  const pendingHoursSparkline = useMemo(
+    () =>
+      data
+        ? last7DaysSeries(
+            filteredEntries.filter((e) => isBillablePending(e, invoiceByEntryId)),
+            'date',
+            'hours',
+          )
+        : [],
+    [data, filteredEntries, invoiceByEntryId],
+  )
 
   // Micro-visual de cada KPI card: actividad real de los últimos 7 días en el
   // dominio de esa card (no repite el número de la card, da contexto de tendencia).
   const sparklines = useMemo(() => {
     if (!data) return null
-    const unbilled = filteredEntries.filter((e) => isBillablePending(e, invoiceByEntryId))
     return {
-      pendingHours: last7DaysSeries(unbilled, 'date', 'hours'),
       // issuedDate = invoice_date o, si falta (facturas agrupadas), la fecha de creación.
       invoicesThisMonth: last7DaysSeries(
         data.invoices.map((i) => ({
@@ -244,7 +271,7 @@ export function DashboardPage() {
       collectionsPending: last7DaysSeries(data.collections, 'collectionDate'),
       paymentsDueThisWeek: last7DaysSeries(data.payments, 'paymentDate'),
     }
-  }, [data, filteredEntries, invoiceByEntryId])
+  }, [data])
 
   const billingDist = useMemo(() => {
     if (!data) return []
@@ -293,23 +320,17 @@ export function DashboardPage() {
       .filter((d) => d.value > 0)
   }, [data, filteredEntries])
 
-  // Ambos donuts reparten EXACTAMENTE las mismas entries (mismo data.entries,
-  // misma suma de e.hours), solo que particionadas distinto (por estado de factura
-  // vs por allocation). El total del centro tiene que ser el mismo en los dos, así
-  // que se calcula UNA vez sobre las horas crudas y se redondea una sola vez.
+  // Total del centro de los donuts, sobre las MISMAS horas filtradas (filteredEntries)
+  // que reparten los donuts. Se calcula UNA vez sobre las horas crudas y se redondea una
+  // sola vez, para que el centro no drifte por el redondeo por-bucket (dos entries de
+  // 0.25 h dan 0.5 juntas pero 0.3+0.3=0.6 separadas).
   //
-  // Ojo: NO se suma billingDist/allocationDist, porque esos buckets ya vienen
-  // redondeados a 1 decimal y, al redondear por-bucket sobre particiones distintas,
-  // las dos sumas pueden diferir en 0.1 h (p. ej. dos entries de 0.25 h: juntas en un
-  // bucket dan 0.5; separadas en dos dan 0.3 + 0.3 = 0.6). Usar el total crudo evita
-  // ese drift entre los dos centros. Como contrapartida, en esos casos límite el
-  // centro puede diferir en 0.1 de la suma visible de su propia leyenda —el
-  // compromiso habitual de redondear las partes y el total por separado.
-  //
-  // Memoizado sobre [data] igual que billingDist/allocationDist (evita re-sumar
-  // todas las entries en cada render). Suma e.hours crudo, igual que el resto del
-  // componente (billingDist/allocationDist/kpis): confía en el tipo number, sin
-  // guards extra que solo cubrirían este consumidor y no los otros tres.
+  // OJO: allocationDist reparte TODAS las horas filtradas (su suma = totalHours), pero
+  // billingDist EXCLUYE las no-facturables (overage/sp_internal/sin triagear/Rejected sin
+  // factura), así que la suma de sus slices puede ser MENOR que este total. Es un quirk
+  // pre-existente del donut de billing: su centro (totalHours) puede superar la suma de su
+  // leyenda cuando hay horas no-facturables. El filtro no lo cambia, sólo lo hace más
+  // visible al acotar el universo. Memoizado sobre [data, filteredEntries].
   const totalHours = useMemo(
     () => (data ? filteredEntries.reduce((sum, e) => sum + e.hours, 0) : 0),
     [data, filteredEntries],
@@ -362,6 +383,12 @@ export function DashboardPage() {
             isActive={isActive}
             title="Dashboard filters"
           />
+          {isActive && (
+            <p className="dash-filter-scope">
+              Filters apply to the hours widgets (Pending Hours and the two donuts). The
+              Invoices / Collections / Payments tiles stay org-wide.
+            </p>
+          )}
 
           {/* KPI Cards */}
           <div className="dash-kpis">
@@ -374,11 +401,11 @@ export function DashboardPage() {
                     <span className="dash-kpi__icon">
                       <Clock size={17} aria-hidden="true" />
                     </span>
-                    <Sparkline values={sparklines.pendingHours} />
+                    <Sparkline values={pendingHoursSparkline} />
                   </div>
                   <span className="dash-kpi__label">Pending Hours</span>
                   <span className="dash-kpi__value">
-                    {kpis.pendingHours.toFixed(1)}
+                    {pendingHours.toFixed(1)}
                     <span className="dash-kpi__unit"> h</span>
                   </span>
                   <span className="dash-kpi__hint">unbilled entries</span>
