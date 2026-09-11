@@ -4,7 +4,8 @@ import { MultiSelectDropdown } from './MultiSelectDropdown'
  * Barra de filtros compartida (FR-03). Renderiza un MultiSelectDropdown por cada
  * dimensión que se le pasa y, si hay algún filtro activo, un botón Clear. Es tonta:
  * el estado (filters) y las opciones cruzadas (buildFilterOptions) viven en la página;
- * acá sólo se pintan. La usan Billing, Payments y Dashboard para tener la MISMA barra.
+ * acá sólo se pintan. La estrena Billing; Payments (slice 03) y Dashboard (04) la
+ * montarán después para tener la MISMA barra (Payments suma la dimensión Estado).
  *
  * @param {object} props
  * @param {Array<{key:string, label:string, options:string[]}>} props.dimensions
@@ -19,7 +20,7 @@ import { MultiSelectDropdown } from './MultiSelectDropdown'
  */
 export function EntryFilterBar({ dimensions, filters, onToggle, onClear, isActive, title = 'Filters' }) {
   return (
-    <section className="filterbar" aria-label="Filters">
+    <section className="filterbar" aria-label={title}>
       <div className="filterbar__head">
         <span className="filterbar__title">{title}</span>
       </div>
@@ -28,7 +29,7 @@ export function EntryFilterBar({ dimensions, filters, onToggle, onClear, isActiv
           <MultiSelectDropdown
             key={d.key}
             label={d.label}
-            options={d.options}
+            options={d.options ?? []}
             selected={filters[d.key] ?? []}
             onToggle={(v) => onToggle(d.key, v)}
           />

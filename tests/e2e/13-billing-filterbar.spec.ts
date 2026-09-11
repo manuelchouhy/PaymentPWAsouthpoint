@@ -13,9 +13,9 @@ test('Billing: la barra de filtros compartida renderiza, filtra y limpia', async
   const bar = page.locator('.filterbar')
   await expect(bar).toBeVisible()
 
-  // Las 4 dimensiones de Billing.
+  // Las 4 dimensiones de Billing (match EXACTO: 'Project' no debe matchear 'Project #').
   for (const label of ['Client', 'Project #', 'Project', 'Contractor']) {
-    await expect(bar.locator('.filterfield__label', { hasText: label }).first()).toBeVisible()
+    await expect(bar.getByText(label, { exact: true })).toBeVisible()
   }
 
   // Abrir el dropdown de Client y tildar la primera opción.
