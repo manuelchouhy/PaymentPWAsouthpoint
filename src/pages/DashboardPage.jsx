@@ -112,21 +112,16 @@ export function DashboardPage() {
   useEffect(() => {
     let cancelled = false
     setLoadStatus('loading')
-    // projects/clients sólo resuelven el cliente de cada hora (deriveEntriesClient) para
-    // el filtro; un fallo suyo no debe tirar el dashboard → catch propio que degrada a [].
-    const projectsList = Promise.resolve().then(() => api.projects.list()).catch(() => [])
-    const clientsList = Promise.resolve().then(() => api.clients.list()).catch(() => [])
+    // Datos CORE (KPIs y donuts): bloquean el first paint.
     Promise.all([
       api.timeEntries.list(),
       api.invoices.list(),
       api.collections.list(),
       api.payments.list(),
-      projectsList,
-      clientsList,
     ])
-      .then(([entries, invoices, collections, payments, projects, clients]) => {
+      .then(([entries, invoices, collections, payments]) => {
         if (cancelled) return
-        setData({ entries, invoices, collections, payments, projects, clients })
+        setData({ entries, invoices, collections, payments, projects: [], clients: [] })
         setLoadStatus('ready')
       })
       .catch((err) => {
@@ -134,6 +129,18 @@ export function DashboardPage() {
         console.error('Dashboard load error:', err)
         setLoadStatus('error')
       })
+
+    // projects/clients sólo resuelven el cliente de cada hora (deriveEntriesClient) para el
+    // filtro: NO bloquean el first paint (los KPIs/donuts se ven ya) y sólo hidratan las
+    // opciones del filtro cuando llegan. Un fallo suyo degrada a [] (filtro con menos
+    // opciones), sin tirar el dashboard.
+    Promise.all([
+      Promise.resolve().then(() => api.projects.list()).catch(() => []),
+      Promise.resolve().then(() => api.clients.list()).catch(() => []),
+    ]).then(([projects, clients]) => {
+      if (cancelled) return
+      setData((prev) => (prev ? { ...prev, projects, clients } : prev))
+    })
     return () => {
       cancelled = true
     }
@@ -325,7 +332,7 @@ export function DashboardPage() {
   // vez, para que el centro no drifte por el redondeo por-bucket (dos entries de 0.25 h dan
   // 0.5 juntas pero 0.3+0.3=0.6 separadas). El donut de BILLING usa su propio total
   // (billing.total), que excluye las no-facturables, para que centro y slices coincidan.
-  // Memoizado sobre [data, filteredEntries].
+  // Memoizado sobre [filteredEntries] (que ya deriva de data).
   const totalHours = useMemo(
     () => filteredEntries.reduce((sum, e) => sum + e.hours, 0),
     [filteredEntries],

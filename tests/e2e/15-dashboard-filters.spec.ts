@@ -27,6 +27,10 @@ test('Dashboard: barra de filtros con 5 dimensiones; Status = billing status; fi
     .locator('.dash-kpi', { hasText: 'Pending Hours' })
     .locator('.dash-kpi__value')
   await expect(pendingValue).toBeVisible()
+  // Pre-filtro: hay horas facturables-pendientes en la base (no debe arrancar en 0.0,
+  // si no la aserción de abajo no probaría nada).
+  const before = (await pendingValue.innerText()).trim()
+  expect(before).not.toMatch(/^0\.0(\D|$)/)
 
   const statusField = bar.locator('.filterfield', { has: page.getByText('Status', { exact: true }) })
   await statusField.locator('.msel__btn').click()
@@ -36,7 +40,8 @@ test('Dashboard: barra de filtros con 5 dimensiones; Status = billing status; fi
   await statusField.getByRole('option', { name: 'Paid' }).click()
   await page.keyboard.press('Escape')
 
-  await expect(pendingValue).toContainText('0.0')
+  // Post-filtro: las pagadas están facturadas → no son facturables-pendientes → 0.0.
+  await expect(pendingValue).toHaveText(/^0\.0/)
 
   // Clear limpia (y desaparece).
   const clear = bar.locator('.filterbar__clear')
