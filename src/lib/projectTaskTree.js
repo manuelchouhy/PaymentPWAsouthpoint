@@ -1,15 +1,14 @@
 /**
  * Árbol stage → tasks para el pop up de Projects & SOW. Agrupa los tasks del proyecto
  * bajo su stage (por `task.stageId`), en orden de `stage.position`. Los tasks sin stage
- * (o cuyo stageId no matchea ningún stage) caen en un nodo sintético "No stage" al final.
+ * (o cuyo stageId no matchea ningún stage) caen en un nodo sintético "Tasks" al final.
  * Un stage sin tasks igual aparece (con `tasks: []`).
  *
- * NOTA (dominio, 2026-09-11): hoy `ProjectTask` NO tiene `stageId` en el schema (los tasks
- * son a nivel proyecto, no por stage), así que en la práctica TODOS caen bajo "No stage".
- * El módulo ya soporta el nesting por si se agrega el link — ver open item del slice 12.
- * Para activarlo NO alcanza con la columna en DB: hay que (a) agregar `project_tasks.stage_id`,
- * (b) incluirla en el `select` de la query y (c) mapearla en `rowToTask` (projectsData.js) a
- * `stageId`. Sin la mitad de frontend (b+c) los tasks siguen cayendo bajo "No stage".
+ * NOTA (dominio, 2026-09-11): los tasks que recibe son los REALES del proyecto (los
+ * distintos `task` de sus horas cargadas en Zoho — ver getProjectLoggedTasks), NO los
+ * task_name del scope del SOW. Esos tasks NO tienen stageId (no hay link stage↔task en
+ * el schema ni en las horas), así que en la práctica TODOS caen bajo el nodo "Tasks".
+ * El módulo ya soporta el nesting por si algún día se agrega un link stage↔task.
  *
  * @param {Array<{id:string|number, stageName:string, position?:number}>} stages
  * @param {Array<{id:string|number, taskName:string, stageId?:string|number|null}>} tasks
@@ -37,10 +36,13 @@ export function buildProjectTaskTree(stages = [], tasks = []) {
 
   const orphans = byStage.get(null) ?? []
   if (orphans.length) {
+    // Nodo "Tasks": los tasks del proyecto que no están atados a un stage. Hoy TODOS
+    // caen acá (no hay link stage↔task en el schema ni en las horas), así que es la
+    // lista de tasks del proyecto. Si algún día se agrega el link, sólo los sueltos.
     stageNodes.push({
       key: 'no-stage',
       stageId: null,
-      label: 'No stage',
+      label: 'Tasks',
       meta: null,
       tasks: orphans,
     })

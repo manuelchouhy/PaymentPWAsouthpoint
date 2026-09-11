@@ -1019,6 +1019,41 @@ export async function getProjectTasks(projectId) {
 }
 
 /**
+ * Tasks REALES de un proyecto: los distintos `task` de sus time_entries (los que el
+ * contractor carga en Zoho), con sus horas. Es lo que se ve como "los tasks del
+ * proyecto" en el resto de la app — NO los task_name del scope del SOW (project_tasks),
+ * que casi nunca se cargan y NO tienen FK con las horas. Ver getProjectTaskNames.
+ *
+ * Se agrupa por nombre de task; `hours` suma TODAS (cualquier estado) para reflejar la
+ * actividad real, y `approvedHours` sólo las Approved.
+ *
+ * @param {string} projectName
+ * @returns {Promise<Array<{ id: string, taskName: string, hours: number, approvedHours: number, entryCount: number }>>}
+ */
+export async function getProjectLoggedTasks(projectName) {
+  if (!projectName) return []
+  if (!isSupabaseConfigured) return []
+  const { data, error } = await supabase
+    .from('time_entries')
+    .select('task, hours, status')
+    .eq('project', projectName)
+    .limit(5000)
+  if (error) throw new Error(error.message)
+  const byTask = new Map()
+  for (const row of data ?? []) {
+    const name = row.task ?? ''
+    if (!name) continue
+    const acc = byTask.get(name) ?? { id: name, taskName: name, hours: 0, approvedHours: 0, entryCount: 0 }
+    const h = Number(row.hours) || 0
+    acc.hours += h
+    if (row.status === 'Approved') acc.approvedHours += h
+    acc.entryCount += 1
+    byTask.set(name, acc)
+  }
+  return [...byTask.values()].sort((a, b) => a.taskName.localeCompare(b.taskName, 'es', { numeric: true }))
+}
+
+/**
  * Crea las tasks del SOW de un proyecto recién creado (alta en bloque).
  * @param {string|number} projectId
  * @param {Array<{ taskName: string, role: ?string, estimatedHours: number }>} tasks

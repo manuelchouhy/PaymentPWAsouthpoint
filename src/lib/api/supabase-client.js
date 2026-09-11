@@ -87,6 +87,7 @@ import {
   getProjects,
   getProjectStages,
   getProjectTasks,
+  getProjectLoggedTasks,
   recordProjectDocument,
   removeSowFiles,
   updateContractAlertSettings,
@@ -367,6 +368,7 @@ export const supabaseApiClient = {
 
   projectTasks: {
     list: getProjectTasks,
+    logged: getProjectLoggedTasks,
     create: createProjectTasks,
     update: updateProjectTask,
   },
