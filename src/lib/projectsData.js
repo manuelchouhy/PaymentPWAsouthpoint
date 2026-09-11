@@ -1027,12 +1027,11 @@ export async function getProjectTasks(projectId) {
  *
  * Se agrupa por nombre de task; `taskNumber` es el id de la task en Zoho (time_entries.
  * task_number, el mismo de la columna "Task #" de Entries); `hours` suma TODAS (cualquier
- * estado) y `approvedHours` sólo las Approved (= horas consumidas). `allApproved` es true
- * sólo si TODAS las entries del task están Approved (flag explícito, no comparar sumas: con
- * correcciones negativas approvedHours podría superar a hours sin que todo esté aprobado).
+ * estado), `approvedHours` sólo las Approved (= horas consumidas) y `pendingHours` sólo las
+ * Pending (las Rejected NO cuentan como pending — mismo criterio que clientSummaryWeekly).
  *
  * @param {string} projectName
- * @returns {Promise<Array<{ id: string, taskName: string, taskNumber: (string|null), hours: number, approvedHours: number, allApproved: boolean }>>}
+ * @returns {Promise<Array<{ id: string, taskName: string, taskNumber: (string|null), hours: number, approvedHours: number, pendingHours: number }>>}
  */
 export async function getProjectLoggedTasks(projectName) {
   if (!projectName) return []
@@ -1071,7 +1070,7 @@ export async function getProjectLoggedTasks(projectName) {
     if (!name) continue
     const acc =
       byTask.get(name) ??
-      { id: name, taskName: name, taskNumber: null, hours: 0, approvedHours: 0, allApproved: true }
+      { id: name, taskName: name, taskNumber: null, hours: 0, approvedHours: 0, pendingHours: 0 }
     // task_number (supabase) / taskNumber (demo): el id de Zoho; primero no vacío gana.
     if (acc.taskNumber == null) {
       const num = row.task_number ?? row.taskNumber
@@ -1080,7 +1079,8 @@ export async function getProjectLoggedTasks(projectName) {
     const h = Number(row.hours) || 0
     acc.hours += h
     if (row.status === 'Approved') acc.approvedHours += h
-    else acc.allApproved = false
+    else if (row.status === 'Pending') acc.pendingHours += h
+    // Rejected u otros estados: no cuentan como consumido ni pending.
     byTask.set(name, acc)
   }
   return [...byTask.values()].sort((a, b) => a.taskName.localeCompare(b.taskName, 'es', { numeric: true }))

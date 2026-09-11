@@ -938,7 +938,7 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
                     // filas ni chocar con un id real igual al índice (lista read-only).
                     <li key={t.id ?? `idx-${i}`} className="stage-tree__task">
                       <span className="stage-tree__task-name">
-                        {t.taskName || '—'}
+                        <span className="stage-tree__task-name-text">{t.taskName || '—'}</span>
                         {/* id del task (task_number de Zoho, el mismo de "Task #" en
                             Entries). Es largo → mono, atenuado y truncado, con tooltip. */}
                         {t.taskNumber ? (
@@ -947,12 +947,11 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
                           </span>
                         ) : null}
                       </span>
-                      {/* Horas CONSUMIDAS (Approved) del task + las pendientes si las hay.
-                          formatHours redondea para no mostrar 12.3999… al sumar fracciones. */}
+                      {/* Horas CONSUMIDAS (Approved) del task + las Pending si las hay (las
+                          Rejected no cuentan). formatHours redondea para no mostrar 12.3999…. */}
                       {(() => {
-                        const total = Number(t.hours ?? 0)
                         const consumed = Number(t.approvedHours ?? 0)
-                        const pending = Math.max(0, total - consumed)
+                        const pending = Number(t.pendingHours ?? 0)
                         return (
                           <span className="stage-tree__task-meta">
                             {`${formatHours(consumed)} h consumed`}

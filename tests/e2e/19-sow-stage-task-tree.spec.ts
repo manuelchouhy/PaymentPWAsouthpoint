@@ -42,8 +42,11 @@ test('Projects & SOW: el slide "Stages & Tasks" muestra los tasks reales del pro
   expect(await taskRows.count()).toBeGreaterThan(0)
   // Nombre.
   await expect(tasksNode.locator('.stage-tree__task-name').first()).not.toHaveText('')
-  // Id del task (task_number de Zoho, prefijado con #).
-  await expect(tasksNode.locator('.stage-tree__task-id').first()).toContainText('#')
+  // Id del task (task_number de Zoho, prefijado con #). El span solo aparece si la task
+  // tiene task_number; "Proyecto Prueba" lo tiene, así que debe haber al menos uno.
+  const idSpans = tasksNode.locator('.stage-tree__task-id')
+  expect(await idSpans.count()).toBeGreaterThan(0)
+  await expect(idSpans.first()).toContainText('#')
   // Horas consumidas.
   await expect(tasksNode.locator('.stage-tree__task-meta').first()).toContainText('consumed')
 

@@ -552,7 +552,7 @@ export interface ApiClient {
         taskNumber: string | null
         hours: number
         approvedHours: number
-        allApproved: boolean
+        pendingHours: number
       }>
     >
     create(

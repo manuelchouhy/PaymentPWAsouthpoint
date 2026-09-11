@@ -3211,11 +3211,21 @@ th.col-pop { text-align: center; }
   display: flex;
   align-items: baseline;
   gap: 8px;
-  min-width: 0; /* deja truncar el id largo */
+  min-width: 0;
   flex: 1;
 }
-/* id del task (task_number de Zoho, largo): mono, atenuado y truncado con ellipsis. */
+/* El nombre trunca con ellipsis y cede espacio al id. */
+.stage-tree__task-name-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* id del task (task_number de Zoho, largo): mono, atenuado y truncado con ellipsis.
+   No se encoge por debajo de su caja (flex-shrink: 0) para no desaparecer. */
 .stage-tree__task-id {
+  flex-shrink: 0;
   font-family: var(--mono);
   font-size: 11px;
   color: var(--text-faint);
