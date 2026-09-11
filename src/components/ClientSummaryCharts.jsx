@@ -45,6 +45,9 @@ export function ClientSummaryCharts({ totals }) {
   const barData = [
     ...(totals.hasBudget ? [{ name: 'Budget', value: budget, color: COLOR.budget }] : []),
     { name: 'Consumed', value: consumed, color: COLOR.consumed },
+    // Invoiced es una porción de Consumed (ya facturado); barra propia sólo si hay algo,
+    // para que se vea también acá (además del donut).
+    ...(invoiced > 0 ? [{ name: 'Invoiced', value: invoiced, color: COLOR.invoiced }] : []),
     { name: 'Pending', value: pending, color: COLOR.pending },
     { name: 'Overage', value: overage, color: COLOR.overage },
   ]
@@ -91,7 +94,7 @@ export function ClientSummaryCharts({ totals }) {
         <div className="dash-widget__head">
           <span className="dash-widget__title">
             <TrendingUp size={14} />
-            Budget · Consumed · Pending · Overage
+            Budget · Consumed · Invoiced · Pending · Overage
           </span>
         </div>
         {noData ? (

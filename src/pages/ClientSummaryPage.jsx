@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react'
@@ -145,39 +145,46 @@ export function ClientSummaryPage() {
     [resolvedProjects, entries, crsByProject, isInvoiced],
   )
 
-  // Opciones de cada filtro, derivadas de la salida COMPLETA del motor (misma
-  // fuente que la grilla; no se duplica la regla de agrupación).
-  const clientOptions = useMemo(
-    () => sortedUnique(summary.clients.map((c) => c.client)),
-    [summary],
+  // Opciones INTERLAZADAS: cada dimensión deriva sus opciones de los clientes/proyectos
+  // que pasan TODOS los OTROS filtros de proyecto (menos el propio), para que elegir un
+  // Cliente recorte Project/Project#/SOW y no ofrezca combinaciones que dan cero. Se
+  // reusa el mismo filterClientSummary que la tabla. La propia dimensión se excluye del
+  // cruce; los valores ya elegidos se unen siempre (para poder destildarlos).
+  const optionScope = useCallback(
+    (except) =>
+      filterClientSummary(summary.clients, {
+        clients: except === 'clients' ? [] : selectedClients,
+        projectNumbers: except === 'projectNumbers' ? [] : selectedProjectNumbers,
+        projectNames: except === 'projectNames' ? [] : selectedProjectNames,
+        sows: except === 'sows' ? [] : selectedSows,
+      }),
+    [summary, selectedClients, selectedProjectNumbers, selectedProjectNames, selectedSows],
   )
-  const allProjects = useMemo(() => summary.clients.flatMap((c) => c.projects), [summary])
+  const scopeProjects = useCallback((except) => optionScope(except).flatMap((c) => c.projects), [optionScope])
+
+  const clientOptions = useMemo(
+    () => sortedUnique([...optionScope('clients').map((c) => c.client), ...selectedClients]),
+    [optionScope, selectedClients],
+  )
   const projectNumberOptions = useMemo(
-    () => sortedUnique(allProjects.map((p) => p.projectNumber)),
-    [allProjects],
+    () => sortedUnique([...scopeProjects('projectNumbers').map((p) => p.projectNumber), ...selectedProjectNumbers]),
+    [scopeProjects, selectedProjectNumbers],
   )
   const projectNameOptions = useMemo(
-    () => sortedUnique(allProjects.map((p) => p.projectName)),
-    [allProjects],
+    () => sortedUnique([...scopeProjects('projectNames').map((p) => p.projectName), ...selectedProjectNames]),
+    [scopeProjects, selectedProjectNames],
   )
   // El SOW del proyecto puede venir coma-separado (multi-stage); las opciones son
   // los SOW individuales.
   const sowOptions = useMemo(
-    () => sortedUnique(allProjects.flatMap((p) => p.sowNumbers ?? [])),
-    [allProjects],
+    () => sortedUnique([...scopeProjects('sows').flatMap((p) => p.sowNumbers ?? []), ...selectedSows]),
+    [scopeProjects, selectedSows],
   )
-  // Semanas presentes en cualquier proyecto, rotuladas year-aware y ordenadas por
-  // su domingo. El value del filtro es el rótulo (único por semana física).
-  const weekOptions = useMemo(() => {
-    const byLabel = new Map()
-    for (const p of allProjects) {
-      for (const w of p.weeks) byLabel.set(weekLabel(w), w.weekStart)
-    }
-    return [...byLabel.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([label]) => label)
-  }, [allProjects])
-
-  // Scope de PROYECTO (Client/Project#/Name/SOW), sin el filtro Week: es la base
-  // tanto de la tabla como de los gráficos. Lógica pura en clientSummaryFilter.
+  // Semanas del scope de PROYECTO (ya filtrado por Client/Project#/Name/SOW), rotuladas
+  // year-aware y ordenadas por su domingo. Se unen las ya elegidas.
+  // Scope de PROYECTO (Client/Project#/Name/SOW), sin el filtro Week: es la base tanto de
+  // la tabla como de los gráficos, y de las opciones de Week. Lógica pura en
+  // clientSummaryFilter.
   const projectScoped = useMemo(
     () =>
       filterClientSummary(summary.clients, {
@@ -188,6 +195,15 @@ export function ClientSummaryPage() {
       }),
     [summary, selectedClients, selectedProjectNumbers, selectedProjectNames, selectedSows],
   )
+
+  const weekOptions = useMemo(() => {
+    const byLabel = new Map()
+    for (const p of projectScoped.flatMap((c) => c.projects)) {
+      for (const w of p.weeks) byLabel.set(weekLabel(w), w.weekStart)
+    }
+    for (const w of selectedWeeks) if (!byLabel.has(w)) byLabel.set(w, '￿') // ya elegida: al final
+    return [...byLabel.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([label]) => label)
+  }, [projectScoped, selectedWeeks])
 
   // La tabla aplica además el filtro Week sobre el scope de proyecto (recorta
   // filas-semana y descarta proyectos/clientes sin semana visible).
