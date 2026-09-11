@@ -1308,6 +1308,17 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
   font-size: 12px;
   color: var(--text-faint);
 }
+/* Variante grande SÓLO para "Selected to bill" de Billing (la clase base la comparte
+   la SelectionBar de Entries, que debe quedar como caption chico). Las horas grandes
+   como el valor de los cuadros KPI. */
+.selbar__count--lg {
+  font-size: 16px;
+  color: var(--text);
+}
+.selbar__count--lg b {
+  font-size: 21px;
+  font-weight: 600;
+}
 
 /* Métrica de selección de Entries: mismo estilo big-number que las KPI cards del
    dashboard (.dash-kpi__label/__value/__unit/__hint), para que el conteo de horas

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useOutletContext, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle, ArrowRight, Info } from 'lucide-react'
@@ -483,66 +483,71 @@ export function BillingPage() {
     return { ...kpis, classifiable }
   }, [filtered, filteredAllAllocations, invoiceByEntryId, paidEntryIds])
 
-  // Cuadro #2: sólo tiene sentido cuando el usuario filtró EXPLÍCITAMENTE por proyecto
-  // (nombre o número) y el scope queda en UN solo proyecto. Devuelve su budget efectivo
-  // y su consumed (del proyecto completo). Con varios/ninguno → null y el cuadro "—".
-  const singleProject = useMemo(() => {
-    // Un filtro de contractor/estado que por casualidad deja un solo proyecto NO cuenta
-    // como "el proyecto que estoy mirando": exigimos filtro de proyecto explícito.
-    if (!filters.projects.length && !filters.projectNumbers.length) return null
-    // Horas del/los proyecto(s) filtrado(s) IGNORANDO los demás filtros (semana,
-    // contractor, estado): se aplican SÓLO las dimensiones de proyecto sobre todas las
-    // entries. Así el consumed es del proyecto COMPLETO y usa el mismo matcheo (por
-    // nombre y/o número) que la grilla — sin perder las horas viejas sin projectNumber
-    // (que un join por número descartaría) ni cambiar con la semana/contractor filtrados.
-    const projectScope = {
-      ...filters,
-      contractors: [],
-      clients: [],
-      tasks: [],
-      billingStatuses: [],
-      statuses: [],
-      allocations: [],
-      dateFrom: '',
-      dateTo: '',
-      week: '',
-      weekStart: '',
-    }
-    const projectEntries = applyEntryFilters(
-      entriesConCliente,
-      projectScope,
-      invoiceByEntryId,
-      masterNames,
-    )
-    // Consumed = Approved bill_to_client. sp_internal NO cuenta acá (va en su sección
-    // aparte, decisión del usuario) — a diferencia de Client Summary, que sí lo suma.
-    let consumed = 0
-    const names = new Set()
-    const nums = new Set()
-    for (const en of projectEntries) {
-      if (en.project) names.add(en.project)
-      if (en.projectNumber) nums.add(en.projectNumber)
-      if (en.status === 'Approved' && en.allocation === 'bill_to_client') {
-        consumed += Number(en.hours) || 0
+  // Cuadro #2: consumed (Approved bill_to_client del proyecto COMPLETO) + budget efectivo
+  // de UN proyecto identificado por nombre y/o número. Ignora semana/contractor/estado.
+  // Devuelve null si el scope abarca 0 o >1 proyecto. Lo usan tanto el filtro de proyecto
+  // (singleProject) como la selección de filas (selectionProject).
+  const projectStatsFor = useCallback(
+    (projectSel) => {
+      if (!projectSel.projects.length && !projectSel.projectNumbers.length) return null
+      const projectScope = {
+        contractors: [],
+        clients: [],
+        projects: projectSel.projects,
+        projectNumbers: projectSel.projectNumbers,
+        tasks: [],
+        billingStatuses: [],
+        statuses: [],
+        allocations: [],
+        dateFrom: '',
+        dateTo: '',
+        week: '',
+        weekStart: '',
       }
-    }
-    // Si el scope abarca varios proyectos (por nombre o número) no es "un proyecto" → "—".
-    if (names.size > 1 || nums.size > 1) return null
-    // Budget: con un projectNumber real, tiene que matchear EXACTAMENTE un proyecto. Si
-    // el número está DUPLICADO (id49/id50), consumed mezclaría los dos y el budget saldría
-    // de uno → ambiguo, se descarta todo el cuadro ("—"). Con projectNumber vacío (proyecto
-    // legacy filtrado por nombre) no hay budget pero el consumed sí vale → "consumed / —".
-    let budget = null
-    if (nums.size === 1) {
-      const [num] = [...nums]
-      const matches = projects.filter((p) => p.projectNumber === num)
-      if (matches.length !== 1) return null
-      budget = crsLoaded
-        ? effectiveBudgetHours(matches[0].baseBudgetHours, crsByProject.get(String(matches[0].id)) ?? [])
-        : null
-    }
-    return { budget, consumed }
-  }, [filters, entriesConCliente, invoiceByEntryId, masterNames, projects, crsByProject, crsLoaded])
+      const projectEntries = applyEntryFilters(
+        entriesConCliente,
+        projectScope,
+        invoiceByEntryId,
+        masterNames,
+      )
+      // Consumed = Approved bill_to_client. sp_internal NO cuenta acá (va en su sección
+      // aparte, decisión del usuario) — a diferencia de Client Summary, que sí lo suma.
+      let consumed = 0
+      const names = new Set()
+      const nums = new Set()
+      for (const en of projectEntries) {
+        if (en.project) names.add(en.project)
+        if (en.projectNumber) nums.add(en.projectNumber)
+        if (en.status === 'Approved' && en.allocation === 'bill_to_client') {
+          consumed += Number(en.hours) || 0
+        }
+      }
+      // Si el scope abarca varios proyectos (por nombre o número) no es "un proyecto" → "—".
+      if (names.size > 1 || nums.size > 1) return null
+      // Budget: con un projectNumber real, tiene que matchear EXACTAMENTE un proyecto. Si
+      // el número está DUPLICADO (id49/id50), consumed mezclaría los dos y el budget saldría
+      // de uno → ambiguo, se descarta todo el cuadro ("—"). Con projectNumber vacío (proyecto
+      // legacy filtrado por nombre) no hay budget pero el consumed sí vale → "consumed / —".
+      let budget = null
+      if (nums.size === 1) {
+        const [num] = [...nums]
+        const matches = projects.filter((p) => p.projectNumber === num)
+        if (matches.length !== 1) return null
+        budget = crsLoaded
+          ? effectiveBudgetHours(matches[0].baseBudgetHours, crsByProject.get(String(matches[0].id)) ?? [])
+          : null
+      }
+      return { budget, consumed }
+    },
+    [entriesConCliente, invoiceByEntryId, masterNames, projects, crsByProject, crsLoaded],
+  )
+
+  // Cuadro #2 por FILTRO: cuando el usuario filtró EXPLÍCITAMENTE por proyecto (nombre o
+  // número) y el scope queda en un solo proyecto.
+  const singleProject = useMemo(
+    () => projectStatsFor({ projects: filters.projects, projectNumbers: filters.projectNumbers }),
+    [projectStatsFor, filters.projects, filters.projectNumbers],
+  )
 
   // Las horas facturables ordenadas por cliente → semana domingo→sábado → filas
   // proveedor·proyecto·task (billingGrouping). "Sin cliente" queda arriba, no es
@@ -677,6 +682,31 @@ export function BillingPage() {
   const selectedRows = [...selectedKeys].map((k) => billableRows.get(k)).filter(Boolean)
   const selectedEntries = selectedRows.flatMap((r) => r.entries)
   const selectedHours = selectedRows.reduce((sum, r) => sum + r.hours, 0)
+  // Cuadro #2 por SELECCIÓN: cuando tildás filas de UN solo proyecto (aunque no haya
+  // filtro de proyecto). Deriva el nombre del proyecto de las filas seleccionadas y
+  // reusa projectStatsFor para su consumed/budget completos. Memoizado sobre
+  // selectedKeys+billableRows (no sobre selectedRows, que es un array nuevo por render).
+  const selectionProjectNames = useMemo(() => {
+    const names = new Set()
+    for (const k of selectedKeys) {
+      const r = billableRows.get(k)
+      if (r?.project) names.add(r.project)
+    }
+    return [...names]
+  }, [selectedKeys, billableRows])
+  const selectionProject = useMemo(
+    () =>
+      selectionProjectNames.length
+        ? projectStatsFor({ projects: selectionProjectNames, projectNumbers: [] })
+        : null,
+    [selectionProjectNames, projectStatsFor],
+  )
+  // El cuadro #2 muestra números con selección de un proyecto O con filtro a un proyecto
+  // (las dos cosas). Con selección manda la selección: si abarca varios proyectos,
+  // selectionProject es null y el cuadro va "—" (no se cae al filtro, porque
+  // selectedHours sumaría varios proyectos contra el consumed/budget de uno solo). Sin
+  // selección, vale el filtro de proyecto.
+  const budgetCardProject = selectedKeys.size > 0 ? selectionProject : singleProject
   const canCreate = can('billing.create')
   // Factura AGRUPADA multi-contractor (slice 03): se emite cuando la selección es de
   // un solo cliente + un solo proyecto (varios contractors permitidos).
@@ -1118,21 +1148,21 @@ export function BillingPage() {
               </span>
             </div>
             {/* Cuadro #2: Seleccionadas + Consumidas / Budget. El "+" y el "/" son
-                formato de texto (no operaciones). Consumed y budget se muestran con un
-                filtro activo aunque no haya selección; sin filtro ni selección → "—".
-                Budget sólo cuando el filtro deja un único proyecto (singleProjectBudget). */}
+                formato de texto (no operaciones). Se muestra cuando tildás filas de un
+                proyecto O cuando el filtro deja un único proyecto (las dos cosas); la
+                selección manda. Sin selección ni filtro de un proyecto → "—". */}
             <div className="dash-kpi dash-kpi--static">
               <div className="dash-kpi__head">
                 <span className="dash-kpi__label">Selected + consumed / budget</span>
               </div>
               <span className="dash-kpi__value">
-                {singleProject ? (
+                {budgetCardProject ? (
                   <>
                     {formatHours(selectedHours)}
                     <span className="dash-kpi__unit"> + </span>
-                    {formatHours(singleProject.consumed)}
+                    {formatHours(budgetCardProject.consumed)}
                     <span className="dash-kpi__unit"> / </span>
-                    {singleProject.budget != null ? formatHours(singleProject.budget) : '—'}
+                    {budgetCardProject.budget != null ? formatHours(budgetCardProject.budget) : '—'}
                     <span className="dash-kpi__unit"> h</span>
                   </>
                 ) : (
@@ -1140,7 +1170,7 @@ export function BillingPage() {
                 )}
               </span>
               <span className="dash-kpi__hint">
-                {singleProject ? 'selected + consumed / budget' : 'filter to one project'}
+                {budgetCardProject ? 'selected + consumed / budget' : 'select or filter one project'}
               </span>
             </div>
             <div className="dash-kpi dash-kpi--static">
@@ -1258,7 +1288,7 @@ export function BillingPage() {
               {canCreate && selectedKeys.size > 0 && (
                 <div className="selbar-wrap">
                   <div className="selbar selbar--active">
-                    <span className="selbar__count">
+                    <span className="selbar__count selbar__count--lg">
                       Selected to bill: <b>{formatHours(selectedHours)} h</b> ·{' '}
                       {selectedEntries.length} {selectedEntries.length === 1 ? 'entry' : 'entries'}
                     </span>
