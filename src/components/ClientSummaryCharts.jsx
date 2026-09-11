@@ -56,7 +56,11 @@ export function ClientSummaryCharts({ totals }) {
     ...(invoiced > 0
       ? [
           { key: 'invoiced', name: 'Invoiced', value: invoiced, color: COLOR.invoiced },
-          { key: 'consumed', name: 'Consumed (unbilled)', value: consumedUnbilled, color: COLOR.consumed },
+          // La porción sin facturar sólo si queda algo: si todo el consumido está
+          // facturado (consumedUnbilled === 0) no se agrega un slice/leyenda en 0.
+          ...(consumedUnbilled > 0
+            ? [{ key: 'consumed', name: 'Consumed (unbilled)', value: consumedUnbilled, color: COLOR.consumed }]
+            : []),
         ]
       : [{ key: 'consumed', name: 'Consumed', value: consumed, color: COLOR.consumed }]),
     { key: 'overage', name: 'Overage', value: overage, color: COLOR.overage },
