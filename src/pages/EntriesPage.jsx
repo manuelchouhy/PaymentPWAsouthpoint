@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { formatDate, formatHours, formatWeek } from '../lib/format'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, clientFilterOptions, OTHER_CLIENT, UNALLOCATED, ALLOCATED } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
+import { invoiceByEntryId as buildInvoiceByEntryId } from '../lib/invoiceIndex'
 import { isEntryFrozen, entryFrozenReason } from '../lib/entryFreeze'
 import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { useSyncReload } from '../lib/useSyncReload'
@@ -198,13 +199,7 @@ export function EntriesPage() {
 
   // id de entry -> factura, para resolver Billing status sin recorrer las
   // facturas por cada fila.
-  const invoiceByEntryId = useMemo(() => {
-    const map = new Map()
-    for (const invoice of invoices) {
-      for (const entryId of invoice.entryIds ?? []) map.set(String(entryId), invoice)
-    }
-    return map
-  }, [invoices])
+  const invoiceByEntryId = useMemo(() => buildInvoiceByEntryId(invoices), [invoices])
 
   // Nombres del maestro (los mismos que la página Clients): con este Set el
   // filtro de Cliente agrupa bajo "Others" a los clientes que no están en él.

@@ -7,6 +7,7 @@ import { formatDate, formatHours, formatTaskLabel } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, sortedUnique, clientFilterOptions, OTHER_CLIENT } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
+import { invoiceByEntryId as buildInvoiceByEntryId } from '../lib/invoiceIndex'
 import { buildClientResolver } from '../lib/clientResolver'
 import { groupBillToClient, groupReadonly } from '../lib/billingGrouping'
 import { billingKpis } from '../lib/billingKpis'
@@ -304,13 +305,7 @@ export function BillingPage() {
     }
   }, [reloadKey])
 
-  const invoiceByEntryId = useMemo(() => {
-    const map = new Map()
-    for (const invoice of invoices) {
-      for (const entryId of invoice.entryIds ?? []) map.set(String(entryId), invoice)
-    }
-    return map
-  }, [invoices])
+  const invoiceByEntryId = useMemo(() => buildInvoiceByEntryId(invoices), [invoices])
 
   // Con el cliente ya resuelto desde el proyecto (por id de Zoho → grupo →
   // cliente), para que la columna, el filtro y sus opciones hablen todos del

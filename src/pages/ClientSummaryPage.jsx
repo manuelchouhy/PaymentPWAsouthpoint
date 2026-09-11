@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
 import { buildClientSummaryWeekly, weekLabel } from '../lib/clientSummaryWeekly'
+import { invoiceByEntryId } from '../lib/invoiceIndex'
 import { useSyncReload } from '../lib/useSyncReload'
 import { filterClientSummary } from '../lib/clientSummaryFilter'
 import {
@@ -128,14 +129,12 @@ export function ClientSummaryPage() {
     return projects.map((p) => ({ ...p, resolvedClient: resolve(p).client ?? '' }))
   }, [projects, clientMasters])
 
-  // Índice entry→factura, igual que Billing: una hora está facturada si aparece en
-  // el entryIds de alguna factura. Alimenta el predicado isInvoiced del motor (C11).
+  // Índice entry→factura (servicio compartido con Billing/Entries): una hora está
+  // facturada si aparece en el entryIds de alguna factura. Alimenta el predicado
+  // isInvoiced del motor (C11).
   const isInvoiced = useMemo(() => {
-    const invoicedIds = new Set()
-    for (const invoice of invoices) {
-      for (const entryId of invoice.entryIds ?? []) invoicedIds.add(String(entryId))
-    }
-    return (entry) => invoicedIds.has(String(entry.id))
+    const byId = invoiceByEntryId(invoices)
+    return (entry) => byId.has(String(entry.id))
   }, [invoices])
 
   // Toda la agregación semanal (consumed/overage/invoiced/cumulative/remaining por
