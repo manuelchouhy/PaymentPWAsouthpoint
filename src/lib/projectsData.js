@@ -22,6 +22,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from './supabase'
+import { getTimeEntries } from './data'
 import { demoDate } from './demoDates'
 import { stageSows } from './projectSows'
 
@@ -1028,26 +1029,39 @@ export async function getProjectTasks(projectId) {
  * actividad real, y `approvedHours` sólo las Approved.
  *
  * @param {string} projectName
- * @returns {Promise<Array<{ id: string, taskName: string, hours: number, approvedHours: number, entryCount: number }>>}
+ * @returns {Promise<Array<{ id: string, taskName: string, hours: number, approvedHours: number }>>}
  */
 export async function getProjectLoggedTasks(projectName) {
   if (!projectName) return []
-  if (!isSupabaseConfigured) return []
-  const { data, error } = await supabase
-    .from('time_entries')
-    .select('task, hours, status')
-    .eq('project', projectName)
-    .limit(5000)
-  if (error) throw new Error(error.message)
+  let rows
+  if (!isSupabaseConfigured) {
+    // Fallback demo (mismo criterio que getProjectTaskNames): sale de las time entries demo.
+    const entries = await getTimeEntries()
+    rows = entries.filter((e) => e.project === projectName)
+  } else {
+    // Se pagina para NO truncar el total de horas en proyectos con muchas entries (un
+    // .limit fijo daría un total mal sin aviso).
+    rows = []
+    const page = 1000
+    for (let from = 0; ; from += page) {
+      const { data, error } = await supabase
+        .from('time_entries')
+        .select('task, hours, status')
+        .eq('project', projectName)
+        .range(from, from + page - 1)
+      if (error) throw new Error(error.message)
+      rows.push(...(data ?? []))
+      if (!data || data.length < page) break
+    }
+  }
   const byTask = new Map()
-  for (const row of data ?? []) {
+  for (const row of rows) {
     const name = row.task ?? ''
     if (!name) continue
-    const acc = byTask.get(name) ?? { id: name, taskName: name, hours: 0, approvedHours: 0, entryCount: 0 }
+    const acc = byTask.get(name) ?? { id: name, taskName: name, hours: 0, approvedHours: 0 }
     const h = Number(row.hours) || 0
     acc.hours += h
     if (row.status === 'Approved') acc.approvedHours += h
-    acc.entryCount += 1
     byTask.set(name, acc)
   }
   return [...byTask.values()].sort((a, b) => a.taskName.localeCompare(b.taskName, 'es', { numeric: true }))

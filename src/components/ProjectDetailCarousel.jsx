@@ -938,13 +938,22 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
                     // filas ni chocar con un id real igual al índice (lista read-only).
                     <li key={t.id ?? `idx-${i}`} className="stage-tree__task">
                       <span className="stage-tree__task-name">{t.taskName || '—'}</span>
-                      {/* Horas cargadas del task (todas) + cuántas están aprobadas. */}
-                      <span className="stage-tree__task-meta">
-                        {Number.isFinite(t.hours) ? `${t.hours} h` : '—'}
-                        {Number.isFinite(t.approvedHours) && t.approvedHours !== t.hours
-                          ? ` · ${t.approvedHours} h approved`
-                          : ''}
-                      </span>
+                      {/* Horas cargadas del task + estado de aprobación. formatHours
+                          redondea (evita 12.3999… de sumar fracciones); la comparación
+                          va sobre los valores redondeados (no floats crudos). */}
+                      {(() => {
+                        const total = Number(Number(t.hours ?? 0).toFixed(2))
+                        const appr = Number(Number(t.approvedHours ?? 0).toFixed(2))
+                        return (
+                          <span className="stage-tree__task-meta">
+                            {total > 0 ? `${formatHours(total)} h` : '—'}
+                            {total > 0 &&
+                              (appr >= total
+                                ? ' · all approved'
+                                : ` · ${formatHours(appr)} h approved`)}
+                          </span>
+                        )
+                      })()}
                     </li>
                   ))}
                 </ul>

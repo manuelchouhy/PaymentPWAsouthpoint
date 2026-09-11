@@ -67,6 +67,16 @@ test('Projects & SOW: el slide "Stages & Tasks" llega a un estado terminal en cu
   const errorMsg = modal.getByText('Stages & tasks could not be loaded', { exact: false })
   if ((await nodes.count()) === 0) {
     expect((await empty.count()) + (await errorMsg.count())).toBeGreaterThan(0)
+  } else {
+    // Con nodos: expandir el primero muestra su contenido (tasks o el vacío del nodo).
+    const firstNode = nodes.first()
+    const header = firstNode.locator('.stage-tree__header')
+    await expect(header).toHaveAttribute('aria-expanded', 'false')
+    await header.click()
+    await expect(header).toHaveAttribute('aria-expanded', 'true')
+    await expect(
+      firstNode.locator('.stage-tree__task, .stage-tree__empty').first(),
+    ).toBeVisible()
   }
 
   await page.keyboard.press('Escape')
