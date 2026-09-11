@@ -15,6 +15,16 @@ import { HoursDonut } from '../components/HoursDonut'
 import { api } from '../lib/api'
 import { useSyncReloadKey } from '../lib/useSyncReload'
 import { ALLOCATION_LABELS } from '../lib/allocations'
+import { deriveEntriesClient } from '../lib/entryClient'
+import {
+  useEntryFilters,
+  applyEntryFilters,
+  buildFilterOptions,
+  clientFilterOptions,
+  OTHER_CLIENT,
+} from '../lib/useEntryFilters'
+import { EntryFilterBar } from '../components/EntryFilterBar'
+import { BILLING_STATUSES } from '../lib/data'
 import { ContractsExpiringWidget } from '../components/dashboard/ContractsExpiringWidget'
 import { SupplierContractsWidget } from '../components/dashboard/SupplierContractsWidget'
 import { Sparkline } from '../components/Sparkline'
@@ -96,12 +106,19 @@ function last7DaysSeries(items, dateKey, valueKey) {
 export function DashboardPage() {
   const { can } = useOutletContext()
   const [data, setData] = useState(null)
+  // projects/clients viven APARTE del data core: cargan en su propia cadena (no bloquean
+  // el first paint) y se guardan acá para alimentar el filtro. Estado separado a propósito
+  // — si se mergearan al `data` core con setData(prev=>...), un race donde llegan antes que
+  // el core los perdería (prev === null).
+  const [filterData, setFilterData] = useState({ projects: [], clients: [] })
   const [loadStatus, setLoadStatus] = useState('loading')
 
   const reloadKey = useSyncReloadKey()
   useEffect(() => {
     let cancelled = false
     setLoadStatus('loading')
+    setFilterData({ projects: [], clients: [] }) // reset en cada (re)carga
+    // Datos CORE (KPIs y donuts): bloquean el first paint.
     Promise.all([
       api.timeEntries.list(),
       api.invoices.list(),
@@ -118,6 +135,18 @@ export function DashboardPage() {
         console.error('Dashboard load error:', err)
         setLoadStatus('error')
       })
+
+    // projects/clients sólo resuelven el cliente de cada hora (deriveEntriesClient) para el
+    // filtro: NO bloquean el first paint (los KPIs/donuts se ven ya) y sólo hidratan las
+    // opciones del filtro cuando llegan. Estado propio (filterData), así que no hay race con
+    // el core. Un fallo suyo degrada a [] (filtro con menos opciones), sin tirar el dashboard.
+    Promise.all([
+      Promise.resolve().then(() => api.projects.list()).catch(() => []),
+      Promise.resolve().then(() => api.clients.list()).catch(() => []),
+    ]).then(([projects, clients]) => {
+      if (cancelled) return
+      setFilterData({ projects, clients })
+    })
     return () => {
       cancelled = true
     }
@@ -133,6 +162,45 @@ export function DashboardPage() {
     return m
   }, [data])
 
+  // --- Filtros (misma barra que Billing/Payments) --------------------------------
+  // Filtran los widgets basados en HORAS (donuts, Pending Hours, total). Los tiles de
+  // facturas (Invoices/Collections/Payments) quedan globales. "Status" = billing status.
+  const enrichedEntries = useMemo(
+    () => (data ? deriveEntriesClient(data.entries, filterData.projects, filterData.clients) : []),
+    [data, filterData],
+  )
+  const { filters, toggleValue, clear, isActive } = useEntryFilters()
+  const masterNames = useMemo(
+    () => new Set(filterData.clients.map((c) => c.clientName).filter(Boolean)),
+    [filterData],
+  )
+  const filterOptions = useMemo(
+    () => buildFilterOptions(enrichedEntries, filters, invoiceByEntryId, masterNames),
+    [enrichedEntries, filters, invoiceByEntryId, masterNames],
+  )
+  const filteredEntries = useMemo(
+    () => applyEntryFilters(enrichedEntries, filters, invoiceByEntryId, masterNames),
+    [enrichedEntries, filters, invoiceByEntryId, masterNames],
+  )
+  // Client dropdown = maestro de clientes (mismo criterio que Billing/Entries/Projects):
+  // lista todos los clientes de la página Clients + el centinela Others si aplica.
+  const clientOptions = useMemo(
+    () => clientFilterOptions(filterData.clients, filterOptions.clients.includes(OTHER_CLIENT)),
+    [filterData, filterOptions.clients],
+  )
+  const filterDimensions = useMemo(
+    () => [
+      { key: 'clients', label: 'Client', options: clientOptions },
+      { key: 'projectNumbers', label: 'Project #', options: filterOptions.projectNumbers },
+      { key: 'projects', label: 'Project', options: filterOptions.projects },
+      { key: 'contractors', label: 'Contractor', options: filterOptions.contractors },
+      // "Status" del Dashboard = estado de FACTURACIÓN de la hora (billingStatuses de
+      // useEntryFilters), el estado natural de una entry acá (los widgets son de horas).
+      { key: 'billingStatuses', label: 'Status', options: BILLING_STATUSES },
+    ],
+    [clientOptions, filterOptions],
+  )
+
   // Map: invoiceId → last collection date
   const lastCollDateByInvoiceId = useMemo(() => {
     if (!data) return new Map()
@@ -144,16 +212,23 @@ export function DashboardPage() {
     return m
   }, [data])
 
+  // Horas facturables pendientes (isBillablePending): Rejected/Pending y overage/
+  // sp_internal/sin triagear no se facturan al cliente. Un solo memo alimenta el número
+  // (Pending Hours) y su sparkline — el único KPI que responde al filtro (el resto son de
+  // facturas y quedan globales, por eso aparte, para no recomputarlos en cada toggle).
+  const unbilledEntries = useMemo(
+    () => filteredEntries.filter((e) => isBillablePending(e, invoiceByEntryId)),
+    [filteredEntries, invoiceByEntryId],
+  )
+  const pendingHours = useMemo(
+    () => unbilledEntries.reduce((sum, e) => sum + e.hours, 0),
+    [unbilledEntries],
+  )
+
   const kpis = useMemo(() => {
     if (!data) return null
     const now = new Date()
     const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-
-    // Sólo horas facturables al cliente (ver isBillablePending): las Rejected/Pending
-    // y las overage/sp_internal/sin triagear no se facturan al cliente.
-    const pendingHours = data.entries
-      .filter((e) => isBillablePending(e, invoiceByEntryId))
-      .reduce((sum, e) => sum + e.hours, 0)
 
     // Las facturas agrupadas (modelo en horas) no cargan invoice_date; se usa la fecha
     // de emisión (created_at) como fecha de la factura para el KPI/sparkline.
@@ -175,16 +250,20 @@ export function DashboardPage() {
       if (d >= 0 && d <= 7) paymentsDueThisWeek += 1
     }
 
-    return { pendingHours, invoicesThisMonth, collectionsPending, paymentsDueThisWeek }
-  }, [data, invoiceByEntryId, lastCollDateByInvoiceId])
+    return { invoicesThisMonth, collectionsPending, paymentsDueThisWeek }
+  }, [data, lastCollDateByInvoiceId])
+
+  // Sparkline de Pending Hours: sobre el mismo subconjunto filtrado.
+  const pendingHoursSparkline = useMemo(
+    () => last7DaysSeries(unbilledEntries, 'date', 'hours'),
+    [unbilledEntries],
+  )
 
   // Micro-visual de cada KPI card: actividad real de los últimos 7 días en el
   // dominio de esa card (no repite el número de la card, da contexto de tendencia).
   const sparklines = useMemo(() => {
     if (!data) return null
-    const unbilled = data.entries.filter((e) => isBillablePending(e, invoiceByEntryId))
     return {
-      pendingHours: last7DaysSeries(unbilled, 'date', 'hours'),
       // issuedDate = invoice_date o, si falta (facturas agrupadas), la fecha de creación.
       invoicesThisMonth: last7DaysSeries(
         data.invoices.map((i) => ({
@@ -196,20 +275,29 @@ export function DashboardPage() {
       collectionsPending: last7DaysSeries(data.collections, 'collectionDate'),
       paymentsDueThisWeek: last7DaysSeries(data.payments, 'paymentDate'),
     }
-  }, [data, invoiceByEntryId])
+  }, [data])
 
-  const billingDist = useMemo(() => {
-    if (!data) return []
+  // Donut de billing: horas por estado de factura. Devuelve las slices Y su total propio
+  // (suma de las horas que reparte = facturadas + facturables-pendientes). El donut usa
+  // ESE total como centro, no totalHours: si no, las horas no-facturables (overage/
+  // sp_internal/sin triagear) inflarían el centro sobre la suma de sus slices.
+  const billing = useMemo(() => {
     const sums = { Pending: 0, Invoiced: 0, Collected: 0, Paid: 0 }
-    for (const e of data.entries) {
+    let total = 0
+    for (const e of filteredEntries) {
       const inv = invoiceByEntryId.get(String(e.id))
       // Facturada → cuenta bajo el estado de su factura (una vez emitida, la factura
       // es la fuente de verdad). Sin factura → sólo entra como "Pending" si es
       // facturable al cliente (Approved + bill_to_client), igual que Billing.
-      if (inv) sums[inv.status] = (sums[inv.status] || 0) + e.hours
-      else if (isBillablePending(e, invoiceByEntryId)) sums.Pending += e.hours
+      if (inv) {
+        sums[inv.status] = (sums[inv.status] || 0) + e.hours
+        total += e.hours
+      } else if (isBillablePending(e, invoiceByEntryId)) {
+        sums.Pending += e.hours
+        total += e.hours
+      }
     }
-    return Object.entries(sums)
+    const dist = Object.entries(sums)
       .filter(([, v]) => v > 0)
       .map(([name, value]) => ({
         key: name,
@@ -217,7 +305,8 @@ export function DashboardPage() {
         value: Number(value.toFixed(1)),
         color: STATUS_COLORS[name] ?? '#6b7280',
       }))
-  }, [data, invoiceByEntryId])
+    return { dist, total: Number(total.toFixed(1)) }
+  }, [filteredEntries, invoiceByEntryId])
 
   // Mismas horas que el donut de billing, pero repartidas por allocation en vez de
   // por estado de factura. Las categorías conocidas (null + los 4 valores del CHECK
@@ -225,9 +314,8 @@ export function DashboardPage() {
   // (p. ej. si el CHECK se ampliara) se agrega al final en vez de descartar sus horas
   // en silencio. El color sale de la KEY estable, no del label visible.
   const allocationDist = useMemo(() => {
-    if (!data) return []
     const sums = new Map()
-    for (const e of data.entries) {
+    for (const e of filteredEntries) {
       const key = e.allocation ?? null
       sums.set(key, (sums.get(key) || 0) + e.hours)
     }
@@ -243,28 +331,19 @@ export function DashboardPage() {
         color: allocationColor(key),
       }))
       .filter((d) => d.value > 0)
-  }, [data])
+  }, [filteredEntries])
 
-  // Ambos donuts reparten EXACTAMENTE las mismas entries (mismo data.entries,
-  // misma suma de e.hours), solo que particionadas distinto (por estado de factura
-  // vs por allocation). El total del centro tiene que ser el mismo en los dos, así
-  // que se calcula UNA vez sobre las horas crudas y se redondea una sola vez.
-  //
-  // Ojo: NO se suma billingDist/allocationDist, porque esos buckets ya vienen
-  // redondeados a 1 decimal y, al redondear por-bucket sobre particiones distintas,
-  // las dos sumas pueden diferir en 0.1 h (p. ej. dos entries de 0.25 h: juntas en un
-  // bucket dan 0.5; separadas en dos dan 0.3 + 0.3 = 0.6). Usar el total crudo evita
-  // ese drift entre los dos centros. Como contrapartida, en esos casos límite el
-  // centro puede diferir en 0.1 de la suma visible de su propia leyenda —el
-  // compromiso habitual de redondear las partes y el total por separado.
-  //
-  // Memoizado sobre [data] igual que billingDist/allocationDist (evita re-sumar
-  // todas las entries en cada render). Suma e.hours crudo, igual que el resto del
-  // componente (billingDist/allocationDist/kpis): confía en el tipo number, sin
-  // guards extra que solo cubrirían este consumidor y no los otros tres.
+  // Total del centro del donut de ALLOCATION: reparte TODAS las horas filtradas, así que
+  // su suma = este total. Se calcula UNA vez sobre las horas crudas y se redondea una sola
+  // vez, para que el centro no drifte por el redondeo por-bucket (dos entries de 0.25 h dan
+  // 0.5 juntas pero 0.3+0.3=0.6 separadas). El donut de BILLING usa su propio total
+  // (billing.total), que excluye las no-facturables — así su centro no incluye horas que
+  // sus slices no muestran (puede diferir 0.1 de la suma de la leyenda por el redondeo
+  // por-bucket, el mismo compromiso que el donut de Allocation).
+  // Memoizado sobre [filteredEntries] (que ya deriva de data).
   const totalHours = useMemo(
-    () => (data ? data.entries.reduce((sum, e) => sum + e.hours, 0) : 0),
-    [data],
+    () => filteredEntries.reduce((sum, e) => sum + e.hours, 0),
+    [filteredEntries],
   )
 
   const now = new Date()
@@ -304,6 +383,23 @@ export function DashboardPage() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.05 }}
         >
+          {/* Filtra los widgets de HORAS (donuts, Pending Hours, total). Los tiles de
+              facturas (Invoices/Collections/Payments) quedan globales. */}
+          <EntryFilterBar
+            dimensions={filterDimensions}
+            filters={filters}
+            onToggle={toggleValue}
+            onClear={clear}
+            isActive={isActive}
+            title="Dashboard filters"
+          />
+          {isActive && (
+            <p className="dash-filter-scope">
+              Filters apply to the hours widgets (the two donuts and hours totals). The
+              Invoices / Collections / Payments tiles stay org-wide.
+            </p>
+          )}
+
           {/* KPI Cards */}
           <div className="dash-kpis">
             {can('billing.create') && (
@@ -315,11 +411,11 @@ export function DashboardPage() {
                     <span className="dash-kpi__icon">
                       <Clock size={17} aria-hidden="true" />
                     </span>
-                    <Sparkline values={sparklines.pendingHours} />
+                    <Sparkline values={pendingHoursSparkline} />
                   </div>
                   <span className="dash-kpi__label">Pending Hours</span>
                   <span className="dash-kpi__value">
-                    {kpis.pendingHours.toFixed(1)}
+                    {pendingHours.toFixed(1)}
                     <span className="dash-kpi__unit"> h</span>
                   </span>
                   <span className="dash-kpi__hint">unbilled entries</span>
@@ -369,11 +465,13 @@ export function DashboardPage() {
 
           {/* Dos donuts: horas por estado de factura y por allocation, lado a lado. */}
           <div className="dash-main">
+            {/* Título aclara "billable hours": este donut cuenta sólo las facturables, así
+                que su centro puede ser menor que el del donut de Allocation (todas las horas). */}
             <HoursDonut
               icon={<TrendingUp size={14} />}
-              title="Billing Status Distribution"
-              data={billingDist}
-              total={totalHours}
+              title="Billing Status (billable hours)"
+              data={billing.dist}
+              total={billing.total}
             />
             <HoursDonut
               icon={<TrendingUp size={14} />}
