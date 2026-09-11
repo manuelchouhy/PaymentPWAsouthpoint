@@ -15,11 +15,19 @@ test('Payments: los selectores del picker "Hours to pay" tienen tipografía agra
   await expect(payBtn).toBeVisible()
   await payBtn.click()
 
-  const desc = page.locator('.overage-picker__desc').first()
-  await expect(desc).toBeVisible()
-  // La descripción de cada hora quedó en 14px (antes 12.5px).
-  const fontSize = await desc.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
-  expect(fontSize).toBeGreaterThanOrEqual(14)
+  const picker = page.locator('.overage-picker')
+  await expect(picker).toBeVisible()
+
+  const fontSizeOf = (sel: string) =>
+    picker
+      .locator(sel)
+      .first()
+      .evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+
+  // Los 3 selectores quedaron más grandes (antes: title 9.5, desc 12.5, hours 12).
+  expect(await fontSizeOf('.overage-picker__title')).toBeGreaterThanOrEqual(11)
+  expect(await fontSizeOf('.overage-picker__desc')).toBeGreaterThanOrEqual(14)
+  expect(await fontSizeOf('.overage-picker__hours')).toBeGreaterThanOrEqual(13)
 
   await page.keyboard.press('Escape')
 })
