@@ -98,7 +98,19 @@ Rol del contractor en el contrato (texto libre, ej. "Developer", "QA"). Campo de
 contrato, no un catálogo cerrado. En la UI el label visible es **"Role"** (inglés,
 como el resto de la interfaz); la columna DB es `role`.
 
-### Diseño
+### Projects and SOW
+
+**Task**:
+Una **unidad de trabajo real del proyecto en Zoho** — lo que el equipo ejecuta y
+contra lo que imputa horas (ej. "KPI dashboard", "Revenue projection calculation
+engine"). Cada proyecto tiene **una o varias** Tasks. Se **sincronizan desde
+Zoho** (no se cargan a mano) y se muestran en "Projects and SOW", agrupables por
+proyecto o por stage. Es un concepto de **ejecución**, distinto del alcance
+planificado del SOW.
+_Avoid_: confundir la Task con el desglose del SOW; una Task puede no haber
+estado nunca en el SOW.
+
+
 
 **Mockup** (`.scratch/pantallas-nuevas-mockup.html`):
 Fuente de verdad **solo del diseño** (colores, tokens, layout, tipografía). No es
@@ -110,6 +122,11 @@ fuente de verdad de comportamiento ni de semántica de dominio.
   "Pending" compartían la clase CSS `badge--pending` (gris sólido). Resuelto: "to
   bill" usa su propia clase `badge--tobill` (ámbar, como el `.pill.pend` del
   mockup); "Pending" sigue siendo exclusivamente el Billing Status.
+- **"Task" vs la tabla `project_tasks`.** El término de dominio **Task** (arriba)
+  es la unidad de trabajo real sincronizada de Zoho, en su **tabla propia**. NO es
+  la tabla `project_tasks`, que guarda el **desglose del SOW** (líneas de alcance
+  con horas estimadas y rol, cargadas a mano). Son cosas distintas y no se mezclan;
+  `project_tasks` hoy está vacía en todos los proyectos.
 - **Ámbar sobrecargado en badges**, a propósito: `badge--invoiced` (ámbar sólido =
   ya facturado) vs `badge--tobill` / `badge--alloc-overage` (ámbar translúcido =
   sin facturar / overage). No conviven en la misma tabla, así que sólido-vs-
