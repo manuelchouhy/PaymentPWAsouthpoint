@@ -1056,7 +1056,27 @@ code { font-family: var(--mono); font-size: .92em; color: var(--text-soft); }
 /* Número de proyecto delante del nombre en el encabezado del grupo (Billing):
    mono y atenuado para que el nombre siga siendo lo dominante. */
 .bill-project__num { color: var(--text-soft); font-family: var(--mono); font-size: 12px; font-weight: 600; margin-right: 8px; }
-.bill-project__hours { color: var(--text-soft); font-family: var(--mono); font-size: 12px; }
+/* Horas del proyecto siempre a la derecha: así la columna de totales queda alineada
+   entre proyectos hermanos, con o sin badge. */
+.bill-project__hours { color: var(--text-soft); font-family: var(--mono); font-size: 12px; margin-left: auto; }
+/* C10: horas ya facturadas del proyecto, siempre visibles. Pill atenuado para no
+   competir con las horas pendientes (lo accionable). Queda inline tras el nombre; las
+   horas totales se van solas a la derecha por su propio margin-left:auto.
+   align-self: center porque el toggle alinea por baseline y el pill tiene padding.
+   Borde con --line-stronger: --line-strong coincide con --surface-3 en light (mismo
+   #E4E4E7) y el borde no se vería. */
+.bill-project__invoiced {
+  align-self: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-stronger);
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
 .bill-project .bill-week { padding-left: 12px; }
 /* Respiración vertical de la tabla anidada: que las filas no queden pegadas al
    header de la semana ni al borde inferior de la tarjeta / a la siguiente semana. */
