@@ -31,13 +31,6 @@ const RECORD_FIELDS = [
   { key: 'contractNumber', label: 'Contract Number' },
 ]
 
-// Etiquetas legibles para el log de auditoría.
-const FIELD_LABELS = Object.fromEntries(
-  [...OVERVIEW_FIELDS, ...RECORD_FIELDS].map((f) => [f.key, f.label]),
-)
-FIELD_LABELS.projectName = 'Project Name'
-FIELD_LABELS.contractExpirationDate = 'Contract Expiration Date'
-
 function OverviewSlide({
   project,
   stageCount,
@@ -914,8 +907,6 @@ export function ProjectDetailCarousel({
   onEdit,
   onEditSow,
 }) {
-  const [history, setHistory] = useState([])
-  const [loadingHistory, setLoadingHistory] = useState(true)
   const [stageCount, setStageCount] = useState(null)
   const [stageCountError, setStageCountError] = useState(false)
   const [changeRequests, setChangeRequests] = useState([])
@@ -1002,18 +993,6 @@ export function ProjectDetailCarousel({
   }
 
   useScrollLock()
-
-  useEffect(() => {
-    let cancelled = false
-    setLoadingHistory(true)
-    api.projects.getHistory(project.id)
-      .then((rows) => !cancelled && setHistory(rows))
-      .catch(() => !cancelled && setHistory([]))
-      .finally(() => !cancelled && setLoadingHistory(false))
-    return () => {
-      cancelled = true
-    }
-  }, [project.id])
 
   useEffect(() => {
     let cancelled = false
@@ -1179,33 +1158,6 @@ export function ProjectDetailCarousel({
           </div>
         </div>
 
-        <div className="drawer__section">
-          <span className="drawer__section-label">Audit log</span>
-          {loadingHistory ? (
-            <p className="drawer__empty">Loading history…</p>
-          ) : history.length === 0 ? (
-            <p className="drawer__empty">No changes recorded.</p>
-          ) : (
-            <ul className="drawer__history">
-              {history.map((row) => (
-                <li key={row.id} className="drawer__history-row">
-                  <span className="drawer__history-status">
-                    <strong>{FIELD_LABELS[row.fieldName] ?? row.fieldName}</strong>
-                  </span>
-                  <span className="drawer__history-status">
-                    <span className="drawer__history-from">{row.oldValue || '—'}</span>
-                    <ArrowRight size={12} aria-hidden="true" />
-                    {row.newValue || '—'}
-                  </span>
-                  <span className="drawer__history-meta">
-                    {formatDateTime(row.changedAt)}
-                    {row.changedBy ? ` · ${row.changedBy}` : ''}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
       </motion.div>
     </motion.div>
   )
