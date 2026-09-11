@@ -4661,6 +4661,18 @@ th.col-pop { text-align: center; }
 
 /* --- Tablas editables (severidad / tasks) — no son filas clickeables ------ */
 .table--form { table-layout: auto; }
+/* Tabla de tasks del wizard (con columna Stage): layout fijo + inputs al 100% para que
+   las columnas ENTREN en el modal (Stage/Est.Hours/Remove acotadas, Task Name/Role toman
+   el resto). Especificidad .table.table--tasks (0,2,0) para ganarle a .table--form
+   {table-layout:auto} sin depender del orden. El .table-wrap scrollea horizontal sólo si
+   de verdad no entra (con fixed+100% no debería). Sin min-width: con la columna Stage
+   oculta (4 col) no fuerza scroll en modales angostos. */
+.table.table--tasks { table-layout: fixed; }
+.table.table--tasks input.field__input,
+.table.table--tasks select.field__input { width: 100%; min-width: 0; }
+.table.table--tasks .col-stage { width: 140px; }
+.table.table--tasks .col-num { width: 110px; }
+.table.table--tasks .col-rm { width: 52px; }
 .table--form tbody tr { cursor: default; user-select: text; }
 .table--form tbody tr:nth-child(4n+3) td, .table--form tbody tr:nth-child(4n+4) td { background: transparent; }
 .table--form tbody tr:hover td { background: transparent; box-shadow: none; }
