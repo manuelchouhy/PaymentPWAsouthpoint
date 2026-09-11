@@ -1,20 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, ChevronLeft, ChevronRight, FileText, Pencil, Plus, Settings2, Upload, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileText, Pencil, Plus, Settings2, Upload, X } from 'lucide-react'
 import { ContractBadge } from './ContractBadge'
 import { contractStatus, daysRemaining } from '../lib/projectsData'
 import { CR_TYPE_LABELS, effectiveBudgetHours } from '../lib/changeRequestsData'
 import { api } from '../lib/api'
 import { fileNameFromPath, formatDate, formatDateTime } from '../lib/format'
 import { useScrollLock } from '../lib/useScrollLock'
-
-// El slide 1 muestra lo que define el mock, en su orden: Client, SOW status,
-// Project, SOW number, Budget hours, Model, Period, Stage. Es la vista del SOW,
-// no la ficha administrativa del proyecto.
-const OVERVIEW_FIELDS = [
-  { key: 'client', label: 'Client' },
-  { key: 'projectName', label: 'Project' },
-]
 
 // El resto de la ficha —lo que trae el sync de Zoho y los datos de contrato—
 // baja a un bloque desplegable dentro del mismo slide. No se elimina: se saca
