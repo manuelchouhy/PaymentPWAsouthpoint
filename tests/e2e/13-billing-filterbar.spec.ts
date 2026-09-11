@@ -24,6 +24,7 @@ test('Billing: la barra de filtros compartida renderiza, filtra y limpia', async
   const firstOpt = page.locator('.msel__panel .msel__opt').first()
   await firstOpt.waitFor({ state: 'visible' })
   await firstOpt.click()
+  await page.keyboard.press('Escape') // cerrar el panel para que no tape a Clear
 
   // Con un filtro activo aparece Clear.
   const clear = bar.locator('.filterbar__clear')

@@ -371,6 +371,18 @@ export function BillingPage() {
     [clients, options.clients],
   )
 
+  // Dimensiones de la barra de filtros (EntryFilterBar). Memoizadas para no rearmar el
+  // array en cada render y evitar re-renders de la barra y sus dropdowns.
+  const filterDimensions = useMemo(
+    () => [
+      { key: 'clients', label: 'Client', options: clientOptions },
+      { key: 'projectNumbers', label: 'Project #', options: options.projectNumbers },
+      { key: 'projects', label: 'Project', options: options.projects },
+      { key: 'contractors', label: 'Contractor', options: options.contractors },
+    ],
+    [clientOptions, options],
+  )
+
   // Todas las filas que pasan los filtros del usuario, sin mirar allocation.
   const filteredAllAllocations = useMemo(
     () => applyEntryFilters(entriesConCliente, filters, invoiceByEntryId, masterNames),
@@ -1065,12 +1077,7 @@ export function BillingPage() {
       {status === 'ready' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4, delay: 0.05 }}>
           <EntryFilterBar
-            dimensions={[
-              { key: 'clients', label: 'Client', options: clientOptions },
-              { key: 'projectNumbers', label: 'Project #', options: options.projectNumbers },
-              { key: 'projects', label: 'Project', options: options.projects },
-              { key: 'contractors', label: 'Contractor', options: options.contractors },
-            ]}
+            dimensions={filterDimensions}
             filters={filters}
             onToggle={toggleValue}
             onClear={clear}
