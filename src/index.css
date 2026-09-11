@@ -4661,6 +4661,15 @@ th.col-pop { text-align: center; }
 
 /* --- Tablas editables (severidad / tasks) — no son filas clickeables ------ */
 .table--form { table-layout: auto; }
+/* Tabla de tasks del wizard (con columna Stage): layout fijo + inputs al 100% para que
+   las 5 columnas ENTREN en el modal (col-num/Stage/Remove acotadas, Task Name/Role toman
+   el resto). Su .table-wrap scrollea horizontal como fallback si el modal fuera angosto. */
+.table--tasks { table-layout: fixed; width: 100%; min-width: 560px; }
+.table--tasks input.field__input,
+.table--tasks select.field__input { width: 100%; min-width: 0; }
+.table--tasks .col-stage { width: 140px; }
+.table--tasks .col-num { width: 96px; }
+.table--tasks .col-rm { width: 40px; }
 .table--form tbody tr { cursor: default; user-select: text; }
 .table--form tbody tr:nth-child(4n+3) td, .table--form tbody tr:nth-child(4n+4) td { background: transparent; }
 .table--form tbody tr:hover td { background: transparent; box-shadow: none; }

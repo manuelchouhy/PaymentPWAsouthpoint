@@ -1149,15 +1149,15 @@ export function ProjectWizardModal({ initial = null, onClose, onSubmit }) {
                 form.tasks.length === 0 &&
                 !tasksLoadError && <p className="field__hint">No tasks recorded.</p>}
               {(existingTasks.length > 0 || form.tasks.length > 0) && (
-                <div className="table-wrap">
-                  <table className="table table--form">
+                <div className="table-wrap table-wrap--scroll">
+                  <table className="table table--form table--tasks">
                     <thead>
                       <tr>
                         <th scope="col">Task Name</th>
                         <th scope="col">Role</th>
-                        {showStageCol && <th scope="col">Stage</th>}
+                        {showStageCol && <th scope="col" className="col-stage">Stage</th>}
                         <th scope="col" className="col-num">Est. Hours</th>
-                        <th scope="col" aria-label="Remove" />
+                        <th scope="col" className="col-rm" aria-label="Remove" />
                       </tr>
                     </thead>
                     <tbody>
