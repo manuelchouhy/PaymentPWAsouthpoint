@@ -42,7 +42,7 @@ export function buildProjectTaskTree(stages = [], tasks = []) {
     stageNodes.push({
       key: 'no-stage',
       stageId: null,
-      label: 'Tasks',
+      label: 'No stage',
       meta: null,
       tasks: orphans,
     })

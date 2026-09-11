@@ -31,7 +31,7 @@ test('Projects & SOW: el slide "Stages & Tasks" muestra los tasks reales del pro
   // árbol usa los tasks reales. (No se asertan nombres/horas exactos para no acoplar a la
   // seed; sólo que hay al menos un task real con sus horas.)
   const tasksNode = modal.locator('.stage-tree__node', {
-    has: page.locator('.stage-tree__label', { hasText: /^Tasks$/ }),
+    has: page.locator('.stage-tree__label', { hasText: /^No stage$/ }),
   })
   await expect(tasksNode).toBeVisible()
 

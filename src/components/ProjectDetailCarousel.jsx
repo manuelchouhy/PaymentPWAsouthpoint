@@ -5,6 +5,7 @@ import { ContractBadge } from './ContractBadge'
 import { contractStatus, daysRemaining } from '../lib/projectsData'
 import { CR_TYPE_LABELS, effectiveBudgetHours } from '../lib/changeRequestsData'
 import { buildProjectTaskTree } from '../lib/projectTaskTree'
+import { mergeProjectTasks } from '../lib/mergeProjectTasks'
 import { api } from '../lib/api'
 import { fileNameFromPath, formatDate, formatDateTime } from '../lib/format'
 import { useScrollLock } from '../lib/useScrollLock'
@@ -934,9 +935,9 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
               ) : (
                 <ul className="stage-tree__tasks">
                   {node.tasks.map((t, i) => (
-                    // id ?? `idx-${i}`: en data demo/legacy un id nulo no debe colapsar
-                    // filas ni chocar con un id real igual al índice (lista read-only).
-                    <li key={t.id ?? `idx-${i}`} className="stage-tree__task">
+                    // taskName es único dentro del merge (se agrupa por nombre); fallback a
+                    // idx por si acaso (lista read-only).
+                    <li key={t.taskName || `idx-${i}`} className="stage-tree__task">
                       <span className="stage-tree__task-name">
                         <span className="stage-tree__task-name-text">{t.taskName || '—'}</span>
                         {/* id del task (task_number de Zoho, el mismo de "Task #" en
@@ -1200,20 +1201,24 @@ export function ProjectDetailCarousel({
     }
   }, [project.id, project.hasStages])
 
-  // Tasks del slide "Stages & Tasks" (slice 12). Carga perezosa: recién cuando el
-  // usuario abre el slide (treeRequested). Se traen los tasks REALES del proyecto (los
-  // distintos `task` de sus horas cargadas en Zoho, con sus horas) — NO los task_name
-  // del scope del SOW (project_tasks), que casi nunca se cargan. Por nombre de proyecto,
-  // que es como matchean las horas (no hay FK con project_tasks). Los stages ya los trae
-  // el efecto de arriba.
+  // Tasks del slide "Stages & Tasks". Carga perezosa (treeRequested). Une los tasks
+  // REGISTRADOS del SOW (project_tasks, con su stage asignado) con los LOGUEADOS (los
+  // distintos `task` de las horas de Zoho, con sus horas), matcheando por nombre — así el
+  // árbol muestra cada task bajo su stage (o "No stage" si no tiene) con su consumido. Los
+  // stages ya los trae el efecto de arriba.
   useEffect(() => {
     if (!treeRequested) return
     let cancelled = false
     setTreeLoading(true)
     setTreeError(false)
-    Promise.resolve()
-      .then(() => api.projectTasks.logged(project.projectName))
-      .then((tasks) => !cancelled && setTreeTasks(Array.isArray(tasks) ? tasks : []))
+    Promise.all([
+      Promise.resolve().then(() => api.projectTasks.list(project.id)),
+      Promise.resolve().then(() => api.projectTasks.logged(project.projectName)),
+    ])
+      .then(([registered, logged]) => {
+        if (cancelled) return
+        setTreeTasks(mergeProjectTasks(registered ?? [], logged ?? []))
+      })
       .catch((error) => {
         if (cancelled) return
         console.error('No se pudieron cargar los tasks del proyecto:', error)
@@ -1223,7 +1228,7 @@ export function ProjectDetailCarousel({
     return () => {
       cancelled = true
     }
-  }, [project.projectName, treeRequested])
+  }, [project.id, project.projectName, treeRequested])
 
   useEffect(() => {
     function onKeyDown(event) {
