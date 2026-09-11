@@ -17,8 +17,6 @@ import {
   useEntryFilters,
   applyEntryFilters,
   buildFilterOptions,
-  clientFilterOptions,
-  OTHER_CLIENT,
 } from '../lib/useEntryFilters'
 import { EntryFilterBar } from '../components/EntryFilterBar'
 import { api } from '../lib/api'
@@ -493,18 +491,19 @@ export function PaymentsPage() {
     const ids = new Set()
     for (const r of invoiceRows)
       for (const c of r.contractors) for (const id of c.entryIds ?? []) ids.add(String(id))
-    for (const g of [...overagePending, ...spInternalPending, ...overagePaid, ...spInternalPaid])
-      for (const id of g.entryIds ?? []) ids.add(String(id))
+    const addGroupIds = (list) => {
+      for (const g of list) for (const id of g.entryIds ?? []) ids.add(String(id))
+    }
+    addGroupIds(overagePending)
+    addGroupIds(spInternalPending)
+    addGroupIds(overagePaid)
+    addGroupIds(spInternalPaid)
     return enrichedEntries.filter((e) => ids.has(String(e.id)))
   }, [invoiceRows, overagePending, spInternalPending, overagePaid, spInternalPaid, enrichedEntries])
 
   const filterOptions = useMemo(
     () => buildFilterOptions(displayedEntries, filters, NO_INVOICE_MAP, masterNames),
     [displayedEntries, filters, masterNames],
-  )
-  const clientOptions = useMemo(
-    () => clientFilterOptions(clients, filterOptions.clients.includes(OTHER_CLIENT)),
-    [clients, filterOptions.clients],
   )
   // Ids (string) de las horas MOSTRADAS que pasan el filtro de dimensiones. null = ninguna
   // dimensión de horas activa → no se filtra por horas.
@@ -521,20 +520,39 @@ export function PaymentsPage() {
     !matchingEntryIds || (entryIds ?? []).some((id) => matchingEntryIds.has(String(id)))
   const filterDimensions = useMemo(
     () => [
-      { key: 'clients', label: 'Client', options: clientOptions },
+      // Todas las dimensiones (Client incluido) salen de displayedEntries → los dropdowns
+      // sólo ofrecen valores que respaldan algo mostrado (no vacían la página).
+      { key: 'clients', label: 'Client', options: filterOptions.clients },
       { key: 'projectNumbers', label: 'Project #', options: filterOptions.projectNumbers },
       { key: 'projects', label: 'Project', options: filterOptions.projects },
       { key: 'contractors', label: 'Contractor', options: filterOptions.contractors },
       { key: 'paymentStatuses', label: 'Status', options: PAYMENT_STATUS_OPTIONS },
     ],
-    [clientOptions, filterOptions],
+    [filterOptions],
   )
 
-  // Filtra una lista de filas invoice-less (cada una con .entryIds) por el filtro de
-  // HORAS. Helper único para no repetir el cruce en las 4 secciones.
+  // Filtra las filas invoice-less (cada una con .entryIds/.entries/.hours) por el filtro
+  // de HORAS y, con un filtro activo, las ACOTA a las horas que matchean: un grupo por
+  // contractor puede cruzar clientes/proyectos, así que además de decidir si se ve, se le
+  // recortan las horas/entradas/meta al cliente/proyecto filtrado (si no, mostraría el
+  // total cruzado del contractor y el picker pre-pagaría horas de otro cliente).
   const filterByEntries = useCallback(
-    (list) => (list ?? []).filter((x) => passesEntryFilter(x.entryIds)),
-    // passesEntryFilter sólo depende de matchingEntryIds.
+    (list) => {
+      const kept = (list ?? []).filter((x) => passesEntryFilter(x.entryIds))
+      if (!matchingEntryIds) return kept
+      return kept.map((g) => {
+        const entries = (g.entries ?? []).filter((e) => matchingEntryIds.has(String(e.id)))
+        const entryIds = (g.entryIds ?? []).filter((id) => matchingEntryIds.has(String(id)))
+        return {
+          ...g,
+          entries,
+          entryIds,
+          hours: entries.reduce((s, e) => s + (Number(e.hours) || 0), 0),
+          meta: formatGroupMeta(summarizeEntries(entries)),
+        }
+      })
+    },
+    // passesEntryFilter/narrow sólo dependen de matchingEntryIds.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [matchingEntryIds],
   )
@@ -585,16 +603,18 @@ export function PaymentsPage() {
     let pendingHours = 0
     for (const r of filteredInvoiceRows) {
       if (!isPayable(r.inv.status)) continue
-      pendingHours += r.contractors.reduce((s, ic) => {
+      // Horas pendientes de ESTA factura que cuentan bajo el filtro: contractors no
+      // pagados cuyas horas matchean (con filtro activo). Sin filtro, todos los pendientes.
+      const invPending = r.contractors.reduce((s, ic) => {
         if (ic.paid) return s
-        // Con filtro de horas activo, sólo cuentan los contractors cuyas horas matchean
-        // (si no, "Hours pending" sumaría también los contractors no filtrados de una
-        // factura que pasó por otro contractor).
         if (matchingEntryIds && !(ic.entryIds ?? []).some((id) => matchingEntryIds.has(String(id))))
           return s
         return s + (Number(ic.hours) || 0)
       }, 0)
-      if (r.dueDate) {
+      pendingHours += invPending
+      // Overdue/Due sólo cuentan si la factura tiene horas pendientes que matchean el
+      // filtro: si el único contractor que matchea ya está pagado, no es "pendiente".
+      if (r.dueDate && invPending > 0) {
         if (r.alertLevel === 'overdue') overdue += 1
         if (r.daysUntilDue >= 0 && r.daysUntilDue <= 7) dueThisWeek += 1
       }
