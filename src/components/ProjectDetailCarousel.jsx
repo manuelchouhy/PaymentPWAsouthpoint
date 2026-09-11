@@ -952,15 +952,18 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
                           difiere (así un task con horas rechazadas/overage no queda como
                           "0 h consumed" a secas). formatHours redondea. */}
                       {(() => {
-                        // Comparación sobre los valores MOSTRADOS (redondeados): así no
-                        // aparece un "10 h consumed · 10 h logged" redundante por una
-                        // diferencia sub-0.05, y se muestra "logged" siempre que difiera.
-                        const consumedLabel = formatHours(Number(t.consumedHours ?? 0))
-                        const totalLabel = formatHours(Number(t.hours ?? 0))
+                        const consumed = Number(t.consumedHours ?? 0)
+                        const total = Number(t.hours ?? 0)
+                        // Sin horas: '—' (no "0 h consumed"). Comparación sobre los valores
+                        // MOSTRADOS (redondeados): sin "10 h consumed · 10 h logged"
+                        // redundante por una diferencia sub-0.05; "logged" si difieren.
+                        const consumedLabel = formatHours(consumed)
+                        const totalLabel = formatHours(total)
                         return (
                           <span className="stage-tree__task-meta">
-                            {`${consumedLabel} h consumed`}
-                            {consumedLabel !== totalLabel ? ` · ${totalLabel} h logged` : ''}
+                            {total === 0 && consumed === 0
+                              ? '—'
+                              : `${consumedLabel} h consumed${consumedLabel !== totalLabel ? ` · ${totalLabel} h logged` : ''}`}
                           </span>
                         )
                       })()}

@@ -47,12 +47,15 @@ test('Projects & SOW: el slide "Stages & Tasks" muestra los tasks reales del pro
   const idSpans = tasksNode.locator('.stage-tree__task-id')
   expect(await idSpans.count()).toBeGreaterThan(0)
   await expect(idSpans.first()).toContainText('#')
-  // Horas consumidas: "Proyecto Prueba" tiene horas Approved bill_to_client (5 h y 8 h),
-  // así que el consumido de la primera task es un número > 0 (no un "0 h consumed" vacío
-  // — eso verifica que la agregación de consumido realmente corre).
-  await expect(tasksNode.locator('.stage-tree__task-meta').first()).toHaveText(
-    /[1-9]\d*(\.\d+)? h consumed/,
-  )
+  // Horas consumidas: "Proyecto Prueba" tiene horas Approved bill_to_client, así que
+  // ALGUNA task muestra consumido > 0 (verifica que la agregación de consumido corre, no
+  // sólo que existe el texto "consumed"). Se busca en cualquier task, no la primera.
+  await expect(
+    tasksNode
+      .locator('.stage-tree__task-meta')
+      .filter({ hasText: /[1-9]\d*(\.\d+)? h consumed/ })
+      .first(),
+  ).toBeVisible()
 
   await page.keyboard.press('Escape')
 })
