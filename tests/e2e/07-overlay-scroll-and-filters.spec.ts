@@ -134,8 +134,7 @@ test.describe('Entries · listas de filtros entrelazadas', () => {
       .click()
     await page.keyboard.press('Escape')
 
-    await field('Contractor').locator('.msel__btn').click()
-    await expect(field('Contractor').locator('.msel__empty')).toBeVisible()
-    await expect(field('Contractor').locator('.msel__opt')).toHaveCount(0)
+    // La grilla no puede mostrar nada → el dropdown de Contractor queda vacío.
+    expect(await optionsOf(page, 'Contractor')).toEqual([])
   })
 })
