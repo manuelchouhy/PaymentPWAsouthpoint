@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, BellRing, ChevronDown, ChevronRight, Download } from 'lucide-react'
@@ -364,16 +364,28 @@ export function PaymentsPage() {
     !matchingEntryIds || (entryIds ?? []).some((id) => matchingEntryIds.has(String(id)))
 
   const paymentFilterActive = isActive || paymentStatuses.length > 0
-  const togglePaymentStatus = (value) =>
-    setPaymentStatuses((prev) =>
-      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
-    )
-  const onFilterToggle = (key, value) =>
-    key === 'paymentStatuses' ? togglePaymentStatus(value) : toggleValue(key, value)
-  const onFilterClear = () => {
+  // Callbacks estables + filters memoizado: así el EntryFilterBar (React.memo) no se
+  // re-renderiza en renders no relacionados de la página.
+  const onFilterToggle = useCallback(
+    (key, value) => {
+      if (key === 'paymentStatuses') {
+        setPaymentStatuses((prev) =>
+          prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+        )
+      } else {
+        toggleValue(key, value)
+      }
+    },
+    [toggleValue],
+  )
+  const onFilterClear = useCallback(() => {
     clear()
     setPaymentStatuses([])
-  }
+  }, [clear])
+  const combinedFilters = useMemo(
+    () => ({ ...filters, paymentStatuses }),
+    [filters, paymentStatuses],
+  )
   const filterDimensions = useMemo(
     () => [
       { key: 'clients', label: 'Client', options: clientOptions },
@@ -426,8 +438,11 @@ export function PaymentsPage() {
   // transitorio antes de que la RPC flipee a Paid) no tiene pendientes → se oculta.
   const invoiceRows = useMemo(() => {
     const rows = []
+    // Las Paid se incluyen si el toggle "Show paid" está on O si el filtro de Estado
+    // pide 'Paid' (sin esto, filtrar Estado='Paid' daría la grilla vacía).
+    const includePaid = showPaid || paymentStatuses.includes('Paid')
     for (const inv of invoices) {
-      if (!(isPayable(inv.status) || (showPaid && inv.status === 'Paid'))) continue
+      if (!(isPayable(inv.status) || (includePaid && inv.status === 'Paid'))) continue
       const completion = invoiceCompletion(contractorsByInvoice.get(inv.id) ?? [], payments)
       // Decora cada contractor una sola vez (acá, memoizado) con su desglose de horas
       // y el rango de semanas: así el render no rejoinea/reagrega en cada toggle/toast.
@@ -469,7 +484,7 @@ export function PaymentsPage() {
       })
     }
     return rows
-  }, [invoices, contractorsByInvoice, payments, showPaid, warningBefore, entryById])
+  }, [invoices, contractorsByInvoice, payments, showPaid, paymentStatuses, warningBefore, entryById])
 
   // Horas invoice-less pendientes de pago, por contractor (overage / sp_internal).
   // El meta condensado (proyecto/cliente/semana) de cada grupo se computa acá, una vez,
@@ -496,6 +511,27 @@ export function PaymentsPage() {
     return { overage: overage.map(decorate), spInternal: spInternal.map(decorate) }
   }, [payments, enrichedEntries, entryById])
 
+  // Grupos/pagos invoice-less que pasan el filtro de HORAS (memoizados para no rehacer
+  // el cruce en cada render). El "Estado" de pago no aplica a lo invoice-less; se filtran
+  // sólo por cliente/proyecto/#/contractor. Se incluyen los PAGADOS (renderPaid) para que
+  // el filtro sea consistente en toda la página, no sólo en las facturas y lo pendiente.
+  const overagePendingF = useMemo(
+    () => overagePending.filter((g) => passesEntryFilter(g.entryIds)),
+    [overagePending, matchingEntryIds],
+  )
+  const spInternalPendingF = useMemo(
+    () => spInternalPending.filter((g) => passesEntryFilter(g.entryIds)),
+    [spInternalPending, matchingEntryIds],
+  )
+  const overagePaidF = useMemo(
+    () => overagePaid.filter((r) => passesEntryFilter(r.entryIds)),
+    [overagePaid, matchingEntryIds],
+  )
+  const spInternalPaidF = useMemo(
+    () => spInternalPaid.filter((r) => passesEntryFilter(r.entryIds)),
+    [spInternalPaid, matchingEntryIds],
+  )
+
   // Ids (string) de las horas YA pagadas: lo usa el picker "Hours to pay" para
   // marcar el estado de cada hora (entryPaymentStatus). Las pendientes que muestra
   // el picker dan 'pending'; una ya pagada daría 'paid' (defensivo).
@@ -506,13 +542,26 @@ export function PaymentsPage() {
   // el display y en el submit para que no puedan divergir.
   const isPending = (entry) => entryPaymentStatus(entry, paidEntryIds) === 'pending'
 
-  // KPIs sobre las facturas pendientes de pago. Total pendiente en HORAS (suma de las
-  // horas de los contractors todavía sin pagar en las facturas pagables).
+  // Facturas que pasan la BARRA de filtros (horas: cliente/proyecto/#/contractor, +
+  // Estado de pago), SIN el filtro de alertas (que lo manejan los chips). Es la base
+  // común de los KPIs y de la grilla, para que el header y las filas no diverjan.
+  const filteredInvoiceRows = useMemo(
+    () =>
+      invoiceRows.filter((r) => {
+        if (paymentStatuses.length > 0 && !paymentStatuses.includes(r.inv.status)) return false
+        const entryIds = r.contractors.flatMap((c) => c.entryIds ?? [])
+        return passesEntryFilter(entryIds)
+      }),
+    [invoiceRows, paymentStatuses, matchingEntryIds],
+  )
+
+  // KPIs sobre las facturas FILTRADAS pendientes de pago. Total pendiente en HORAS (suma
+  // de las horas de los contractors todavía sin pagar en las facturas pagables).
   const kpis = useMemo(() => {
     let overdue = 0
     let dueThisWeek = 0
     let pendingHours = 0
-    for (const r of invoiceRows) {
+    for (const r of filteredInvoiceRows) {
       if (!isPayable(r.inv.status)) continue
       pendingHours += r.contractors.reduce(
         (s, ic) => s + (ic.paid ? 0 : Number(ic.hours) || 0),
@@ -524,23 +573,14 @@ export function PaymentsPage() {
       }
     }
     return { overdue, dueThisWeek, pendingHours }
-  }, [invoiceRows])
+  }, [filteredInvoiceRows])
 
   const rows = useMemo(() => {
-    const filtered = invoiceRows.filter((r) => {
-      if (alertFilter === 'overdue' && r.alertLevel !== 'overdue') return false
-      if (
-        alertFilter === 'dueThisWeek' &&
-        !(Boolean(r.dueDate) && r.daysUntilDue >= 0 && r.daysUntilDue <= 7)
-      ) {
-        return false
-      }
-      // Estado de pago de la factura (dimensión "Estado" de la barra).
-      if (paymentStatuses.length > 0 && !paymentStatuses.includes(r.inv.status)) return false
-      // Filtro de horas (cliente/proyecto/#/contractor): la factura pasa si alguna de
-      // sus horas (de cualquier contractor) matchea.
-      const entryIds = r.contractors.flatMap((c) => c.entryIds ?? [])
-      return passesEntryFilter(entryIds)
+    const filtered = filteredInvoiceRows.filter((r) => {
+      if (alertFilter === 'overdue') return r.alertLevel === 'overdue'
+      if (alertFilter === 'dueThisWeek')
+        return Boolean(r.dueDate) && r.daysUntilDue >= 0 && r.daysUntilDue <= 7
+      return true
     })
     // Pagables primero (Invoiced antes que Paid); dentro, vencidos arriba y luego por
     // fecha de vencimiento. Las Paid (sin deadline) caen al final.
@@ -550,7 +590,7 @@ export function PaymentsPage() {
         ALERT_RANK[a.alertLevel] - ALERT_RANK[b.alertLevel] ||
         (a.dueDate ?? '9999-12-31').localeCompare(b.dueDate ?? '9999-12-31'),
     )
-  }, [invoiceRows, alertFilter, paymentStatuses, matchingEntryIds])
+  }, [filteredInvoiceRows, alertFilter])
 
   // Pago de UN contractor de una factura agrupada. Al completar el último, la factura
   // pasa a Paid. Maneja carreras (already_paid / not_payable / stale) recargando.
@@ -917,7 +957,7 @@ export function PaymentsPage() {
         >
           <EntryFilterBar
             dimensions={filterDimensions}
-            filters={{ ...filters, paymentStatuses }}
+            filters={combinedFilters}
             onToggle={onFilterToggle}
             onClear={onFilterClear}
             isActive={paymentFilterActive}
@@ -1097,15 +1137,12 @@ export function PaymentsPage() {
           {/* Horas invoice-less a pagar (sin factura al cliente): overage y sp_internal. */}
           {/* Los grupos invoice-less se filtran sólo por horas (cliente/proyecto/#/
               contractor); el "Estado" es de pago de factura y no aplica acá. */}
-          {renderToPay('overage', overagePending.filter((g) => passesEntryFilter(g.entryIds)))}
-          {renderToPay(
-            'sp_internal',
-            spInternalPending.filter((g) => passesEntryFilter(g.entryIds)),
-          )}
+          {renderToPay('overage', overagePendingF)}
+          {renderToPay('sp_internal', spInternalPendingF)}
 
           {/* Pagos invoice-less ya hechos (read-only), separados por allocation. */}
-          {renderPaid('overage', overagePaid)}
-          {renderPaid('sp_internal', spInternalPaid)}
+          {renderPaid('overage', overagePaidF)}
+          {renderPaid('sp_internal', spInternalPaidF)}
         </motion.div>
       )}
 
