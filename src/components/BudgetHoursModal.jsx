@@ -85,27 +85,32 @@ export function BudgetHoursModal({ project, onClose, onSubmit }) {
   // base_budget_hours en un proyecto cuyo budget vive en sus stages.
   const hasStages = Boolean(project.hasStages) || stages.length > 0
 
+  // Parseo memoizado una sola vez por stage (y del base): lo consumen el total en
+  // vivo, la validación y cada fila — sin repetir parseBudgetInput 3× por stage.
+  const parsedByStage = useMemo(
+    () => Object.fromEntries(stages.map((s) => [s.id, parseBudgetInput(stageInputs[s.id], { allowEmpty: true, allowZero: true })])),
+    [stages, stageInputs],
+  )
+  const parsedBase = parseBudgetInput(baseBudgetInput, { allowEmpty: true, allowZero: true })
+
   // Total/activo en vivo: se reusa el mismo resolver que Client Summary, mapeando
-  // los inputs actuales a budgets parseados, para que el número que ve el usuario
-  // al editar sea exactamente el que se va a guardar.
+  // los inputs parseados a budgets, para que el número que ve el usuario al editar
+  // sea exactamente el que se va a guardar.
   const live = useMemo(() => {
-    const parsedStages = stages.map((s) => ({
-      id: s.id,
-      budgetHours: parseBudgetInput(stageInputs[s.id], { allowEmpty: true, allowZero: true }).value,
-    }))
+    const parsedStages = stages.map((s) => ({ id: s.id, budgetHours: parsedByStage[s.id]?.value ?? null }))
     return resolveProjectBudget(
-      { baseBudgetHours: parseBudgetInput(baseBudgetInput, { allowEmpty: true, allowZero: true }).value, activeStageId },
+      { baseBudgetHours: parsedBase.value, activeStageId },
       hasStages ? parsedStages : [],
       [],
     )
-  }, [stages, stageInputs, baseBudgetInput, activeStageId, hasStages])
+  }, [stages, parsedByStage, parsedBase.value, activeStageId, hasStages])
 
   const taskTree = useMemo(() => buildProjectTaskTree(stages, treeTasks), [stages, treeTasks])
 
   // Validación en vivo: cualquier input inválido bloquea Save.
   const inputError = hasStages
-    ? stages.map((s) => parseBudgetInput(stageInputs[s.id], { allowEmpty: true, allowZero: true }).error).find(Boolean) ?? null
-    : parseBudgetInput(baseBudgetInput, { allowEmpty: true, allowZero: true }).error
+    ? stages.map((s) => parsedByStage[s.id]?.error).find(Boolean) ?? null
+    : parsedBase.error
   // Un fallo al traer stages solo es fatal para un proyecto CON stages: el base
   // budget (proyecto sin stages) vive en base_budget_hours y no depende de ellos.
   // Un proyecto con stages pero sin ninguno listado no tiene nada editable acá →
@@ -213,9 +218,7 @@ export function BudgetHoursModal({ project, onClose, onSubmit }) {
                 </thead>
                 <tbody>
                   {stages.map((s) => {
-                    const err = touched
-                      ? parseBudgetInput(stageInputs[s.id], { allowEmpty: true, allowZero: true }).error
-                      : null
+                    const err = touched ? parsedByStage[s.id]?.error : null
                     return (
                       <tr key={s.id}>
                         <td>{s.stageName}</td>
