@@ -965,7 +965,7 @@ export async function getProjectStages(projectId) {
  * Crea los stages de un proyecto recién creado (alta en bloque, en el orden
  * en que se agregaron en el wizard).
  * @param {string|number} projectId
- * @param {Array<{ stageName: string, sowNumber: string, sowUrl: ?string }>} stages
+ * @param {Array<{ stageName: string, sowNumber: string, sowUrl: ?string, budgetHours?: ?number }>} stages
  * @param {?string} createdBy
  * @param {number} startPosition  0 al crear el proyecto; longitud de los
  *   stages ya existentes cuando se agregan más en edición (issue 03b) — si
@@ -985,7 +985,8 @@ export async function createProjectStages(projectId, stages, createdBy, startPos
       stageName: s.stageName,
       sowNumber: s.sowNumber,
       sowUrl: s.sowUrl ?? null,
-      budgetHours: s.budgetHours ?? null,
+      // '' -> null (?? no atrapa ''); preserva 0. Mismo criterio que updateProjectStage.
+      budgetHours: s.budgetHours === '' ? null : s.budgetHours ?? null,
       createdAt: new Date().toISOString(),
       createdBy: createdBy || null,
     }),
@@ -995,7 +996,8 @@ export async function createProjectStages(projectId, stages, createdBy, startPos
       stage_name: s.stageName,
       sow_number: s.sowNumber,
       sow_url: s.sowUrl ?? null,
-      budget_hours: s.budgetHours ?? null,
+      // '' -> null: sin esto el '' llega a la columna numérica y revienta el insert.
+      budget_hours: s.budgetHours === '' ? null : s.budgetHours ?? null,
       created_by: createdBy || null,
     }),
     rowToEntity: rowToStage,
