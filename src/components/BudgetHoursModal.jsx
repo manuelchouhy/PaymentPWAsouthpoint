@@ -46,15 +46,16 @@ export function BudgetHoursModal({ project, onClose, onSubmit }) {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    // Stages (con su budget) para la grilla; tasks (registradas + logueadas de
-    // Zoho) solo para mostrarlas read-only bajo su stage. allSettled: si fallan
-    // las tasks, la edición de budgets igual funciona; solo los stages son
-    // imprescindibles.
+    // Stages (con su budget) para la grilla + tasks REGISTRADAS del SOW
+    // (project_tasks) solo para mostrarlas read-only bajo su stage. NO se traen
+    // las horas logueadas de Zoho: ese fetch pagina TODAS las time_entries del
+    // proyecto y acá el único producto sería una lista read-only (se ven en el
+    // slide "Stages & Tasks" del detalle). allSettled: si fallan las tasks, la
+    // edición de budgets igual funciona; solo los stages son imprescindibles.
     Promise.allSettled([
       Promise.resolve().then(() => api.projects.getStages(project.id)),
       Promise.resolve().then(() => api.projectTasks.list(project.id)),
-      Promise.resolve().then(() => api.projectTasks.logged(project.projectName)),
-    ]).then(([stagesRes, registeredRes, loggedRes]) => {
+    ]).then(([stagesRes, registeredRes]) => {
       if (cancelled) return
       if (stagesRes.status === 'fulfilled') {
         const loaded = Array.isArray(stagesRes.value) ? stagesRes.value : []
@@ -65,14 +66,13 @@ export function BudgetHoursModal({ project, onClose, onSubmit }) {
         setLoadError('Stages could not be loaded — try reopening this project.')
       }
       const registered = registeredRes.status === 'fulfilled' ? registeredRes.value : []
-      const logged = loggedRes.status === 'fulfilled' ? loggedRes.value : []
-      setTreeTasks(mergeProjectTasks(registered ?? [], logged ?? []))
+      setTreeTasks(mergeProjectTasks(registered ?? [], []))
       setLoading(false)
     })
     return () => {
       cancelled = true
     }
-  }, [project.id, project.projectName])
+  }, [project.id])
 
   // Un proyecto marcado con stages usa el editor por-stage aunque getStages haya
   // vuelto vacío (dato inconsistente / transitorio): así NUNCA se escribe
@@ -100,7 +100,9 @@ export function BudgetHoursModal({ project, onClose, onSubmit }) {
   const inputError = hasStages
     ? stages.map((s) => parseBudgetInput(stageInputs[s.id], { allowEmpty: true, allowZero: true }).error).find(Boolean) ?? null
     : parseBudgetInput(baseBudgetInput, { allowEmpty: true, allowZero: true }).error
-  const valid = !loading && !loadError && !inputError
+  // Un fallo al traer stages solo es fatal para un proyecto CON stages: el base
+  // budget (proyecto sin stages) vive en base_budget_hours y no depende de ellos.
+  const valid = !loading && !inputError && !(hasStages && loadError)
 
   function original() {
     return {
@@ -118,6 +120,13 @@ export function BudgetHoursModal({ project, onClose, onSubmit }) {
     const plan = buildBudgetSavePlan(original(), { baseBudgetInput, activeStageId, stageInputs })
     if (plan.error) {
       setSubmitError(plan.error)
+      return
+    }
+    // Nada cambió: cerrar sin guardar (evita un audit y un toast de un no-op).
+    const noChanges =
+      !plan.baseBudgetChange && !(plan.stageBudgetChanges?.length) && !plan.activeStageChange
+    if (noChanges) {
+      onClose()
       return
     }
     setSubmitError('')
@@ -166,7 +175,7 @@ export function BudgetHoursModal({ project, onClose, onSubmit }) {
         <form className="modal__form project-form" onSubmit={handleSubmit} noValidate>
           {loading ? (
             <p className="field__hint">Loading…</p>
-          ) : loadError ? (
+          ) : hasStages && loadError ? (
             <p className="modal__submit-error" role="alert">
               {loadError}
             </p>

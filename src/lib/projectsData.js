@@ -1015,10 +1015,15 @@ export async function createProjectStages(projectId, stages, createdBy, startPos
 export async function updateProjectStage(current, updates) {
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 150))
-    const updated = { ...current, ...updates }
-    demoStages[current.projectId] = (demoStages[current.projectId] ?? []).map((s) =>
-      s.id === current.id ? updated : s,
-    )
+    // Mergear sobre el stage ALMACENADO (no sobre `current`): `current` puede
+    // llegar parcial (solo { id, projectId }, ej. desde el editor de budget), y
+    // spreadear ese pisaría stageName/position/sowNumber del stage guardado.
+    let updated = { ...current, ...updates }
+    demoStages[current.projectId] = (demoStages[current.projectId] ?? []).map((s) => {
+      if (s.id !== current.id) return s
+      updated = { ...s, ...current, ...updates }
+      return updated
+    })
     return updated
   }
   const row = {}
