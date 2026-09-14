@@ -197,6 +197,8 @@ export interface Project {
   client: string
   clientId?: string | number | null
   baseBudgetHours?: number | null
+  /** Stage marcado activo (uno por proyecto); su budget es el vigente. null = sin marcar. */
+  activeStageId?: string | number | null
   projectName: string
   projectNumber: string
   contractNumber?: string
@@ -217,6 +219,8 @@ export interface ProjectStage {
   stageName: string
   sowNumber: string
   sowUrl?: string | null
+  /** Budget (horas) asignado a este stage. null = sin cargar (0 es válido). */
+  budgetHours?: number | null
   createdAt: string
   createdBy: string | null
 }

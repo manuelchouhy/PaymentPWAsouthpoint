@@ -32,6 +32,8 @@ const FIELD_TO_COLUMN = {
   client: 'client',
   clientId: 'client_id',
   baseBudgetHours: 'base_budget_hours',
+  // Stage marcado activo: su budget es el vigente del proyecto (ver projectStageBudget.js).
+  activeStageId: 'active_stage_id',
   projectName: 'project_name',
   projectNumber: 'project_number',
   customerName: 'customer_name',
@@ -196,6 +198,8 @@ function rowToProject(row) {
     client: row.client,
     clientId: row.client_id ?? null,
     baseBudgetHours: row.base_budget_hours != null ? Number(row.base_budget_hours) : null,
+    // Stage activo (uno por proyecto). null = sin marcar / proyecto sin stages.
+    activeStageId: row.active_stage_id ?? null,
     projectName: row.project_name,
     projectNumber: row.project_number,
     customerName: row.customer_name ?? null,
@@ -882,6 +886,8 @@ function rowToStage(row) {
     stageName: row.stage_name,
     sowNumber: row.sow_number,
     sowUrl: row.sow_url ?? null,
+    // Budget (horas) asignado a este stage. null = sin cargar (0 es un valor válido).
+    budgetHours: row.budget_hours != null ? Number(row.budget_hours) : null,
     createdAt: row.created_at,
     createdBy: row.created_by ?? null,
   }
@@ -979,6 +985,7 @@ export async function createProjectStages(projectId, stages, createdBy, startPos
       stageName: s.stageName,
       sowNumber: s.sowNumber,
       sowUrl: s.sowUrl ?? null,
+      budgetHours: s.budgetHours ?? null,
       createdAt: new Date().toISOString(),
       createdBy: createdBy || null,
     }),
@@ -988,6 +995,7 @@ export async function createProjectStages(projectId, stages, createdBy, startPos
       stage_name: s.stageName,
       sow_number: s.sowNumber,
       sow_url: s.sowUrl ?? null,
+      budget_hours: s.budgetHours ?? null,
       created_by: createdBy || null,
     }),
     rowToEntity: rowToStage,
@@ -999,7 +1007,7 @@ export async function createProjectStages(projectId, stages, createdBy, startPos
  * reemplazó el archivo). Sin delete — 0025_project_stages_update_policy.sql
  * solo agregó update, mismo patrón "nadie borra" del resto de la app.
  * @param {{ id: string|number, projectId: string|number }} current
- * @param {{ stageName?: string, sowNumber?: string, sowUrl?: ?string }} updates
+ * @param {{ stageName?: string, sowNumber?: string, sowUrl?: ?string, budgetHours?: ?number }} updates
  * @returns {Promise<Object>}
  */
 export async function updateProjectStage(current, updates) {
@@ -1015,6 +1023,9 @@ export async function updateProjectStage(current, updates) {
   if (updates.stageName !== undefined) row.stage_name = updates.stageName
   if (updates.sowNumber !== undefined) row.sow_number = updates.sowNumber
   if (updates.sowUrl !== undefined) row.sow_url = updates.sowUrl
+  // '' -> null; preserva 0 como budget válido (mismo criterio que projectToRow).
+  if (updates.budgetHours !== undefined)
+    row.budget_hours = updates.budgetHours === '' ? null : updates.budgetHours ?? null
   const { data, error } = await supabase.from('project_stages').update(row).eq('id', current.id).select().single()
   if (error) throw new Error(error.message)
   return rowToStage(data)
