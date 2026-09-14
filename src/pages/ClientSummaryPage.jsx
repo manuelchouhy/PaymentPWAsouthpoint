@@ -65,6 +65,7 @@ export function ClientSummaryPage() {
   const [projects, setProjects] = useState([])
   const [entries, setEntries] = useState([])
   const [crsByProject, setCrsByProject] = useState(() => new Map())
+  const [stagesByProject, setStagesByProject] = useState(() => new Map())
   const [clientMasters, setClientMasters] = useState([])
   const [invoices, setInvoices] = useState([])
   const [status, setStatus] = useState('loading')
@@ -94,18 +95,26 @@ export function ClientSummaryPage() {
     const invoicesList = Promise.resolve()
       .then(() => api.invoices.list())
       .catch(() => [])
+    // Los stages (con su budget) alimentan el budget del stage activo. NO son
+    // esenciales: si su fetch falla (permisos, backend http sin el método, red) se
+    // degrada a Map vacío → cada proyecto cae a su base budget, como antes.
+    const stagesList = Promise.resolve()
+      .then(() => api.projects.getAllStages())
+      .catch(() => new Map())
     Promise.all([
       api.projects.list(),
       api.timeEntries.list(),
       api.changeRequests.listByProject(),
       clientsList,
       invoicesList,
+      stagesList,
     ])
-      .then(([projectRows, entryRows, crMap, clientRows, invoiceRows]) => {
+      .then(([projectRows, entryRows, crMap, clientRows, invoiceRows, stageMap]) => {
         if (cancelled) return
         setProjects(projectRows)
         setEntries(entryRows)
         setCrsByProject(crMap)
+        setStagesByProject(stageMap)
         setClientMasters(clientRows)
         setInvoices(invoiceRows)
         setStatus('ready')
@@ -141,8 +150,8 @@ export function ClientSummaryPage() {
   // semana, budget del proyecto) vive en el motor puro clientSummaryWeekly. Agrupa
   // por el cliente resuelto (resolvedClient).
   const summary = useMemo(
-    () => buildClientSummaryWeekly({ projects: resolvedProjects, entries, crsByProject, isInvoiced }),
-    [resolvedProjects, entries, crsByProject, isInvoiced],
+    () => buildClientSummaryWeekly({ projects: resolvedProjects, entries, crsByProject, stagesByProject, isInvoiced }),
+    [resolvedProjects, entries, crsByProject, stagesByProject, isInvoiced],
   )
 
   // Opciones INTERLAZADAS: cada dimensión deriva sus opciones de los clientes/proyectos
@@ -494,7 +503,14 @@ export function ClientSummaryPage() {
                                     : '—'}
                                 </td>
                                 <td className="cell-soft">{project.zohoStatus || '—'}</td>
-                                <td className={hoursCellClass(pt.budget)}>{hoursOrDash(pt.budget)}</td>
+                                {/* Budget = el del stage activo si el proyecto tiene stages;
+                                    el total (suma de stages) va como referencia cuando difiere. */}
+                                <td className={hoursCellClass(pt.budget)}>
+                                  {hoursOrDash(pt.budget)}
+                                  {pt.totalBudget != null && pt.totalBudget !== pt.budget && (
+                                    <span className="cell-soft"> / {formatHours(pt.totalBudget)} total</span>
+                                  )}
+                                </td>
                                 <td className={hoursCellClass(pt.consumed)}>{formatHours(pt.consumed)}</td>
                                 <td className={hoursCellClass(pt.pending)}>{formatHours(pt.pending)}</td>
                                 <td className={hoursCellClass(pt.cumulative)}>{formatHours(pt.cumulative)}</td>

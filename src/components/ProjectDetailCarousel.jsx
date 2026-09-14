@@ -3,7 +3,8 @@ import { motion } from 'framer-motion'
 import { ChevronDown, ChevronLeft, ChevronRight, FileText, Pencil, Plus, Settings2, Upload, X } from 'lucide-react'
 import { ContractBadge } from './ContractBadge'
 import { contractStatus, daysRemaining } from '../lib/projectsData'
-import { CR_TYPE_LABELS, effectiveBudgetHours } from '../lib/changeRequestsData'
+import { CR_TYPE_LABELS } from '../lib/changeRequestsData'
+import { resolveProjectBudget } from '../lib/projectStageBudget'
 import { buildProjectTaskTree } from '../lib/projectTaskTree'
 import { mergeProjectTasks } from '../lib/mergeProjectTasks'
 import { api } from '../lib/api'
@@ -32,6 +33,8 @@ function OverviewSlide({
   canEditBudget,
   budgetHours,
   budgetExpanded,
+  budgetHasStages,
+  totalBudget,
   budgetPending,
   budgetError,
 }) {
@@ -67,17 +70,24 @@ function OverviewSlide({
         <dt>SOW Number</dt>
         <dd className="cell-mono">{project.sowNumber || '—'}</dd>
       </div>
-      {project.baseBudgetHours != null && (
+      {(budgetHasStages || project.baseBudgetHours != null) && (
         <div className="drawer__fact">
-          <dt>Budget Hours</dt>
+          {/* Con stages internos el budget vigente es el del stage activo; el
+              total (suma de stages) va como referencia. Sin stages, la base + CRs. */}
+          <dt>Budget Hours{budgetHasStages ? ' (active stage)' : ''}</dt>
           <dd>
             {/* Sin los change requests cargados no se sabe el presupuesto
                 vigente — mostrar la base como si lo fuera haría que
                 Operations subestime lo que el cliente ya aprobó. */}
             {budgetError ? (
-              `${project.baseBudgetHours} h (base — approved CRs could not be loaded)`
+              `${(budgetHasStages ? budgetHours : project.baseBudgetHours) ?? '—'} h (approved CRs could not be loaded)`
             ) : budgetPending ? (
               'Loading…'
+            ) : budgetHasStages ? (
+              <>
+                {budgetHours ?? '—'} h
+                <span className="field__hint"> (active stage · total {totalBudget ?? '—'} h)</span>
+              </>
             ) : (
               <>
                 {budgetHours ?? project.baseBudgetHours} h
@@ -1040,8 +1050,17 @@ export function ProjectDetailCarousel({
   // renderizar. Disponible para cualquier proyecto editable (incl. clientId
   // null); el permiso se resuelve arriba (onEditBudget presente solo con projects.edit).
   const canEditBudget = Boolean(onEditBudget)
-  const budgetHours = effectiveBudgetHours(project.baseBudgetHours, changeRequests)
-  const budgetExpanded = budgetHours != null && budgetHours !== Number(project.baseBudgetHours)
+  // Budget vigente: el del STAGE ACTIVO si el proyecto tiene stages internos (los
+  // treeStages ya se cargaron en el efecto de arriba), si no la base + CRs. El
+  // total (suma de stages) se muestra como referencia. Ver projectStageBudget.js.
+  const { activeBudget, totalBudget, hasStages: budgetHasStages } = resolveProjectBudget(
+    project,
+    treeStages,
+    changeRequests,
+  )
+  const budgetHours = activeBudget
+  const budgetExpanded =
+    !budgetHasStages && budgetHours != null && budgetHours !== Number(project.baseBudgetHours)
 
   const taskTree = useMemo(
     () => buildProjectTaskTree(treeStages, treeTasks),
@@ -1084,6 +1103,8 @@ export function ProjectDetailCarousel({
           canEditBudget={canEditBudget}
           budgetHours={budgetHours}
           budgetExpanded={budgetExpanded}
+          budgetHasStages={budgetHasStages}
+          totalBudget={totalBudget}
           budgetPending={loadingCrs}
           budgetError={crsLoadError}
         />
