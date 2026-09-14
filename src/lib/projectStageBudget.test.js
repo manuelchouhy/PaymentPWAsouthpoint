@@ -98,6 +98,19 @@ test("budgetHours '' se trata como sin cargar (no como 0)", () => {
   assert.equal(result.activeBudget, null) // stage activo sin budget → null
 })
 
+test('budgets inválidos (negativo, whitespace, no numérico) se ignoran como sin cargar', () => {
+  const project = { baseBudgetHours: null, activeStageId: 1 }
+  const stages = [
+    { id: 1, budgetHours: -5 },
+    { id: 2, budgetHours: '   ' },
+    { id: 3, budgetHours: 'abc' },
+    { id: 4, budgetHours: 40 },
+  ]
+  const result = resolveProjectBudget(project, stages, [])
+  assert.equal(result.totalBudget, 40) // solo el 40 cuenta
+  assert.equal(result.activeBudget, null) // stage activo (id 1) negativo → sin cargar
+})
+
 test('con stages pero todos sin budget cargado: total null', () => {
   const project = { baseBudgetHours: 500, activeStageId: 1 }
   const stages = [

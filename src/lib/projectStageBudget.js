@@ -1,16 +1,19 @@
 import { effectiveBudgetHours } from './effectiveBudget.js'
 
 /**
- * Normaliza un budget de stage: '' y valores no finitos se tratan como "sin
- * cargar" (null), igual que null. 0 es un budget válido y se preserva. El módulo
- * no confía en el mapeo de la capa de datos (que ya devuelve number|null).
+ * Normaliza un budget de stage a un número válido o null ("sin cargar"). Se
+ * tratan como null: null/undefined, string vacía o de solo espacios, valores no
+ * numéricos, y **negativos** (el CHECK `budget_hours >= 0` de la migración 0047
+ * los prohíbe; el módulo puro coincide con esa regla en vez de sumar basura). 0
+ * es un budget válido y se preserva. No confía en el mapeo de la capa de datos.
  * @param {*} v
  * @returns {?number}
  */
 function normBudget(v) {
-  if (v == null || v === '') return null
+  if (v == null) return null
+  if (typeof v === 'string' && v.trim() === '') return null
   const n = Number(v)
-  return Number.isFinite(n) ? n : null
+  return Number.isFinite(n) && n >= 0 ? n : null
 }
 
 /**
