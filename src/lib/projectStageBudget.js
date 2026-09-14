@@ -1,6 +1,19 @@
 import { effectiveBudgetHours } from './effectiveBudget.js'
 
 /**
+ * Normaliza un budget de stage: '' y valores no finitos se tratan como "sin
+ * cargar" (null), igual que null. 0 es un budget válido y se preserva. El módulo
+ * no confía en el mapeo de la capa de datos (que ya devuelve number|null).
+ * @param {*} v
+ * @returns {?number}
+ */
+function normBudget(v) {
+  if (v == null || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+/**
  * Resolución pura del budget de un proyecto (sin dependencias de Supabase ni de
  * red), única fuente de verdad de "cuál es el budget contra el que se mide el
  * consumo" y "cuánto suma el proyecto en total".
@@ -29,9 +42,8 @@ export function resolveProjectBudget(project, stages = [], changeRequests = []) 
   // que la rama sin-stages y que el Budget del dominio (estimado + CRs aprobados).
   // Así el contrato es simétrico y activeBudget ≤ totalBudget siempre.
   const loaded = stages
-    .map((s) => s.budgetHours)
-    .filter((v) => v != null && Number.isFinite(Number(v)))
-    .map(Number)
+    .map((s) => normBudget(s.budgetHours))
+    .filter((v) => v != null)
   const totalRaw = loaded.length ? loaded.reduce((a, b) => a + b, 0) : null
   const totalBudget = effectiveBudgetHours(totalRaw, changeRequests)
 
@@ -41,7 +53,7 @@ export function resolveProjectBudget(project, stages = [], changeRequests = []) 
   // consistente con la rama sin-stages y el resto de la app.
   const active = stages.find((s) => String(s.id) === String(activeStageId))
   const activeBudget = active
-    ? effectiveBudgetHours(active.budgetHours, changeRequests)
+    ? effectiveBudgetHours(normBudget(active.budgetHours), changeRequests)
     : null
 
   return { activeBudget, totalBudget, hasStages: true, activeStageId }

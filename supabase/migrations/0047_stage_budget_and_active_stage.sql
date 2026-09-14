@@ -16,7 +16,8 @@
 -- =============================================================================
 
 alter table public.project_stages
-  add column if not exists budget_hours numeric;
+  add column if not exists budget_hours numeric
+    check (budget_hours is null or budget_hours >= 0);
 
 alter table public.projects
   add column if not exists active_stage_id bigint
