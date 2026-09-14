@@ -22,7 +22,7 @@
  */
 
 import { sundayWeek, sundayWeekYear, weekStartISO } from './format.js'
-import { effectiveBudgetHours } from './effectiveBudget.js'
+import { resolveProjectBudget } from './projectStageBudget.js'
 import { isConsumedAllocation } from './allocations.js'
 
 const UNASSIGNED = 'Without client'
@@ -55,7 +55,9 @@ function sowList(project) {
 
 /**
  * @param {{ projects: object[], entries: object[], crsByProject: Map<string, object[]>,
- *          isInvoiced?: (entry: object) => boolean }} input
+ *          stagesByProject?: Map<string, object[]>, isInvoiced?: (entry: object) => boolean }} input
+ *   - stagesByProject: stages internos por projectId (para el budget del stage
+ *     activo). Un proyecto sin entrada acá se trata como sin stages (budget = base).
  *   - isInvoiced (C11): marca una hora ya facturada al cliente. `invoiced` es un
  *     SUBCONJUNTO de `consumed`: sólo horas Approved bill_to_client que además ya se
  *     facturaron (sp_internal no se factura al cliente, así que nunca cuenta acá aunque
@@ -65,6 +67,7 @@ export function buildClientSummaryWeekly({
   projects = [],
   entries = [],
   crsByProject = new Map(),
+  stagesByProject = new Map(),
   isInvoiced = () => false,
 }) {
   // Horas por (nombre de proyecto → weekStart) separadas en consumed/overage.
@@ -119,10 +122,16 @@ export function buildClientSummaryWeekly({
   const byClient = new Map()
   for (const project of projects) {
     const clientName = groupNameOf(project)
-    const budget = effectiveBudgetHours(
-      project.baseBudgetHours,
+    // Budget contra el que se mide el consumo = el del STAGE ACTIVO si el proyecto
+    // tiene stages internos; si no, la base + CRs (idéntico a antes). `totalBudget`
+    // (suma de stages, o la base sin stages) viaja como referencia. Ver
+    // projectStageBudget.js y el PRD stage-budget-hours.
+    const { activeBudget, totalBudget } = resolveProjectBudget(
+      project,
+      stagesByProject.get(String(project.id)) ?? [],
       crsByProject.get(String(project.id)) ?? [],
     )
+    const budget = activeBudget
 
     // Semanas del proyecto, en orden cronológico, con cumulative/remaining.
     // Se CLONA cada objeto de semana: dos proyectos con el mismo projectName
@@ -156,6 +165,7 @@ export function buildClientSummaryWeekly({
       sowNumbers: sows, // lista para filtrar por SOW individual
       zohoStatus: project.zohoStatus ?? null,
       budget,
+      totalBudget,
       consumed: consumedTotal,
       overage: overageTotal,
       pending: pendingTotal,

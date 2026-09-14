@@ -962,6 +962,35 @@ export async function getProjectStages(projectId) {
 }
 
 /**
+ * Todos los stages de todos los proyectos, agrupados por projectId, en una sola
+ * query. Para Client Summary/Dashboard/Billing, que necesitan el budget del stage
+ * activo por proyecto sin un fetch por proyecto (N+1). Solo trae lo mínimo para el
+ * resolver: id + budget_hours (el active_stage_id vive en la fila del proyecto).
+ * @returns {Promise<Map<string, {id:(string|number), budgetHours:?number}[]>>}
+ */
+export async function getAllProjectStages() {
+  const map = new Map()
+  if (!isSupabaseConfigured) {
+    for (const [pid, stages] of Object.entries(demoStages)) {
+      map.set(String(pid), (stages ?? []).map((s) => ({ id: s.id, budgetHours: s.budgetHours ?? null })))
+    }
+    return map
+  }
+  const { data, error } = await supabase.from('project_stages').select('project_id, id, budget_hours')
+  if (error) throw new Error(error.message)
+  if (data.length === 1000) {
+    console.warn('project_stages devolvió 1000 filas (posible tope de PostgREST) — paginar getAllProjectStages.')
+  }
+  for (const row of data) {
+    const key = String(row.project_id)
+    const list = map.get(key) ?? []
+    list.push({ id: row.id, budgetHours: row.budget_hours != null ? Number(row.budget_hours) : null })
+    map.set(key, list)
+  }
+  return map
+}
+
+/**
  * Crea los stages de un proyecto recién creado (alta en bloque, en el orden
  * en que se agregaron en el wizard).
  * @param {string|number} projectId

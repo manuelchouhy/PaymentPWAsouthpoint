@@ -201,6 +201,8 @@ export const httpApiClient = {
     uploadDocumentVersion: () => notImplemented('projects.uploadDocumentVersion'),
     // GET /api/projects/:id/stages → ProjectStage[]
     getStages: () => notImplemented('projects.getStages'),
+    // GET /api/projects/stages → Map<projectId, {id, budgetHours}[]>
+    getAllStages: () => notImplemented('projects.getAllStages'),
     // POST /api/projects/:id/stages → ProjectStage[]
     createStages: () => notImplemented('projects.createStages'),
     // PATCH /api/projects/stages/:id → ProjectStage
