@@ -57,10 +57,11 @@ export function BudgetHoursModal({ project, onClose, onSubmit }) {
     // proyecto y acá el único producto sería una lista read-only (se ven en el
     // slide "Stages & Tasks" del detalle). allSettled: si fallan las tasks, la
     // edición de budgets igual funciona; solo los stages son imprescindibles.
-    Promise.allSettled([
-      Promise.resolve().then(() => api.projects.getStages(project.id)),
-      Promise.resolve().then(() => api.projectTasks.list(project.id)),
-    ]).then(([stagesRes, registeredRes]) => {
+    // Las tasks (read-only) solo se muestran para proyectos CON stages; para uno
+    // sin stages no se pide project_tasks (evita un round-trip inútil).
+    const fetches = [Promise.resolve().then(() => api.projects.getStages(project.id))]
+    if (project.hasStages) fetches.push(Promise.resolve().then(() => api.projectTasks.list(project.id)))
+    Promise.allSettled(fetches).then(([stagesRes, registeredRes]) => {
       if (cancelled) return
       if (stagesRes.status === 'fulfilled') {
         const loaded = Array.isArray(stagesRes.value) ? stagesRes.value : []
@@ -70,14 +71,14 @@ export function BudgetHoursModal({ project, onClose, onSubmit }) {
         console.error('No se pudieron cargar los stages del proyecto:', stagesRes.reason)
         setLoadError('Stages could not be loaded — try reopening this project.')
       }
-      const registered = registeredRes.status === 'fulfilled' ? registeredRes.value : []
+      const registered = registeredRes?.status === 'fulfilled' ? registeredRes.value : []
       setTreeTasks(mergeProjectTasks(registered ?? [], []))
       setLoading(false)
     })
     return () => {
       cancelled = true
     }
-  }, [project.id])
+  }, [project.id, project.hasStages])
 
   // Un proyecto marcado con stages usa el editor por-stage aunque getStages haya
   // vuelto vacío (dato inconsistente / transitorio): así NUNCA se escribe
@@ -107,7 +108,10 @@ export function BudgetHoursModal({ project, onClose, onSubmit }) {
     : parseBudgetInput(baseBudgetInput, { allowEmpty: true, allowZero: true }).error
   // Un fallo al traer stages solo es fatal para un proyecto CON stages: el base
   // budget (proyecto sin stages) vive en base_budget_hours y no depende de ellos.
-  const valid = !loading && !inputError && !(hasStages && loadError)
+  // Un proyecto con stages pero sin ninguno listado no tiene nada editable acá →
+  // Save deshabilitado (no un no-op que parece funcionar).
+  const stagedButEmpty = hasStages && !loading && stages.length === 0
+  const valid = !loading && !inputError && !(hasStages && loadError) && !stagedButEmpty
 
   function original() {
     return {
@@ -176,7 +180,7 @@ export function BudgetHoursModal({ project, onClose, onSubmit }) {
               Edit Budget Hours
             </h2>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
+          <button type="button" className="icon-btn" onClick={onClose} disabled={submitting} aria-label="Close">
             <X size={18} />
           </button>
         </div>
