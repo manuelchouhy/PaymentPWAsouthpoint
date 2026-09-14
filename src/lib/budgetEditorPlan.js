@@ -8,7 +8,7 @@ import { parseBudgetInput } from './budgetInput.js'
  *
  * @param {{ hasStages: boolean, baseBudgetHours: ?number, activeStageId: (string|number|null), stages: {id:(string|number), budgetHours:?number}[] }} original
  * @param {{ baseBudgetInput?: string, activeStageId?: (string|number|null), stageInputs?: Object }} edited
- * @returns {{ error: ?string, baseBudgetChange: ?{value:?number}, stageBudgetChanges: {id:(string|number), value:?number}[], activeStageChange: ?{value:(string|number|null)} }}
+ * @returns {{ error: ?string, baseBudgetChange: ?{value:?number}, stageBudgetChanges: {id:(string|number), from:?number, value:?number}[], activeStageChange: ?{value:(string|number|null)} }}
  */
 export function buildBudgetSavePlan(original, edited) {
   const empty = { error: null, baseBudgetChange: null, stageBudgetChanges: [], activeStageChange: null }
@@ -26,7 +26,10 @@ export function buildBudgetSavePlan(original, edited) {
   for (const stage of original.stages ?? []) {
     const { value, error } = parseBudgetInput(stageInputs[stage.id], { allowEmpty: true, allowZero: true })
     if (error) return { ...empty, error }
-    if (value !== (stage.budgetHours ?? null)) stageBudgetChanges.push({ id: stage.id, value })
+    // `from` (valor anterior) viaja para que el audit pueda reconstruir el cambio
+    // (de X a Y) — es el único control de esta acción sin aprobación (CONTEXT.md).
+    const from = stage.budgetHours ?? null
+    if (value !== from) stageBudgetChanges.push({ id: stage.id, from, value })
   }
 
   const activeChanged =

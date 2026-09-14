@@ -35,9 +35,14 @@ export function BudgetHoursModal({ project, onClose, onSubmit }) {
 
   useScrollLock()
 
+  // `submittingRef` para que el handler de Escape (registrado una vez) vea el
+  // estado vivo sin re-suscribirse en cada render.
+  const submittingRef = useRef(false)
   useEffect(() => {
     function onKeyDown(e) {
-      if (e.key === 'Escape') onClose()
+      // No cerrar a mitad de un guardado: desmontar el modal dispararía un
+      // setState sobre un componente desmontado y perdería el feedback de error.
+      if (e.key === 'Escape' && !submittingRef.current) onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
@@ -131,9 +136,11 @@ export function BudgetHoursModal({ project, onClose, onSubmit }) {
     }
     setSubmitError('')
     setSubmitting(true)
+    submittingRef.current = true
     try {
       await onSubmit(plan)
     } catch (error) {
+      submittingRef.current = false
       setSubmitting(false)
       setSubmitError(error?.message ?? 'Could not save. Please try again.')
     }
@@ -142,7 +149,9 @@ export function BudgetHoursModal({ project, onClose, onSubmit }) {
   return (
     <motion.div
       className="modal-backdrop"
-      onClick={onClose}
+      onClick={() => {
+        if (!submittingRef.current) onClose()
+      }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}

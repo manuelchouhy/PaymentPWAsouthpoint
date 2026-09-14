@@ -51,8 +51,8 @@ test('con stages: solo los stages con budget cambiado entran al plan', () => {
   assert.equal(plan.error, null)
   assert.equal(plan.baseBudgetChange, null)
   assert.deepEqual(plan.stageBudgetChanges, [
-    { id: 2, value: 80 },
-    { id: 3, value: 40 },
+    { id: 2, from: 60, value: 80 },
+    { id: 3, from: null, value: 40 },
   ])
   assert.equal(plan.activeStageChange, null)
 })
@@ -83,7 +83,7 @@ test('con stages: vaciar el budget de un stage lo cambia a null', () => {
     stages: [{ id: 1, budgetHours: 50 }],
   }
   const plan = buildBudgetSavePlan(original, { activeStageId: 1, stageInputs: { 1: '' } })
-  assert.deepEqual(plan.stageBudgetChanges, [{ id: 1, value: null }])
+  assert.deepEqual(plan.stageBudgetChanges, [{ id: 1, from: 50, value: null }])
 })
 
 test('con stages: budget de stage inválido devuelve error', () => {
