@@ -212,6 +212,10 @@ export function BillingPage() {
   // Stages internos por proyecto (para el budget del stage activo del cuadro #2).
   // Degrada a Map vacío si falla → el cuadro cae a la base, como antes.
   const [stagesByProject, setStagesByProject] = useState(() => new Map())
+  // Igual que crsLoaded: hasta que el intento de traer stages termine (ok o falla),
+  // el budget del cuadro #2 no es confiable (sin stages mostraría el base inflado
+  // de un proyecto que sí los tiene) → se muestra "—".
+  const [stagesLoaded, setStagesLoaded] = useState(false)
   const [clients, setClients] = useState([])
   const [status, setStatus] = useState('loading')
   const [reloadKey, setReloadKey] = useState(0)
@@ -256,6 +260,7 @@ export function BillingPage() {
     // confiable (mostraría el base con CRs viejos). Sin esto, un reload por sync dejaría
     // crsLoaded en true con el crsByProject anterior.
     setCrsLoaded(false)
+    setStagesLoaded(false)
     // Los proyectos son sólo para etiquetar el SOW de cada fila: van aparte de
     // Promise.all y con catch propio para que un fallo suyo no tire la pantalla
     // entera, que sí puede facturar sin ese dato.
@@ -320,6 +325,11 @@ export function BillingPage() {
         setStagesByProject(stageMap)
       })
       .catch((error) => console.error('No se pudieron cargar los stages de Billing:', error))
+      .finally(() => {
+        // Ok o falla, el intento terminó: si falló queda el Map vacío (budget cae a
+        // la base, como antes), pero ya no se muestra el base inflado transitorio.
+        if (!cancelled) setStagesLoaded(true)
+      })
 
     Promise.all([api.timeEntries.list(), api.invoices.list(), api.clients.list(), api.payments.list()])
       .then(([entryRows, invoiceRows, clientRows, paymentRows]) => {
@@ -559,19 +569,20 @@ export function BillingPage() {
         const matches = projects.filter((p) => p.projectNumber === num)
         if (matches.length !== 1) return null
         // Budget del STAGE ACTIVO si el proyecto tiene stages internos; si no, la
-        // base + CRs. Hasta que los CRs carguen no es confiable (faltarían las
-        // expansiones aprobadas) → "—".
-        budget = crsLoaded
-          ? resolveProjectBudget(
-              matches[0],
-              stagesByProject.get(String(matches[0].id)) ?? [],
-              crsByProject.get(String(matches[0].id)) ?? [],
-            ).activeBudget
-          : null
+        // base + CRs. Hasta que CRs Y stages carguen no es confiable (faltarían las
+        // expansiones aprobadas, o mostraría el base de un proyecto con stages) → "—".
+        budget =
+          crsLoaded && stagesLoaded
+            ? resolveProjectBudget(
+                matches[0],
+                stagesByProject.get(String(matches[0].id)) ?? [],
+                crsByProject.get(String(matches[0].id)) ?? [],
+              ).activeBudget
+            : null
       }
       return { budget, consumed }
     },
-    [entriesConCliente, invoiceByEntryId, projects, crsByProject, crsLoaded, stagesByProject],
+    [entriesConCliente, invoiceByEntryId, projects, crsByProject, crsLoaded, stagesByProject, stagesLoaded],
   )
 
   // Cuadro #2 por FILTRO: cuando el usuario filtró EXPLÍCITAMENTE por proyecto (nombre o

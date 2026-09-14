@@ -42,7 +42,7 @@ test('con stages y uno activo: total = suma, active = budget del activo', () => 
   assert.equal(result.activeBudget, 60)
 })
 
-test('con stages: los CRs aprobados suman al activo y también al total', () => {
+test('con stages: los CRs aprobados suman al activo pero NO al total (suma pura de stages)', () => {
   const project = { baseBudgetHours: null, activeStageId: 2 }
   const stages = [
     { id: 1, budgetHours: 100 },
@@ -51,8 +51,7 @@ test('con stages: los CRs aprobados suman al activo y también al total', () => 
   const crs = [{ status: 'approved', type: 'expand_budget', deltaHours: 15 }]
   const result = resolveProjectBudget(project, stages, crs)
   assert.equal(result.activeBudget, 75) // 60 (activo) + 15 (CR)
-  assert.equal(result.totalBudget, 175) // 160 (suma) + 15 (CR); mismo criterio de dominio
-  assert.ok(result.activeBudget <= result.totalBudget, 'active nunca supera al total')
+  assert.equal(result.totalBudget, 160) // 100 + 60, sin CRs — reconcilia con la grilla
 })
 
 test('con stages y ninguno activo: active null, total = suma', () => {

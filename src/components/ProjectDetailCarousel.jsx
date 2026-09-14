@@ -80,7 +80,7 @@ function OverviewSlide({
                 vigente — mostrar la base como si lo fuera haría que
                 Operations subestime lo que el cliente ya aprobó. */}
             {budgetError ? (
-              `${(budgetHasStages ? budgetHours : project.baseBudgetHours) ?? '—'} h (approved CRs could not be loaded)`
+              'Current budget could not be loaded — try reopening this project.'
             ) : budgetPending ? (
               'Loading…'
             ) : budgetHasStages ? (
@@ -1050,17 +1050,6 @@ export function ProjectDetailCarousel({
   // renderizar. Disponible para cualquier proyecto editable (incl. clientId
   // null); el permiso se resuelve arriba (onEditBudget presente solo con projects.edit).
   const canEditBudget = Boolean(onEditBudget)
-  // Budget vigente: el del STAGE ACTIVO si el proyecto tiene stages internos (los
-  // treeStages ya se cargaron en el efecto de arriba), si no la base + CRs. El
-  // total (suma de stages) se muestra como referencia. Ver projectStageBudget.js.
-  const { activeBudget, totalBudget, hasStages: budgetHasStages } = resolveProjectBudget(
-    project,
-    treeStages,
-    changeRequests,
-  )
-  const budgetHours = activeBudget
-  const budgetExpanded =
-    !budgetHasStages && budgetHours != null && budgetHours !== Number(project.baseBudgetHours)
 
   const taskTree = useMemo(
     () => buildProjectTaskTree(treeStages, treeTasks),
@@ -1070,6 +1059,21 @@ export function ProjectDetailCarousel({
   // efecto de stageCount). Extraído para no repetir la regla en loading/error.
   const stagesPending = project.hasStages && stageCount === null && !stageCountError
   const stagesFailed = project.hasStages && stageCountError
+
+  // Budget vigente: el del STAGE ACTIVO si el proyecto tiene stages internos, si no
+  // la base + CRs. `budgetHasStages` sale de project.hasStages (autoritativo), NO de
+  // treeStages.length: si los stages todavía cargan o fallaron, NO se muestra el base
+  // (sería un número inflado) — se muestra Loading/error hasta tenerlos. El total
+  // (suma de stages) va como referencia. Ver projectStageBudget.js.
+  const budgetHasStages = Boolean(project.hasStages)
+  const { activeBudget, totalBudget } = resolveProjectBudget(project, treeStages, changeRequests)
+  const budgetHours = activeBudget
+  const budgetExpanded =
+    !budgetHasStages && budgetHours != null && budgetHours !== Number(project.baseBudgetHours)
+  // El budget de un proyecto con stages no es confiable hasta que carguen (si no,
+  // resolveProjectBudget con treeStages=[] devuelve la base). Se suma al gate de CRs.
+  const budgetLoading = loadingCrs || (budgetHasStages && stagesPending)
+  const budgetLoadFailed = crsLoadError || (budgetHasStages && stagesFailed)
   const toggleStage = (key) =>
     setExpandedStages((prev) => {
       const next = new Set(prev)
@@ -1105,8 +1109,8 @@ export function ProjectDetailCarousel({
           budgetExpanded={budgetExpanded}
           budgetHasStages={budgetHasStages}
           totalBudget={totalBudget}
-          budgetPending={loadingCrs}
-          budgetError={crsLoadError}
+          budgetPending={budgetLoading}
+          budgetError={budgetLoadFailed}
         />
       ),
     },
