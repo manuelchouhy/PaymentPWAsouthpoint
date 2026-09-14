@@ -23,16 +23,22 @@ export function resolveProjectBudget(project, stages = [], changeRequests = []) 
     return { activeBudget: budget, totalBudget: budget, hasStages: false, activeStageId }
   }
 
-  // Total = suma de los budgets cargados de los stages (null se ignora, 0 cuenta).
-  // Los change requests NO suman al total: amplían el trabajo del stage activo, no
-  // el alcance planificado de cada stage.
+  // Total = suma de los budgets cargados de los stages (null se ignora, 0 cuenta),
+  // más los change requests aprobados. Los CRs son a nivel proyecto (no tienen
+  // stage_id), así que suman una vez al total igual que al activo — mismo criterio
+  // que la rama sin-stages y que el Budget del dominio (estimado + CRs aprobados).
+  // Así el contrato es simétrico y activeBudget ≤ totalBudget siempre.
   const loaded = stages
     .map((s) => s.budgetHours)
     .filter((v) => v != null && Number.isFinite(Number(v)))
     .map(Number)
-  const totalBudget = loaded.length ? loaded.reduce((a, b) => a + b, 0) : null
+  const totalRaw = loaded.length ? loaded.reduce((a, b) => a + b, 0) : null
+  const totalBudget = effectiveBudgetHours(totalRaw, changeRequests)
 
   // Active = budget del stage marcado activo + los CRs aprobados. Sin activo → null.
+  // Nota: si el stage activo no tiene budget cargado (null), effectiveBudgetHours
+  // devuelve null (un CR amplía un budget existente; sin base no hay qué ampliar),
+  // consistente con la rama sin-stages y el resto de la app.
   const active = stages.find((s) => String(s.id) === String(activeStageId))
   const activeBudget = active
     ? effectiveBudgetHours(active.budgetHours, changeRequests)
