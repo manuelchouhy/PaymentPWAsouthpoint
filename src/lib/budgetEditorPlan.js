@@ -29,7 +29,12 @@ export function buildBudgetSavePlan(original, edited) {
   const stageInputs = edited.stageInputs ?? {}
   const stageBudgetChanges = []
   for (const stage of original.stages ?? []) {
-    const { value, error } = parseBudgetInput(stageInputs[stage.id], { allowEmpty: true, allowZero: true })
+    const input = stageInputs[stage.id]
+    // Campo ausente = ese stage no se editó → no lo toco (mismo criterio que el
+    // base). Sin esto, un stageInputs parcial borraría el budget de un stage no
+    // editado (null !== from). Un string vacío SÍ es una edición válida (vaciar).
+    if (input === undefined) continue
+    const { value, error } = parseBudgetInput(input, { allowEmpty: true, allowZero: true })
     if (error) return { ...empty, error }
     // `from` (valor anterior) viaja para que el audit pueda reconstruir el cambio
     // (de X a Y) — es el único control de esta acción sin aprobación (CONTEXT.md).

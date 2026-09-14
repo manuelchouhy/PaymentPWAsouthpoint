@@ -64,6 +64,22 @@ test('con stages: solo los stages con budget cambiado entran al plan', () => {
   assert.equal(plan.activeStageChange, null)
 })
 
+test('con stages: input de stage ausente es no-op, NO borra ese stage', () => {
+  const original = {
+    hasStages: true,
+    baseBudgetHours: null,
+    activeStageId: 1,
+    stages: [
+      { id: 1, budgetHours: 100 },
+      { id: 2, budgetHours: 60 },
+    ],
+  }
+  // stageInputs solo trae el stage 2 (editado); el 1 se omite → no debe tocarse.
+  const plan = buildBudgetSavePlan(original, { activeStageId: 1, stageInputs: { 2: '80' } })
+  assert.equal(plan.error, null)
+  assert.deepEqual(plan.stageBudgetChanges, [{ id: 2, from: 60, value: 80 }])
+})
+
 test('con stages: cambiar el stage activo produce activeStageChange', () => {
   const original = {
     hasStages: true,

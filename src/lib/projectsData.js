@@ -976,25 +976,35 @@ export async function getAllProjectStages() {
     }
     return map
   }
-  // Paginado explícito: PostgREST tope a 1000 filas por respuesta. Sin esto, un
-  // workspace con >1000 stages en total devolvería un subconjunto arbitrario y el
-  // resolver mostraría budgets incompletos/errados sin ninguna señal al usuario.
-  // Orden por id estable para que las páginas no se solapen ni salteen filas.
+  // Paginado por keyset (id > último visto), no por offset: PostgREST tope a 1000
+  // filas por respuesta y con offset un insert/delete entre páginas correría los
+  // índices y saltearía/duplicaría filas. Keyset sobre id (orden estable) es
+  // inmune a eso. Sin esto, un workspace con >1000 stages devolvería un subconjunto
+  // arbitrario y el resolver mostraría budgets incompletos sin señal al usuario.
+  // Se corta cuando una página vuelve VACÍA, no cuando trae menos de pageSize: el
+  // límite real de filas lo pone el server (db-max-rows), que puede ser < pageSize,
+  // y cortar por "< pageSize" saltearía el resto. Cada página avanza lastId sobre el
+  // último id visto, así que el keyset siempre progresa y termina (id es serial único).
   const pageSize = 1000
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await supabase
+  let lastId = null
+  for (;;) {
+    let q = supabase
       .from('project_stages')
       .select('project_id, id, budget_hours')
       .order('id', { ascending: true })
-      .range(from, from + pageSize - 1)
+      .limit(pageSize)
+    if (lastId != null) q = q.gt('id', lastId)
+    const { data, error } = await q
     if (error) throw new Error(error.message)
-    for (const row of data) {
+    const rows = data ?? [] // data puede venir null (ej. edge sin filas) sin error
+    if (rows.length === 0) break
+    for (const row of rows) {
       const key = String(row.project_id)
       const list = map.get(key) ?? []
       list.push({ id: row.id, budgetHours: row.budget_hours != null ? Number(row.budget_hours) : null })
       map.set(key, list)
     }
-    if (data.length < pageSize) break
+    lastId = rows[rows.length - 1].id
   }
   return map
 }
