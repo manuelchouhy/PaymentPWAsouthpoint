@@ -19,6 +19,7 @@ import { ContractBadge } from '../components/ContractBadge'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { ProjectFormModal } from '../components/ProjectFormModal'
 import { ProjectWizardModal } from '../components/ProjectWizardModal'
+import { BudgetHoursModal } from '../components/BudgetHoursModal'
 import { ProjectDetailCarousel } from '../components/ProjectDetailCarousel'
 import { Toast } from '../components/Toast'
 import { ExportDropdown } from '../components/ExportDropdown'
@@ -64,7 +65,7 @@ export function ProjectsPage() {
   const [showAllStatuses, setShowAllStatuses] = useState(false)
   const [form, setForm] = useState(null) // null | { mode:'edit', project } — campos legacy, cualquier proyecto
   const [wizardOpen, setWizardOpen] = useState(false)
-  const [wizardEditing, setWizardEditing] = useState(null) // "Edit SOW & Scope" — solo proyectos con clientId
+  const [budgetEditing, setBudgetEditing] = useState(null) // "Edit Budget Hours" — cualquier proyecto editable
   const [detail, setDetail] = useState(null)
   const [toast, setToast] = useState(null)
 
@@ -336,7 +337,7 @@ export function ProjectsPage() {
     })
     // Se adjuntan los SOW de stage del proyecto recién creado antes de meterlo
     // en la lista, para que la columna y el filtro SOW queden al día sin
-    // recargar (mismo patrón que handleUpdateFromWizard).
+    // recargar (mismo patrón que handleSaveBudgets).
     const withSows = await withStageSows(project)
     setProjects((prev) => sortByExp([withSows, ...prev]))
     setWizardOpen(false)
@@ -376,162 +377,53 @@ export function ProjectsPage() {
   }
 
   /**
-   * Edición tabulada (ProjectWizardModal en modo edit, issue 03a) — solo
-   * proyectos con clientId. `newSowFile` es el reemplazo del SOW a nivel
-   * proyecto si el usuario tocó "Replace" (null si no); se sube y versiona
-   * antes de actualizar el proyecto, mismo orden que el resto de los
-   * reemplazos de documento (upload → update row → recordDocument).
-   * `childChanges` (issues 03b/03c): { changedStages, addedStages,
-   * existingStagesCount, changedTasks, addedTasks } — stages solo si el
-   * proyecto las tiene, tasks siempre.
+   * Guardado del editor "Edit Budget Hours" (reemplaza al wizard "Edit SOW &
+   * Scope" en edición). `plan` viene de buildBudgetSavePlan y trae SOLO lo que
+   * cambió: budget a nivel proyecto (proyectos sin stages), budget por stage, y/o
+   * el stage activo. No agrega ni elimina stages/tasks. Corrige/carga un dato: no
+   * requiere aprobación, queda auditado (ver CONTEXT.md, base budget vs CR).
    */
-  async function handleUpdateFromWizard(updates, newSowFile, childChanges) {
-    let sowUrl = wizardEditing.sowUrl
-    if (newSowFile) {
-      sowUrl = await api.projects.uploadSowFile(newSowFile)
-    }
-    let updated
-    try {
-      updated = await api.projects.update(
-        wizardEditing,
-        newSowFile ? { ...updates, sowUrl } : updates,
-        user?.email ?? null,
-      )
-    } catch (error) {
-      // El archivo ya se subió a Storage antes del update — si el update
-      // falla, no queda ninguna fila que lo referencie (mismo riesgo de
-      // huérfano que createProjectFromWizard ya cubre para el alta).
-      if (newSowFile) await api.projects.removeSowFiles([sowUrl])
-      throw error
-    }
-    // recordDocument (recordProjectDocument) es best-effort y nunca tira —
-    // solo loggea con console.warn si falla, como logAudit — así que no hay
-    // nada real que capturar acá; envolverlo en try/catch sería código
-    // muerto (ver la propia doc de la función en projectsData.js).
-    if (newSowFile) {
-      await api.projects.recordDocument({
-        subjectType: 'sow',
-        subjectId: updated.id,
-        fileUrl: sowUrl,
-        uploadedBy: user?.email ?? null,
-      })
+  async function handleSaveBudgets(plan) {
+    const project = budgetEditing
+
+    const projectUpdates = {}
+    if (plan.baseBudgetChange) projectUpdates.baseBudgetHours = plan.baseBudgetChange.value
+    if (plan.activeStageChange) projectUpdates.activeStageId = plan.activeStageChange.value
+
+    let updated = project
+    if (Object.keys(projectUpdates).length) {
+      updated = await api.projects.update(project, projectUpdates, user?.email ?? null)
     }
 
-    // Cada stage cambiada es independiente de las demás — en paralelo, igual
-    // que el bloque de abajo para las agregadas (antes era un for-of
-    // secuencial sin motivo, multiplicaba la latencia por cantidad de stages).
+    // Cada budget de stage es independiente — en paralelo. Solo llegan los que
+    // cambiaron (el plan ya filtró). `projectId` viaja para el path demo de
+    // updateStage; el real solo usa el id.
     await Promise.all(
-      (childChanges?.changedStages ?? []).map(async (stage) => {
-        let stageSowUrl = null
-        if (stage.sowFile) {
-          stageSowUrl = await api.projects.uploadSowFile(stage.sowFile)
-        }
-        try {
-          // `stage` viaja completo (id, projectId, position, sowUrl, etc. —
-          // ver ProjectWizardModal) porque updateStage en modo demo hace
-          // `{...current, ...updates}`; el path real de Supabase solo usa
-          // stage.id.
-          await api.projects.updateStage(stage, {
-            stageName: stage.stageName,
-            sowNumber: stage.sowNumber,
-            ...(stageSowUrl ? { sowUrl: stageSowUrl } : {}),
-          })
-        } catch (error) {
-          if (stageSowUrl) await api.projects.removeSowFiles([stageSowUrl])
-          throw error
-        }
-        if (stageSowUrl) {
-          await api.projects.recordDocument({
-            subjectType: 'sow',
-            subjectId: stage.id,
-            fileUrl: stageSowUrl,
-            uploadedBy: user?.email ?? null,
-          })
-        }
-      }),
-    )
-
-    if (childChanges?.addedStages?.length) {
-      // allSettled, no all: si uno de los uploads falla, los que sí
-      // terminaron no deben quedar huérfanos en Storage sin limpiar (mismo
-      // motivo que createProjectFromWizard ya documenta para el alta).
-      const uploadResults = await Promise.allSettled(
-        childChanges.addedStages.map((s) =>
-          // SOW File opcional: sin archivo, sowUrl null (no se llama a uploadSowFile,
-          // que tira si el file es null).
-          (s.sowFile ? api.projects.uploadSowFile(s.sowFile) : Promise.resolve(null)).then(
-            (sowUrl) => ({ stageName: s.stageName, sowNumber: s.sowNumber, sowUrl }),
-          ),
-        ),
-      )
-      const firstUploadFailure = uploadResults.find((r) => r.status === 'rejected')
-      const uploadedPaths = uploadResults.filter((r) => r.status === 'fulfilled').map((r) => r.value.sowUrl)
-      if (firstUploadFailure) {
-        await api.projects.removeSowFiles(uploadedPaths)
-        throw firstUploadFailure.reason
-      }
-      const uploaded = uploadResults.map((r) => r.value)
-      let createdStages
-      try {
-        createdStages = await api.projects.createStages(
-          updated.id,
-          uploaded,
-          user?.email ?? null,
-          childChanges.existingStagesCount,
-        )
-      } catch (error) {
-        await api.projects.removeSowFiles(uploadedPaths)
-        throw error
-      }
-      await Promise.all(
-        createdStages.map((stage, i) =>
-          // Solo si el stage tiene archivo (SOW File opcional): file_url es NOT NULL, un
-          // sowUrl null haría fallar el insert best-effort. El guard preserva el índice.
-          uploaded[i].sowUrl
-            ? api.projects.recordDocument({
-                subjectType: 'sow',
-                subjectId: stage.id,
-                fileUrl: uploaded[i].sowUrl,
-                uploadedBy: user?.email ?? null,
-              })
-            : null,
-        ),
-      )
-    }
-
-    // Tasks (issue 03c): sin archivo, no hay riesgo de huérfano en Storage —
-    // update/create en paralelo, cada task es independiente de las demás.
-    await Promise.all(
-      (childChanges?.changedTasks ?? []).map((task) =>
-        api.projectTasks.update(task, {
-          taskName: task.taskName,
-          role: task.role,
-          estimatedHours: task.estimatedHours,
-          // stageId (null = sin asignar) tiene que viajar, si no reasignar el stage de
-          // una task existente sería un no-op silencioso.
-          stageId: task.stageId ?? null,
-        }),
+      (plan.stageBudgetChanges ?? []).map((c) =>
+        api.projects.updateStage({ id: c.id, projectId: project.id }, { budgetHours: c.value }),
       ),
     )
-    if (childChanges?.addedTasks?.length) {
-      await api.projectTasks.create(updated.id, childChanges.addedTasks, user?.email ?? null)
-    }
 
     api.audit.log({
       actorEmail: user?.email,
       actorRole: profile?.roles?.[0] ?? null,
       action: 'project.update',
       resourceType: 'project',
-      resourceId: updated.id,
-      before: { projectNumber: wizardEditing.projectNumber },
-      after: { projectNumber: updated.projectNumber, projectName: updated.projectName, client: updated.client },
+      resourceId: project.id,
+      before: { baseBudgetHours: project.baseBudgetHours ?? null, activeStageId: project.activeStageId ?? null },
+      after: {
+        baseBudgetHours: updated.baseBudgetHours ?? null,
+        activeStageId: updated.activeStageId ?? null,
+        stageBudgetChanges: plan.stageBudgetChanges ?? [],
+      },
     })
-    // El wizard pudo editar/agregar stages: se re-consultan sus SOW para que la
-    // columna y el filtro reflejen los cambios sin recargar.
+
+    // Re-consulta los SOW de las stages para que la columna/filtro reflejen sin
+    // recargar (mismo patrón que tenía la edición por wizard).
     const updatedWithSows = await withStageSows(updated)
     setProjects((prev) => sortByExp(prev.map((p) => (p.id === updatedWithSows.id ? updatedWithSows : p))))
-    setWizardEditing(null)
-    setToast({ id: Date.now(), message: `Project updated: ${updated.projectName}` })
+    setBudgetEditing(null)
+    setToast({ id: Date.now(), message: `Budget updated: ${project.projectName}` })
   }
 
   return (
@@ -799,12 +691,12 @@ export function ProjectsPage() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {wizardEditing && (
-          <ProjectWizardModal
-            key={`edit-wizard-${wizardEditing.id}`}
-            initial={wizardEditing}
-            onClose={() => setWizardEditing(null)}
-            onSubmit={handleUpdateFromWizard}
+        {budgetEditing && (
+          <BudgetHoursModal
+            key={`edit-budget-${budgetEditing.id}`}
+            project={budgetEditing}
+            onClose={() => setBudgetEditing(null)}
+            onSubmit={handleSaveBudgets}
           />
         )}
       </AnimatePresence>
@@ -829,12 +721,12 @@ export function ProjectsPage() {
               setDetail(null)
               setForm({ mode: 'edit', project })
             }}
-            onEditSow={
-              detail.clientId
+            onEditBudget={
+              can('projects.edit')
                 ? () => {
                     const project = detail
                     setDetail(null)
-                    setWizardEditing(project)
+                    setBudgetEditing(project)
                   }
                 : undefined
             }

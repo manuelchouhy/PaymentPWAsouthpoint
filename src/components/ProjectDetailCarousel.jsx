@@ -29,7 +29,7 @@ function OverviewSlide({
   project,
   stageCount,
   stageCountError,
-  canEditSow,
+  canEditBudget,
   budgetHours,
   budgetExpanded,
   budgetPending,
@@ -109,7 +109,7 @@ function OverviewSlide({
           ) : (
             <>
               {stageCount} stage{stageCount === 1 ? '' : 's'}
-              {canEditSow && ' — see "Edit SOW & Scope"'}
+              {canEditBudget && ' — see "Edit Budget Hours"'}
             </>
           )}
         </dd>
@@ -997,7 +997,7 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
  *   canDecideChangeRequests?: boolean, // permiso changeRequests.decide (issue 07)
  *   onClose: () => void,
  *   onEdit: () => void,           // campos legacy (contrato, customer, etc.) — siempre disponible
- *   onEditSow?: () => void,       // SOW/Scope/Maintenance del wizard — solo si el proyecto tiene clientId
+ *   onEditBudget?: () => void,    // editor "Edit Budget Hours" — presente si el usuario tiene projects.edit
  * }} props
  */
 export function ProjectDetailCarousel({
@@ -1008,7 +1008,7 @@ export function ProjectDetailCarousel({
   canDecideChangeRequests,
   onClose,
   onEdit,
-  onEditSow,
+  onEditBudget,
 }) {
   const [stageCount, setStageCount] = useState(null)
   const [stageCountError, setStageCountError] = useState(false)
@@ -1035,11 +1035,11 @@ export function ProjectDetailCarousel({
 
   const days = daysRemaining(project.contractExpirationDate)
   const status = contractStatus(days)
-  // Mismo gate que el botón "Edit SOW & Scope" de acá abajo — el texto del
-  // slide Overview que lo referencia solo debe aparecer cuando el botón
-  // realmente se va a renderizar (clientId puede ser null incluso con
-  // hasStages=true).
-  const canEditSow = Boolean(project.clientId && onEditSow)
+  // Mismo gate que el botón "Edit Budget Hours" de acá abajo — el texto del
+  // slide Overview que lo referencia solo debe aparecer cuando el botón se va a
+  // renderizar. Disponible para cualquier proyecto editable (incl. clientId
+  // null); el permiso se resuelve arriba (onEditBudget presente solo con projects.edit).
+  const canEditBudget = Boolean(onEditBudget)
   const budgetHours = effectiveBudgetHours(project.baseBudgetHours, changeRequests)
   const budgetExpanded = budgetHours != null && budgetHours !== Number(project.baseBudgetHours)
 
@@ -1081,7 +1081,7 @@ export function ProjectDetailCarousel({
           project={project}
           stageCount={stageCount}
           stageCountError={stageCountError}
-          canEditSow={canEditSow}
+          canEditBudget={canEditBudget}
           budgetHours={budgetHours}
           budgetExpanded={budgetExpanded}
           budgetPending={loadingCrs}
@@ -1292,10 +1292,10 @@ export function ProjectDetailCarousel({
             </h2>
           </div>
           <div className="modal__head-actions">
-            {canEditSow && (
-              <button type="button" className="btn btn--ghost btn--sm" onClick={onEditSow}>
+            {canEditBudget && (
+              <button type="button" className="btn btn--ghost btn--sm" onClick={onEditBudget}>
                 <Settings2 size={15} strokeWidth={2.2} aria-hidden="true" />
-                Edit SOW &amp; Scope
+                Edit Budget Hours
               </button>
             )}
             <button type="button" className="btn btn--ghost btn--sm" onClick={onEdit}>

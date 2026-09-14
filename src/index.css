@@ -5761,3 +5761,39 @@ select.field__input { cursor: pointer; }
   /* Settings grid: 1-col */
   .settings-grid { grid-template-columns: 1fr; }
 }
+
+/* ---- Editor "Edit Budget Hours" (BudgetHoursModal) ---- */
+.budget-stages {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+.budget-stages th,
+.budget-stages td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.budget-stages thead th {
+  font-size: 12px;
+  color: var(--text-soft);
+  font-weight: 600;
+}
+.budget-stages tfoot td {
+  font-weight: 600;
+  border-bottom: none;
+}
+.budget-stages .field__input {
+  width: 120px;
+}
+.budget-tasks {
+  margin-top: 14px;
+}
+.budget-tasks ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.budget-tasks > ul > li {
+  margin-bottom: 4px;
+}
