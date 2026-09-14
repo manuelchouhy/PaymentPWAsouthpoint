@@ -22,3 +22,8 @@ alter table public.project_stages
 alter table public.projects
   add column if not exists active_stage_id bigint
     references public.project_stages(id) on delete set null;
+
+-- Índice de la columna referenciante: el ON DELETE SET NULL busca por
+-- active_stage_id al borrar un stage (mismo patrón que 0046 con stage_id).
+create index if not exists idx_projects_active_stage_id
+  on public.projects(active_stage_id);

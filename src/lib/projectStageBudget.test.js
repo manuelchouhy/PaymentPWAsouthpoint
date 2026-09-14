@@ -111,6 +111,18 @@ test('budgets inválidos (negativo, whitespace, no numérico) se ignoran como si
   assert.equal(result.activeBudget, null) // stage activo (id 1) negativo → sin cargar
 })
 
+test('normBudget ignora tipos no numéricos (boolean, array)', () => {
+  const project = { baseBudgetHours: null, activeStageId: 1 }
+  const stages = [
+    { id: 1, budgetHours: true },
+    { id: 2, budgetHours: [5] },
+    { id: 3, budgetHours: 30 },
+  ]
+  const result = resolveProjectBudget(project, stages, [])
+  assert.equal(result.totalBudget, 30) // ni true→1 ni [5]→5 cuentan
+  assert.equal(result.activeBudget, null)
+})
+
 test('con stages pero todos sin budget cargado: total null', () => {
   const project = { baseBudgetHours: 500, activeStageId: 1 }
   const stages = [

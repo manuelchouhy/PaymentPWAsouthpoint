@@ -10,7 +10,9 @@ import { effectiveBudgetHours } from './effectiveBudget.js'
  * @returns {?number}
  */
 function normBudget(v) {
-  if (v == null) return null
+  // Solo number|string son candidatos: evita que boolean (true→1) o array
+  // ([5]→5, []→0) se cuelen como budgets vía Number().
+  if (typeof v !== 'number' && typeof v !== 'string') return null
   if (typeof v === 'string' && v.trim() === '') return null
   const n = Number(v)
   return Number.isFinite(n) && n >= 0 ? n : null
