@@ -14,6 +14,11 @@ export function buildBudgetSavePlan(original, edited) {
   const empty = { error: null, baseBudgetChange: null, stageBudgetChanges: [], activeStageChange: null }
 
   if (!original.hasStages) {
+    // Campo ausente = "no se editó", no "vaciar a null": sin esto, un caller que
+    // omita baseBudgetInput emitiría un cambio a null y borraría el budget del
+    // proyecto. Un string vacío SÍ es una edición válida (vaciar), y lo maneja
+    // parseBudgetInput con allowEmpty.
+    if (edited.baseBudgetInput === undefined) return empty
     const { value, error } = parseBudgetInput(edited.baseBudgetInput, { allowEmpty: true, allowZero: true })
     if (error) return { ...empty, error }
     if (value === (original.baseBudgetHours ?? null)) return empty

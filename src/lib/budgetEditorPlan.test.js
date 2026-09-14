@@ -32,6 +32,13 @@ test('sin stages: vaciar el base lo cambia a null', () => {
   assert.deepEqual(plan.baseBudgetChange, { value: null })
 })
 
+test('sin stages: baseBudgetInput ausente es no-op, NO borra el budget', () => {
+  const original = { hasStages: false, baseBudgetHours: 120, activeStageId: null, stages: [] }
+  const plan = buildBudgetSavePlan(original, {})
+  assert.equal(plan.error, null)
+  assert.equal(plan.baseBudgetChange, null)
+})
+
 test('con stages: solo los stages con budget cambiado entran al plan', () => {
   const original = {
     hasStages: true,

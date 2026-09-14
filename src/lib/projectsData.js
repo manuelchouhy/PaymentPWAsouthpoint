@@ -976,16 +976,25 @@ export async function getAllProjectStages() {
     }
     return map
   }
-  const { data, error } = await supabase.from('project_stages').select('project_id, id, budget_hours')
-  if (error) throw new Error(error.message)
-  if (data.length === 1000) {
-    console.warn('project_stages devolvió 1000 filas (posible tope de PostgREST) — paginar getAllProjectStages.')
-  }
-  for (const row of data) {
-    const key = String(row.project_id)
-    const list = map.get(key) ?? []
-    list.push({ id: row.id, budgetHours: row.budget_hours != null ? Number(row.budget_hours) : null })
-    map.set(key, list)
+  // Paginado explícito: PostgREST tope a 1000 filas por respuesta. Sin esto, un
+  // workspace con >1000 stages en total devolvería un subconjunto arbitrario y el
+  // resolver mostraría budgets incompletos/errados sin ninguna señal al usuario.
+  // Orden por id estable para que las páginas no se solapen ni salteen filas.
+  const pageSize = 1000
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('project_stages')
+      .select('project_id, id, budget_hours')
+      .order('id', { ascending: true })
+      .range(from, from + pageSize - 1)
+    if (error) throw new Error(error.message)
+    for (const row of data) {
+      const key = String(row.project_id)
+      const list = map.get(key) ?? []
+      list.push({ id: row.id, budgetHours: row.budget_hours != null ? Number(row.budget_hours) : null })
+      map.set(key, list)
+    }
+    if (data.length < pageSize) break
   }
   return map
 }
