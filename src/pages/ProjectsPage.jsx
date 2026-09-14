@@ -386,6 +386,18 @@ export function ProjectsPage() {
   async function handleSaveBudgets(plan) {
     const project = budgetEditing
 
+    // Los budgets de stage van PRIMERO. Cada uno es independiente — en paralelo;
+    // solo llegan los que cambiaron (el plan ya filtró). `projectId` viaja para el
+    // path demo de updateStage; el real solo usa el id. Si alguno falla, se corta
+    // acá y el cambio a nivel proyecto (base/activo) NO se commitea, así no queda
+    // un cambio auditado a medias. (Atomicidad total sobre ambas tablas requeriría
+    // un RPC transaccional — follow-up.)
+    await Promise.all(
+      (plan.stageBudgetChanges ?? []).map((c) =>
+        api.projects.updateStage({ id: c.id, projectId: project.id }, { budgetHours: c.value }),
+      ),
+    )
+
     const projectUpdates = {}
     if (plan.baseBudgetChange) projectUpdates.baseBudgetHours = plan.baseBudgetChange.value
     if (plan.activeStageChange) projectUpdates.activeStageId = plan.activeStageChange.value
@@ -394,15 +406,6 @@ export function ProjectsPage() {
     if (Object.keys(projectUpdates).length) {
       updated = await api.projects.update(project, projectUpdates, user?.email ?? null)
     }
-
-    // Cada budget de stage es independiente — en paralelo. Solo llegan los que
-    // cambiaron (el plan ya filtró). `projectId` viaja para el path demo de
-    // updateStage; el real solo usa el id.
-    await Promise.all(
-      (plan.stageBudgetChanges ?? []).map((c) =>
-        api.projects.updateStage({ id: c.id, projectId: project.id }, { budgetHours: c.value }),
-      ),
-    )
 
     api.audit.log({
       actorEmail: user?.email,

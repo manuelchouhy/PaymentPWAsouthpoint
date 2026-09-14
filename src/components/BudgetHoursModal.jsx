@@ -74,7 +74,10 @@ export function BudgetHoursModal({ project, onClose, onSubmit }) {
     }
   }, [project.id, project.projectName])
 
-  const hasStages = stages.length > 0
+  // Un proyecto marcado con stages usa el editor por-stage aunque getStages haya
+  // vuelto vacío (dato inconsistente / transitorio): así NUNCA se escribe
+  // base_budget_hours en un proyecto cuyo budget vive en sus stages.
+  const hasStages = Boolean(project.hasStages) || stages.length > 0
 
   // Total/activo en vivo: se reusa el mismo resolver que Client Summary, mapeando
   // los inputs actuales a budgets parseados, para que el número que ve el usuario
@@ -166,6 +169,10 @@ export function BudgetHoursModal({ project, onClose, onSubmit }) {
           ) : loadError ? (
             <p className="modal__submit-error" role="alert">
               {loadError}
+            </p>
+          ) : hasStages && stages.length === 0 ? (
+            <p className="field__hint">
+              This project has stages, but none could be listed right now. Try reopening this project.
             </p>
           ) : hasStages ? (
             <>
