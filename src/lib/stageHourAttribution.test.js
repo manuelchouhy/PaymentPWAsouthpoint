@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { attributeHoursByStage } from './stageHourAttribution.js'
+import { attributeHoursByStage, buildTaskToStage } from './stageHourAttribution.js'
 
 const E = (id, taskNumber, hours) => ({ id, taskNumber, hours })
 
@@ -97,4 +97,35 @@ test('la suma total de horas se conserva (byStage + noStage)', () => {
   const { byStage, noStage } = attributeHoursByStage(entries, { 'T-1': 'S1', 'T-2': 'S1' })
   const total = Object.values(byStage).reduce((s, b) => s + b.hours, 0) + noStage.hours
   assert.equal(total, 9)
+})
+
+// --- buildTaskToStage ---------------------------------------------------------
+
+test('buildTaskToStage: arma zoho_task_id → stage_id (normaliza a string)', () => {
+  const rows = [
+    { zoho_task_id: 'T-1', stage_id: 5 },
+    { zoho_task_id: 1003, stage_id: 'S2' },
+  ]
+  assert.deepEqual(buildTaskToStage(rows), { 'T-1': '5', '1003': 'S2' })
+})
+
+test('buildTaskToStage: ignora filas sin task o sin stage (y null)', () => {
+  const rows = [
+    { zoho_task_id: 'T-1', stage_id: null },
+    { zoho_task_id: '', stage_id: 'S1' },
+    null,
+    { zoho_task_id: 'T-2', stage_id: 'S2' },
+  ]
+  assert.deepEqual(buildTaskToStage(rows), { 'T-2': 'S2' })
+})
+
+test('buildTaskToStage: el resultado alimenta attributeHoursByStage', () => {
+  const taskToStage = buildTaskToStage([{ zoho_task_id: 'T-1', stage_id: 'S1' }])
+  const { byStage } = attributeHoursByStage([{ id: 9, taskNumber: 'T-1', hours: 4 }], taskToStage)
+  assert.equal(byStage.S1.hours, 4)
+})
+
+test('buildTaskToStage: entrada vacía o no-array → {}', () => {
+  assert.deepEqual(buildTaskToStage([]), {})
+  assert.deepEqual(buildTaskToStage(null), {})
 })
