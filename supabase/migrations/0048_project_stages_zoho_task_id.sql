@@ -31,3 +31,8 @@ alter table public.project_stages
 create unique index if not exists uq_project_stages_project_zoho_task
   on public.project_stages (project_id, zoho_task_id)
   where zoho_task_id is not null;
+
+-- Los Stages sincronizados de Zoho NO tienen SOW number (era NOT NULL por el wizard
+-- legacy). Se relaja a nullable para poder insertar un stage de Zoho con sow_number null.
+alter table public.project_stages
+  alter column sow_number drop not null;
