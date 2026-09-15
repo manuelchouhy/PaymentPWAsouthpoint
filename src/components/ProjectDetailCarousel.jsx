@@ -7,6 +7,7 @@ import { CR_TYPE_LABELS } from '../lib/changeRequestsData'
 import { resolveProjectBudget } from '../lib/projectStageBudget'
 import { buildProjectTaskTree } from '../lib/projectTaskTree'
 import { mergeProjectTasks } from '../lib/mergeProjectTasks'
+import { buildTaskToStage } from '../lib/stageHourAttribution'
 import { api } from '../lib/api'
 import { fileNameFromPath, formatDate, formatDateTime } from '../lib/format'
 import { useScrollLock } from '../lib/useScrollLock'
@@ -1028,6 +1029,9 @@ export function ProjectDetailCarousel({
   // recién cuando se ve el slide (treeRequested).
   const [treeStages, setTreeStages] = useState([])
   const [treeTasks, setTreeTasks] = useState([])
+  // Mapa zoho_task_id → stage_id de la membresía (stage_task_membership), acotado a este
+  // proyecto: ubica bajo su stage a los tasks logueados que no tienen stage del SOW.
+  const [treeTaskToStage, setTreeTaskToStage] = useState({})
   const [treeLoading, setTreeLoading] = useState(true)
   const [treeError, setTreeError] = useState(false)
   const [treeRequested, setTreeRequested] = useState(false)
@@ -1052,8 +1056,8 @@ export function ProjectDetailCarousel({
   const canEditBudget = Boolean(onEditBudget)
 
   const taskTree = useMemo(
-    () => buildProjectTaskTree(treeStages, treeTasks),
-    [treeStages, treeTasks],
+    () => buildProjectTaskTree(treeStages, treeTasks, treeTaskToStage),
+    [treeStages, treeTasks, treeTaskToStage],
   )
   // Estado de la carga de stages para el slide del árbol (los stages los trae el
   // efecto de stageCount). Extraído para no repetir la regla en loading/error.
@@ -1239,14 +1243,21 @@ export function ProjectDetailCarousel({
     let cancelled = false
     setTreeLoading(true)
     setTreeError(false)
+    // Reset del mapa del proyecto anterior: al cambiar de proyecto, no agrupar con la
+    // membresía vieja mientras carga la nueva (evita un agrupado stale transitorio).
+    setTreeTaskToStage({})
     // allSettled: si falla la lista de registrados (RLS, stub notImplemented del backend
     // http), los logueados igual se muestran — antes del merge sólo se pedían esos. Sólo
     // es error si fallan las DOS.
     Promise.allSettled([
       Promise.resolve().then(() => api.projectTasks.list(project.id)),
       Promise.resolve().then(() => api.projectTasks.logged(project.projectName)),
+      // Membresía subtask→stage (por id de Zoho) SÓLO de este proyecto (filtrada en el
+      // server). Su fallo NO es error del árbol (los tasks igual se muestran, sólo que sin
+      // agrupar por stage de Zoho) → va en el allSettled.
+      Promise.resolve().then(() => api.projects.getStageMembership(project.id)),
     ])
-      .then(([registeredRes, loggedRes]) => {
+      .then(([registeredRes, loggedRes, membershipRes]) => {
         if (cancelled) return
         if (registeredRes.status === 'rejected' && loggedRes.status === 'rejected') {
           console.error('No se pudieron cargar los tasks del proyecto:', loggedRes.reason)
@@ -1256,6 +1267,9 @@ export function ProjectDetailCarousel({
         const registered = registeredRes.status === 'fulfilled' ? registeredRes.value : []
         const logged = loggedRes.status === 'fulfilled' ? loggedRes.value : []
         setTreeTasks(mergeProjectTasks(registered ?? [], logged ?? []))
+        // Ya viene acotada a este proyecto → mapa zoho_task_id → stage_id directo.
+        const membership = membershipRes.status === 'fulfilled' ? membershipRes.value ?? [] : []
+        setTreeTaskToStage(buildTaskToStage(membership))
       })
       .finally(() => !cancelled && setTreeLoading(false))
     return () => {

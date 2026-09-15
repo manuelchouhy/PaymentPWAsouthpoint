@@ -1023,15 +1023,28 @@ export async function getAllProjectStages() {
  * Devuelve las filas crudas [{ project_id, stage_id, zoho_task_id, task_name }]. En demo (sin
  * Supabase) devuelve [] — la feature de stages sólo aplica a proyectos de Zoho.
  *
- * Paginado por keyset sobre `zoho_task_id`: aunque el PK de la tabla es compuesto
- * (project_id, zoho_task_id), el zoho_task_id es el id de tarea de Zoho, ÚNICO a nivel portal
- * (todo el workspace es un solo portal), así que no hay dos filas con el mismo zoho_task_id y
- * el cursor `.gt('zoho_task_id', last)` no puede saltear filas en el borde de página. Se
- * ordena por él por el mismo motivo que getAllProjectStages (offset correría con inserts).
+ * Con `projectId` trae SÓLO las filas de ese proyecto (filtrado en el SERVER): la vista de
+ * UN proyecto no debe traerse toda la tabla. Un proyecto no llega a 1000 subtasks, así que
+ * ahí no hace falta paginar.
+ *
+ * Sin `projectId` (lo usa Billing) trae TODA la tabla, paginada por keyset sobre
+ * `zoho_task_id`: aunque el PK es compuesto (project_id, zoho_task_id), el zoho_task_id es el
+ * id de tarea de Zoho, ÚNICO a nivel portal (todo el workspace es un solo portal), así que no
+ * hay dos filas con el mismo zoho_task_id y el cursor `.gt('zoho_task_id', last)` no saltea
+ * filas en el borde de página. Se ordena por él por el mismo motivo que getAllProjectStages.
+ * @param {(string|number)} [projectId] si viene, filtra a ese proyecto (server-side, sin paginar).
  * @returns {Promise<Array<{ project_id: (string|number), stage_id: (string|number), zoho_task_id: string, task_name: ?string }>>}
  */
-export async function getStageTaskMembership() {
+export async function getStageTaskMembership(projectId = null) {
   if (!isSupabaseConfigured) return []
+  if (projectId != null) {
+    const { data, error } = await supabase
+      .from('stage_task_membership')
+      .select('project_id, stage_id, zoho_task_id, task_name')
+      .eq('project_id', projectId)
+    if (error) throw new Error(error.message)
+    return data ?? []
+  }
   const out = []
   const pageSize = 1000
   let lastKey = null
