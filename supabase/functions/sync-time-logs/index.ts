@@ -682,6 +682,11 @@ Deno.serve(async (req) => {
               task_number: String(
                 safe(tl, "task.id_string", "") || safe(tl, "task.id", ""),
               ),
+              // key corto de Zoho (task.key, ej. "HSS-I12"), SÓLO para display: la UI lo
+              // muestra en vez del task_number largo. La lógica sigue sobre task_number.
+              // Si el payload del time-log no trae task.key, queda '' y la UI cae al largo
+              // (sin regresión). Verificar en el primer re-sync que Zoho lo incluya.
+              task_key: String(safe(tl, "task.key", "")),
               description: tl.notes || "",
               notes: tl.notes || "",
               log_date: logDate,

@@ -31,18 +31,24 @@ export function mergeProjectTasks(registered = [], logged = []) {
     const key = norm(l?.taskName)
     if (!key) continue
     const acc = loggedByKey.get(key)
+    const num = toNum(l.taskNumber)
+    const tkey = toNum(l.taskKey) // key corto de Zoho, sólo para display (ver taskDisplayId)
     if (acc) {
       acc.hours += Number(l.hours) || 0
       acc.consumedHours += Number(l.consumedHours) || 0
-      if (acc.taskNumber == null) acc.taskNumber = toNum(l.taskNumber)
-      if (acc.taskKey == null) acc.taskKey = toNum(l.taskKey)
+      // taskNumber + taskKey atados: el key mostrado debe corresponder al mismo task que el
+      // número (si dos logueados colapsan por nombre, no mezclar el key de uno con el id de otro).
+      if (acc.taskNumber == null && num != null) {
+        acc.taskNumber = num
+        acc.taskKey = tkey
+      } else if (acc.taskKey == null && num != null && num === acc.taskNumber) {
+        acc.taskKey = tkey
+      }
     } else {
       loggedByKey.set(key, {
         taskName: l.taskName ?? '',
-        taskNumber: toNum(l.taskNumber),
-        // key corto de Zoho, sólo para display (ver taskDisplayId). toNum sólo coacciona a
-        // string/null, así que sirve igual para un key alfanumérico.
-        taskKey: toNum(l.taskKey),
+        taskNumber: num,
+        taskKey: tkey,
         hours: Number(l.hours) || 0,
         consumedHours: Number(l.consumedHours) || 0,
       })

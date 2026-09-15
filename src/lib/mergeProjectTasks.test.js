@@ -28,6 +28,21 @@ test('propaga el taskKey (corto de Zoho) del logueado al task mergeado, para dis
   assert.equal(mergeProjectTasks([], logged)[0].taskKey, 'HSS-I12')
 })
 
+test('taskKey atado al taskNumber: dos logueados homónimos no cruzan key↔número', () => {
+  // "Backend" (número 111, sin key) y "Backend " (número 222, key 'HSS-9') colapsan por nombre;
+  // el par gana el primero → número 111 con key null, sin prestarle el key del task 222.
+  const out = mergeProjectTasks(
+    [],
+    [
+      { taskName: 'Backend', taskNumber: '111', taskKey: null, hours: 4, consumedHours: 4 },
+      { taskName: 'Backend ', taskNumber: '222', taskKey: 'HSS-9', hours: 6, consumedHours: 6 },
+    ],
+  )
+  assert.equal(out.length, 1)
+  assert.equal(out[0].taskNumber, '111')
+  assert.equal(out[0].taskKey, null) // NO 'HSS-9'
+})
+
 test('un task logueado SIN registrar aparece con stageId null (sin asignar) y registered=false', () => {
   const out = mergeProjectTasks([], [{ taskName: 'Ad-hoc', taskNumber: '9', hours: 5, consumedHours: 5 }])
   assert.equal(out.length, 1)
