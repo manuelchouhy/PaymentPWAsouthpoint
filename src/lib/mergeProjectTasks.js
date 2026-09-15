@@ -48,7 +48,9 @@ export function mergeProjectTasks(registered = [], logged = []) {
       loggedByKey.set(key, {
         taskName: l.taskName ?? '',
         taskNumber: num,
-        taskKey: tkey,
+        // tether: el key sólo vale atado a un número (mismo criterio que aggregateLoggedTasks);
+        // sin número no hay a qué corresponder el key → null.
+        taskKey: num != null ? tkey : null,
         hours: Number(l.hours) || 0,
         consumedHours: Number(l.consumedHours) || 0,
       })

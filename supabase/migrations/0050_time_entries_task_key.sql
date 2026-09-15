@@ -10,8 +10,11 @@
 -- puramente de presentación. Nullable, sin backfill: queda NULL en filas viejas hasta el
 -- próximo sync (sync-time-logs la puebla desde task.key de Zoho). No destructivo e idempotente.
 --
--- ORDEN DE DEPLOY (stacked): esta migración debe aplicarse ANTES de deployar el frontend,
--- porque getTimeEntries()/getProjectLoggedTasks() ya piden la columna en su SELECT.
+-- ORDEN DE DEPLOY (stacked): esta migración debe aplicarse PRIMERO, antes de:
+--   1) redeployar el edge function sync-time-logs (su upsert ya incluye task_key; si la
+--      columna no existe, PostgREST rechaza TODO el batch y el sync se corta), y
+--   2) deployar el frontend (getTimeEntries()/getProjectLoggedTasks() ya piden la columna
+--      en su SELECT; si falta, la query tira y se caen las páginas).
 -- =============================================================================
 
 alter table public.time_entries

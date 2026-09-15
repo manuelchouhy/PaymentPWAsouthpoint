@@ -63,8 +63,10 @@ export interface TimeEntry {
   task: string
   taskNumber: string
   /** Key corto de Zoho (task.key), sólo para display. '' hasta que el sync lo pueble;
-   *  la UI cae al taskNumber largo. La lógica sigue usando taskNumber. */
-  taskKey: string
+   *  la UI cae al taskNumber largo. La lógica sigue usando taskNumber. Opcional: no todos
+   *  los productores de TimeEntry lo setean (data demo, mappers viejos); taskDisplayId
+   *  tolera undefined. */
+  taskKey?: string
   description: string
   notes: string
   date: string // ISO YYYY-MM-DD

@@ -303,6 +303,9 @@ export function EntriesPage() {
       { header: 'User', key: 'user' },
       { header: 'Client', key: 'client' },
       { header: 'Task', key: 'task' },
+      // Task #: en el EXPORT va el id LARGO de Zoho (taskNumber), a propósito, aunque la grilla
+      // muestre el key corto. El export es para trazar/matchear contra Zoho (mismo criterio que
+      // el export de Billing), no para leerse en pantalla. El corto es sólo display.
       { header: 'Task #', key: 'taskNumber' },
       { header: 'Date', key: 'date' },
       { header: 'Week', key: 'week' },
