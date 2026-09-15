@@ -40,7 +40,8 @@ async function getAccessToken(): Promise<string> {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: params.toString(),
       });
-      if (res.status >= 500) throw new Error(`Zoho token HTTP ${res.status}`);
+      // 5xx y 429 (throttle) son transitorios → reintentar (no confundir con credenciales).
+      if (res.status >= 500 || res.status === 429) throw new Error(`Zoho token HTTP ${res.status}`);
       const data = await res.json();
       if (!data.access_token) throw new Error("No access_token from Zoho. Revisá las credenciales.");
       return data.access_token;
@@ -85,6 +86,7 @@ async function fetchTopLevelTasks(portalId: string, projectId: string, token: st
   const out: { id: string; key: string | null; name: string }[] = [];
   const MAX_PAGES = 100; // guarda anti-loop (20k tasks)
   let index = 1;
+  let prevFirstId = "";
   for (let page = 0; ; page++) {
     // Tope de páginas: abortar (tirar) en vez de devolver una lista incompleta que
     // haría borrar stages reales en la reconciliación.
@@ -97,6 +99,11 @@ async function fetchTopLevelTasks(portalId: string, projectId: string, token: st
     // transitorio de Zoho. Una lista vacía real (200 con tasks:[]) sí reconcilia.
     if (data == null) throw new Error(`fetch de tasks falló (proyecto ${projectId}, index ${index}) — se saltea`);
     const tasks: any[] = Array.isArray(data.tasks) ? data.tasks : [];
+    // No-progreso: si Zoho ignora index/range, cada página repite la misma primera task →
+    // cortar en vez de pedir la misma página MAX_PAGES veces (detectStages dedup igual).
+    const firstId = tasks.length ? String(tasks[0].id_string || tasks[0].id || "") : "";
+    if (tasks.length > 0 && firstId === prevFirstId) break;
+    prevFirstId = firstId;
     for (const t of tasks) {
       out.push({
         id: String(t.id_string || t.id || ""),
@@ -118,7 +125,7 @@ async function reconcileProjectStages(
 ) {
   const { data: existing, error } = await supabase
     .from("project_stages")
-    .select("id, zoho_task_id, stage_name, zoho_task_key, position")
+    .select("id, zoho_task_id, stage_name, zoho_task_key")
     .eq("project_id", projectId);
   if (error) throw new Error(error.message);
 
@@ -156,6 +163,15 @@ async function reconcileProjectStages(
     }
   }
 
+  // GUARDA DE SEGURIDAD: si NO se detectó ningún Stage en Zoho, NO se borra NADA.
+  // Un "cero stages" con filas existentes es sospechoso (false-empty: cambio de shape de
+  // Zoho, regresión del parser, stages modelados como subtareas que esta slice no trae) y
+  // borrar todo sería catastrófico (budgets + active_stage_id, ADR-0003). Se prefiere
+  // dejar stages viejos (stale) antes que un wipe accidental; un proyecto que realmente
+  // vació sus stages en Zoho se limpia a mano. La baja de huérfanos solo ocurre cuando hay
+  // al menos un Stage detectado (caso normal: llegó "Stage N" y se limpia el manual viejo).
+  if (detected.length === 0) return { created, updated, deleted };
+
   // Baja: stages que ya no vienen de Zoho (incluye manuales con zoho_task_id null).
   // El budget se pierde (ADR-0003); active_stage_id/project_tasks.stage_id son SET NULL.
   for (const row of existing ?? []) {
@@ -170,6 +186,8 @@ async function reconcileProjectStages(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  // Solo POST dispara el sync (destructivo): un GET/health-check no debe correrlo.
+  if (req.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   try {
