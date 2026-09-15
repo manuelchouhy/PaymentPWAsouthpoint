@@ -676,18 +676,36 @@ Deno.serve(async (req) => {
     // en time_entries: tras el primer sync exitoso, casi ninguna tarea necesita pedirle el key
     // a Zoho otra vez. Lo que falte (tareas nuevas) se resuelve después del loop (ver más abajo).
     const keyMap = new Map<string, string>();
+    // seedOk=false → la siembra falló: NO se toca task_key en el upsert este run, para no pisar
+    // con '' los keys buenos ya guardados (regresión). Ver el strip antes del upsert.
+    let seedOk = true;
     try {
-      const { data: known } = await supabase
-        .from("time_entries")
-        .select("task_number, task_key")
-        .not("task_key", "is", null)
-        .neq("task_key", "");
-      for (const r of known ?? []) {
-        if (r.task_number && r.task_key) keyMap.set(String(r.task_number), String(r.task_key));
+      // Keyset por id (igual que el barrido de logs): COMPLETO aunque el server tope max-rows
+      // (si truncara, un key conocido quedaría fuera y se re-pediría o —peor— se pisaría). El
+      // keyMap queda DISTINCT por task_number (dedupe natural) → memoria acotada al nº de tareas,
+      // no de filas. Las páginas intermedias se liberan.
+      let lastId = 0;
+      for (let guard = 0; guard < 1000; guard++) {
+        const { data, error } = await supabase
+          .from("time_entries")
+          .select("id, task_number, task_key")
+          .not("task_key", "is", null)
+          .neq("task_key", "")
+          .gt("id", lastId)
+          .order("id")
+          .limit(1000);
+        if (error) throw new Error(error.message);
+        const batch = data ?? [];
+        for (const r of batch) {
+          if (r.task_number && r.task_key) keyMap.set(String(r.task_number), String(r.task_key));
+        }
+        if (batch.length === 0) break;
+        lastId = batch[batch.length - 1].id;
       }
       console.log(`keyMap sembrado con ${keyMap.size} keys ya conocidos (DB)`);
     } catch (e) {
-      console.log("No se pudo sembrar keyMap desde la DB, se sigue:", String((e as Error)?.message ?? e));
+      seedOk = false;
+      console.log("No se pudo sembrar keyMap desde la DB; se OMITE escribir task_key este run para no pisar valores buenos:", String((e as Error)?.message ?? e));
     }
 
     // El barrido de logs es SOLO sobre activos: los archivados casi nunca tienen
@@ -745,11 +763,10 @@ Deno.serve(async (req) => {
               task: safe(tl, "task.name", ""),
               task_number: taskId,
               // key corto de Zoho (task.key, ej. "PP1-T5"), SÓLO para display: la UI lo muestra
-              // en vez del task_number largo. NO viene en el time-log; acá se toma del keyMap
-              // top-level (paso 1). Las subtasks/anidadas con horas se completan en el paso 2
-              // (lazy, más abajo). Lo que no quede en el mapa cae al id largo. La lógica sigue
-              // sobre task_number.
-              task_key: String(keyMap.get(taskId) ?? ""),
+              // en vez del task_number largo. Se prefiere el del time-log si el portal lo trae
+              // (gratis; hoy llega vacío, verificado), si no el del keyMap (sembrado + resuelto).
+              // Lo que no quede queda '' y cae al id largo. La lógica sigue sobre task_number.
+              task_key: String(safe(tl, "task.key", "") || keyMap.get(taskId) || ""),
               description: tl.notes || "",
               notes: tl.notes || "",
               log_date: logDate,
@@ -768,12 +785,16 @@ Deno.serve(async (req) => {
     // sembrar desde la DB (tareas nunca resueltas). Se agrupan por proyecto para no pedir tareas
     // de proyectos activos-pero-sin-horas-nuevas. Best-effort: lo que no resuelva queda '' y cae
     // al id largo — nunca rompe el sync (cada fetch va guardado aparte).
+    // Se salta entero si la siembra falló (seedOk=false): sin el mapa completo no se puede
+    // distinguir "nueva" de "ya conocida", y escribir '' pisaría keys buenos.
     const missingByProject = new Map<string, Set<string>>();
-    for (const r of rows) {
-      if (r.task_key || !r.task_number) continue;
-      const pid = String(r.zoho_project_id);
-      if (!missingByProject.has(pid)) missingByProject.set(pid, new Set());
-      missingByProject.get(pid)!.add(String(r.task_number));
+    if (seedOk) {
+      for (const r of rows) {
+        if (r.task_key || !r.task_number) continue;
+        const pid = String(r.zoho_project_id);
+        if (!missingByProject.has(pid)) missingByProject.set(pid, new Set());
+        missingByProject.get(pid)!.add(String(r.task_number));
+      }
     }
     if (missingByProject.size > 0) {
       const totalMissing = [...missingByProject.values()].reduce((n, s) => n + s.size, 0);
@@ -787,9 +808,23 @@ Deno.serve(async (req) => {
         }
       }
       // Paso 2 (lazy): las que el top-level NO cubrió (subtasks/anidadas) → GET por tarea, una vez.
+      // CAP por corrida (MAX_LAZY_RESOLVE): los GETs son secuenciales y en el PRIMER sync (mapa
+      // vacío) podrían ser muchos → riesgo de exceder el wall-clock del edge function o vencer el
+      // token de Zoho, y que el upsert (al final) no llegue a correr. Lo que no entra en el cap se
+      // resuelve en los próximos syncs (el keyMap se siembra con lo ya resuelto → converge).
+      const MAX_LAZY_RESOLVE = 250;
+      let resolved = 0;
+      let capped = false;
       for (const [pid, taskIds] of missingByProject) {
+        if (capped) break;
         for (const taskId of taskIds) {
           if (keyMap.has(taskId)) continue; // ya la trajo el top-level
+          if (resolved >= MAX_LAZY_RESOLVE) {
+            capped = true;
+            console.log(`  cap de ${MAX_LAZY_RESOLVE} resoluciones lazy alcanzado; el resto se resuelve en el próximo sync`);
+            break;
+          }
+          resolved++;
           try {
             const key = await resolveTaskKey(portalId, pid, taskId, token);
             if (key) keyMap.set(taskId, key);
@@ -812,6 +847,14 @@ Deno.serve(async (req) => {
         projects: projectsSynced,
         note: "Sin time logs en el rango.",
       });
+    }
+
+    // Si la siembra de keys falló, se saca task_key del payload del upsert: así la columna NO se
+    // toca y se conservan los valores buenos ya guardados (en vez de pisarlos con ''). El resto
+    // del sync (horas, proyectos, clientes) corre normal; los keys se completan en el próximo run.
+    if (!seedOk) {
+      for (const r of rows) delete r.task_key;
+      console.log("Siembra fallida: task_key excluido del upsert (no se pisan valores existentes).");
     }
 
     // upsert en lotes de 500 para no pasarse de tamaño
