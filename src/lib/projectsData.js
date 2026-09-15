@@ -1038,7 +1038,6 @@ export async function createProjectStages(projectId, stages, createdBy, startPos
       sowUrl: s.sowUrl ?? null,
       // '' -> null (?? no atrapa ''); preserva 0. Mismo criterio que updateProjectStage.
       budgetHours: s.budgetHours === '' ? null : s.budgetHours ?? null,
-      zohoTaskId: s.zohoTaskId ?? null,
       createdAt: new Date().toISOString(),
       createdBy: createdBy || null,
     }),
@@ -1050,7 +1049,8 @@ export async function createProjectStages(projectId, stages, createdBy, startPos
       sow_url: s.sowUrl ?? null,
       // '' -> null: sin esto el '' llega a la columna numérica y revienta el insert.
       budget_hours: s.budgetHours === '' ? null : s.budgetHours ?? null,
-      zoho_task_id: s.zohoTaskId ?? null,
+      // zoho_task_id NO se setea acá: los stages creados por esta vía (manual/legacy)
+      // son null por definición; el campo lo pone el sync (edge function). Ver 0048.
       created_by: createdBy || null,
     }),
     rowToEntity: rowToStage,
@@ -1086,7 +1086,9 @@ export async function updateProjectStage(current, updates) {
   // '' -> null; preserva 0 como budget válido (mismo criterio que projectToRow).
   if (updates.budgetHours !== undefined)
     row.budget_hours = updates.budgetHours === '' ? null : updates.budgetHours ?? null
-  if (updates.zohoTaskId !== undefined) row.zoho_task_id = updates.zohoTaskId ?? null
+  // zoho_task_id NO se escribe desde el frontend: es un campo del sync (lo pone/actualiza
+  // el edge function directo). Acá solo se lee (rowToStage). Escribirlo a mano sería un
+  // footgun (un null marca el stage para borrado en el próximo diff, ADR-0003).
   const { data, error } = await supabase.from('project_stages').update(row).eq('id', current.id).select().single()
   if (error) throw new Error(error.message)
   return rowToStage(data)

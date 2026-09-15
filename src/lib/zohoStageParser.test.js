@@ -66,6 +66,17 @@ test('detectStages descarta una Task-Stage sin id de Zoho (inusable para el upse
   assert.deepEqual(detectStages(tasks), [{ zohoTaskId: 'z-t5', name: 'Stage III' }])
 })
 
+test('detectStages descarta id vacío ("") y coerciona el id numérico a string', () => {
+  // Nota: los ids reales de Zoho son enteros grandes (fuera del rango seguro de JS),
+  // por eso el edge function normaliza desde task.id_string (string) — acá se testea
+  // solo la coerción con un numérico chico, sin el landmine de precisión.
+  const tasks = [
+    { id: '', name: 'Stage I' }, // id vacío → descartado
+    { id: 12345, name: 'Stage II' }, // id numérico → string
+  ]
+  assert.deepEqual(detectStages(tasks), [{ zohoTaskId: '12345', name: 'Stage II' }])
+})
+
 test('detectStages normaliza el name a string trimeado', () => {
   assert.deepEqual(detectStages([{ id: 'z-t5', name: '  Stage II  ' }]), [
     { zohoTaskId: 'z-t5', name: 'Stage II' },
