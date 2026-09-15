@@ -16,8 +16,10 @@ export function isStageName(name) {
   // `.*[\p{L}\p{N}]` (flag s) exige un alfanumérico real después de "Stage": un
   // separador suelto ("Stage:", "Stage -") no alcanza; el `s` permite que ese separador
   // sea un newline. LIMITACIÓN CONOCIDA (ver PRD "Riesgo principal"): la heurística por
-  // nombre puede dar falsos positivos si una task común empieza con "Stage <n> ..."
-  // (ej. "Stage 2 servers"); se acepta porque el usuario nombra los stages como "Stage N".
+  // nombre puede dar falsos positivos con cualquier task que empiece con "Stage" + un
+  // separador + algo (ej. "Stage 2 servers", "Stage-gate review"); se acepta porque el
+  // usuario nombra los stages como "Stage N". Si molesta, se podría exigir número/romano
+  // tras "Stage" (decisión de producto pendiente).
   return /^stage(?![\p{L}]).*[\p{L}\p{N}]/ius.test(String(name ?? '').trim())
 }
 
@@ -29,20 +31,28 @@ export function isStageName(name) {
  */
 export function detectStages(tasks) {
   // Un input no-array (ej. normalización fallida upstream que pasa null) devuelve []
-  // en vez de tirar — el default `= []` solo cubre undefined, no null.
+  // en vez de tirar (Array.isArray cubre null y undefined, no solo undefined).
   if (!Array.isArray(tasks)) return []
-  return tasks
-    // `t != null`: tolera huecos en el array (se saltea la fila mala, no tira).
-    // id ausente/vacío: un Stage sin id de Zoho es inusable (el upsert/diff se ancla por
-    // zoho_task_id) → se descarta en vez de emitir un anchor vacío.
-    .filter((t) => t != null && t.id != null && t.id !== '' && isStageName(t.name))
-    // `zohoTaskId` a string (la columna zoho_task_id es TEXT, como time_entries.task_number):
-    // así el diff del sync compara con === sin mismatch número-vs-string. `zohoTaskKey` es la
-    // key legible ("PP1-T5") para mostrar en el front (null si no vino). `name` trimeado
-    // cumple el contrato { name:string } y limpia el stage_name a guardar.
-    .map((t) => ({
-      zohoTaskId: String(t.id),
-      zohoTaskKey: t.key != null ? String(t.key) : null,
+  const seen = new Set()
+  const stages = []
+  for (const t of tasks) {
+    // Se saltea (no tira): hueco null en el array, o Stage sin id de Zoho (id ausente/
+    // vacío) que es inusable porque el upsert/diff se ancla por zoho_task_id.
+    if (t == null || t.id == null || t.id === '' || !isStageName(t.name)) continue
+    // `zohoTaskId` a string (la columna es TEXT, como time_entries.task_number) → el diff
+    // del sync compara con === sin mismatch número-vs-string.
+    const zohoTaskId = String(t.id)
+    // Dedup por id: si Zoho repite la misma Task-Stage (overlap de paginación), emitirla
+    // dos veces reventaría el índice único (project_id, zoho_task_id) del upsert.
+    if (seen.has(zohoTaskId)) continue
+    seen.add(zohoTaskId)
+    stages.push({
+      zohoTaskId,
+      // key legible ("PP1-T5") para mostrar en el front; null si no vino o vino vacía.
+      zohoTaskKey: t.key != null && t.key !== '' ? String(t.key) : null,
+      // name trimeado: cumple el contrato { name:string } y limpia el stage_name a guardar.
       name: String(t.name ?? '').trim(),
-    }))
+    })
+  }
+  return stages
 }

@@ -53,10 +53,21 @@ test('detectStages devuelve las Tasks-Stage con { zohoTaskId (largo), zohoTaskKe
   assert.deepEqual(detectStages(tasks), [{ zohoTaskId: 'z-t5', zohoTaskKey: 'PP1-T5', name: 'Stage II' }])
 })
 
-test('detectStages con key ausente devuelve zohoTaskKey null', () => {
+test('detectStages con key ausente o vacía devuelve zohoTaskKey null', () => {
   assert.deepEqual(detectStages([{ id: 'z-t5', name: 'Stage II' }]), [
     { zohoTaskId: 'z-t5', zohoTaskKey: null, name: 'Stage II' },
   ])
+  assert.deepEqual(detectStages([{ id: 'z-t5', key: '', name: 'Stage II' }]), [
+    { zohoTaskId: 'z-t5', zohoTaskKey: null, name: 'Stage II' },
+  ])
+})
+
+test('detectStages deduplica por zohoTaskId (overlap de paginación de Zoho)', () => {
+  const tasks = [
+    { id: 'z-t5', key: 'PP1-T5', name: 'Stage II' },
+    { id: 'z-t5', key: 'PP1-T5', name: 'Stage II' }, // repetida
+  ]
+  assert.deepEqual(detectStages(tasks), [{ zohoTaskId: 'z-t5', zohoTaskKey: 'PP1-T5', name: 'Stage II' }])
 })
 
 test('detectStages tolera huecos null/undefined en el array (no tira)', () => {
