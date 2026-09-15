@@ -12,6 +12,7 @@ import { buildClientResolver } from '../lib/clientResolver'
 import { groupBillToClient, groupReadonly } from '../lib/billingGrouping'
 import { billingKpis } from '../lib/billingKpis'
 import { resolveProjectBudget } from '../lib/projectStageBudget'
+import { effectiveBudgetHours } from '../lib/effectiveBudget'
 import { remainingBudgetHours } from '../lib/budgetRemaining'
 import {
   canBillSelection,
@@ -580,17 +581,25 @@ export function BillingPage() {
         const [num] = [...nums]
         const matches = projects.filter((p) => p.projectNumber === num)
         if (matches.length !== 1) return null
-        // Budget del STAGE ACTIVO si el proyecto tiene stages internos; si no, la
-        // base + CRs. Hasta que CRs Y stages carguen no es confiable (faltarían las
-        // expansiones aprobadas, o mostraría el base de un proyecto con stages) → "—".
-        budget =
-          crsLoaded && stagesLoaded
-            ? resolveProjectBudget(
-                matches[0],
-                stagesByProject.get(String(matches[0].id)) ?? [],
-                crsByProject.get(String(matches[0].id)) ?? [],
-              ).activeBudget
-            : null
+        // Budget TOTAL del proyecto contra el `consumed` del proyecto COMPLETO (mismo
+        // alcance en ambos lados, a diferencia del stage activo). Con stages internos:
+        // SUMA de los budgets de los stages MÁS las expansiones aprobadas (Change
+        // Requests) — resolveProjectBudget.totalBudget excluye los CRs a propósito (para
+        // reconciliar con el editor de stages), así que acá se suman aparte con
+        // effectiveBudgetHours. Sin stages: totalBudget ya es base + CRs (no se re-suman).
+        // Hasta que CRs Y stages carguen no es confiable → "—".
+        if (crsLoaded && stagesLoaded) {
+          const crs = crsByProject.get(String(matches[0].id)) ?? []
+          const resolved = resolveProjectBudget(
+            matches[0],
+            stagesByProject.get(String(matches[0].id)) ?? [],
+            crs,
+          )
+          budget =
+            resolved.hasStages && resolved.totalBudget != null
+              ? effectiveBudgetHours(resolved.totalBudget, crs)
+              : resolved.totalBudget
+        }
       }
       return { budget, consumed }
     },
@@ -1290,10 +1299,8 @@ export function BillingPage() {
               // Sólo se marca "over budget" cuando el negativo supera la banda de
               // redondeo de formatHours (1 decimal): así un -0.03 que se muestra como
               // "-0.0 h" no aparece en rojo. Mismo criterio de 0.05 que usa el resto de
-              // Billing. OJO scope: budget = stage ACTIVO, consumed = proyecto COMPLETO
-              // (igual que el cuadro #2 hermano). En proyectos multi-stage esa asimetría
-              // puede dar un negativo espurio — es el riesgo conocido del PRD (OQ-3);
-              // consumed por stage depende del slice de membresía task→stage pendiente.
+              // Billing. Scope: budget = TOTAL del proyecto (suma de stages, o base+CRs sin
+              // stages) y consumed = proyecto COMPLETO → ambos lados en el mismo alcance.
               const over = remaining != null && remaining < -0.05
               return (
                 <div className="dash-kpi dash-kpi--static">
@@ -1319,7 +1326,7 @@ export function BillingPage() {
                           : 'select or filter one project'
                       : over
                         ? 'over budget'
-                        : 'active-stage budget − project consumed'}
+                        : 'total budget − project consumed'}
                   </span>
                 </div>
               )
