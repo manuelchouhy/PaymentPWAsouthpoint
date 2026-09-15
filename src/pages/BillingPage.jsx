@@ -24,6 +24,7 @@ import {
 import { paidEntryIdsFrom } from '../lib/paymentsData'
 import { useSyncReload } from '../lib/useSyncReload'
 import { EntryFilterBar } from '../components/EntryFilterBar'
+import { WeekNavigator } from '../components/WeekNavigator'
 import { Checkbox } from '../components/Checkbox'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { GroupedBillModal } from '../components/GroupedBillModal'
@@ -251,7 +252,7 @@ export function BillingPage() {
   // de la fila. Es sólo-lectura y no edita nada, así que no necesita re-resolverse
   // contra la data viva. Ver el render del drawer.
   const [detailRow, setDetailRow] = useState(null)
-  const { filters, toggleValue, clear, isActive } = useEntryFilters()
+  const { filters, toggleValue, setField, clear, isActive } = useEntryFilters()
 
   useEffect(() => {
     let cancelled = false
@@ -410,6 +411,16 @@ export function BillingPage() {
   const clientOptions = useMemo(
     () => clientFilterOptions(clients, options.clients.includes(OTHER_CLIENT)),
     [clients, options.clients],
+  )
+
+  // Navegador de semana montado como children de EntryFilterBar. Handler estable
+  // (setField ya es estable) + elemento memoizado por weekStart: así el children no es
+  // un elemento nuevo en cada render y NO anula el React.memo de EntryFilterBar (que se
+  // le puso justamente para no re-renderizar los dropdowns en renders no relacionados).
+  const onWeekChange = useCallback((v) => setField('weekStart', v), [setField])
+  const weekNav = useMemo(
+    () => <WeekNavigator value={filters.weekStart} onChange={onWeekChange} />,
+    [filters.weekStart, onWeekChange],
   )
 
   // Dimensiones de la barra de filtros (EntryFilterBar). Memoizadas para no rearmar el
@@ -1202,7 +1213,13 @@ export function BillingPage() {
             onToggle={toggleValue}
             onClear={clear}
             isActive={isActive}
-          />
+          >
+            {/* Navegador de semana year-aware (mismo que Entries): filtra la grilla y
+                los KPIs por la semana física exacta (filters.weekStart), vía
+                applyEntryFilters. "All weeks" (× / Clear) no filtra. Elemento memoizado
+                (weekNav) para no anular el React.memo de EntryFilterBar. */}
+            {weekNav}
+          </EntryFilterBar>
 
           {/* Aviso cuando los cuadros dejan de seguir el filtro y pasan a reflejar la
               SELECCIÓN: sin esto, tildar filas cambia los números en silencio y se

@@ -25,6 +25,10 @@ import { MultiSelectDropdown } from './MultiSelectDropdown'
  * @param {()=>void} props.onClear  limpia todos los filtros.
  * @param {boolean} props.isActive  hay al menos un filtro activo (muestra Clear).
  * @param {string} [props.title]  rótulo de la barra ("Filters" por defecto).
+ * @param {React.ReactNode} [props.children]  controles extra (p. ej. el WeekNavigator),
+ *   renderizados DESPUÉS de las dimensiones y ANTES del botón Clear. Retrocompatible:
+ *   los llamadores que no los pasan (Dashboard) no cambian. Los usan Billing y Payments
+ *   para montar el navegador de semana en la misma barra que Entries.
  */
 export const EntryFilterBar = memo(function EntryFilterBar({
   dimensions = [],
@@ -33,6 +37,7 @@ export const EntryFilterBar = memo(function EntryFilterBar({
   onClear,
   isActive,
   title = 'Filters',
+  children,
 }) {
   return (
     <section className="filterbar" aria-label={title}>
@@ -50,6 +55,7 @@ export const EntryFilterBar = memo(function EntryFilterBar({
             onToggle={(v) => onToggle(d.key, v)}
           />
         ))}
+        {children}
         {isActive && (
           <button type="button" className="btn btn--ghost filterbar__clear" onClick={onClear}>
             Clear
