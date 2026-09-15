@@ -272,17 +272,34 @@ export function distinctWeekCount(isoDates = []) {
  * como dos números. Si no hay id devuelve sólo el nombre; si no hay nombre, "#<id>";
  * si no hay ninguno, cadena vacía.
  * @param {?string} task nombre del task
- * @param {?string} taskNumber id del task (entry.taskNumber)
+ * @param {?string} taskNumber id largo del task (entry.taskNumber), fallback de display
+ * @param {?string} [taskKey] key corto de Zoho (entry.taskKey); si viene, es el id mostrado
  * @returns {string}
  */
-export function formatTaskLabel(task, taskNumber) {
+export function formatTaskLabel(task, taskNumber, taskKey) {
   // Coerción a String: taskNumber puede llegar como número si la columna de Zoho es
   // numérica; el contrato promete string en todas las ramas (incl. "sólo el id").
   const name = task == null ? '' : String(task)
-  const id = taskNumber == null ? '' : String(taskNumber)
+  // Sólo cambia lo que se MUESTRA: el corto (key) si existe, si no el largo. La lógica
+  // (matching, stages, dedup) sigue usando taskNumber aparte — ver taskDisplayId.
+  const id = taskDisplayId(taskNumber, taskKey)
   if (id && name) return `#${id} · ${name}`
   if (id) return `#${id}`
   return name
+}
+
+/**
+ * Id de task para MOSTRAR: el key corto de Zoho si está, si no el task_number largo
+ * (fallback sin regresión mientras el backend no lo haya poblado). No usar para lógica:
+ * el matching/stages/dedup siguen sobre entry.taskNumber (el largo, estable).
+ * @param {?(string|number)} taskNumber id largo (entry.taskNumber)
+ * @param {?(string|number)} taskKey key corto (entry.taskKey)
+ * @returns {string}
+ */
+export function taskDisplayId(taskNumber, taskKey) {
+  const key = taskKey == null ? '' : String(taskKey)
+  if (key) return key
+  return taskNumber == null ? '' : String(taskNumber)
 }
 
 /**

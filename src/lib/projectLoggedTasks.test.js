@@ -23,6 +23,19 @@ test('agrupa por nombre; suma hours (todas) y consumedHours (Approved + alloc co
   assert.equal(out[0].consumedHours, 8) // 5 + 3 (Approved bill_to_client/sp_internal); la Pending no
 })
 
+test('captura el task_key corto (display); primer no-vacío gana, cae al largo si falta', () => {
+  // Con key: se agrega para MOSTRAR (la lógica sigue usando taskNumber, el largo).
+  const withKey = aggregateLoggedTasks([
+    row({ task: 'T', task_key: '', task_number: '2236753000000193417' }),
+    row({ task: 'T', task_key: 'HSS-I12', task_number: '2236753000000193417' }),
+  ])
+  assert.equal(withKey[0].taskKey, 'HSS-I12')
+  assert.equal(withKey[0].taskNumber, '2236753000000193417') // el largo intacto
+  // Sin key en ninguna fila → taskKey null (la UI cae al largo con taskDisplayId).
+  const noKey = aggregateLoggedTasks([row({ task: 'U', task_number: '999' })])
+  assert.equal(noKey[0].taskKey, null)
+})
+
 test('overage y rejected NO cuentan como consumido, pero sí como logged', () => {
   const out = aggregateLoggedTasks([
     row({ task: 'T', hours: 10, status: 'Approved', allocation: 'bill_to_client' }),

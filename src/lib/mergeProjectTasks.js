@@ -35,10 +35,14 @@ export function mergeProjectTasks(registered = [], logged = []) {
       acc.hours += Number(l.hours) || 0
       acc.consumedHours += Number(l.consumedHours) || 0
       if (acc.taskNumber == null) acc.taskNumber = toNum(l.taskNumber)
+      if (acc.taskKey == null) acc.taskKey = toNum(l.taskKey)
     } else {
       loggedByKey.set(key, {
         taskName: l.taskName ?? '',
         taskNumber: toNum(l.taskNumber),
+        // key corto de Zoho, sólo para display (ver taskDisplayId). toNum sólo coacciona a
+        // string/null, así que sirve igual para un key alfanumérico.
+        taskKey: toNum(l.taskKey),
         hours: Number(l.hours) || 0,
         consumedHours: Number(l.consumedHours) || 0,
       })
@@ -58,6 +62,7 @@ export function mergeProjectTasks(registered = [], logged = []) {
       taskId: r.id ?? null,
       taskName: name,
       taskNumber: toNum(l?.taskNumber),
+      taskKey: toNum(l?.taskKey),
       stageId: r.stageId ?? null,
       estimatedHours: Number(r.estimatedHours) || 0,
       hours: l ? Number(l.hours) || 0 : 0,
@@ -72,6 +77,7 @@ export function mergeProjectTasks(registered = [], logged = []) {
       taskId: null,
       taskName: l.taskName ?? '',
       taskNumber: toNum(l.taskNumber),
+      taskKey: toNum(l.taskKey),
       stageId: null,
       estimatedHours: 0,
       hours: Number(l.hours) || 0,

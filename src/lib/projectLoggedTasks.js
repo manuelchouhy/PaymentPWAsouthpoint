@@ -22,10 +22,16 @@ export function aggregateLoggedTasks(rows = []) {
     const name = row.task ?? ''
     if (!name) continue
     const acc =
-      byTask.get(name) ?? { id: name, taskName: name, taskNumber: null, hours: 0, consumedHours: 0 }
+      byTask.get(name) ??
+      { id: name, taskName: name, taskNumber: null, taskKey: null, hours: 0, consumedHours: 0 }
     if (acc.taskNumber == null) {
       const num = row.task_number ?? row.taskNumber
       if (num != null && String(num) !== '') acc.taskNumber = String(num)
+    }
+    // taskKey: key corto de Zoho, sólo para display (primer no-vacío gana, igual que el número).
+    if (acc.taskKey == null) {
+      const k = row.task_key ?? row.taskKey
+      if (k != null && String(k) !== '') acc.taskKey = String(k)
     }
     const h = Number(row.hours) || 0
     acc.hours += h // total logged (cualquier estado/allocation)

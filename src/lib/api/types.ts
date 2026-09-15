@@ -62,6 +62,9 @@ export interface TimeEntry {
   client: string
   task: string
   taskNumber: string
+  /** Key corto de Zoho (task.key), sólo para display. '' hasta que el sync lo pueble;
+   *  la UI cae al taskNumber largo. La lógica sigue usando taskNumber. */
+  taskKey: string
   description: string
   notes: string
   date: string // ISO YYYY-MM-DD
@@ -565,6 +568,7 @@ export interface ApiClient {
         id: string
         taskName: string
         taskNumber: string | null
+        taskKey: string | null
         hours: number
         consumedHours: number
       }>

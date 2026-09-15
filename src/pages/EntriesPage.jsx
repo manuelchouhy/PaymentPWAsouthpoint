@@ -3,7 +3,7 @@ import { useOutletContext, useSearchParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle, Info } from 'lucide-react'
 import { api } from '../lib/api'
-import { formatDate, formatHours, formatWeek } from '../lib/format'
+import { formatDate, formatHours, formatWeek, taskDisplayId } from '../lib/format'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, clientFilterOptions, OTHER_CLIENT, UNALLOCATED, ALLOCATED } from '../lib/useEntryFilters'
 import { deriveEntriesClient } from '../lib/entryClient'
 import { invoiceByEntryId as buildInvoiceByEntryId } from '../lib/invoiceIndex'
@@ -726,7 +726,9 @@ export function EntriesPage() {
                             className="col-tasknum cell-mono"
                             title={entry.taskNumber || undefined}
                           >
-                            {entry.taskNumber || '—'}
+                            {/* Muestra el key corto de Zoho; si no está, cae al id largo.
+                                El tooltip (title) conserva el id largo para trazar a Zoho. */}
+                            {taskDisplayId(entry.taskNumber, entry.taskKey) || '—'}
                           </td>
                           <td className="cell-mono">{entry.date ? formatDate(entry.date) : '—'}</td>
                           <td className="cell-mono">{entry.date ? formatWeek(entry.date) : '—'}</td>

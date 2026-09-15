@@ -11,12 +11,21 @@ test('un task registrado toma consumido/id-de-Zoho del logueado con el mismo nom
     taskId: 7,
     taskName: 'Backend',
     taskNumber: '2236',
+    taskKey: null,
     stageId: 3,
     estimatedHours: 40,
     hours: 30,
     consumedHours: 25,
     registered: true,
   })
+})
+
+test('propaga el taskKey (corto de Zoho) del logueado al task mergeado, para display', () => {
+  const registered = [{ id: 7, taskName: 'Backend', stageId: 3, estimatedHours: 40 }]
+  const logged = [{ taskName: 'Backend', taskNumber: '2236', taskKey: 'HSS-I12', hours: 30, consumedHours: 25 }]
+  assert.equal(mergeProjectTasks(registered, logged)[0].taskKey, 'HSS-I12')
+  // Logueado sin registrar también conserva su key.
+  assert.equal(mergeProjectTasks([], logged)[0].taskKey, 'HSS-I12')
 })
 
 test('un task logueado SIN registrar aparece con stageId null (sin asignar) y registered=false', () => {

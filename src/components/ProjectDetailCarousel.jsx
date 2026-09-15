@@ -9,7 +9,7 @@ import { buildProjectTaskTree } from '../lib/projectTaskTree'
 import { mergeProjectTasks } from '../lib/mergeProjectTasks'
 import { buildTaskToStage } from '../lib/stageHourAttribution'
 import { api } from '../lib/api'
-import { fileNameFromPath, formatDate, formatDateTime } from '../lib/format'
+import { fileNameFromPath, formatDate, formatDateTime, taskDisplayId } from '../lib/format'
 import { useScrollLock } from '../lib/useScrollLock'
 
 // El resto de la ficha —lo que trae el sync de Zoho y los datos de contrato—
@@ -954,11 +954,12 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
                     >
                       <span className="stage-tree__task-name">
                         <span className="stage-tree__task-name-text">{t.taskName || '—'}</span>
-                        {/* id del task (task_number de Zoho, el mismo de "Task #" en
-                            Entries). Es largo → mono, atenuado y truncado, con tooltip. */}
+                        {/* id del task para MOSTRAR: el key corto de Zoho si está, si no el
+                            task_number largo (mismo de "Task #" en Entries). Mono, atenuado y
+                            truncado; el tooltip conserva el id largo para trazar a Zoho. */}
                         {t.taskNumber ? (
                           <span className="stage-tree__task-id" title={`Task #${t.taskNumber}`}>
-                            #{t.taskNumber}
+                            #{taskDisplayId(t.taskNumber, t.taskKey)}
                           </span>
                         ) : null}
                       </span>
