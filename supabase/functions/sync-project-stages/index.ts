@@ -45,7 +45,9 @@ async function getAccessToken(): Promise<string> {
       if (!data.access_token) throw new Error("No access_token from Zoho. Revisá las credenciales.");
       return data.access_token;
     } catch (e) {
-      if (String(e).includes("HTTP 5") && attempt < RETRY_DELAYS_MS.length) {
+      // Reintentar cualquier fallo transitorio (5xx, red/DNS) salvo credenciales inválidas.
+      const credential = String(e).includes("No access_token");
+      if (!credential && attempt < RETRY_DELAYS_MS.length) {
         await sleep(RETRY_DELAYS_MS[attempt]);
         continue;
       }
@@ -81,10 +83,20 @@ async function zohoGet(url: string, token: string): Promise<any | null> {
 // subtasks:true) — eso es la membresía de la slice 02. Normaliza a { id, key, name }.
 async function fetchTopLevelTasks(portalId: string, projectId: string, token: string) {
   const out: { id: string; key: string | null; name: string }[] = [];
-  for (let index = 1; ; index += RANGE) {
+  const MAX_PAGES = 100; // guarda anti-loop (20k tasks)
+  let index = 1;
+  for (let page = 0; ; page++) {
+    // Tope de páginas: abortar (tirar) en vez de devolver una lista incompleta que
+    // haría borrar stages reales en la reconciliación.
+    if (page >= MAX_PAGES) throw new Error(`demasiadas páginas de tasks (proyecto ${projectId})`);
     const url = `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/?index=${index}&range=${RANGE}`;
     const data = await zohoGet(url, token);
-    const tasks: any[] = data?.tasks ?? [];
+    // CRÍTICO (ADR-0003 sería destructivo si no): null = fetch FALLIDO/ambiguo (4xx/429,
+    // token vencido, 5xx tras reintentos, body vacío). NO es "sin tasks" — se TIRA para que
+    // el catch del proyecto SALTEE la reconciliación y NO borre stages reales por un error
+    // transitorio de Zoho. Una lista vacía real (200 con tasks:[]) sí reconcilia.
+    if (data == null) throw new Error(`fetch de tasks falló (proyecto ${projectId}, index ${index}) — se saltea`);
+    const tasks: any[] = Array.isArray(data.tasks) ? data.tasks : [];
     for (const t of tasks) {
       out.push({
         id: String(t.id_string || t.id || ""),
@@ -93,6 +105,7 @@ async function fetchTopLevelTasks(portalId: string, projectId: string, token: st
       });
     }
     if (tasks.length < RANGE) break;
+    index += RANGE;
   }
   return out;
 }
@@ -131,10 +144,12 @@ async function reconcileProjectStages(
       });
       if (insErr) throw new Error(insErr.message);
       created++;
-    } else if (row.stage_name !== s.name || row.zoho_task_key !== s.zohoTaskKey || row.position !== i) {
+    } else if (row.stage_name !== s.name || row.zoho_task_key !== s.zohoTaskKey) {
+      // position NO se actualiza (solo se setea al insertar): el orden de Zoho puede no
+      // ser estable entre corridas y reescribirlo cada vez generaría churn de updates.
       const { error: updErr } = await supabase
         .from("project_stages")
-        .update({ stage_name: s.name, zoho_task_key: s.zohoTaskKey, position: i })
+        .update({ stage_name: s.name, zoho_task_key: s.zohoTaskKey })
         .eq("id", row.id);
       if (updErr) throw new Error(updErr.message);
       updated++;
@@ -160,7 +175,7 @@ Deno.serve(async (req) => {
   try {
     const token = await getAccessToken();
     const portals = await zohoGet(`${ZOHO_V3}/portals`, token);
-    if (!portals || !portals[0]) return json({ error: "No portal found" }, 500);
+    if (!portals || !portals[0]) return json({ ok: false, error: "No portal found" }, 500);
     const portalId = String(portals[0].id);
 
     // Solo proyectos linkeados a Zoho: un proyecto sin zoho_project_id (manual/interno)
@@ -181,9 +196,15 @@ Deno.serve(async (req) => {
         const r = await reconcileProjectStages(supabase, p.id, detected);
         created += r.created; updated += r.updated; deleted += r.deleted; processed++;
       } catch (e) {
-        // Un proyecto que falla no tumba la corrida entera (mismo criterio que el sync de logs).
+        // Un proyecto que falla no tumba la corrida entera (mismo criterio que el sync de
+        // logs). CLAVE: un fetch fallido tira acá y SALTEA la reconciliación → NO se borran
+        // stages reales por un error transitorio de Zoho.
         errors.push({ projectId: p.id, error: String(e) });
       }
+      // Espaciado suave entre proyectos: evita gatillar el rate-limit (429) de Zoho, que
+      // por el punto anterior sería un error (skip), no una pérdida de datos, pero mejor no
+      // tentarlo.
+      await sleep(150);
     }
 
     return json({ ok: true, processed, created, updated, deleted, errors });
