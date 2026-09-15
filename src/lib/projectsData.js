@@ -977,7 +977,7 @@ export async function getAllProjectStages() {
   const map = new Map()
   if (!isSupabaseConfigured) {
     for (const [pid, stages] of Object.entries(demoStages)) {
-      map.set(String(pid), (stages ?? []).map((s) => ({ id: s.id, budgetHours: s.budgetHours ?? null })))
+      map.set(String(pid), (stages ?? []).map((s) => ({ id: s.id, budgetHours: s.budgetHours ?? null, name: s.stageName ?? null })))
     }
     return map
   }
@@ -995,7 +995,7 @@ export async function getAllProjectStages() {
   for (;;) {
     let q = supabase
       .from('project_stages')
-      .select('project_id, id, budget_hours')
+      .select('project_id, id, budget_hours, stage_name')
       .order('id', { ascending: true })
       .limit(pageSize)
     if (lastId != null) q = q.gt('id', lastId)
@@ -1006,12 +1006,50 @@ export async function getAllProjectStages() {
     for (const row of rows) {
       const key = String(row.project_id)
       const list = map.get(key) ?? []
-      list.push({ id: row.id, budgetHours: row.budget_hours != null ? Number(row.budget_hours) : null })
+      // `name` (stage_name) lo usa el filtro de Stage de Billing para el rótulo; resolveProjectBudget
+      // ignora el campo extra (sólo mira id/budgetHours).
+      list.push({ id: row.id, budgetHours: row.budget_hours != null ? Number(row.budget_hours) : null, name: row.stage_name ?? null })
       map.set(key, list)
     }
     lastId = rows[rows.length - 1].id
   }
   return map
+}
+
+/**
+ * Membresía subtask→stage (tabla stage_task_membership, migración 0049): qué task de Zoho
+ * (por su id, = time_entries.task_number) pertenece a qué stage. La usa Billing para atribuir
+ * horas por stage (buildTaskToStage + attributeHoursByStage) y para el filtro de Stage.
+ * Devuelve las filas crudas [{ project_id, stage_id, zoho_task_id, task_name }]. En demo (sin
+ * Supabase) devuelve [] — la feature de stages sólo aplica a proyectos de Zoho.
+ *
+ * Paginado por keyset sobre `zoho_task_id`: aunque el PK de la tabla es compuesto
+ * (project_id, zoho_task_id), el zoho_task_id es el id de tarea de Zoho, ÚNICO a nivel portal
+ * (todo el workspace es un solo portal), así que no hay dos filas con el mismo zoho_task_id y
+ * el cursor `.gt('zoho_task_id', last)` no puede saltear filas en el borde de página. Se
+ * ordena por él por el mismo motivo que getAllProjectStages (offset correría con inserts).
+ * @returns {Promise<Array<{ project_id: (string|number), stage_id: (string|number), zoho_task_id: string, task_name: ?string }>>}
+ */
+export async function getStageTaskMembership() {
+  if (!isSupabaseConfigured) return []
+  const out = []
+  const pageSize = 1000
+  let lastKey = null
+  for (;;) {
+    let q = supabase
+      .from('stage_task_membership')
+      .select('project_id, stage_id, zoho_task_id, task_name')
+      .order('zoho_task_id', { ascending: true })
+      .limit(pageSize)
+    if (lastKey != null) q = q.gt('zoho_task_id', lastKey)
+    const { data, error } = await q
+    if (error) throw new Error(error.message)
+    const rows = data ?? []
+    if (rows.length === 0) break
+    for (const row of rows) out.push(row)
+    lastKey = rows[rows.length - 1].zoho_task_id
+  }
+  return out
 }
 
 /**
