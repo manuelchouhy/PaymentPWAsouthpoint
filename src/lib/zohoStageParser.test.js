@@ -1,0 +1,38 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { isStageName, detectStages } from './zohoStageParser.js'
+
+test('un nombre "Stage II" es un Stage', () => {
+  assert.equal(isStageName('Stage II'), true)
+})
+
+test('una task común "Task 1" no es un Stage', () => {
+  assert.equal(isStageName('Task 1'), false)
+})
+
+test('la detección es case-insensitive: "stage 1" es un Stage', () => {
+  assert.equal(isStageName('stage 1'), true)
+})
+
+test('"Staging deploy" NO es un Stage (no es la palabra "Stage")', () => {
+  assert.equal(isStageName('Staging deploy'), false)
+})
+
+test('"Stage" pelado NO es un Stage (tiene que venir "Stage" + algo)', () => {
+  assert.equal(isStageName('Stage'), false)
+})
+
+test('se ignora el whitespace de los bordes: "  Stage 2  " es un Stage', () => {
+  assert.equal(isStageName('  Stage 2  '), true)
+})
+
+test('detectStages devuelve solo las Tasks-Stage con { zohoTaskId, name }', () => {
+  // Mezcla como "Proyecto Prueba": tasks comunes + una Stage + una subtarea con typo.
+  const tasks = [
+    { id: 'z-t1', name: 'Task 1' },
+    { id: 'z-t2', name: 'Task 2' },
+    { id: 'z-t5', name: 'Stage II' },
+    { id: 'z-t8', name: 'Task Stapge 2.4' }, // typo real: NO es un Stage
+  ]
+  assert.deepEqual(detectStages(tasks), [{ zohoTaskId: 'z-t5', name: 'Stage II' }])
+})
