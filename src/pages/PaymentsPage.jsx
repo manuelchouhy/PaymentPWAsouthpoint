@@ -12,6 +12,7 @@ import {
 } from '../lib/paymentsGrouping'
 import { invoiceCompletion } from '../lib/invoiceCompletion'
 import { entryPaymentStatus } from '../lib/entryPaymentStatus'
+import { bucketEntriesByPeriod, sumHours } from '../lib/paymentsPeriodBuckets'
 import { buildProjectIndex, deriveEntriesClient } from '../lib/entryClient'
 import {
   useEntryFilters,
@@ -218,6 +219,10 @@ export function PaymentsPage() {
   // Contractor cuyo pago invoice-less (overage o sp_internal) se está por registrar.
   const [payTarget, setPayTarget] = useState(null)
   const [paySelectedIds, setPaySelectedIds] = useState(() => new Set())
+  // Modo de agrupado del picker de pago invoice-less: 'total' (paga todo, como siempre),
+  // 'month' o 'week'. Sólo cambia cómo se AGRUPAN/seleccionan las horas; el pago sigue
+  // siendo por los ids tildados. Ver src/lib/paymentsPeriodBuckets.js.
+  const [payPeriodMode, setPayPeriodMode] = useState('total')
   const [entries, setEntries] = useState([])
   // Proyectos: sólo para mapear el NOMBRE de proyecto de la factura a su número
   // (columna "Project #" del encabezado). La factura guarda el proyecto como texto,
@@ -911,6 +916,9 @@ export function PaymentsPage() {
                                   ? group.entryIds.filter((id) => matchingEntryIds.has(String(id)))
                                   : group.entryIds
                                 setPaySelectedIds(new Set(preselect.map(String)))
+                                // Cada picker abre en 'total' (paga todo, como siempre);
+                                // el usuario cambia a mes/semana si quiere pagar por período.
+                                setPayPeriodMode('total')
                               }}
                             >
                               Pay {label.low}
@@ -1256,7 +1264,9 @@ export function PaymentsPage() {
             const selected = payTarget.entries.filter(
               (e) => paySelectedIds.has(String(e.id)) && isPending(e),
             )
-            const selHours = selected.reduce((sum, e) => sum + e.hours, 0)
+            // sumHours: suma con guard NaN, el MISMO criterio que los totales de bucket
+            // (una hora mal tipada mostraría 'NaN h' en el summary del modal).
+            const selHours = sumHours(selected)
             const toggle = (id) =>
               setPaySelectedIds((prev) => {
                 const next = new Set(prev)
@@ -1265,6 +1275,55 @@ export function PaymentsPage() {
                 else next.add(k)
                 return next
               })
+
+            // Buckets de período (Total / By month / By week): sólo AGRUPAN las horas
+            // para poder tildarlas de a un mes/semana; el pago sigue siendo por los ids
+            // tildados (paySelectedIds). En 'total' la lista es plana y NO se agrupa
+            // (bucketEntriesByPeriod sólo se llama en month/week, no en cada render de total).
+            const buckets =
+              payPeriodMode === 'total'
+                ? []
+                : bucketEntriesByPeriod(payTarget.entries, payPeriodMode)
+            // Tilda/destilda de una vez las pendientes de un bucket (ids ya calculados):
+            // si están todas seleccionadas, las saca; si no, las agrega.
+            const toggleBucketIds = (ids) =>
+              setPaySelectedIds((prev) => {
+                const allSelected = ids.length > 0 && ids.every((id) => prev.has(id))
+                const next = new Set(prev)
+                for (const id of ids) {
+                  if (allSelected) next.delete(id)
+                  else next.add(id)
+                }
+                return next
+              })
+            // Fila de una hora (reusada en modo plano y agrupado).
+            const renderEntryRow = (e) => {
+              const status = entryPaymentStatus(e, paidEntryIds)
+              const isPaid = status === 'paid'
+              return (
+                <li key={e.id}>
+                  <label
+                    className={`overage-picker__row${isPaid ? ' overage-picker__row--paid' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={paySelectedIds.has(String(e.id))}
+                      disabled={isPaid}
+                      onChange={() => toggle(e.id)}
+                    />
+                    <span className="overage-picker__desc">
+                      {e.project || '—'}
+                      {e.task ? ` · ${e.task}` : ''}
+                      {e.date ? ` · ${formatDate(e.date)}` : ''}
+                    </span>
+                    <span className="overage-picker__hours">{formatHours(e.hours)} h</span>
+                    {/* Indicador pasivo: pointer-events:none (CSS) deja pasar el click al
+                        <label>, así clickear el badge de una fila pendiente la togglea. */}
+                    <span className={`badge badge--${status}`}>{isPaid ? 'Paid' : 'Pending'}</span>
+                  </label>
+                </li>
+              )
+            }
             return (
               <RegisterPaymentModal
                 key={`${payTarget.allocation}-${payTarget.user}`}
@@ -1279,39 +1338,76 @@ export function PaymentsPage() {
                 summaryFigureLabel={`${label.cap} hours (selected)`}
                 extraContent={
                   <div className="overage-picker">
+                    {/* Modo de pago: Total (todo, como siempre), por Mes o por Semana. Sólo
+                        cambia el agrupado/selección; el pago es por las horas tildadas. */}
+                    <div
+                      className="overage-picker__modes"
+                      role="group"
+                      aria-label="Pay by period"
+                    >
+                      {[
+                        ['total', 'Total'],
+                        ['month', 'By month'],
+                        ['week', 'By week'],
+                      ].map(([mode, modeLabel]) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          className={`overage-picker__mode${payPeriodMode === mode ? ' is-active' : ''}`}
+                          aria-pressed={payPeriodMode === mode}
+                          onClick={() => setPayPeriodMode(mode)}
+                        >
+                          {modeLabel}
+                        </button>
+                      ))}
+                    </div>
                     <span className="overage-picker__title">Hours to pay</span>
-                    <ul className="overage-picker__list">
-                      {payTarget.entries.map((e) => {
-                        const status = entryPaymentStatus(e, paidEntryIds)
-                        const isPaid = status === 'paid'
+                    {payPeriodMode === 'total' ? (
+                      <ul className="overage-picker__list">
+                        {payTarget.entries.map(renderEntryRow)}
+                      </ul>
+                    ) : (
+                      buckets.map((bucket) => {
+                        // Pendientes del bucket calculadas UNA vez (las pagadas van
+                        // read-only). El header muestra las horas PENDIENTES (lo pagable),
+                        // no bucket.hours —que incluye las ya pagadas y sobreestimaría lo
+                        // que el "seleccionar todo" del bucket realmente tilda—.
+                        const pending = bucket.entries.filter(isPending)
+                        const pendIds = pending.map((e) => String(e.id))
+                        const pendHours = sumHours(pending)
+                        const allSel = pendIds.length > 0 && pendIds.every((id) => paySelectedIds.has(id))
+                        const someSel = pendIds.some((id) => paySelectedIds.has(id))
+                        // Sin pendientes (bucket todo pagado): el "seleccionar todo" no hace
+                        // nada, así que la cabecera no debe parecer clickeable.
+                        const empty = pendIds.length === 0
                         return (
-                          <li key={e.id}>
+                          <div key={bucket.key} className="overage-picker__bucket">
                             <label
-                              className={`overage-picker__row${isPaid ? ' overage-picker__row--paid' : ''}`}
+                              className={`overage-picker__bucket-head${empty ? ' overage-picker__bucket-head--empty' : ''}`}
                             >
                               <input
                                 type="checkbox"
-                                checked={paySelectedIds.has(String(e.id))}
-                                disabled={isPaid}
-                                onChange={() => toggle(e.id)}
+                                checked={allSel}
+                                // Indeterminado cuando hay algunas (no todas) tildadas.
+                                ref={(el) => {
+                                  if (el) el.indeterminate = !allSel && someSel
+                                }}
+                                // Sin pendientes (todo pagado) no hay nada que tildar.
+                                disabled={empty}
+                                onChange={() => toggleBucketIds(pendIds)}
                               />
-                              <span className="overage-picker__desc">
-                                {e.project || '—'}
-                                {e.task ? ` · ${e.task}` : ''}
-                                {e.date ? ` · ${formatDate(e.date)}` : ''}
-                              </span>
-                              <span className="overage-picker__hours">{formatHours(e.hours)} h</span>
-                              {/* Indicador pasivo: pointer-events:none (CSS) deja pasar el
-                                  click al <label>, así clickear el badge de una fila pendiente
-                                  la togglea igual que el resto de la fila. */}
-                              <span className={`badge badge--${status}`}>
-                                {isPaid ? 'Paid' : 'Pending'}
+                              <span className="overage-picker__bucket-label">{bucket.label}</span>
+                              <span className="overage-picker__bucket-hours">
+                                {formatHours(pendHours)} h
                               </span>
                             </label>
-                          </li>
+                            <ul className="overage-picker__list">
+                              {bucket.entries.map(renderEntryRow)}
+                            </ul>
+                          </div>
                         )
-                      })}
-                    </ul>
+                      })
+                    )}
                     {selected.length === 0 && (
                       <span className="field__error">Select at least one hour to pay.</span>
                     )}

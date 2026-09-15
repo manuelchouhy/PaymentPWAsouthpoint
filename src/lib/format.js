@@ -181,6 +181,20 @@ export function formatWeek(iso = '') {
 }
 
 /**
+ * Mes de una fecha como "Sep 2026". Acepta 'YYYY-MM' o 'YYYY-MM-DD' (usa los dos
+ * primeros campos). Cadena vacía si es inválida. Lo usa el agrupado por mes del picker
+ * de pagos (paymentsPeriodBuckets) para rotular cada bucket mensual.
+ * @param {string} iso
+ * @returns {string}
+ */
+export function formatMonth(iso = '') {
+  if (!iso) return ''
+  const [year, month] = iso.split('-').map(Number)
+  if (!year || !month || month < 1 || month > 12) return ''
+  return `${MONTHS_EN[month - 1]} ${year}`
+}
+
+/**
  * Fecha + hora compacta para el historial de sync: "04 may · 14:23".
  * @param {string} iso
  * @returns {string}

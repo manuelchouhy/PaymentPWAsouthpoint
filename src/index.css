@@ -2711,6 +2711,73 @@ th.col-pop { text-align: center; }
   color: var(--text-muted, var(--text-faint));
 }
 
+/* Selector de período del picker de pago (Total / By month / By week): agrupa las horas
+   a pagar en buckets para poder tildar todo un mes o toda una semana de una vez. */
+.overage-picker__modes {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--surface-2, rgba(127, 127, 127, .08));
+  align-self: flex-start;
+}
+.overage-picker__mode {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: var(--text-muted, var(--text-faint));
+  cursor: pointer;
+}
+.overage-picker__mode:hover {
+  color: var(--text);
+}
+.overage-picker__mode.is-active {
+  background: var(--surface, #fff);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+  font-weight: 600;
+}
+
+/* Cabecera de cada bucket de período: checkbox para tildar/destildar todas las horas
+   pendientes del bucket + su rótulo y total de horas. */
+.overage-picker__bucket + .overage-picker__bucket {
+  margin-top: 6px;
+}
+.overage-picker__bucket-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  background: var(--surface-2, rgba(127, 127, 127, .05));
+}
+/* Bucket sin horas pendientes (todo pagado): el "seleccionar todo" está deshabilitado,
+   así que la cabecera no debe parecer clickeable. */
+.overage-picker__bucket-head--empty {
+  cursor: default;
+}
+.overage-picker__bucket-head input {
+  flex: none;
+}
+.overage-picker__bucket-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.overage-picker__bucket-hours {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted, var(--text-faint));
+}
+
 .modal__entries {
   margin-top: 12px;
   max-height: 168px;

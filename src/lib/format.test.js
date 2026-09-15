@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  formatMonth,
   sundayWeek,
   sundayWeekYear,
   formatWeek,
@@ -176,4 +177,16 @@ test('formatTaskLabel: taskNumber numérico devuelve string (contrato @returns s
   assert.equal(soloId, '#123')
   assert.equal(typeof soloId, 'string')
   assert.equal(formatTaskLabel('Login design', 123), '#123 · Login design')
+})
+
+test('formatMonth: acepta YYYY-MM y YYYY-MM-DD → "Mon YYYY"', () => {
+  assert.equal(formatMonth('2026-09'), 'Sep 2026')
+  assert.equal(formatMonth('2026-09-06'), 'Sep 2026')
+  assert.equal(formatMonth('2026-01-31'), 'Jan 2026')
+})
+
+test('formatMonth: vacío o inválido → cadena vacía', () => {
+  assert.equal(formatMonth(''), '')
+  assert.equal(formatMonth('garbage'), '')
+  assert.equal(formatMonth('2026-13'), '')
 })
