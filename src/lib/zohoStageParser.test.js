@@ -36,6 +36,11 @@ test('una letra (incl. no-ASCII) tras "Stage" NO es Stage: "Staged", "Stageño"'
   assert.equal(isStageName('Stageño'), false)
 })
 
+test('"Stage" + separador suelto (sin label real) NO es Stage: "Stage:", "Stage -"', () => {
+  assert.equal(isStageName('Stage:'), false)
+  assert.equal(isStageName('Stage -'), false)
+})
+
 test('detectStages devuelve solo las Tasks-Stage con { zohoTaskId, name }', () => {
   // Mezcla como "Proyecto Prueba": tasks comunes + una Stage + una subtarea con typo.
   const tasks = [
@@ -50,4 +55,14 @@ test('detectStages devuelve solo las Tasks-Stage con { zohoTaskId, name }', () =
 test('detectStages tolera huecos null/undefined en el array (no tira)', () => {
   const tasks = [null, { id: 'z-t5', name: 'Stage II' }, undefined, { id: 'z-t1', name: 'Task 1' }]
   assert.deepEqual(detectStages(tasks), [{ zohoTaskId: 'z-t5', name: 'Stage II' }])
+})
+
+test('detectStages con un argumento no-array (null) devuelve [] sin tirar', () => {
+  assert.deepEqual(detectStages(null), [])
+})
+
+test('detectStages normaliza el name a string trimeado', () => {
+  assert.deepEqual(detectStages([{ id: 'z-t5', name: '  Stage II  ' }]), [
+    { zohoTaskId: 'z-t5', name: 'Stage II' },
+  ])
 })
