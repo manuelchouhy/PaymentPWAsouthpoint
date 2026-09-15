@@ -171,48 +171,6 @@ function safe(obj: any, path: string, fallback: any): any {
   return cur == null ? fallback : cur;
 }
 
-// El key corto de Zoho (task.key, ej. "PP1-T5") NO viene en el payload de time-logs
-// (verificado 2026-09-15: task.key llega vacío ahí), sólo en /tasks/. Se arma un keyMap
-// (id_string largo → key corto) en DOS pasos, para no dispararle a Zoho una llamada por
-// cada tarea del portal (la mayoría sin horas): (1) las top-level de cada proyecto de una
-// sola lista barata, acá; (2) las que faltan (subtasks/anidadas) se resuelven LAZY, una por
-// una, sólo si aparecen en un log (ver resolveTaskKey). Es SÓLO para display: si algo falla,
-// la tarea no queda en el mapa y su hora cae al id largo — nunca rompe el sync.
-async function addTopLevelTaskKeys(
-  keyMap: Map<string, string>,
-  portalId: string,
-  projectId: string,
-  token: string,
-): Promise<void> {
-  const tasks = await fetchAllPagesV1(
-    `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/`,
-    "tasks",
-    token,
-  );
-  if (!tasks) return; // 4xx/forma inesperada → sin keys para este proyecto (fallback al largo)
-  for (const t of tasks) {
-    const id = String(t.id_string || t.id || "");
-    if (id && t.key) keyMap.set(id, String(t.key));
-  }
-}
-
-// Resuelve el key corto de UNA tarea por su id (GET de la tarea). Cubre subtasks y anidadas
-// sin adivinar jerarquía: cualquier id de tarea con horas se resuelve igual. Devuelve el key
-// o null. Zoho envuelve la tarea en `tasks[0]` (a veces `task`); se contemplan ambas formas.
-async function resolveTaskKey(
-  portalId: string,
-  projectId: string,
-  taskId: string,
-  token: string,
-): Promise<string | null> {
-  const data = await zohoGet(
-    `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/${taskId}/`,
-    token,
-  );
-  const t = data?.tasks?.[0] ?? data?.task ?? (data?.id_string || data?.key ? data : null);
-  return t?.key ? String(t.key) : null;
-}
-
 // Mapa projectId → nombre del Project Group de Zoho.
 //
 // En Zoho el cliente vive como Project Group, y el listado de proyectos NO trae
@@ -671,43 +629,6 @@ Deno.serve(async (req) => {
 
     const rows: any[] = [];
 
-    // Mapa id_string largo → key corto de Zoho (task.key). Sólo para display; el loop de logs
-    // lo busca por task_number. task_key es INMUTABLE, así que se SIEMBRA desde lo ya guardado
-    // en time_entries: tras el primer sync exitoso, casi ninguna tarea necesita pedirle el key
-    // a Zoho otra vez. Lo que falte (tareas nuevas) se resuelve después del loop (ver más abajo).
-    const keyMap = new Map<string, string>();
-    // seedOk=false → la siembra falló: NO se toca task_key en el upsert este run, para no pisar
-    // con '' los keys buenos ya guardados (regresión). Ver el strip antes del upsert.
-    let seedOk = true;
-    try {
-      // Keyset por id (igual que el barrido de logs): COMPLETO aunque el server tope max-rows
-      // (si truncara, un key conocido quedaría fuera y se re-pediría o —peor— se pisaría). El
-      // keyMap queda DISTINCT por task_number (dedupe natural) → memoria acotada al nº de tareas,
-      // no de filas. Las páginas intermedias se liberan.
-      let lastId = 0;
-      for (let guard = 0; guard < 1000; guard++) {
-        const { data, error } = await supabase
-          .from("time_entries")
-          .select("id, task_number, task_key")
-          .not("task_key", "is", null)
-          .neq("task_key", "")
-          .gt("id", lastId)
-          .order("id")
-          .limit(1000);
-        if (error) throw new Error(error.message);
-        const batch = data ?? [];
-        for (const r of batch) {
-          if (r.task_number && r.task_key) keyMap.set(String(r.task_number), String(r.task_key));
-        }
-        if (batch.length === 0) break;
-        lastId = batch[batch.length - 1].id;
-      }
-      console.log(`keyMap sembrado con ${keyMap.size} keys ya conocidos (DB)`);
-    } catch (e) {
-      seedOk = false;
-      console.log("No se pudo sembrar keyMap desde la DB; se OMITE escribir task_key este run para no pisar valores buenos:", String((e as Error)?.message ?? e));
-    }
-
     // El barrido de logs es SOLO sobre activos: los archivados casi nunca tienen
     // horas nuevas y barrerlos mes a mes multiplicaría las llamadas a Zoho (riesgo
     // de rate-limit/timeout de la edge function). Sus horas viejas ya se
@@ -746,11 +667,6 @@ Deno.serve(async (req) => {
         for (const bucket of logsData.timelogs.date) {
           const logDate = logDateToISO(bucket.date);
           for (const tl of (bucket.tasklogs || [])) {
-            // FR-02 · ID numérico de la tarea en Zoho (string para no perder precisión en ids
-            // largos). Es la llave para buscar el key corto en keyMap.
-            const taskId = String(
-              safe(tl, "task.id_string", "") || safe(tl, "task.id", ""),
-            );
             rows.push({
               // --- mapeo a la tabla time_entries ---
               zoho_log_id: String(tl.id_string || tl.id || ""),
@@ -761,12 +677,11 @@ Deno.serve(async (req) => {
               zoho_project_id: projectIdStr,
               client: clientName,
               task: safe(tl, "task.name", ""),
-              task_number: taskId,
-              // key corto de Zoho (task.key, ej. "PP1-T5"), SÓLO para display: la UI lo muestra
-              // en vez del task_number largo. Se prefiere el del time-log si el portal lo trae
-              // (gratis; hoy llega vacío, verificado), si no el del keyMap (sembrado + resuelto).
-              // Lo que no quede queda '' y cae al id largo. La lógica sigue sobre task_number.
-              task_key: String(safe(tl, "task.key", "") || keyMap.get(taskId) || ""),
+              // FR-02 · ID numérico de la tarea en Zoho (string para no perder
+              // precisión en ids largos).
+              task_number: String(
+                safe(tl, "task.id_string", "") || safe(tl, "task.id", ""),
+              ),
               description: tl.notes || "",
               notes: tl.notes || "",
               log_date: logDate,
@@ -791,19 +706,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Si la siembra de keys falló, se saca task_key del payload del upsert: así la columna NO se
-    // toca y se conservan los valores buenos ya guardados (en vez de pisarlos con ''). El resto
-    // del sync (horas, proyectos, clientes) corre normal; los keys se completan en el próximo run.
-    if (!seedOk) {
-      for (const r of rows) delete r.task_key;
-      console.log("Siembra fallida: task_key excluido del upsert (no se pisan valores existentes).");
-    }
-
-    // === Las HORAS (dato crítico) se persisten y marcan OK PRIMERO ===
-    // task_key va con lo ya SEMBRADO (correcto para tareas conocidas; '' para las nuevas, que se
-    // completan después con un UPDATE liviano). Resolver los key cortos (display) es un paso
-    // POSTERIOR y best-effort: aunque tarde, falle o se pase del wall-clock, las horas ya quedaron
-    // guardadas y el run marcado OK — un feature cosmético nunca puede tumbar el sync de horas.
+    // upsert en lotes de 500 para no pasarse de tamaño
     let synced = 0;
     for (let i = 0; i < rows.length; i += 500) {
       const batch = rows.slice(i, i + 500);
@@ -817,85 +720,8 @@ Deno.serve(async (req) => {
       }
       synced += batch.length;
     }
+
     await recordStatus(supabase, "OK", synced, null);
-
-    // === PASO POSTERIOR (best-effort): key cortos de tareas NUEVAS ===
-    // Corre DESPUÉS de guardar las horas. Todo el bloque va en try/catch propio: un fallo acá NO
-    // debe voltear el estado OK del sync de horas ni llegar al catch externo. Se salta si la
-    // siembra falló (sin mapa completo no se distingue "nueva" de "ya conocida").
-    if (seedOk) {
-      try {
-        const missingByProject = new Map<string, Set<string>>();
-        for (const r of rows) {
-          if (r.task_key || !r.task_number) continue;
-          const pid = String(r.zoho_project_id);
-          if (!missingByProject.has(pid)) missingByProject.set(pid, new Set());
-          missingByProject.get(pid)!.add(String(r.task_number));
-        }
-        if (missingByProject.size > 0) {
-          const totalMissing = [...missingByProject.values()].reduce((n, s) => n + s.size, 0);
-          console.log(`Resolviendo key corto de ${totalMissing} tareas nuevas en ${missingByProject.size} proyectos`);
-          const newlyResolved = new Map<string, string>(); // task_number → key resuelto este run
-          // Paso 1: top-level de cada proyecto con faltantes (1 lista barata; resuelve el caso común).
-          for (const [pid, taskIds] of missingByProject) {
-            try {
-              await addTopLevelTaskKeys(keyMap, portalId, pid, token);
-            } catch (e) {
-              console.log(`  top-level tasks de ${pid} no disponibles, se sigue: ${String((e as Error)?.message ?? e)}`);
-            }
-            for (const taskId of taskIds) {
-              const k = keyMap.get(taskId);
-              if (k) newlyResolved.set(taskId, k);
-            }
-          }
-          // Paso 2 (lazy): las que el top-level NO cubrió (subtasks/anidadas) → GET por tarea, una vez.
-          // CAP por corrida: los GETs son secuenciales; en el 1er sync (mapa vacío) podrían ser
-          // muchos. Lo que no entra se resuelve en los próximos syncs (el seed acumula → converge).
-          const MAX_LAZY_RESOLVE = 250;
-          let resolved = 0;
-          let capped = false;
-          for (const [pid, taskIds] of missingByProject) {
-            if (capped) break;
-            for (const taskId of taskIds) {
-              if (keyMap.has(taskId)) continue; // ya la trajo el top-level
-              if (resolved >= MAX_LAZY_RESOLVE) {
-                capped = true;
-                console.log(`  cap de ${MAX_LAZY_RESOLVE} resoluciones lazy alcanzado; el resto en el próximo sync`);
-                break;
-              }
-              resolved++;
-              try {
-                const key = await resolveTaskKey(portalId, pid, taskId, token);
-                if (key) { keyMap.set(taskId, key); newlyResolved.set(taskId, key); }
-              } catch (e) {
-                console.log(`  key de tarea ${taskId} no resuelto, se sigue: ${String((e as Error)?.message ?? e)}`);
-              }
-            }
-          }
-          // UPDATE liviano: task_key SÓLO de las tareas recién resueltas. Su task_number no estaba
-          // sembrado (era "missing"), así que ninguna de sus filas tenía un key bueno → actualizar
-          // por task_number no pisa nada. Una por tarea (índice por task_number).
-          let updated = 0;
-          for (const [taskNumber, key] of newlyResolved) {
-            const { error } = await supabase
-              .from("time_entries")
-              .update({ task_key: key })
-              .eq("task_number", taskNumber);
-            if (error) {
-              console.log(`  no se pudo actualizar task_key de ${taskNumber}: ${error.message}`);
-            } else {
-              updated++;
-            }
-          }
-          console.log(`task_key actualizado para ${updated}/${newlyResolved.size} tareas nuevas`);
-        }
-      } catch (e) {
-        // Best-effort: el sync de horas ya está OK; sólo se pierde (hasta el próximo run) el
-        // completar keys nuevos. No se propaga.
-        console.log("Resolución de task_key falló (horas ya guardadas OK):", String((e as Error)?.message ?? e));
-      }
-    }
-
     return json({ ok: true, synced, projects: projectsSynced });
   } catch (e) {
     // Fallo de Zoho (5xx tras reintentos, red, credenciales, etc.): NO se tocó
