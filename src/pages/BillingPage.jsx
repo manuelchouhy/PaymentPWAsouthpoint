@@ -12,7 +12,6 @@ import { buildClientResolver } from '../lib/clientResolver'
 import { groupBillToClient, groupReadonly } from '../lib/billingGrouping'
 import { billingKpis } from '../lib/billingKpis'
 import { resolveProjectBudget } from '../lib/projectStageBudget'
-import { effectiveBudgetHours } from '../lib/effectiveBudget'
 import { remainingBudgetHours } from '../lib/budgetRemaining'
 import { buildTaskToStage } from '../lib/stageHourAttribution'
 import {
@@ -670,24 +669,19 @@ export function BillingPage() {
         const [num] = [...nums]
         const matches = projects.filter((p) => p.projectNumber === num)
         if (matches.length !== 1) return null
-        // Budget TOTAL del proyecto contra el `consumed` del proyecto COMPLETO (mismo
-        // alcance en ambos lados, a diferencia del stage activo). Con stages internos:
-        // SUMA de los budgets de los stages MÁS las expansiones aprobadas (Change
-        // Requests) — resolveProjectBudget.totalBudget excluye los CRs a propósito (para
-        // reconciliar con el editor de stages), así que acá se suman aparte con
-        // effectiveBudgetHours. Sin stages: totalBudget ya es base + CRs (no se re-suman).
+        // Budget total EFECTIVO del proyecto contra el `consumed` del proyecto COMPLETO
+        // (mismo alcance en ambos lados, a diferencia del stage activo): suma de stages + CRs,
+        // o base + CRs si no hay stages / ningún stage tiene budget (el budget base no
+        // desaparece por agregar un stage sin budget). La derivación vive en resolveProjectBudget
+        // (effectiveTotal), no acá, para no reimplementarla. (Client Summary mide contra el stage
+        // ACTIVO por decisión propia, así que usa activeBudget, no effectiveTotal — es a propósito.)
         // Hasta que CRs Y stages carguen no es confiable → "—".
         if (crsLoaded && stagesLoaded) {
-          const crs = crsByProject.get(String(matches[0].id)) ?? []
-          const resolved = resolveProjectBudget(
+          budget = resolveProjectBudget(
             matches[0],
             stagesByProject.get(String(matches[0].id)) ?? [],
-            crs,
-          )
-          budget =
-            resolved.hasStages && resolved.totalBudget != null
-              ? effectiveBudgetHours(resolved.totalBudget, crs)
-              : resolved.totalBudget
+            crsByProject.get(String(matches[0].id)) ?? [],
+          ).effectiveTotal
         }
       }
       return { budget, consumed }
