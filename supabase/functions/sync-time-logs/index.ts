@@ -171,13 +171,14 @@ function safe(obj: any, path: string, fallback: any): any {
   return cur == null ? fallback : cur;
 }
 
-// Agrega al keyMap (id_string largo → key corto de Zoho, ej. "PP1-T5") las tareas de UN
-// proyecto: las top-level de /tasks/ Y, para las que son padre (isparent / subtasks), sus
-// subtareas de /tasks/{id}/subtasks/. El key corto NO viene en el payload de time-logs
-// (verificado 2026-09-15: task.key llega vacío ahí), sólo en /tasks/, por eso se arma aparte
-// y el loop de logs lo busca por task_number. Es SÓLO para display; si algo falla acá, el
-// keyMap simplemente no cubre esa tarea y su hora cae al id largo — nunca rompe el sync.
-async function addProjectTaskKeys(
+// El key corto de Zoho (task.key, ej. "PP1-T5") NO viene en el payload de time-logs
+// (verificado 2026-09-15: task.key llega vacío ahí), sólo en /tasks/. Se arma un keyMap
+// (id_string largo → key corto) en DOS pasos, para no dispararle a Zoho una llamada por
+// cada tarea del portal (la mayoría sin horas): (1) las top-level de cada proyecto de una
+// sola lista barata, acá; (2) las que faltan (subtasks/anidadas) se resuelven LAZY, una por
+// una, sólo si aparecen en un log (ver resolveTaskKey). Es SÓLO para display: si algo falla,
+// la tarea no queda en el mapa y su hora cae al id largo — nunca rompe el sync.
+async function addTopLevelTaskKeys(
   keyMap: Map<string, string>,
   portalId: string,
   projectId: string,
@@ -192,24 +193,24 @@ async function addProjectTaskKeys(
   for (const t of tasks) {
     const id = String(t.id_string || t.id || "");
     if (id && t.key) keyMap.set(id, String(t.key));
-    // ¿tiene subtareas? isparent es el flag de Zoho; subtasks (array/número) es respaldo.
-    const hasSubs =
-      t.isparent === true ||
-      t.isparent === "true" ||
-      (Array.isArray(t.subtasks) ? t.subtasks.length > 0 : Number(t.subtasks) > 0);
-    if (!id || !hasSubs) continue;
-    // Subtasks bajo la clave `tasks` (shape confirmado por probe en sync-stage-task-membership;
-    // 204/empty → fetchAllPagesV1 devuelve null → se saltea sin agregar).
-    const subs = await fetchAllPagesV1(
-      `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/${id}/subtasks/`,
-      "tasks",
-      token,
-    );
-    for (const s of subs ?? []) {
-      const sid = String(s.id_string || s.id || "");
-      if (sid && s.key) keyMap.set(sid, String(s.key));
-    }
   }
+}
+
+// Resuelve el key corto de UNA tarea por su id (GET de la tarea). Cubre subtasks y anidadas
+// sin adivinar jerarquía: cualquier id de tarea con horas se resuelve igual. Devuelve el key
+// o null. Zoho envuelve la tarea en `tasks[0]` (a veces `task`); se contemplan ambas formas.
+async function resolveTaskKey(
+  portalId: string,
+  projectId: string,
+  taskId: string,
+  token: string,
+): Promise<string | null> {
+  const data = await zohoGet(
+    `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/${taskId}/`,
+    token,
+  );
+  const t = data?.tasks?.[0] ?? data?.task ?? (data?.id_string || data?.key ? data : null);
+  return t?.key ? String(t.key) : null;
 }
 
 // Mapa projectId → nombre del Project Group de Zoho.
@@ -670,8 +671,9 @@ Deno.serve(async (req) => {
 
     const rows: any[] = [];
 
-    // Mapa id_string largo → key corto de Zoho (task.key), poblado por proyecto desde /tasks/
-    // (+ subtasks). Sólo para display: el loop de logs lo busca por task_number. Ver addProjectTaskKeys.
+    // Mapa id_string largo → key corto de Zoho (task.key). Se puebla en 2 pasos: top-level por
+    // proyecto (addTopLevelTaskKeys, dentro del loop) y las subtasks/anidadas con horas (lazy,
+    // resolveTaskKey, después del loop). Sólo para display: el loop de logs lo busca por task_number.
     const keyMap = new Map<string, string>();
 
     // El barrido de logs es SOLO sobre activos: los archivados casi nunca tienen
@@ -690,11 +692,11 @@ Deno.serve(async (req) => {
       const projectStatus = safe(p, "status.name", "");
       const projectOwner = safe(p, "owner.full_name", "");
 
-      // Traer los key cortos de las tareas (+ subtareas) de este proyecto ANTES de sus logs,
-      // para setear task_key en el push. Best-effort: un fallo acá no aborta el sync (las horas
-      // caen al id largo). Ver addProjectTaskKeys.
+      // Paso 1: key cortos de las tareas TOP-LEVEL de este proyecto ANTES de sus logs, para
+      // setear task_key en el push. Best-effort: un fallo no aborta el sync (caen al id largo).
+      // Las subtasks/anidadas con horas se completan LAZY después del loop (ver más abajo).
       try {
-        await addProjectTaskKeys(keyMap, portalId, projectIdStr, token);
+        await addTopLevelTaskKeys(keyMap, portalId, projectIdStr, token);
       } catch (e) {
         console.log(`task keys de ${projectIdStr} no disponibles, se sigue: ${String((e as Error)?.message ?? e)}`);
       }
@@ -738,9 +740,10 @@ Deno.serve(async (req) => {
               task: safe(tl, "task.name", ""),
               task_number: taskId,
               // key corto de Zoho (task.key, ej. "PP1-T5"), SÓLO para display: la UI lo muestra
-              // en vez del task_number largo. NO viene en el payload de time-logs; se resuelve
-              // por keyMap (armado desde /tasks/ + subtasks). Si la tarea no está en el mapa,
-              // queda '' y la UI cae al id largo (sin regresión). La lógica sigue sobre task_number.
+              // en vez del task_number largo. NO viene en el time-log; acá se toma del keyMap
+              // top-level (paso 1). Las subtasks/anidadas con horas se completan en el paso 2
+              // (lazy, más abajo). Lo que no quede en el mapa cae al id largo. La lógica sigue
+              // sobre task_number.
               task_key: String(keyMap.get(taskId) ?? ""),
               description: tl.notes || "",
               notes: tl.notes || "",
@@ -755,6 +758,35 @@ Deno.serve(async (req) => {
     }
 
     console.log("Filas extraídas:", rows.length);
+
+    // Paso 2 (lazy): las horas cuyo task_key quedó vacío son de tareas que NO están en el
+    // keyMap top-level — subtasks o anidadas. Se resuelve el key UNA sola vez por (proyecto,
+    // tarea) DISTINTA que realmente tiene horas (no por cada tarea del portal), guardando cada
+    // GET aparte para que un fallo puntual no pierda las demás. Best-effort: lo que no resuelva
+    // queda '' y cae al id largo.
+    const pendientes = new Map<string, { projectId: string; taskId: string }>();
+    for (const r of rows) {
+      if (r.task_key || !r.task_number) continue;
+      const k = `${r.zoho_project_id}|${r.task_number}`;
+      if (!pendientes.has(k)) {
+        pendientes.set(k, { projectId: String(r.zoho_project_id), taskId: String(r.task_number) });
+      }
+    }
+    if (pendientes.size > 0) {
+      console.log(`Resolviendo key corto de ${pendientes.size} tareas con horas fuera del top-level (subtasks/anidadas)`);
+      for (const { projectId, taskId } of pendientes.values()) {
+        try {
+          const key = await resolveTaskKey(portalId, projectId, taskId, token);
+          if (key) keyMap.set(taskId, key);
+        } catch (e) {
+          console.log(`  key de tarea ${taskId} no resuelto, se sigue: ${String((e as Error)?.message ?? e)}`);
+        }
+      }
+      // Segunda pasada: completar el task_key de las filas que ahora sí tienen key en el mapa.
+      for (const r of rows) {
+        if (!r.task_key && r.task_number) r.task_key = String(keyMap.get(String(r.task_number)) ?? "");
+      }
+    }
 
     if (rows.length === 0) {
       await recordStatus(supabase, "OK", 0, null);
