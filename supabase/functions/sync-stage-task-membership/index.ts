@@ -1,5 +1,7 @@
 // DRAFT — sync-stage-task-membership (slice 02 de stages-from-zoho). NO deployada aún;
-// requiere aprobación humana + verificar el shape de subtasks de Zoho (ver fetchSubtasks).
+// requiere aprobación humana antes de deployar. El shape de subtasks de Zoho YA fue
+// confirmado por probe (endpoint /tasks/{stageId}/subtasks/ → clave `tasks`, 204 si vacío;
+// ver fetchSubtasks).
 //
 // Puebla stage_task_membership (migración 0049): por cada Stage (project_stages con
 // zoho_task_id = una Task top-level "Stage N" de Zoho), trae sus SUBTASKS y guarda la
@@ -58,44 +60,51 @@ async function getAccessToken(): Promise<string> {
   throw new Error("No se pudo obtener el access token de Zoho.");
 }
 
+// Wrapper delgado sobre zohoGetStatus (única fuente del fetch-con-reintentos): devuelve el
+// JSON sólo si la respuesta fue 2xx, si no null. Lo usa el fetch de portales, al que sólo le
+// importa el body. fetchSubtasks usa zohoGetStatus directo porque necesita el status (204 vs fallo).
 async function zohoGet(url: string, token: string): Promise<any | null> {
+  const { status, data } = await zohoGetStatus(url, token);
+  return status >= 200 && status < 300 ? data : null;
+}
+
+// Igual que zohoGet pero DEVUELVE EL STATUS: hace falta para distinguir 204 (fin limpio,
+// "no hay más subtasks") de un 4xx/failure (abortar). Reintenta transitorios (5xx/429).
+async function zohoGetStatus(url: string, token: string): Promise<{ status: number; data: any | null }> {
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
     try {
       const res = await fetch(url, { headers: { Authorization: "Zoho-oauthtoken " + token } });
-      if (res.status >= 500) throw new Error(`Zoho HTTP ${res.status}`);
-      if (!res.ok) return null; // 4xx: degradar (no reintentar)
-      const text = await res.text();
-      if (!text) return null;
-      try { return JSON.parse(text); } catch { return null; }
-    } catch (e) {
-      if (attempt < RETRY_DELAYS_MS.length) {
-        await sleep(RETRY_DELAYS_MS[attempt]);
+      if ((res.status >= 500 || res.status === 429) && attempt < RETRY_DELAYS_MS.length) {
+        await sleep(RETRY_DELAYS_MS[attempt]); // transitorio → reintentar
         continue;
       }
+      const text = await res.text();
+      let data: any = null;
+      if (text) { try { data = JSON.parse(text); } catch { /* no-json */ } }
+      return { status: res.status, data };
+    } catch (e) {
+      if (attempt < RETRY_DELAYS_MS.length) { await sleep(RETRY_DELAYS_MS[attempt]); continue; }
       throw e;
     }
   }
-  return null;
+  return { status: 0, data: null };
 }
 
 /**
  * SUBTASKS de una Task-Stage de Zoho, paginadas y normalizadas a { id, name }.
  *
- * ⚠️ VERIFICAR antes de deployar: el endpoint/shape exacto de subtasks de la API v1 de
- * Zoho Projects debe confirmarse con un probe (la probe original ya fue retirada). Este
- * draft asume el endpoint por-task `/tasks/{taskId}/subtasks/` con la lista bajo la clave
- * `subtasks`. Se acepta SÓLO esa clave a propósito: si el shape difiere (respuesta con otra
- * clave, o el endpoint equivocado que devuelve las tasks TOP-LEVEL bajo `tasks`), NO se
- * ingieren esas filas como subtasks —eso corrompería la membresía de todos los stages—: se
- * devuelve null y el caller SALTEA (no toca datos).
+ * SHAPE CONFIRMADO por probe contra el portal real:
+ *   - Endpoint por-task `/tasks/{stageId}/subtasks/` (v1).
+ *   - 200 con la lista de subtasks bajo la clave **`tasks`** (NO `subtasks`); item: id_string, key, name.
+ *   - **204 No Content** cuando el stage NO tiene subtasks (Stage IV=204; III=40, II=15, I=5).
  *
- * Devoluciones:
- *   - null  → fetch fallido O shape no reconocido (sin `subtasks` array) → el caller saltea
- *             la reconciliación (NO borra membresías reales). Igual criterio anti-wipe que
- *             sync-project-stages.
- *   - []    → 200 con `subtasks: []` (el stage realmente no tiene subtasks). El caller NO
- *             borra ante lista vacía (guarda false-empty, ver reconcileStageMembership).
- *   - filas → subtasks deduplicadas por id (una página repetida no rompe el upsert).
+ * Distingue por STATUS (no colapsa todo a null como zohoGet):
+ *   - 204 → fin limpio (0 subtasks). Devuelve lo acumulado (típicamente []).
+ *   - status fuera de 2xx (4xx, o 5xx/429 tras reintentos) → devuelve **null** = FALLO: el
+ *     caller SALTEA la reconciliación (NO borra membresías). Esto evita el wipe PARCIAL si
+ *     falla una página >1 tras haber traído otras (no se toma la lista parcial como completa).
+ *   - 200 sin `tasks` array → shape inesperado: se aborta (null) en vez de ingerir algo raro.
+ *   - 200 con `tasks` → subtasks deduplicadas por id.
  */
 async function fetchSubtasks(
   portalId: string,
@@ -110,12 +119,14 @@ async function fetchSubtasks(
   for (let page = 0; ; page++) {
     if (page >= MAX_PAGES) throw new Error(`demasiadas páginas de subtasks (task ${stageTaskId})`);
     const url = `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/${stageTaskId}/subtasks/?index=${index}&range=${RANGE}`;
-    const data = await zohoGet(url, token);
-    if (data == null) return null; // fetch fallido → el caller saltea (no borra)
-    // SÓLO la clave `subtasks`: un 200 sin ese array = shape no reconocido → null (no se
-    // asumen las top-level `tasks` como subtasks, que ensuciaría la membresía).
-    if (!Array.isArray(data.subtasks)) return null;
-    const items: any[] = data.subtasks;
+    const { status, data } = await zohoGetStatus(url, token);
+    if (status === 204) break; // sin (más) subtasks → fin limpio
+    // Cualquier no-2xx = fallo → ABORTAR el stage entero (null): no se toma la lista parcial
+    // como completa (evita borrar las páginas que no cargaron). El caller lo saltea/registra.
+    if (status < 200 || status >= 300) return null;
+    // 200 con shape inesperado (sin `tasks` array) → abortar por seguridad (no ingerir basura).
+    if (!data || !Array.isArray(data.tasks)) return null;
+    const items: any[] = data.tasks;
     const firstId = items.length ? String(items[0].id_string || items[0].id || "") : "";
     if (items.length > 0 && firstId === prevFirstId) break; // Zoho ignora paginación → cortar
     prevFirstId = firstId;
@@ -226,7 +237,9 @@ Deno.serve(async (req) => {
       if (!zohoProjectId) continue;
       try {
         const subtasks = await fetchSubtasks(portalId, String(zohoProjectId), String(s.zoho_task_id), token);
-        // null = fetch fallido → SALTEAR (no reconciliar): no se borran membresías reales.
+        // null = fetch FALLIDO (no un 204 vacío, que devuelve []) → SALTEAR: no reconciliar
+        // con datos incompletos (no borrar membresías reales por un error transitorio). Queda
+        // registrado en errors[] para tener señal (no se cuenta como processed).
         if (subtasks == null) throw new Error(`fetch de subtasks falló (stage ${s.id}) — se saltea`);
         const r = await reconcileStageMembership(supabase, s.project_id, s.id, subtasks);
         upserted += r.upserted; deleted += r.deleted; processed++;
