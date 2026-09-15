@@ -19,6 +19,7 @@ import {
   buildFilterOptions,
 } from '../lib/useEntryFilters'
 import { EntryFilterBar } from '../components/EntryFilterBar'
+import { WeekNavigator } from '../components/WeekNavigator'
 import { api } from '../lib/api'
 import { downloadPaymentReceipt } from '../lib/paymentReceipt'
 import {
@@ -328,17 +329,21 @@ export function PaymentsPage() {
   // "Estado" = estado de PAGO de la factura (Invoiced/Paid), que es propio de Payments
   // y no vive en useEntryFilters (por eso paymentStatuses aparte). Filtra facturas y
   // grupos overage/sp_internal por las horas que contienen.
-  const { filters, toggleValue, clear, isActive } = useEntryFilters()
+  const { filters, toggleValue, setField, clear, isActive } = useEntryFilters()
   const [paymentStatuses, setPaymentStatuses] = useState([])
   const masterNames = useMemo(
     () => new Set(clients.map((c) => c.clientName).filter(Boolean)),
     [clients],
   )
+  // El filtro de semana (weekStart, year-aware) también es una dimensión de HORAS: sin
+  // incluirlo acá, matchingEntryIds quedaría null y elegir una semana no acotaría nada.
+  // (El filtro numérico `week` no se incluye: ninguna UI de Payments lo setea — ver OQ-2.)
   const entryDimsActive =
     filters.clients.length > 0 ||
     filters.projects.length > 0 ||
     filters.projectNumbers.length > 0 ||
-    filters.contractors.length > 0
+    filters.contractors.length > 0 ||
+    Boolean(filters.weekStart)
 
   const paymentFilterActive = isActive || paymentStatuses.length > 0
   // Callbacks estables + filters memoizado: así el EntryFilterBar (React.memo) no se
@@ -362,6 +367,14 @@ export function PaymentsPage() {
   const combinedFilters = useMemo(
     () => ({ ...filters, paymentStatuses }),
     [filters, paymentStatuses],
+  )
+  // Navegador de semana year-aware (mismo que Entries/Billing), montado como children de
+  // EntryFilterBar. Reemplaza al viejo input numérico W## year-blind (ver OQ-2). Handler
+  // estable + elemento memoizado por weekStart para no anular el React.memo de la barra.
+  const onWeekChange = useCallback((v) => setField('weekStart', v), [setField])
+  const weekNav = useMemo(
+    () => <WeekNavigator value={filters.weekStart} onChange={onWeekChange} />,
+    [filters.weekStart, onWeekChange],
   )
   // NOTA: las OPCIONES del filtro y el matching (matchingEntryIds/passesEntryFilter/
   // filterDimensions) se computan MÁS ABAJO, sobre el universo REALMENTE mostrado
@@ -1019,7 +1032,9 @@ export function PaymentsPage() {
             onClear={onFilterClear}
             isActive={paymentFilterActive}
             title="Payment filters"
-          />
+          >
+            {weekNav}
+          </EntryFilterBar>
 
           <div className="proj-kpis">
             <div className="proj-kpis__chips" role="group" aria-label="Payment alerts">
