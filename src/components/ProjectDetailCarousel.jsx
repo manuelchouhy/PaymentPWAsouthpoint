@@ -3,7 +3,8 @@ import { motion } from 'framer-motion'
 import { ChevronDown, ChevronLeft, ChevronRight, FileText, Pencil, Plus, Settings2, Upload, X } from 'lucide-react'
 import { ContractBadge } from './ContractBadge'
 import { contractStatus, daysRemaining } from '../lib/projectsData'
-import { CR_TYPE_LABELS, effectiveBudgetHours } from '../lib/changeRequestsData'
+import { CR_TYPE_LABELS } from '../lib/changeRequestsData'
+import { resolveProjectBudget } from '../lib/projectStageBudget'
 import { buildProjectTaskTree } from '../lib/projectTaskTree'
 import { mergeProjectTasks } from '../lib/mergeProjectTasks'
 import { api } from '../lib/api'
@@ -29,9 +30,11 @@ function OverviewSlide({
   project,
   stageCount,
   stageCountError,
-  canEditSow,
+  canEditBudget,
   budgetHours,
   budgetExpanded,
+  budgetHasStages,
+  totalBudget,
   budgetPending,
   budgetError,
 }) {
@@ -67,17 +70,24 @@ function OverviewSlide({
         <dt>SOW Number</dt>
         <dd className="cell-mono">{project.sowNumber || '—'}</dd>
       </div>
-      {project.baseBudgetHours != null && (
+      {(budgetHasStages || project.baseBudgetHours != null) && (
         <div className="drawer__fact">
-          <dt>Budget Hours</dt>
+          {/* Con stages internos el budget vigente es el del stage activo; el
+              total (suma de stages) va como referencia. Sin stages, la base + CRs. */}
+          <dt>Budget Hours{budgetHasStages ? ' (active stage)' : ''}</dt>
           <dd>
             {/* Sin los change requests cargados no se sabe el presupuesto
                 vigente — mostrar la base como si lo fuera haría que
                 Operations subestime lo que el cliente ya aprobó. */}
             {budgetError ? (
-              `${project.baseBudgetHours} h (base — approved CRs could not be loaded)`
+              'Current budget could not be loaded — try reopening this project.'
             ) : budgetPending ? (
               'Loading…'
+            ) : budgetHasStages ? (
+              <>
+                {budgetHours ?? '—'} h
+                <span className="field__hint"> (active stage · total {totalBudget ?? '—'} h)</span>
+              </>
             ) : (
               <>
                 {budgetHours ?? project.baseBudgetHours} h
@@ -109,7 +119,7 @@ function OverviewSlide({
           ) : (
             <>
               {stageCount} stage{stageCount === 1 ? '' : 's'}
-              {canEditSow && ' — see "Edit SOW & Scope"'}
+              {canEditBudget && ' — see "Edit Budget Hours"'}
             </>
           )}
         </dd>
@@ -997,7 +1007,7 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
  *   canDecideChangeRequests?: boolean, // permiso changeRequests.decide (issue 07)
  *   onClose: () => void,
  *   onEdit: () => void,           // campos legacy (contrato, customer, etc.) — siempre disponible
- *   onEditSow?: () => void,       // SOW/Scope/Maintenance del wizard — solo si el proyecto tiene clientId
+ *   onEditBudget?: () => void,    // editor "Edit Budget Hours" — presente si el usuario tiene projects.edit
  * }} props
  */
 export function ProjectDetailCarousel({
@@ -1008,7 +1018,7 @@ export function ProjectDetailCarousel({
   canDecideChangeRequests,
   onClose,
   onEdit,
-  onEditSow,
+  onEditBudget,
 }) {
   const [stageCount, setStageCount] = useState(null)
   const [stageCountError, setStageCountError] = useState(false)
@@ -1035,13 +1045,11 @@ export function ProjectDetailCarousel({
 
   const days = daysRemaining(project.contractExpirationDate)
   const status = contractStatus(days)
-  // Mismo gate que el botón "Edit SOW & Scope" de acá abajo — el texto del
-  // slide Overview que lo referencia solo debe aparecer cuando el botón
-  // realmente se va a renderizar (clientId puede ser null incluso con
-  // hasStages=true).
-  const canEditSow = Boolean(project.clientId && onEditSow)
-  const budgetHours = effectiveBudgetHours(project.baseBudgetHours, changeRequests)
-  const budgetExpanded = budgetHours != null && budgetHours !== Number(project.baseBudgetHours)
+  // Mismo gate que el botón "Edit Budget Hours" de acá abajo — el texto del
+  // slide Overview que lo referencia solo debe aparecer cuando el botón se va a
+  // renderizar. Disponible para cualquier proyecto editable (incl. clientId
+  // null); el permiso se resuelve arriba (onEditBudget presente solo con projects.edit).
+  const canEditBudget = Boolean(onEditBudget)
 
   const taskTree = useMemo(
     () => buildProjectTaskTree(treeStages, treeTasks),
@@ -1051,6 +1059,21 @@ export function ProjectDetailCarousel({
   // efecto de stageCount). Extraído para no repetir la regla en loading/error.
   const stagesPending = project.hasStages && stageCount === null && !stageCountError
   const stagesFailed = project.hasStages && stageCountError
+
+  // Budget vigente: el del STAGE ACTIVO si el proyecto tiene stages internos, si no
+  // la base + CRs. `budgetHasStages` sale de project.hasStages (autoritativo), NO de
+  // treeStages.length: si los stages todavía cargan o fallaron, NO se muestra el base
+  // (sería un número inflado) — se muestra Loading/error hasta tenerlos. El total
+  // (suma de stages) va como referencia. Ver projectStageBudget.js.
+  const budgetHasStages = Boolean(project.hasStages)
+  const { activeBudget, totalBudget } = resolveProjectBudget(project, treeStages, changeRequests)
+  const budgetHours = activeBudget
+  const budgetExpanded =
+    !budgetHasStages && budgetHours != null && budgetHours !== Number(project.baseBudgetHours)
+  // El budget de un proyecto con stages no es confiable hasta que carguen (si no,
+  // resolveProjectBudget con treeStages=[] devuelve la base). Se suma al gate de CRs.
+  const budgetLoading = loadingCrs || (budgetHasStages && stagesPending)
+  const budgetLoadFailed = crsLoadError || (budgetHasStages && stagesFailed)
   const toggleStage = (key) =>
     setExpandedStages((prev) => {
       const next = new Set(prev)
@@ -1081,11 +1104,13 @@ export function ProjectDetailCarousel({
           project={project}
           stageCount={stageCount}
           stageCountError={stageCountError}
-          canEditSow={canEditSow}
+          canEditBudget={canEditBudget}
           budgetHours={budgetHours}
           budgetExpanded={budgetExpanded}
-          budgetPending={loadingCrs}
-          budgetError={crsLoadError}
+          budgetHasStages={budgetHasStages}
+          totalBudget={totalBudget}
+          budgetPending={budgetLoading}
+          budgetError={budgetLoadFailed}
         />
       ),
     },
@@ -1292,10 +1317,10 @@ export function ProjectDetailCarousel({
             </h2>
           </div>
           <div className="modal__head-actions">
-            {canEditSow && (
-              <button type="button" className="btn btn--ghost btn--sm" onClick={onEditSow}>
+            {canEditBudget && (
+              <button type="button" className="btn btn--ghost btn--sm" onClick={onEditBudget}>
                 <Settings2 size={15} strokeWidth={2.2} aria-hidden="true" />
-                Edit SOW &amp; Scope
+                Edit Budget Hours
               </button>
             )}
             <button type="button" className="btn btn--ghost btn--sm" onClick={onEdit}>

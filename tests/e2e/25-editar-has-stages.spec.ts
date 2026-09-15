@@ -2,12 +2,15 @@ import { test, expect } from '@playwright/test'
 import { loginAsTestAdmin } from './helpers'
 
 /**
- * Fix 2026-09-11: al editar el SOW se puede cambiar si el proyecto tiene stages o no
- * ("Has stages?" pasó de read-only a editable), y el SOW File de un stage es OPCIONAL.
- * Todo se prueba sin guardar (no muta la DB). State-agnostic: no asume el estado inicial
- * de has_stages del proyecto (el usuario puede haberlo cambiado).
+ * Slice 03 (stage-budget-hours): en EDICIÓN, el wizard "Edit SOW & Scope" se
+ * reemplazó por el editor "Edit Budget Hours". Ya NO se pueden agregar/eliminar
+ * stages ni tasks ni togglear "Has stages?"; lo único editable es el budget por
+ * stage y cuál stage está activo. Las tasks se muestran read-only. La creación de
+ * proyectos conserva el wizard completo (no se prueba acá).
+ *
+ * "Proyecto Prueba" tiene el stage "hola". Se prueba sin guardar (no muta la DB).
  */
-test('Editar SOW: "Has stages?" es editable, muestra/oculta stages y el SOW File es opcional', async ({
+test('Editar: botón "Edit Budget Hours", sin agregar/eliminar stages ni tasks, budget por stage editable', async ({
   page,
 }) => {
   await loginAsTestAdmin(page)
@@ -17,32 +20,22 @@ test('Editar SOW: "Has stages?" es editable, muestra/oculta stages y el SOW File
   await row.waitFor({ state: 'visible', timeout: 30000 })
   await row.click()
 
-  const modal = page.locator('.modal--carousel')
-  await expect(modal).toBeVisible()
-  await modal.getByRole('button', { name: /Edit SOW/i }).click()
+  const carousel = page.locator('.modal--carousel')
+  await expect(carousel).toBeVisible()
+  // El botón viejo ya no existe; el nuevo sí.
+  await expect(carousel.getByRole('button', { name: /Edit SOW/i })).toHaveCount(0)
+  await carousel.getByRole('button', { name: /Edit Budget Hours/i }).click()
 
-  const hasStages = page.getByRole('checkbox', { name: 'Has stages?' })
-  await expect(hasStages).toBeVisible()
-  // Editable (no read-only) — se espera a que carguen los stages (queda enabled).
-  await expect(hasStages).toBeEnabled()
+  await expect(page.getByRole('heading', { name: 'Edit Budget Hours' })).toBeVisible()
 
-  const addStage = page.getByRole('button', { name: 'Add stage' })
+  // Nada de agregar/eliminar ni togglear stages/tasks.
+  await expect(page.getByRole('button', { name: 'Add stage' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Add task' })).toHaveCount(0)
+  await expect(page.getByRole('checkbox', { name: 'Has stages?' })).toHaveCount(0)
 
-  // Asegurar stages ON (sin asumir el estado inicial).
-  if (!(await hasStages.isChecked())) await hasStages.check()
-  await expect(hasStages).toBeChecked()
-  await expect(addStage).toBeVisible()
-
-  // Agregar un stage nuevo: su "SOW File" es OPCIONAL (label 'optional', no 'required').
-  await addStage.click()
-  const sowFileLabel = page.locator('label[for^="wz-stage-sow-file-"]').last()
-  await expect(sowFileLabel).toContainText('SOW File')
-  await expect(sowFileLabel).toContainText('optional')
-  await expect(sowFileLabel.locator('.field__req')).toHaveCount(0)
-
-  // Toggle OFF → se oculta la sección de stages.
-  await hasStages.uncheck()
-  await expect(addStage).toHaveCount(0)
+  // Budget del stage "hola" editable + radio para marcarlo activo.
+  await expect(page.getByLabel(/Budget hours for hola/i)).toBeVisible()
+  await expect(page.getByLabel(/Mark hola as the active stage/i)).toBeVisible()
 
   // Cerrar SIN guardar (no muta la DB).
   await page.keyboard.press('Escape')

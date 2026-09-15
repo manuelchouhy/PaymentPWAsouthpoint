@@ -32,6 +32,8 @@ const FIELD_TO_COLUMN = {
   client: 'client',
   clientId: 'client_id',
   baseBudgetHours: 'base_budget_hours',
+  // Stage marcado activo: su budget es el vigente del proyecto (ver projectStageBudget.js).
+  activeStageId: 'active_stage_id',
   projectName: 'project_name',
   projectNumber: 'project_number',
   customerName: 'customer_name',
@@ -196,6 +198,8 @@ function rowToProject(row) {
     client: row.client,
     clientId: row.client_id ?? null,
     baseBudgetHours: row.base_budget_hours != null ? Number(row.base_budget_hours) : null,
+    // Stage activo (uno por proyecto). null = sin marcar / proyecto sin stages.
+    activeStageId: row.active_stage_id ?? null,
     projectName: row.project_name,
     projectNumber: row.project_number,
     customerName: row.customer_name ?? null,
@@ -882,6 +886,8 @@ function rowToStage(row) {
     stageName: row.stage_name,
     sowNumber: row.sow_number,
     sowUrl: row.sow_url ?? null,
+    // Budget (horas) asignado a este stage. null = sin cargar (0 es un valor válido).
+    budgetHours: row.budget_hours != null ? Number(row.budget_hours) : null,
     createdAt: row.created_at,
     createdBy: row.created_by ?? null,
   }
@@ -956,10 +962,58 @@ export async function getProjectStages(projectId) {
 }
 
 /**
+ * Todos los stages de todos los proyectos, agrupados por projectId, en una sola
+ * query. Para Client Summary/Dashboard/Billing, que necesitan el budget del stage
+ * activo por proyecto sin un fetch por proyecto (N+1). Solo trae lo mínimo para el
+ * resolver: id + budget_hours (el active_stage_id vive en la fila del proyecto).
+ * @returns {Promise<Map<string, {id:(string|number), budgetHours:?number}[]>>}
+ */
+export async function getAllProjectStages() {
+  const map = new Map()
+  if (!isSupabaseConfigured) {
+    for (const [pid, stages] of Object.entries(demoStages)) {
+      map.set(String(pid), (stages ?? []).map((s) => ({ id: s.id, budgetHours: s.budgetHours ?? null })))
+    }
+    return map
+  }
+  // Paginado por keyset (id > último visto), no por offset: PostgREST tope a 1000
+  // filas por respuesta y con offset un insert/delete entre páginas correría los
+  // índices y saltearía/duplicaría filas. Keyset sobre id (orden estable) es
+  // inmune a eso. Sin esto, un workspace con >1000 stages devolvería un subconjunto
+  // arbitrario y el resolver mostraría budgets incompletos sin señal al usuario.
+  // Se corta cuando una página vuelve VACÍA, no cuando trae menos de pageSize: el
+  // límite real de filas lo pone el server (db-max-rows), que puede ser < pageSize,
+  // y cortar por "< pageSize" saltearía el resto. Cada página avanza lastId sobre el
+  // último id visto, así que el keyset siempre progresa y termina (id es serial único).
+  const pageSize = 1000
+  let lastId = null
+  for (;;) {
+    let q = supabase
+      .from('project_stages')
+      .select('project_id, id, budget_hours')
+      .order('id', { ascending: true })
+      .limit(pageSize)
+    if (lastId != null) q = q.gt('id', lastId)
+    const { data, error } = await q
+    if (error) throw new Error(error.message)
+    const rows = data ?? [] // data puede venir null (ej. edge sin filas) sin error
+    if (rows.length === 0) break
+    for (const row of rows) {
+      const key = String(row.project_id)
+      const list = map.get(key) ?? []
+      list.push({ id: row.id, budgetHours: row.budget_hours != null ? Number(row.budget_hours) : null })
+      map.set(key, list)
+    }
+    lastId = rows[rows.length - 1].id
+  }
+  return map
+}
+
+/**
  * Crea los stages de un proyecto recién creado (alta en bloque, en el orden
  * en que se agregaron en el wizard).
  * @param {string|number} projectId
- * @param {Array<{ stageName: string, sowNumber: string, sowUrl: ?string }>} stages
+ * @param {Array<{ stageName: string, sowNumber: string, sowUrl: ?string, budgetHours?: ?number }>} stages
  * @param {?string} createdBy
  * @param {number} startPosition  0 al crear el proyecto; longitud de los
  *   stages ya existentes cuando se agregan más en edición (issue 03b) — si
@@ -979,6 +1033,8 @@ export async function createProjectStages(projectId, stages, createdBy, startPos
       stageName: s.stageName,
       sowNumber: s.sowNumber,
       sowUrl: s.sowUrl ?? null,
+      // '' -> null (?? no atrapa ''); preserva 0. Mismo criterio que updateProjectStage.
+      budgetHours: s.budgetHours === '' ? null : s.budgetHours ?? null,
       createdAt: new Date().toISOString(),
       createdBy: createdBy || null,
     }),
@@ -988,6 +1044,8 @@ export async function createProjectStages(projectId, stages, createdBy, startPos
       stage_name: s.stageName,
       sow_number: s.sowNumber,
       sow_url: s.sowUrl ?? null,
+      // '' -> null: sin esto el '' llega a la columna numérica y revienta el insert.
+      budget_hours: s.budgetHours === '' ? null : s.budgetHours ?? null,
       created_by: createdBy || null,
     }),
     rowToEntity: rowToStage,
@@ -999,22 +1057,30 @@ export async function createProjectStages(projectId, stages, createdBy, startPos
  * reemplazó el archivo). Sin delete — 0025_project_stages_update_policy.sql
  * solo agregó update, mismo patrón "nadie borra" del resto de la app.
  * @param {{ id: string|number, projectId: string|number }} current
- * @param {{ stageName?: string, sowNumber?: string, sowUrl?: ?string }} updates
+ * @param {{ stageName?: string, sowNumber?: string, sowUrl?: ?string, budgetHours?: ?number }} updates
  * @returns {Promise<Object>}
  */
 export async function updateProjectStage(current, updates) {
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 150))
-    const updated = { ...current, ...updates }
-    demoStages[current.projectId] = (demoStages[current.projectId] ?? []).map((s) =>
-      s.id === current.id ? updated : s,
-    )
+    // Mergear sobre el stage ALMACENADO (no sobre `current`): `current` puede
+    // llegar parcial (solo { id, projectId }, ej. desde el editor de budget), y
+    // spreadear ese pisaría stageName/position/sowNumber del stage guardado.
+    let updated = { ...current, ...updates }
+    demoStages[current.projectId] = (demoStages[current.projectId] ?? []).map((s) => {
+      if (s.id !== current.id) return s
+      updated = { ...s, ...current, ...updates }
+      return updated
+    })
     return updated
   }
   const row = {}
   if (updates.stageName !== undefined) row.stage_name = updates.stageName
   if (updates.sowNumber !== undefined) row.sow_number = updates.sowNumber
   if (updates.sowUrl !== undefined) row.sow_url = updates.sowUrl
+  // '' -> null; preserva 0 como budget válido (mismo criterio que projectToRow).
+  if (updates.budgetHours !== undefined)
+    row.budget_hours = updates.budgetHours === '' ? null : updates.budgetHours ?? null
   const { data, error } = await supabase.from('project_stages').update(row).eq('id', current.id).select().single()
   if (error) throw new Error(error.message)
   return rowToStage(data)

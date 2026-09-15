@@ -44,6 +44,69 @@ test('agrupa cliente → proyecto → semana con consumed y budget', () => {
   assert.equal(proj.weeks[0].overage, 0)
 })
 
+test('proyecto con stages: budget de la fila = stage activo; totalBudget = suma', () => {
+  const result = buildClientSummaryWeekly({
+    projects: [project({ id: 7, baseBudgetHours: 999, activeStageId: 2 })],
+    entries: [entry({ hours: 10 })],
+    crsByProject: new Map(),
+    stagesByProject: new Map([
+      ['7', [
+        { id: 1, budgetHours: 100 },
+        { id: 2, budgetHours: 60 },
+      ]],
+    ]),
+  })
+  const proj = result.clients[0].projects[0]
+  assert.equal(proj.budget, 60) // stage activo, no la base (999)
+  assert.equal(proj.totalBudget, 160) // suma de stages
+})
+
+test('proyecto con stages: remaining se mide contra el stage activo, no contra el total', () => {
+  const result = buildClientSummaryWeekly({
+    projects: [project({ id: 7, activeStageId: 2 })],
+    entries: [entry({ hours: 70 })], // consumo total del proyecto
+    crsByProject: new Map(),
+    stagesByProject: new Map([
+      ['7', [
+        { id: 1, budgetHours: 100 },
+        { id: 2, budgetHours: 60 },
+      ]],
+    ]),
+  })
+  const proj = result.clients[0].projects[0]
+  // remaining = activeBudget(60) - consumido(70) = -10 (no 160 - 70 = 90).
+  assert.equal(proj.weeks[0].remaining, -10)
+})
+
+test('proyecto con stages pero sin activo marcado: budget null y remaining en blanco', () => {
+  const result = buildClientSummaryWeekly({
+    projects: [project({ id: 7, activeStageId: null })],
+    entries: [entry({ hours: 40 })],
+    crsByProject: new Map(),
+    stagesByProject: new Map([
+      ['7', [
+        { id: 1, budgetHours: 100 },
+        { id: 2, budgetHours: 60 },
+      ]],
+    ]),
+  })
+  const proj = result.clients[0].projects[0]
+  assert.equal(proj.budget, null) // ningún stage activo → sin budget vigente
+  assert.equal(proj.totalBudget, 160) // el total (suma) igual se conoce
+  assert.equal(proj.weeks[0].remaining, null) // remaining en blanco, no un número engañoso
+})
+
+test('proyecto sin stages: totalBudget = base (comportamiento previo intacto)', () => {
+  const result = buildClientSummaryWeekly({
+    projects: [project({ baseBudgetHours: 120 })],
+    entries: [entry({ hours: 10 })],
+    crsByProject: new Map(),
+  })
+  const proj = result.clients[0].projects[0]
+  assert.equal(proj.budget, 120)
+  assert.equal(proj.totalBudget, 120)
+})
+
 test('cumulative y remaining se calculan cronológicamente entre semanas', () => {
   const { clients } = buildClientSummaryWeekly({
     projects: [project({ baseBudgetHours: 120 })],
