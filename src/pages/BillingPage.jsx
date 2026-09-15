@@ -123,6 +123,10 @@ const TABS = [
   { key: 'unknown', label: 'X' },
 ]
 const sumGroupHours = (groups) => groups.reduce((total, g) => total + g.hours, 0)
+// Criterio de "consumed" de los cuadros de budget: horas aprobadas facturables al cliente
+// (sp_internal/overage NO cuentan acá, decisión del dominio). Único lugar para que el cuadro
+// por proyecto (projectStatsFor) y el cuadro por stage (stageBudgetCard) no diverjan.
+const isBillableApproved = (e) => e.status === 'Approved' && e.allocation === 'bill_to_client'
 
 // Filas proveedor·proyecto·task para las tabs de lectura (sin checkbox ni SOW: no
 // se factura acá). Se combinan por terna en groupReadonly. showProvider=false
@@ -651,7 +655,7 @@ export function BillingPage() {
       for (const en of projectEntries) {
         if (en.project) names.add(en.project)
         if (en.projectNumber) nums.add(en.projectNumber)
-        if (en.status === 'Approved' && en.allocation === 'bill_to_client') {
+        if (isBillableApproved(en)) {
           consumed += Number(en.hours) || 0
         }
       }
@@ -860,11 +864,38 @@ export function BillingPage() {
         : null,
     [cardScope, projectStatsFor],
   )
-  // El fallback al filtro (singleProject) es SÓLO sin selección: con algo tildado el
-  // cuadro muestra selectionProject —"—" si la selección no es un proyecto único—, nunca
-  // el filtro. Si no, la mitad izquierda "Selected" (selectedHours de la selección)
-  // quedaría al lado de un consumed/budget del scope del FILTRO: dos scopes en un cuadro.
-  const budgetCardProject = selectedKeys.size > 0 ? selectionProject : singleProject
+  // Con el filtro de Stage activo y UN solo stage elegido, el cuadro de budget/consumed baja a
+  // ese stage (si no, mostraría el total del proyecto al lado de un grid recortado al stage):
+  // budget = el budget de ese stage; consumed = Approved bill_to_client atribuido a ese stage
+  // (mismo criterio que el scope de proyecto, isBillableApproved). Se limita a UN stage a
+  // propósito: sumar budgets/consumos de VARIOS stages (o de stages de proyectos distintos)
+  // mezclaría alcances y el "remaining" perdería sentido — con varios el cuadro va "—". Hasta
+  // que stages cargue, budget no es confiable → null.
+  const stageBudgetCard = useMemo(() => {
+    if (!stageFilterActive || selectedStageIds.size !== 1) return null
+    const sid = String([...selectedStageIds][0])
+    const cat = stageCatalog.get(sid)
+    const st = (cat ? stagesByProject.get(cat.projectId) ?? [] : []).find((s) => String(s.id) === sid)
+    const b = stagesLoaded && st && st.budgetHours != null ? Number(st.budgetHours) : null
+    const budget = b != null && !Number.isNaN(b) ? b : null
+    let consumed = 0
+    for (const e of entriesConCliente) {
+      if (String(stageOfEntry(e)) === sid && isBillableApproved(e)) consumed += Number(e.hours) || 0
+    }
+    return { budget, consumed }
+  }, [stageFilterActive, selectedStageIds, stageCatalog, stagesByProject, stagesLoaded, entriesConCliente, stageOfEntry])
+  // Con el filtro de Stage activo el cuadro es del STAGE (o "—" si hay varios stages elegidos:
+  // no se agregan alcances). Sin filtro de stage, el fallback: con selección de filas,
+  // selectionProject; sin ella, el filtro (singleProject) — nunca mezclando scopes.
+  const budgetCardProject = stageFilterActive
+    ? stageBudgetCard
+    : selectedKeys.size > 0
+      ? selectionProject
+      : singleProject
+  const budgetCardIsStage = stageBudgetCard != null
+  // Con varios stages elegidos el cuadro no puede ser de "un stage" ni del proyecto → "—" con
+  // aviso de elegir uno solo (mismo criterio honesto que el scope de cliente).
+  const stageMultiNoBudget = stageFilterActive && selectedStageIds.size > 1
   const selectionKpis = useMemo(() => {
     if (!cardScope) return null
     // cardScope.clients trae el nombre de cliente CRUDO ya resuelto (group.client), no
@@ -1380,10 +1411,14 @@ export function BillingPage() {
               </span>
               <span className="dash-kpi__hint">
                 {budgetCardProject
-                  ? 'selected + consumed / budget'
-                  : cardScope
-                    ? 'client scope — select one project for its budget'
-                    : 'select or filter one project'}
+                  ? budgetCardIsStage
+                    ? 'selected + consumed / budget (selected stage)'
+                    : 'selected + consumed / budget'
+                  : stageMultiNoBudget
+                    ? 'select a single stage for its budget'
+                    : cardScope
+                      ? 'client scope — select one project for its budget'
+                      : 'select or filter one project'}
               </span>
             </div>
             {/* Cuadro "Budget remaining" = budget − consumed del proyecto en scope
@@ -1397,8 +1432,9 @@ export function BillingPage() {
               // Sólo se marca "over budget" cuando el negativo supera la banda de
               // redondeo de formatHours (1 decimal): así un -0.03 que se muestra como
               // "-0.0 h" no aparece en rojo. Mismo criterio de 0.05 que usa el resto de
-              // Billing. Scope: budget = TOTAL del proyecto (suma de stages, o base+CRs sin
-              // stages) y consumed = proyecto COMPLETO → ambos lados en el mismo alcance.
+              // Billing. Scope (budgetCardProject): con filtro de Stage, budget/consumed son
+              // de los stage(s) elegidos; si no, del proyecto entero (suma de stages/base+CRs
+              // vs consumo del proyecto). En ambos casos los dos lados están en el mismo alcance.
               const over = remaining != null && remaining < -0.05
               return (
                 <div className="dash-kpi dash-kpi--static">
@@ -1418,13 +1454,19 @@ export function BillingPage() {
                   <span className="dash-kpi__hint">
                     {remaining == null
                       ? budgetCardProject
-                        ? 'no budget set for this project'
-                        : cardScope
-                          ? 'client scope — select one project for its budget'
-                          : 'select or filter one project'
+                        ? budgetCardIsStage
+                          ? 'no budget set for the selected stage'
+                          : 'no budget set for this project'
+                        : stageMultiNoBudget
+                          ? 'select a single stage for its budget'
+                          : cardScope
+                            ? 'client scope — select one project for its budget'
+                            : 'select or filter one project'
                       : over
                         ? 'over budget'
-                        : 'total budget − project consumed'}
+                        : budgetCardIsStage
+                          ? 'stage budget − stage consumed'
+                          : 'total budget − project consumed'}
                   </span>
                 </div>
               )
