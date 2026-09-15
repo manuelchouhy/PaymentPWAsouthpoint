@@ -888,9 +888,11 @@ function rowToStage(row) {
     sowUrl: row.sow_url ?? null,
     // Budget (horas) asignado a este stage. null = sin cargar (0 es un valor válido).
     budgetHours: row.budget_hours != null ? Number(row.budget_hours) : null,
-    // Id de Zoho de la Task-Stage que originó este stage (clave del sync). null = stage
-    // manual legacy. Ver migración 0048 y ADR-0003.
+    // Id INTERNO largo de Zoho de la Task-Stage (clave del sync para asociar). null =
+    // stage manual legacy. Ver migración 0048 y ADR-0003.
     zohoTaskId: row.zoho_task_id ?? null,
+    // Key LEGIBLE de Zoho ("PP1-T5") para mostrar en el front. Ver CONTEXT.md.
+    zohoTaskKey: row.zoho_task_key ?? null,
     createdAt: row.created_at,
     createdBy: row.created_by ?? null,
   }

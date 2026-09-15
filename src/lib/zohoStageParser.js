@@ -23,8 +23,9 @@ export function isStageName(name) {
 
 /**
  * Filtra, de la lista de Tasks de Zoho, las que son Stages.
- * @param {{ id:(string|number), name:string }[]} tasks  Tasks de Zoho normalizadas.
- * @returns {{ zohoTaskId:(string|number), name:string }[]} Stages, en el orden de entrada.
+ * @param {{ id:(string|number), key?:(string|number|null), name:string }[]} tasks  Tasks
+ *   de Zoho normalizadas. `id` = id interno largo (anclar); `key` = key legible (mostrar).
+ * @returns {{ zohoTaskId:string, zohoTaskKey:(string|null), name:string }[]} Stages, en orden.
  */
 export function detectStages(tasks) {
   // Un input no-array (ej. normalización fallida upstream que pasa null) devuelve []
@@ -36,7 +37,12 @@ export function detectStages(tasks) {
     // zoho_task_id) → se descarta en vez de emitir un anchor vacío.
     .filter((t) => t != null && t.id != null && t.id !== '' && isStageName(t.name))
     // `zohoTaskId` a string (la columna zoho_task_id es TEXT, como time_entries.task_number):
-    // así el diff del sync compara con === sin mismatch número-vs-string. `name` trimeado
+    // así el diff del sync compara con === sin mismatch número-vs-string. `zohoTaskKey` es la
+    // key legible ("PP1-T5") para mostrar en el front (null si no vino). `name` trimeado
     // cumple el contrato { name:string } y limpia el stage_name a guardar.
-    .map((t) => ({ zohoTaskId: String(t.id), name: String(t.name ?? '').trim() }))
+    .map((t) => ({
+      zohoTaskId: String(t.id),
+      zohoTaskKey: t.key != null ? String(t.key) : null,
+      name: String(t.name ?? '').trim(),
+    }))
 }

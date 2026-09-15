@@ -131,6 +131,12 @@ _Avoid_: confundirlo con los **Stage-proyectos de Zoho** ("Padre - Stage N", que
 son proyectos SEPARADOS con su propio budget) — esos NO son este Stage y quedan
 fuera. El Stage de acá es interno a UN proyecto.
 
+**Task id vs Task key (Zoho):** una Task de Zoho tiene DOS identificadores. El **id
+interno largo** (`task.id`, ej. `2236753000000201118`) es el que une la hora con la
+Task (queda en `time_entries.task_number`) → se usa para **asociar/anclar** (el
+`zoho_task_id` del Stage). La **key legible** (`task.key`, ej. `PP1-T5`) es la que se
+**muestra** en el front. No se mezclan: se ancla por id largo, se muestra la key.
+
 **Mockup** (`.scratch/pantallas-nuevas-mockup.html`):
 Fuente de verdad **solo del diseño** (colores, tokens, layout, tipografía). No es
 fuente de verdad de comportamiento ni de semántica de dominio.

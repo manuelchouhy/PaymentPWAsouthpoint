@@ -9,10 +9,13 @@
 -- en Zoho: es la clave ESTABLE del sync (upsert/diff), así el budget y el stage
 -- activo (datos del Desk) sobreviven un renombre en Zoho.
 --
---   * project_stages.zoho_task_id : id de Zoho de la Task-Stage. TEXT porque los ids
---     de Zoho son enteros grandes (fuera del rango seguro de JS) y así matchea el
---     tipo de time_entries.task_number (string). NULL = stage manual legacy (en
---     transición; el primer sync los borra por diff, ADR-0003).
+--   * project_stages.zoho_task_id : id INTERNO largo de Zoho de la Task-Stage. TEXT
+--     porque los ids de Zoho son enteros grandes (fuera del rango seguro de JS) y así
+--     matchea el tipo de time_entries.task_number (string). Es la clave para ASOCIAR
+--     (une la hora con la task). NULL = stage manual legacy (en transición; el primer
+--     sync los borra por diff, ADR-0003).
+--   * project_stages.zoho_task_key : key LEGIBLE de Zoho (ej. "PP1-T5"), la que se
+--     MUESTRA en el front. NO se usa para joins (ver CONTEXT.md → Task id vs Task key).
 --
 -- Índice único PARCIAL por (project_id, zoho_task_id) donde no es null: garantiza un
 -- solo Stage por Task de Zoho por proyecto (para el upsert), sin bloquear los varios
@@ -21,6 +24,9 @@
 
 alter table public.project_stages
   add column if not exists zoho_task_id text;
+
+alter table public.project_stages
+  add column if not exists zoho_task_key text;
 
 create unique index if not exists uq_project_stages_project_zoho_task
   on public.project_stages (project_id, zoho_task_id)
