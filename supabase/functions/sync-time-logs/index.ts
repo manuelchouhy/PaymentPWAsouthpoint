@@ -171,6 +171,47 @@ function safe(obj: any, path: string, fallback: any): any {
   return cur == null ? fallback : cur;
 }
 
+// Agrega al keyMap (id_string largo → key corto de Zoho, ej. "PP1-T5") las tareas de UN
+// proyecto: las top-level de /tasks/ Y, para las que son padre (isparent / subtasks), sus
+// subtareas de /tasks/{id}/subtasks/. El key corto NO viene en el payload de time-logs
+// (verificado 2026-09-15: task.key llega vacío ahí), sólo en /tasks/, por eso se arma aparte
+// y el loop de logs lo busca por task_number. Es SÓLO para display; si algo falla acá, el
+// keyMap simplemente no cubre esa tarea y su hora cae al id largo — nunca rompe el sync.
+async function addProjectTaskKeys(
+  keyMap: Map<string, string>,
+  portalId: string,
+  projectId: string,
+  token: string,
+): Promise<void> {
+  const tasks = await fetchAllPagesV1(
+    `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/`,
+    "tasks",
+    token,
+  );
+  if (!tasks) return; // 4xx/forma inesperada → sin keys para este proyecto (fallback al largo)
+  for (const t of tasks) {
+    const id = String(t.id_string || t.id || "");
+    if (id && t.key) keyMap.set(id, String(t.key));
+    // ¿tiene subtareas? isparent es el flag de Zoho; subtasks (array/número) es respaldo.
+    const hasSubs =
+      t.isparent === true ||
+      t.isparent === "true" ||
+      (Array.isArray(t.subtasks) ? t.subtasks.length > 0 : Number(t.subtasks) > 0);
+    if (!id || !hasSubs) continue;
+    // Subtasks bajo la clave `tasks` (shape confirmado por probe en sync-stage-task-membership;
+    // 204/empty → fetchAllPagesV1 devuelve null → se saltea sin agregar).
+    const subs = await fetchAllPagesV1(
+      `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/${id}/subtasks/`,
+      "tasks",
+      token,
+    );
+    for (const s of subs ?? []) {
+      const sid = String(s.id_string || s.id || "");
+      if (sid && s.key) keyMap.set(sid, String(s.key));
+    }
+  }
+}
+
 // Mapa projectId → nombre del Project Group de Zoho.
 //
 // En Zoho el cliente vive como Project Group, y el listado de proyectos NO trae
@@ -629,6 +670,10 @@ Deno.serve(async (req) => {
 
     const rows: any[] = [];
 
+    // Mapa id_string largo → key corto de Zoho (task.key), poblado por proyecto desde /tasks/
+    // (+ subtasks). Sólo para display: el loop de logs lo busca por task_number. Ver addProjectTaskKeys.
+    const keyMap = new Map<string, string>();
+
     // El barrido de logs es SOLO sobre activos: los archivados casi nunca tienen
     // horas nuevas y barrerlos mes a mes multiplicaría las llamadas a Zoho (riesgo
     // de rate-limit/timeout de la edge function). Sus horas viejas ya se
@@ -644,6 +689,15 @@ Deno.serve(async (req) => {
       const projectName = p.name;
       const projectStatus = safe(p, "status.name", "");
       const projectOwner = safe(p, "owner.full_name", "");
+
+      // Traer los key cortos de las tareas (+ subtareas) de este proyecto ANTES de sus logs,
+      // para setear task_key en el push. Best-effort: un fallo acá no aborta el sync (las horas
+      // caen al id largo). Ver addProjectTaskKeys.
+      try {
+        await addProjectTaskKeys(keyMap, portalId, projectIdStr, token);
+      } catch (e) {
+        console.log(`task keys de ${projectIdStr} no disponibles, se sigue: ${String((e as Error)?.message ?? e)}`);
+      }
 
       // FR-02 · Cliente del proyecto. Zoho no siempre expone el cliente con la
       // misma clave, así que probamos varias — si no hay ninguna (no está
@@ -667,6 +721,11 @@ Deno.serve(async (req) => {
         for (const bucket of logsData.timelogs.date) {
           const logDate = logDateToISO(bucket.date);
           for (const tl of (bucket.tasklogs || [])) {
+            // FR-02 · ID numérico de la tarea en Zoho (string para no perder precisión en ids
+            // largos). Es la llave para buscar el key corto en keyMap.
+            const taskId = String(
+              safe(tl, "task.id_string", "") || safe(tl, "task.id", ""),
+            );
             rows.push({
               // --- mapeo a la tabla time_entries ---
               zoho_log_id: String(tl.id_string || tl.id || ""),
@@ -677,16 +736,12 @@ Deno.serve(async (req) => {
               zoho_project_id: projectIdStr,
               client: clientName,
               task: safe(tl, "task.name", ""),
-              // FR-02 · ID numérico de la tarea en Zoho (string para no perder
-              // precisión en ids largos).
-              task_number: String(
-                safe(tl, "task.id_string", "") || safe(tl, "task.id", ""),
-              ),
-              // key corto de Zoho (task.key, ej. "HSS-I12"), SÓLO para display: la UI lo
-              // muestra en vez del task_number largo. La lógica sigue sobre task_number.
-              // Si el payload del time-log no trae task.key, queda '' y la UI cae al largo
-              // (sin regresión). Verificar en el primer re-sync que Zoho lo incluya.
-              task_key: String(safe(tl, "task.key", "")),
+              task_number: taskId,
+              // key corto de Zoho (task.key, ej. "PP1-T5"), SÓLO para display: la UI lo muestra
+              // en vez del task_number largo. NO viene en el payload de time-logs; se resuelve
+              // por keyMap (armado desde /tasks/ + subtasks). Si la tarea no está en el mapa,
+              // queda '' y la UI cae al id largo (sin regresión). La lógica sigue sobre task_number.
+              task_key: String(keyMap.get(taskId) ?? ""),
               description: tl.notes || "",
               notes: tl.notes || "",
               log_date: logDate,
