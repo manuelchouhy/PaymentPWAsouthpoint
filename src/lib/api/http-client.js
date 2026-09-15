@@ -203,6 +203,8 @@ export const httpApiClient = {
     getStages: () => notImplemented('projects.getStages'),
     // GET /api/projects/stages → Map<projectId, {id, budgetHours}[]>
     getAllStages: () => notImplemented('projects.getAllStages'),
+    // GET /api/projects/stage-membership → [{project_id, stage_id, zoho_task_id, task_name}]
+    getStageMembership: () => notImplemented('projects.getStageMembership'),
     // POST /api/projects/:id/stages → ProjectStage[]
     createStages: () => notImplemented('projects.createStages'),
     // PATCH /api/projects/stages/:id → ProjectStage
