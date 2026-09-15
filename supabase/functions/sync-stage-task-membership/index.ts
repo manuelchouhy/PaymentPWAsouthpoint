@@ -220,21 +220,30 @@ Deno.serve(async (req) => {
     if (!portals || !portals[0]) return json({ ok: false, error: "No portal found" }, 500);
     const portalId = String(portals[0].id);
 
-    // Stages con zoho_task_id (los sincronizados desde Zoho) + el zoho_project_id de su
-    // proyecto para armar la URL de subtasks. Los stages manuales (sin zoho_task_id) no
-    // tienen subtasks en Zoho → se saltean.
+    // Stages con zoho_task_id (los sincronizados desde Zoho). El zoho_project_id se resuelve
+    // por separado (no con un embed): projects y project_stages tienen DOS relaciones
+    // (project_stages.project_id→projects y projects.active_stage_id→project_stages), y el
+    // embed queda ambiguo. Mismo criterio que sync-project-stages (queries separadas).
     const { data: stages, error: stErr } = await supabase
       .from("project_stages")
-      .select("id, project_id, zoho_task_id, projects!inner(zoho_project_id)")
+      .select("id, project_id, zoho_task_id")
       .not("zoho_task_id", "is", null);
     if (stErr) throw new Error(stErr.message);
+
+    const { data: projs, error: prErr } = await supabase
+      .from("projects")
+      .select("id, zoho_project_id")
+      .not("zoho_project_id", "is", null);
+    if (prErr) throw new Error(prErr.message);
+    const zohoProjectById = new Map<string, string>();
+    for (const p of projs ?? []) zohoProjectById.set(String(p.id), String(p.zoho_project_id));
 
     let upserted = 0, deleted = 0, processed = 0;
     const errors: { stageId: number | string; error: string }[] = [];
 
     for (const s of stages ?? []) {
-      const zohoProjectId = s.projects?.zoho_project_id;
-      if (!zohoProjectId) continue;
+      const zohoProjectId = zohoProjectById.get(String(s.project_id));
+      if (!zohoProjectId) continue; // stage de un proyecto sin zoho_project_id → sin subtasks
       try {
         const subtasks = await fetchSubtasks(portalId, String(zohoProjectId), String(s.zoho_task_id), token);
         // null = fetch FALLIDO (no un 204 vacío, que devuelve []) → SALTEAR: no reconciliar
