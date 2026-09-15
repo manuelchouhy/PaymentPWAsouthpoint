@@ -14,7 +14,8 @@ import { isConsumedAllocation } from './allocations.js'
  *
  * @param {Array<{ task?: string, task_number?: (string|number|null), taskNumber?: (string|number|null),
  *                 hours?: number|string, status?: string, allocation?: string }>} rows
- * @returns {Array<{ id: string, taskName: string, taskNumber: (string|null), hours: number, consumedHours: number }>}
+ * @returns {Array<{ id: string, taskName: string, taskNumber: (string|null), taskKey: (string|null), hours: number, consumedHours: number }>}
+ *   taskKey = key corto de Zoho, sólo para display, atado al taskNumber elegido (ver abajo).
  */
 export function aggregateLoggedTasks(rows = []) {
   const byTask = new Map()

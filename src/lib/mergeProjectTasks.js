@@ -14,13 +14,16 @@
  * de project_tasks (para asignarle un stage) o null si no está registrado.
  *
  * @param {Array<{id:(string|number), taskName:string, stageId:(string|number|null), estimatedHours?:number}>} registered
- * @param {Array<{taskName:string, taskNumber?:(string|null), hours?:number, consumedHours?:number}>} logged
- * @returns {Array<{taskId:(string|number|null), taskName:string, taskNumber:(string|null),
+ * @param {Array<{taskName:string, taskNumber?:(string|null), taskKey?:(string|null), hours?:number, consumedHours?:number}>} logged
+ * @returns {Array<{taskId:(string|number|null), taskName:string, taskNumber:(string|null), taskKey:(string|null),
  *   stageId:(string|number|null), estimatedHours:number, hours:number, consumedHours:number, registered:boolean}>}
+ *   taskKey = key corto de Zoho, sólo para display, atado al mismo task que taskNumber.
  */
 // Clave de matcheo: trim + colapsar espacios internos + lowercase, para que "Backend ",
 // "Backend" y "backend" (SOW vs Zoho) matcheen la misma task en vez de partirse en dos.
 const norm = (name) => String(name ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+// OJO: NO parsea números — sólo coacciona a string (o null si vacío). Sirve igual para el
+// taskKey alfanumérico ("HSS-I12"). No lo cambies a parseInt: rompería todos los task keys.
 const toNum = (v) => (v != null && String(v) !== '' ? String(v) : null)
 
 export function mergeProjectTasks(registered = [], logged = []) {
