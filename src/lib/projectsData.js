@@ -888,6 +888,9 @@ function rowToStage(row) {
     sowUrl: row.sow_url ?? null,
     // Budget (horas) asignado a este stage. null = sin cargar (0 es un valor válido).
     budgetHours: row.budget_hours != null ? Number(row.budget_hours) : null,
+    // Id de Zoho de la Task-Stage que originó este stage (clave del sync). null = stage
+    // manual legacy. Ver migración 0048 y ADR-0003.
+    zohoTaskId: row.zoho_task_id ?? null,
     createdAt: row.created_at,
     createdBy: row.created_by ?? null,
   }
@@ -1035,6 +1038,7 @@ export async function createProjectStages(projectId, stages, createdBy, startPos
       sowUrl: s.sowUrl ?? null,
       // '' -> null (?? no atrapa ''); preserva 0. Mismo criterio que updateProjectStage.
       budgetHours: s.budgetHours === '' ? null : s.budgetHours ?? null,
+      zohoTaskId: s.zohoTaskId ?? null,
       createdAt: new Date().toISOString(),
       createdBy: createdBy || null,
     }),
@@ -1046,6 +1050,7 @@ export async function createProjectStages(projectId, stages, createdBy, startPos
       sow_url: s.sowUrl ?? null,
       // '' -> null: sin esto el '' llega a la columna numérica y revienta el insert.
       budget_hours: s.budgetHours === '' ? null : s.budgetHours ?? null,
+      zoho_task_id: s.zohoTaskId ?? null,
       created_by: createdBy || null,
     }),
     rowToEntity: rowToStage,
@@ -1081,6 +1086,7 @@ export async function updateProjectStage(current, updates) {
   // '' -> null; preserva 0 como budget válido (mismo criterio que projectToRow).
   if (updates.budgetHours !== undefined)
     row.budget_hours = updates.budgetHours === '' ? null : updates.budgetHours ?? null
+  if (updates.zohoTaskId !== undefined) row.zoho_task_id = updates.zohoTaskId ?? null
   const { data, error } = await supabase.from('project_stages').update(row).eq('id', current.id).select().single()
   if (error) throw new Error(error.message)
   return rowToStage(data)

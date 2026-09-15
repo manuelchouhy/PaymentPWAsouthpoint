@@ -221,6 +221,8 @@ export interface ProjectStage {
   sowUrl?: string | null
   /** Budget (horas) asignado a este stage. null = sin cargar (0 es válido). */
   budgetHours?: number | null
+  /** Id de Zoho de la Task-Stage que originó este stage (clave del sync). null = manual legacy. */
+  zohoTaskId?: string | null
   createdAt: string
   createdBy: string | null
 }
