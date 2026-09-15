@@ -16,6 +16,29 @@
  * @returns {{ byStage: Record<string,{hours:number, entryIds:string[]}>, noStage: {hours:number, entryIds:string[]} }}
  *   `byStage` keyed por stageId (string); `noStage` junta las horas sin stage resoluble.
  */
+/**
+ * Arma el mapa task→stage (zoho_task_id → stageId) que consume attributeHoursByStage, a
+ * partir de las filas de membresía (stage_task_membership: qué subtask de Zoho pertenece a
+ * qué stage). Puro y testeable: no lee la DB, sólo transforma filas ya cargadas.
+ *
+ * Filas sin zoho_task_id o sin stage_id se ignoran (no ensucian el mapa). Ante zoho_task_id
+ * repetido, gana la ÚLTIMA fila (orden de entrada) — el caller ordena si necesita otra regla.
+ *
+ * @param {Array<{ zoho_task_id?:(string|number|null), stage_id?:(string|number|null) }>} rows
+ * @returns {Record<string,string>} zoho_task_id (string) → stageId (string)
+ */
+export function buildTaskToStage(rows = []) {
+  const map = {}
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (row == null) continue
+    const taskId = row.zoho_task_id
+    const stageId = row.stage_id
+    if (taskId == null || taskId === '' || stageId == null || stageId === '') continue
+    map[String(taskId)] = String(stageId)
+  }
+  return map
+}
+
 export function attributeHoursByStage(entries = [], taskToStage) {
   // Se normaliza el mapa a claves string UNA vez (Map u objeto → Map string-keyed): así el
   // lookup matchea aunque el mapa venga con claves numéricas (Map([[1003,'S1']])) y el
