@@ -110,7 +110,26 @@ planificado del SOW.
 _Avoid_: confundir la Task con el desglose del SOW; una Task puede no haber
 estado nunca en el SOW.
 
-
+**Stage**:
+Una **etapa interna de un proyecto** (una fase por la que pasa el trabajo). Su
+**existencia, nombre y estructura vienen de Zoho** — concretamente es una Task de
+Zoho llamada "Stage N" que agrupa otras Tasks (sus subtareas) debajo. La **app**
+es dueña de dos cosas que Zoho no tiene: el **budget de horas del stage** y **cuál
+stage está activo** (ambos se cargan a mano en "Edit Budget Hours"). Los Stages **no
+se crean ni se borran a mano** en el Desk — su existencia viene **solo de Zoho**; lo
+único editable en el Desk es el **budget** y el **activo**. Un proyecto puede tener
+**cero o varios** Stages; sin Stages, el budget vive a nivel proyecto.
+El **consumo** de un proyecto con Stages se mide sobre el **stage activo**: solo las
+horas de las Tasks **dentro** de ese stage, contra el budget del stage activo. El
+proyecto igual tiene un **total de horas** (todas, incluidas las de Tasks fuera de
+todo stage — el bucket **"No stage"**) que se muestra como referencia.
+Zoho es autoritativo sobre la **existencia** de un Stage, incluida su **eliminación**:
+si un "Stage N" se borra en Zoho, el Stage (y su budget cargado) se borra del Desk
+(excepción al patrón "nobody deletes", acotada a Stages sincronizados; un stage en
+curso no se borra en Zoho, así que en la práctica no se pierde budget vivo).
+_Avoid_: confundirlo con los **Stage-proyectos de Zoho** ("Padre - Stage N", que
+son proyectos SEPARADOS con su propio budget) — esos NO son este Stage y quedan
+fuera. El Stage de acá es interno a UN proyecto.
 
 **Mockup** (`.scratch/pantallas-nuevas-mockup.html`):
 Fuente de verdad **solo del diseño** (colores, tokens, layout, tipografía). No es
