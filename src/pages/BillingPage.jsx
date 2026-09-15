@@ -12,6 +12,7 @@ import { buildClientResolver } from '../lib/clientResolver'
 import { groupBillToClient, groupReadonly } from '../lib/billingGrouping'
 import { billingKpis } from '../lib/billingKpis'
 import { resolveProjectBudget } from '../lib/projectStageBudget'
+import { remainingBudgetHours } from '../lib/budgetRemaining'
 import {
   canBillSelection,
   billBlockReason,
@@ -1278,6 +1279,51 @@ export function BillingPage() {
                     : 'select or filter one project'}
               </span>
             </div>
+            {/* Cuadro "Budget remaining" = budget − consumed del proyecto en scope
+                (selección o filtro de un proyecto), vía módulo puro budgetRemaining.
+                "—" si no hay un proyecto único o el budget no es resoluble. Negativo
+                (consumido > budget = over budget) se marca en rojo, sin clampear a 0. */}
+            {(() => {
+              // remainingBudgetHours ya devuelve null si budget es null (contrato del
+              // módulo), así que sólo hace falta guardar el destructure de null.
+              const remaining = budgetCardProject ? remainingBudgetHours(budgetCardProject) : null
+              // Sólo se marca "over budget" cuando el negativo supera la banda de
+              // redondeo de formatHours (1 decimal): así un -0.03 que se muestra como
+              // "-0.0 h" no aparece en rojo. Mismo criterio de 0.05 que usa el resto de
+              // Billing. OJO scope: budget = stage ACTIVO, consumed = proyecto COMPLETO
+              // (igual que el cuadro #2 hermano). En proyectos multi-stage esa asimetría
+              // puede dar un negativo espurio — es el riesgo conocido del PRD (OQ-3);
+              // consumed por stage depende del slice de membresía task→stage pendiente.
+              const over = remaining != null && remaining < -0.05
+              return (
+                <div className="dash-kpi dash-kpi--static">
+                  <div className="dash-kpi__head">
+                    <span className="dash-kpi__label">Budget remaining</span>
+                  </div>
+                  <span className="dash-kpi__value" style={over ? { color: '#dc2626' } : undefined}>
+                    {remaining != null ? (
+                      <>
+                        {formatHours(remaining)}
+                        <span className="dash-kpi__unit"> h</span>
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </span>
+                  <span className="dash-kpi__hint">
+                    {remaining == null
+                      ? budgetCardProject
+                        ? 'no budget set for this project'
+                        : cardScope
+                          ? 'client scope — select one project for its budget'
+                          : 'select or filter one project'
+                      : over
+                        ? 'over budget'
+                        : 'active-stage budget − project consumed'}
+                  </span>
+                </div>
+              )
+            })()}
             <div className="dash-kpi dash-kpi--static">
               <div className="dash-kpi__head">
                 <span className="dash-kpi__label">Invoiced</span>
