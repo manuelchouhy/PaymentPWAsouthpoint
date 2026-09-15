@@ -122,7 +122,7 @@ test('normBudget ignora tipos no numéricos (boolean, array)', () => {
   assert.equal(result.activeBudget, null)
 })
 
-test('con stages pero todos sin budget cargado: total null', () => {
+test('con stages pero todos sin budget cargado: totalBudget null (suma pura de stages)', () => {
   const project = { baseBudgetHours: 500, activeStageId: 1 }
   const stages = [
     { id: 1, budgetHours: null },
@@ -131,6 +131,42 @@ test('con stages pero todos sin budget cargado: total null', () => {
   const result = resolveProjectBudget(project, stages, [])
   assert.equal(result.totalBudget, null)
   assert.equal(result.activeBudget, null)
+})
+
+// --- effectiveTotal: budget total efectivo (con fallback al base) que usa Billing ---
+
+test('effectiveTotal sin stages = base + CRs (igual a totalBudget)', () => {
+  const crs = [{ status: 'approved', type: 'expand_budget', deltaHours: 40 }]
+  const r = resolveProjectBudget({ baseBudgetHours: 120, activeStageId: null }, [], crs)
+  assert.equal(r.effectiveTotal, 160)
+  assert.equal(r.totalBudget, 160)
+})
+
+test('effectiveTotal con stages CON budget = suma de stages + CRs (totalBudget sigue sin CRs)', () => {
+  const crs = [{ status: 'approved', type: 'expand_budget', deltaHours: 15 }]
+  const stages = [{ id: 1, budgetHours: 100 }, { id: 2, budgetHours: 60 }]
+  const r = resolveProjectBudget({ baseBudgetHours: 500, activeStageId: 1 }, stages, crs)
+  assert.equal(r.totalBudget, 160) // suma pura de stages (sin CRs)
+  assert.equal(r.effectiveTotal, 175) // 160 + 15 CR
+})
+
+test('effectiveTotal con stages pero NINGUNO con budget CAE al base + CRs (no desaparece)', () => {
+  const crs = [{ status: 'approved', type: 'expand_budget', deltaHours: 10 }]
+  const stages = [{ id: 1, budgetHours: null }, { id: 2, budgetHours: null }]
+  const r = resolveProjectBudget({ baseBudgetHours: 500, activeStageId: 1 }, stages, crs)
+  assert.equal(r.totalBudget, null) // suma pura sigue null (editor)
+  assert.equal(r.effectiveTotal, 510) // fallback: base 500 + 10 CR
+})
+
+test('effectiveTotal: apenas UN stage tiene budget, manda la suma de stages (no el base)', () => {
+  const stages = [{ id: 1, budgetHours: 80 }, { id: 2, budgetHours: null }]
+  const r = resolveProjectBudget({ baseBudgetHours: 500, activeStageId: 1 }, stages, [])
+  assert.equal(r.effectiveTotal, 80)
+})
+
+test('effectiveTotal: stages sin budget y base null → null (no hay de dónde caer)', () => {
+  const r = resolveProjectBudget({ baseBudgetHours: null, activeStageId: null }, [{ id: 1, budgetHours: null }], [])
+  assert.equal(r.effectiveTotal, null)
 })
 
 test('activeStageId string matchea id numérico del stage', () => {
