@@ -32,7 +32,9 @@ export function detectStages(tasks) {
   if (!Array.isArray(tasks)) return []
   return tasks
     // `t != null`: tolera huecos en el array (se saltea la fila mala, no tira).
-    .filter((t) => t != null && isStageName(t.name))
+    // `t.id != null`: un Stage sin id de Zoho es inusable (el upsert/diff se ancla por
+    // zoho_task_id) → se descarta en vez de emitir { zohoTaskId: undefined }.
+    .filter((t) => t != null && t.id != null && isStageName(t.name))
     // `name` normalizado a string trimeado: cumple el contrato { name:string } y limpia
     // el nombre que se va a guardar como stage_name.
     .map((t) => ({ zohoTaskId: t.id, name: String(t.name ?? '').trim() }))

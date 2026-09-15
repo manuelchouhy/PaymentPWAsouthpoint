@@ -61,6 +61,11 @@ test('detectStages con un argumento no-array (null) devuelve [] sin tirar', () =
   assert.deepEqual(detectStages(null), [])
 })
 
+test('detectStages descarta una Task-Stage sin id de Zoho (inusable para el upsert)', () => {
+  const tasks = [{ name: 'Stage II' }, { id: 'z-t5', name: 'Stage III' }]
+  assert.deepEqual(detectStages(tasks), [{ zohoTaskId: 'z-t5', name: 'Stage III' }])
+})
+
 test('detectStages normaliza el name a string trimeado', () => {
   assert.deepEqual(detectStages([{ id: 'z-t5', name: '  Stage II  ' }]), [
     { zohoTaskId: 'z-t5', name: 'Stage II' },
