@@ -1167,7 +1167,8 @@ export async function getProjectTasks(projectId) {
  * bill_to_client o sp_internal (el overage y lo no facturable NO se cuentan como consumido).
  *
  * @param {string} projectName
- * @returns {Promise<Array<{ id: string, taskName: string, taskNumber: (string|null), hours: number, consumedHours: number }>>}
+ * @returns {Promise<Array<{ id: string, taskName: string, taskNumber: (string|null), taskKey: (string|null), hours: number, consumedHours: number }>>}
+ *   taskKey = key corto de Zoho (time_entries.task_key), sólo para display; la lógica usa taskNumber.
  */
 export async function getProjectLoggedTasks(projectName) {
   if (!projectName) return []
@@ -1188,7 +1189,7 @@ export async function getProjectLoggedTasks(projectName) {
     for (let guard = 0; guard < 500 /* tope de seguridad */; guard++) {
       const { data, error } = await supabase
         .from('time_entries')
-        .select('id, task, task_number, hours, status, allocation')
+        .select('id, task, task_number, task_key, hours, status, allocation')
         .eq('project', projectName)
         .gt('id', lastId)
         .order('id')

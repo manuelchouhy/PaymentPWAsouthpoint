@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { StatusBadge } from './StatusBadge'
 import { BillingBadge } from './BillingBadge'
 import { Avatar } from './Avatar'
-import { formatDate, formatWeek, formatHours } from '../lib/format'
+import { formatDate, formatWeek, formatHours, taskDisplayId } from '../lib/format'
 import { useScrollLock } from '../lib/useScrollLock'
 
 /**
@@ -87,7 +87,10 @@ export function EntryDetailDrawer({ entry, allocationLabel, billingStatus, onClo
           </div>
           <div className="drawer__fact">
             <dt>Task number</dt>
-            <dd>{entry.taskNumber || '—'}</dd>
+            {/* Key corto de Zoho (fallback al id largo); tooltip conserva el largo. */}
+            <dd title={entry.taskNumber || undefined}>
+              {taskDisplayId(entry.taskNumber, entry.taskKey) || '—'}
+            </dd>
           </div>
           <div className="drawer__fact">
             <dt>Date</dt>

@@ -346,6 +346,10 @@ function rowToEntry(row) {
     client: row.client ?? '',
     task: row.task ?? '',
     taskNumber: row.task_number ?? '',
+    // Key corto de Zoho, sólo para MOSTRAR (ver taskDisplayId). '' hasta que el sync
+    // lo pueble; el frontend cae al taskNumber largo mientras tanto. La lógica sigue
+    // usando taskNumber, no esto.
+    taskKey: row.task_key ?? '',
     description: row.description ?? '',
     notes: row.notes ?? '',
     date: row.log_date,
@@ -409,7 +413,7 @@ export async function getTimeEntries() {
     // zoho_project_id habilita el join hora→proyecto por id de Zoho en
     // deriveEntriesClient (la columna la crea la migración 0030, ya aplicada).
     .select(
-      'id, zoho_log_id, user_name, project, zoho_project_id, client, task, task_number, description, notes, log_date, hours, status, allocation',
+      'id, zoho_log_id, user_name, project, zoho_project_id, client, task, task_number, task_key, description, notes, log_date, hours, status, allocation',
     )
     .order('log_date', { ascending: false })
 

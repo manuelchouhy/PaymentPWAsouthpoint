@@ -475,6 +475,8 @@ export default function App() {
       { header: 'Project', key: 'project' },
       { header: 'Client', key: 'client' },
       { header: 'Task', key: 'task' },
+      // Task #: el export usa el id LARGO de Zoho (taskNumber) a propósito, para trazar/matchear
+      // contra Zoho; el key corto es sólo para mostrar en pantalla. Ver nota en EntriesPage.
       { header: 'Task #', key: 'taskNumber' },
       { header: 'Description', key: 'description' },
       { header: 'Billing Status', key: 'billingStatus' },

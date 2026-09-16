@@ -23,6 +23,30 @@ test('agrupa por nombre; suma hours (todas) y consumedHours (Approved + alloc co
   assert.equal(out[0].consumedHours, 8) // 5 + 3 (Approved bill_to_client/sp_internal); la Pending no
 })
 
+test('captura el task_key corto (display); primer no-vacío gana, cae al largo si falta', () => {
+  // Con key: se agrega para MOSTRAR (la lógica sigue usando taskNumber, el largo).
+  const withKey = aggregateLoggedTasks([
+    row({ task: 'T', task_key: '', task_number: '2236753000000193417' }),
+    row({ task: 'T', task_key: 'HSS-I12', task_number: '2236753000000193417' }),
+  ])
+  assert.equal(withKey[0].taskKey, 'HSS-I12')
+  assert.equal(withKey[0].taskNumber, '2236753000000193417') // el largo intacto
+  // Sin key en ninguna fila → taskKey null (la UI cae al largo con taskDisplayId).
+  const noKey = aggregateLoggedTasks([row({ task: 'U', task_number: '999' })])
+  assert.equal(noKey[0].taskKey, null)
+})
+
+test('el taskKey queda ATADO al taskNumber elegido: no se filtra el key de OTRO task homónimo', () => {
+  // Dos filas mismo nombre pero DISTINTO task de Zoho: la 1ª (número 111, sin key) fija el par;
+  // la 2ª (número 222, key 'HSS-9') NO debe prestar su key al número 111.
+  const out = aggregateLoggedTasks([
+    row({ task: 'T', task_number: '111', task_key: '' }),
+    row({ task: 'T', task_number: '222', task_key: 'HSS-9' }),
+  ])
+  assert.equal(out[0].taskNumber, '111')
+  assert.equal(out[0].taskKey, null) // NO 'HSS-9' (era de otro task)
+})
+
 test('overage y rejected NO cuentan como consumido, pero sí como logged', () => {
   const out = aggregateLoggedTasks([
     row({ task: 'T', hours: 10, status: 'Approved', allocation: 'bill_to_client' }),
