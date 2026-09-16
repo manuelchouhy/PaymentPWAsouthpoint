@@ -20,10 +20,14 @@ const ZOHO_V3 = "https://projectsapi.zoho.com/api/v3";
 const ZOHO_V1 = "https://projectsapi.zoho.com/restapi";
 const RANGE = 200; // page size de la Tasks API de Zoho (máx 200)
 const RETRY_DELAYS_MS = [500, 1500, 4000];
-// Cota RUN-LEVEL de fetches de subtasks por corrida (slice 02): acota el fan-out de GETs
-// por-padre para que una corrida no se eternice. La convergencia se completa en corridas
-// sucesivas (el key es inmutable → lo resuelto no se vuelve a pedir).
+// Cotas de GETs de subtasks (slice 02). La convergencia se completa en corridas sucesivas
+// (el key es inmutable → lo resuelto no se vuelve a pedir).
+//  - RUN: acota el total de GETs de subtasks de toda la corrida (para que no se eternice).
+//  - PROJECT: acota los GETs por proyecto, para que un proyecto con task_numbers que NUNCA
+//    resuelven (subtasks borradas/anidadas profundas) no drene el budget y deje sin subtasks a
+//    los proyectos siguientes (starvation).
 const MAX_SUBTASK_FETCHES_PER_RUN = 250;
+const MAX_SUBTASK_FETCHES_PER_PROJECT = 50;
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -121,31 +125,43 @@ async function fetchTopLevelTasks(portalId: string, projectId: string, token: st
 
 // SUBTASKS (slice 02): las subtasks de Zoho NO vienen en el listado top-level; se piden por
 // PADRE vía `/tasks/{parentId}/subtasks/` (shape confirmado: lista bajo `tasks`, item con
-// id_string/key/name; 204 = sin subtasks). Recorre los padres (top-level) resolviendo hasta
-// encontrar todas las `wanted` (los task_number que siguen sin key) o agotar `budget` (cota de
-// fetches por corrida, run-level). Es ADITIVO: un fetch fallido/204 (zohoGet → null) solo
-// significa "nada que agregar de este padre" y no aborta nada (a diferencia de la membresía,
-// que es destructiva). Devuelve las subtasks normalizadas {id,key,name} y cuántos fetches usó.
+// id_string/key/name; 204 = sin subtasks). Recorre el árbol en BFS empezando por los padres
+// top-level y encolando cada subtask encontrada como nuevo padre → así resuelve también
+// sub-subtasks anidadas. Para cuando resuelve todas las `wanted` (early-exit) o agota `budget`
+// (cota de GETs, no de padres). Es ADITIVO: un 204/vacío/4xx (zohoGet → null) o un fallo
+// transitorio (429/5xx que tira tras reintentos, atrapado acá) solo significa "nada que agregar
+// de este padre", nunca aborta el proyecto (a diferencia de la membresía, que es destructiva).
+// Devuelve las subtasks normalizadas {id,key,name} y cuántos GETs consumió.
 async function fetchSubtaskKeys(
   portalId: string,
   projectId: string,
-  parentIds: string[],
+  rootParentIds: string[],
   wanted: Set<string>,
   token: string,
   budget: number,
 ): Promise<{ subtasks: { id: string; key: string | null; name: string }[]; fetches: number }> {
   const out: { id: string; key: string | null; name: string }[] = [];
   const remaining = new Set(wanted);
+  const visited = new Set<string>();
+  const queue: string[] = [...rootParentIds];
   let fetches = 0;
-  for (const parentId of parentIds) {
-    if (fetches >= budget || remaining.size === 0) break; // cota por corrida / early-exit
-    fetches++;
+  while (queue.length > 0 && fetches < budget && remaining.size > 0) {
+    const parentId = queue.shift()!;
+    if (!parentId || visited.has(parentId)) continue;
+    visited.add(parentId);
     let index = 1;
     let prevFirstId: string | null = null;
     for (let page = 0; page < 100; page++) {
+      if (fetches >= budget) break; // el budget cuenta GETs, no padres
+      fetches++;
       const url = `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/${parentId}/subtasks/?index=${index}&range=${RANGE}`;
-      const data = await zohoGet(url, token);
-      // null = 204 (sin subtasks), body vacío, o 4xx/fallo → nada que agregar de este padre.
+      let data: any;
+      try {
+        data = await zohoGet(url, token);
+      } catch {
+        break; // 429/5xx tras reintentos → saltear este padre (additivo), NO abortar el proyecto
+      }
+      // null = 204 (sin subtasks), body vacío, o 4xx → nada que agregar de este padre.
       if (data == null) break;
       const items: any[] = Array.isArray(data.tasks) ? data.tasks : [];
       const firstId = items.length ? String(items[0].id_string || items[0].id || "") : "";
@@ -153,8 +169,13 @@ async function fetchSubtaskKeys(
       prevFirstId = firstId;
       for (const t of items) {
         const id = String(t.id_string || t.id || "");
+        if (!id) continue;
         out.push({ id, key: t.key ?? null, name: t.name ?? "" });
-        remaining.delete(id);
+        // Solo marcar resuelta si REALMENTE tiene key: una subtask sin key sigue faltando (no
+        // debe disparar el early-exit como si estuviera resuelta).
+        if (t.key != null && String(t.key) !== "") remaining.delete(id);
+        // Encolar la subtask como padre: sus hijas (sub-subtasks) pueden contener wanted.
+        if (!visited.has(id)) queue.push(id);
       }
       if (items.length < RANGE) break;
       index += RANGE;
@@ -250,15 +271,21 @@ Deno.serve(async (req) => {
         // run (el key es inmutable → converge).
         const stillMissing = new Set(missing.filter((tn) => !keyMap[tn]));
         if (stillMissing.size > 0 && subtaskBudget > 0) {
-          const parentIds = tasks.map((t) => t.id).filter(Boolean);
-          const { subtasks, fetches } = await fetchSubtaskKeys(
-            portalId, zpid, parentIds, stillMissing, token, subtaskBudget,
-          );
-          subtaskBudget -= fetches;
-          subtaskFetches += fetches;
-          const subMap = parseTaskKeyMap(subtasks);
-          for (const [id, key] of Object.entries(subMap)) {
-            if (keyMap[id] == null) keyMap[id] = key; // el top-level tiene prioridad
+          try {
+            const parentIds = tasks.map((t) => t.id).filter(Boolean);
+            // Cap por proyecto además del run-level: un proyecto no drena todo el budget.
+            const projectBudget = Math.min(subtaskBudget, MAX_SUBTASK_FETCHES_PER_PROJECT);
+            const { subtasks, fetches } = await fetchSubtaskKeys(
+              portalId, zpid, parentIds, stillMissing, token, projectBudget,
+            );
+            subtaskBudget -= fetches;
+            subtaskFetches += fetches;
+            // subMap solo tiene ids de subtasks (distintos de los top-level de keyMap) → merge directo.
+            Object.assign(keyMap, parseTaskKeyMap(subtasks));
+          } catch (e) {
+            // La resolución de subtasks es best-effort: si algo falla, NO se pierde el pase
+            // top-level (el UPDATE de abajo igual corre con las keys ya resueltas).
+            console.log(`subtasks proyecto ${zpid}:`, String(e));
           }
         }
 
