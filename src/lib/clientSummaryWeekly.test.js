@@ -514,3 +514,35 @@ test('filtro de stage: grilla semanal y remaining coherentes con el subconjunto 
     [[10, 10, 90], [15, 25, 75]], // budget 100 del stage 1; nada del stage 2
   )
 })
+
+test('filtro de stage: totalBudget = suma de los stages ELEGIDOS (no todos)', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project({ id: 7 })],
+    entries: [entry({ taskNumber: 'T1', hours: 10 })],
+    crsByProject: new Map(),
+    stagesByProject: new Map([['7', [
+      { id: 1, budgetHours: 100 },
+      { id: 2, budgetHours: 60 },
+      { id: 3, budgetHours: 20 },
+    ]]]),
+    taskToStage: { T1: '1' },
+    selectedStageIds: ['1'],
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.budget, 100)
+  assert.equal(proj.totalBudget, 100) // no 180: el "total" no incluye stages filtrados fuera
+})
+
+test('filtro de stage: stage sin budget configurado → budget null y remaining en blanco', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project({ id: 7 })],
+    entries: [entry({ taskNumber: 'T1', hours: 10 })],
+    crsByProject: new Map(),
+    stagesByProject: new Map([['7', [{ id: 1, budgetHours: null }, { id: 2, budgetHours: 60 }]]]),
+    taskToStage: { T1: '1' },
+    selectedStageIds: ['1'],
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.budget, null) // stage sin budget → sin budget vigente (como la rama sin-filtro)
+  assert.equal(proj.weeks[0].remaining, null) // remaining en blanco, no 0 - consumido
+})

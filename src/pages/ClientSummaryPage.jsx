@@ -159,8 +159,9 @@ export function ClientSummaryPage() {
     toggleStage,
     clearStages,
     taskToStage,
+    stageOfEntry,
     buildOptions,
-  } = useStageFilter({ withMembership: true, projects, reloadKey })
+  } = useStageFilter({ withMembership: true, projects, reloadKey, stagesByProject })
 
   // Base SIN el filtro de Stage: alimenta las opciones de Stage (interlazado) y permite
   // cambiar de stage aunque el elegido pertenezca a otro proyecto (si las opciones salieran
@@ -170,18 +171,32 @@ export function ClientSummaryPage() {
     [resolvedProjects, entries, crsByProject, stagesByProject, isInvoiced],
   )
 
-  // Toda la agregación semanal (consumed/overage/invoiced/cumulative/remaining por
-  // semana, budget del proyecto) vive en el motor puro clientSummaryWeekly. Agrupa
-  // por el cliente resuelto (resolvedClient). Con stages elegidos, el motor RECALCULA la fila
-  // al stage (ADR 0004): sin stages, es idéntico a summaryBase.
+  // Agregación semanal para la GRILLA/totales/gráficos. Con stages elegidos, el motor RECALCULA
+  // la fila al stage (ADR 0004). SIN stages es idéntico a summaryBase → se reusa (evita una
+  // segunda pasada completa del motor cuando el filtro está inactivo).
   const summary = useMemo(
-    () => buildClientSummaryWeekly({ projects: resolvedProjects, entries, crsByProject, stagesByProject, isInvoiced, taskToStage, selectedStageIds }),
-    [resolvedProjects, entries, crsByProject, stagesByProject, isInvoiced, taskToStage, selectedStageIds],
+    () =>
+      stageFilterActive
+        ? buildClientSummaryWeekly({ projects: resolvedProjects, entries, crsByProject, stagesByProject, isInvoiced, taskToStage, selectedStageIds })
+        : summaryBase,
+    [stageFilterActive, summaryBase, resolvedProjects, entries, crsByProject, stagesByProject, isInvoiced, taskToStage, selectedStageIds],
   )
 
+  // Stages que realmente TIENEN horas cargadas (atribución task→stage). Si la membresía no
+  // cargó (o ninguna hora atribuye), este set queda vacío → no hay opciones → el dropdown no
+  // aparece, evitando ofrecer un filtro que zeroearía el consumo en silencio.
+  const stagesWithHours = useMemo(() => {
+    const s = new Set()
+    for (const e of entries) {
+      const sid = stageOfEntry(e)
+      if (sid != null) s.add(String(sid))
+    }
+    return s
+  }, [entries, stageOfEntry])
+
   // Opciones del filtro de Stage: los stage_id de los proyectos que pasan los OTROS filtros
-  // (sobre summaryBase, sin stage), interlazado. buildOptions une los ya seleccionados fuera de
-  // scope y arma el rótulo con prefijo condicional por proyecto.
+  // (sobre summaryBase, sin stage) que además tienen horas. Interlazado; buildOptions une los
+  // ya seleccionados fuera de scope y arma el rótulo con prefijo condicional por proyecto.
   const { optionIds: stageOptionIds, getLabel: stageLabel } = useMemo(() => {
     const scoped = filterClientSummary(summaryBase.clients, {
       clients: selectedClients,
@@ -191,10 +206,12 @@ export function ClientSummaryPage() {
     })
     const present = new Set()
     for (const p of scoped.flatMap((c) => c.projects)) {
-      for (const sid of projectStageIds(stagesByProject.get(String(p.id)))) present.add(sid)
+      for (const sid of projectStageIds(stagesByProject.get(String(p.id)))) {
+        if (stagesWithHours.has(sid)) present.add(sid)
+      }
     }
     return buildOptions([...present])
-  }, [summaryBase, selectedClients, selectedProjectNumbers, selectedProjectNames, selectedSows, stagesByProject, buildOptions])
+  }, [summaryBase, selectedClients, selectedProjectNumbers, selectedProjectNames, selectedSows, stagesByProject, stagesWithHours, buildOptions])
 
   // Opciones INTERLAZADAS: cada dimensión deriva sus opciones de los clientes/proyectos
   // que pasan TODOS los OTROS filtros de proyecto (menos el propio), para que elegir un

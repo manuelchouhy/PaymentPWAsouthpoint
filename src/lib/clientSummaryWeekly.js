@@ -151,15 +151,21 @@ export function buildClientSummaryWeekly({
       crsByProject.get(String(project.id)) ?? [],
     )
     let budget = activeBudget
+    let effectiveTotalBudget = totalBudget
 
     // Filtro de Stage (ADR 0004): un proyecto sin ninguno de los stages elegidos NO produce
     // fila (desaparece; su cliente también si se queda sin proyectos). El budget de la fila
     // pasa a ser la SUMA de los budget_hours de los stages elegidos que pertenecen a este
-    // proyecto (no el activo ni el total).
+    // proyecto (no el activo ni el total). Si ninguno de los stages elegidos tiene budget
+    // configurado, budget = null (→ remaining en blanco), igual que la rama sin-filtro para un
+    // proyecto sin budget. `totalBudget` (el "/ N total" de referencia) se recalcula también a
+    // los stages elegidos, para no mostrar un total que incluye stages filtrados fuera.
     if (stageActive) {
       const chosen = projectStages.filter((s) => selectedStages.has(String(s.id)))
       if (chosen.length === 0) continue
-      budget = chosen.reduce((sum, s) => sum + (Number(s.budgetHours) || 0), 0)
+      const budgeted = chosen.filter((s) => s.budgetHours != null)
+      budget = budgeted.length ? budgeted.reduce((sum, s) => sum + (Number(s.budgetHours) || 0), 0) : null
+      effectiveTotalBudget = budget
     }
 
     // Semanas del proyecto, en orden cronológico, con cumulative/remaining.
@@ -194,7 +200,7 @@ export function buildClientSummaryWeekly({
       sowNumbers: sows, // lista para filtrar por SOW individual
       zohoStatus: project.zohoStatus ?? null,
       budget,
-      totalBudget,
+      totalBudget: effectiveTotalBudget,
       consumed: consumedTotal,
       overage: overageTotal,
       pending: pendingTotal,

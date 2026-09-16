@@ -25,27 +25,37 @@ import { normalizeTaskToStage } from './stageFilter'
  *   - reloadKey: cambia cuando la página recarga tras un sync (useSyncReload). Al cambiar, el
  *     hook re-trae stages y membresía, para no quedar con un mapa task→stage viejo que filtraría
  *     de más las horas recién sincronizadas (mismo criterio que el resto de los datos de la página).
+ *   - stagesByProject: si el caller ya tiene el mapa de stages (getAllStages) cargado, lo pasa
+ *     acá y el hook NO vuelve a pedirlo — evita el doble fetch y la divergencia entre copias.
  */
-export function useStageFilter({ withMembership = false, projects = [], reloadKey } = {}) {
-  const [stagesByProject, setStagesByProject] = useState(() => new Map())
+export function useStageFilter({ withMembership = false, projects = [], reloadKey, stagesByProject: externalStages = null } = {}) {
+  const [loadedStages, setLoadedStages] = useState(() => new Map())
   const [membership, setMembership] = useState([])
   const [selectedStageIds, setSelectedStageIds] = useState(() => new Set())
+  // stagesByProject: el que inyecta el caller (si lo tiene, p. ej. Client Summary ya lo carga
+  // para su motor) o el que carga el hook. Inyectarlo evita pedir getAllStages dos veces y que
+  // las dos copias diverjan en una falla parcial. Promise.resolve().then(() => api...()) para
+  // que un throw SÍNCRONO del data-layer (p. ej. notImplemented() del http-client) sea un
+  // rechazo atrapable, no una excepción que escape del efecto y tumbe el commit de React.
+  const stagesByProject = externalStages ?? loadedStages
 
   useEffect(() => {
+    if (externalStages) return undefined // el caller aporta los stages: no re-pedirlos
     let cancelled = false
-    // Promise.resolve().then(() => api...()) para que un throw SÍNCRONO del data-layer (p. ej.
-    // notImplemented() del http-client, que tira al invocarse) se convierta en un rechazo
-    // atrapable por .catch, en vez de escapar del efecto y tumbar el commit de React.
     Promise.resolve()
       .then(() => api.projects.getAllStages())
-      .then((map) => { if (!cancelled) setStagesByProject(map ?? new Map()) })
+      .then((map) => { if (!cancelled) setLoadedStages(map ?? new Map()) })
       .catch((error) => console.error('No se pudieron cargar los stages:', error))
-    if (withMembership) {
-      Promise.resolve()
-        .then(() => api.projects.getStageMembership())
-        .then((rows) => { if (!cancelled) setMembership(rows ?? []) })
-        .catch((error) => console.error('No se pudo cargar la membresía de stages:', error))
-    }
+    return () => { cancelled = true }
+  }, [externalStages, reloadKey])
+
+  useEffect(() => {
+    if (!withMembership) return undefined
+    let cancelled = false
+    Promise.resolve()
+      .then(() => api.projects.getStageMembership())
+      .then((rows) => { if (!cancelled) setMembership(rows ?? []) })
+      .catch((error) => console.error('No se pudo cargar la membresía de stages:', error))
     return () => { cancelled = true }
   }, [withMembership, reloadKey])
 
