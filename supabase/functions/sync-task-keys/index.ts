@@ -132,7 +132,10 @@ async function missingTaskNumbers(supabase: any, zohoProjectId: string): Promise
       .is("task_key", null)
       .not("task_number", "is", null)
       .neq("task_number", "")
-      .order("task_number", { ascending: true })
+      // Ordenar por id (PK ÚNICA), no por task_number (no-único): el offset paging necesita
+      // un orden TOTAL estable, si no una fila en el borde de página podría no caer en ninguna
+      // ventana entre dos queries y saltearse. La dedup por task_number la hace el Set.
+      .order("id", { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) throw new Error(error.message);
     const rows = data ?? [];
