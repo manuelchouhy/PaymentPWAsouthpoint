@@ -231,6 +231,8 @@ async function missingTaskNumbers(supabase: any, zohoProjectId: string, cutoffIs
       .is("task_key", null)
       // Negative-cache: excluir los ya chequeados-sin-key dentro del cooldown. Los NULL (nunca
       // chequeados) o vencidos vuelven a intentarse (recupera keys asignadas tarde en Zoho).
+      // cutoffIso viene de Date.toISOString() → sin comas/paréntesis, seguro dentro de .or()
+      // (verificado contra el REST). NO cambiar a un formato con comas o offset "+00:00".
       .or(`task_key_checked_at.is.null,task_key_checked_at.lt.${cutoffIso}`)
       .not("task_number", "is", null)
       .neq("task_number", "")
@@ -283,7 +285,7 @@ Deno.serve(async (req) => {
       from += rows.length;
     }
 
-    let processed = 0, resolved = 0, updatedRows = 0, skipped = 0, subtaskFetches = 0, markedNoKey = 0;
+    let processed = 0, resolved = 0, updatedRows = 0, skipped = 0, subtaskFetches = 0, markedNoKey = 0, subtaskErrored = 0;
     const errors: { projectId: string; error: string }[] = [];
     let subtaskBudget = MAX_SUBTASK_FETCHES_PER_RUN; // run-level, compartido entre proyectos
     const subtaskDeadline = Date.now() + SUBTASK_TIME_BUDGET_MS; // corte por tiempo de la fase subtasks
@@ -304,10 +306,11 @@ Deno.serve(async (req) => {
         const topLevelIds = new Set(tasks.map((t) => t.id).filter(Boolean));
 
         // NEGATIVE-CACHE barato: un task_number que el listado top-level DEVOLVIÓ pero con key
-        // null se marca directo, sin gastar un GET (y NO va a by-id). TRADEOFF: si Zoho asigna la
-        // key TARDE (o el listado la trajo null por eventual-consistency), queda cacheado; el
-        // cooldown (RECHECK_COOLDOWN_DAYS) lo re-intenta y lo recupera → el falso-cache dura a lo
-        // sumo el cooldown (mientras tanto el front cae al id largo, no rompe).
+        // null se marca directo, sin gastar un GET (y NO va a by-id). El listado es autoritativo
+        // para la key (en el sync real 862 keys salieron del listado y solo 44 necesitaron by-id),
+        // así que null en el listado = sin key. TRADEOFF: si Zoho asignara la key TARDE, el
+        // cooldown (RECHECK_COOLDOWN_DAYS) re-lista y la recupera → falso-cache dura ≤ cooldown
+        // (mientras tanto el front cae al id largo, no rompe).
         const toMark = new Set<string>(missing.filter((tn) => topLevelIds.has(tn) && !keyMap[tn]));
 
         // 2b) SUBTASKS (slice 02): los task_number que NO están en el listado top-level pueden ser
@@ -325,16 +328,9 @@ Deno.serve(async (req) => {
             );
             subtaskBudget -= fetches;
             subtaskFetches += fetches;
+            subtaskErrored += errored; // acumulado RUN-LEVEL para detectar outage (ver abajo)
             for (const r of subResolved) keyMap[r.id] = r.key; // ids de subtask (no colisionan)
             for (const id of noKey) toMark.add(id); // sin key DEFINITIVO por-id → negative-cache
-            // fetchTaskKeysById nunca tira (per-id continue), así que un outage de Zoho durante
-            // la fase por-id NO llegaría al catch. Se surfacea SOLO si TODOS los GETs fallaron
-            // (outage sistemático), no ante un 429 transitorio suelto (evita falsas alarmas).
-            // Alarma de outage solo si TODOS fallaron Y hubo varios GETs (>=3): con 1 solo GET,
-            // errored===fetches sería un 429 transitorio suelto → falsa alarma.
-            if (fetches >= 3 && errored === fetches) {
-              errors.push({ projectId: zpid, error: `subtasks: los ${errored} GET(s) fallaron (outage?)` });
-            }
           } catch (e) {
             // Best-effort: un error inesperado no pierde el pase top-level (el UPDATE igual corre).
             errors.push({ projectId: zpid, error: `subtasks: ${String(e)}` });
@@ -396,6 +392,13 @@ Deno.serve(async (req) => {
       }
       // Espaciado suave entre proyectos: evita el rate-limit (429) de Zoho.
       await sleep(150);
+    }
+
+    // Señal de outage RUN-LEVEL (no per-proyecto, que sería ruidoso): si hubo varios GETs por-id
+    // en toda la corrida y TODOS fallaron por transitorio, es un outage/token vencido real. Con
+    // pocos GETs (o algunos ok) no se alarma → sin falsas alarmas por un 429 suelto.
+    if (subtaskFetches >= 3 && subtaskErrored === subtaskFetches) {
+      errors.push({ projectId: "(run)", error: `subtasks: los ${subtaskErrored} GET(s) por-id de la corrida fallaron (outage?)` });
     }
 
     return json({ ok: true, processed, skipped, resolved, updatedRows, subtaskFetches, markedNoKey, errors });
