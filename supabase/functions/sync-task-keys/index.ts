@@ -35,13 +35,10 @@ const SUBTASK_TIME_BUDGET_MS = 120_000; // deadline absoluto de la corrida; deja
 // bajo el wall-clock del edge (~150s). Es un tope de wall-clock, no un presupuesto exclusivo de
 // la fase subtasks: si el pase top-level ya consumió el tiempo, se saltea subtasks (correcto:
 // mejor no arrancar la fase por-id cerca del límite que morir a mitad de un UPDATE).
-// FOLLOW-UP CONOCIDO = SLICE 04 (negative-cache): sin persistir "task_number ya chequeado sin
-// key", un id que NUNCA resuelve (task borrada, o sin key) se re-pide CADA corrida (1 GET) y,
-// como el orden de proyectos es fijo (id asc), puede dejar a proyectos de id alto SIN turno de
-// subtasks de forma permanente (starvation), no solo por-corrida. Impacto atenuado: el front cae
-// al id largo para esas tasks (no rompe). El budget (run+proyecto+tiempo) acota el daño; el fix
-// real es una columna task_key_checked_at con cooldown (requiere migración) → SLICE 04, gated.
-// RECOMENDADO antes de dejar el cron horario a escala. Ver PRD task-key-display.
+// NEGATIVE-CACHE (slice 04): un task_number chequeado sin key (task borrada, o key null en Zoho)
+// se marca task_key_checked_at y no se re-pide hasta que vence este cooldown → corta el churn/
+// starvation. El cooldown deja recuperar keys asignadas TARDE en Zoho (se reintenta al vencer).
+const RECHECK_COOLDOWN_DAYS = 7;
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -154,9 +151,12 @@ async function fetchTaskKeysById(
   token: string,
   budget: number,
   deadline: number,
-): Promise<{ resolved: { id: string; key: string | null }[]; fetches: number; errored: number }> {
+): Promise<{ resolved: { id: string; key: string | null }[]; fetches: number; errored: number; checked: string[] }> {
   // Solo {id,key}: parseTaskKeyMap ignora `name`, así que no se arrastra dato muerto.
   const out: { id: string; key: string | null }[] = [];
+  // `checked` = ids con respuesta DEFINITIVA de Zoho (200 o 4xx/404), NO los que fallaron por
+  // transitorio. El caller marca el negative-cache solo sobre estos (un 429 no debe marcar).
+  const checked: string[] = [];
   let fetches = 0;
   let errored = 0; // GETs que fallaron por transitorio (5xx/429 agotados) → outage visible al caller
   for (const id of missingIds) {
@@ -170,22 +170,23 @@ async function fetchTaskKeysById(
       data = await zohoGet(url, token);
     } catch {
       errored++;
-      continue; // 429/5xx tras reintentos → reintentar en la próxima corrida (additivo)
+      continue; // 429/5xx tras reintentos → transitorio: NO se marca (reintenta próxima corrida)
     }
-    if (data == null) continue; // 4xx/404 (task borrada) o body vacío → nada que resolver
+    checked.push(id); // respuesta definitiva (haya key o no) → apto para el negative-cache
+    if (data == null) continue; // 4xx/404 (task borrada) o body vacío → chequeado, sin key
     // El detalle de una task viene bajo `tasks` (array de 1) según la API; se toleran variantes.
     const task = Array.isArray(data.tasks) ? data.tasks[0] : (data.task ?? data);
     // Se mapea por el id PEDIDO (`id`), no por el id_string devuelto: se pidió /tasks/{id}/, así
     // que la key es de ese id; keyMap[task_number] tiene que encontrarla en el paso 3.
     if (task) out.push({ id, key: task.key ?? null });
   }
-  return { resolved: out, fetches, errored };
+  return { resolved: out, fetches, errored, checked };
 }
 
-// task_number distintos de un proyecto que TODAVÍA no tienen key (task_key IS NULL). Un
-// proyecto que devuelve [] no gatilla ningún fetch a Zoho (clave de eficiencia: el key es
-// inmutable, lo ya resuelto no se vuelve a pedir).
-async function missingTaskNumbers(supabase: any, zohoProjectId: string): Promise<string[]> {
+// task_number distintos de un proyecto que TODAVÍA no tienen key (task_key IS NULL) Y que no
+// fueron chequeados-sin-key recientemente (negative-cache: task_key_checked_at NULL o más viejo
+// que `cutoffIso`). Un proyecto que devuelve [] no gatilla ningún fetch a Zoho.
+async function missingTaskNumbers(supabase: any, zohoProjectId: string, cutoffIso: string): Promise<string[]> {
   const set = new Set<string>();
   // Paginado explícito: PostgREST corta en 1000 filas por defecto. Un proyecto con miles
   // de time_entries sin key podría dejar afuera task_numbers que solo aparecen pasadas las
@@ -197,6 +198,9 @@ async function missingTaskNumbers(supabase: any, zohoProjectId: string): Promise
       .select("task_number")
       .eq("zoho_project_id", zohoProjectId)
       .is("task_key", null)
+      // Negative-cache: excluir los ya chequeados-sin-key dentro del cooldown. Los NULL (nunca
+      // chequeados) o vencidos vuelven a intentarse (recupera keys asignadas tarde en Zoho).
+      .or(`task_key_checked_at.is.null,task_key_checked_at.lt.${cutoffIso}`)
       .not("task_number", "is", null)
       .neq("task_number", "")
       // Ordenar por id (PK ÚNICA), no por task_number (no-único): el offset paging necesita
@@ -248,16 +252,19 @@ Deno.serve(async (req) => {
       from += rows.length;
     }
 
-    let processed = 0, resolved = 0, updatedRows = 0, skipped = 0, subtaskFetches = 0;
+    let processed = 0, resolved = 0, updatedRows = 0, skipped = 0, subtaskFetches = 0, markedNoKey = 0;
     const errors: { projectId: string; error: string }[] = [];
     let subtaskBudget = MAX_SUBTASK_FETCHES_PER_RUN; // run-level, compartido entre proyectos
     const subtaskDeadline = Date.now() + SUBTASK_TIME_BUDGET_MS; // corte por tiempo de la fase subtasks
+    // Cutoff del negative-cache: los task_number chequeados-sin-key después de este instante
+    // se saltean; los más viejos (o nunca chequeados) se reintentan.
+    const cutoffIso = new Date(Date.now() - RECHECK_COOLDOWN_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
     for (const p of projects) {
       const zpid = String(p.zoho_project_id);
       try {
-        // 1) ¿Qué task_number de este proyecto siguen sin key? Si ninguno, no se pide a Zoho.
-        const missing = await missingTaskNumbers(supabase, zpid);
+        // 1) ¿Qué task_number de este proyecto siguen sin key y no fueron chequeados hace poco?
+        const missing = await missingTaskNumbers(supabase, zpid, cutoffIso);
         if (missing.length === 0) { skipped++; continue; }
 
         // 2) Traer las tasks TOP-LEVEL del proyecto y armar el mapa id→key.
@@ -273,13 +280,29 @@ Deno.serve(async (req) => {
           try {
             // Cap por proyecto además del run-level: un proyecto no drena todo el budget.
             const projectBudget = Math.min(subtaskBudget, MAX_SUBTASK_FETCHES_PER_PROJECT);
-            const { resolved: subResolved, fetches, errored } = await fetchTaskKeysById(
+            const { resolved: subResolved, fetches, errored, checked } = await fetchTaskKeysById(
               portalId, zpid, stillMissing, token, projectBudget, subtaskDeadline,
             );
             subtaskBudget -= fetches;
             subtaskFetches += fetches;
             // Ids resueltos por-id (distintos de los top-level de keyMap) → merge directo.
             Object.assign(keyMap, parseTaskKeyMap(subResolved));
+            // NEGATIVE-CACHE: los ids con respuesta DEFINITIVA (`checked`) que siguen sin key
+            // (task borrada, o key null en Zoho) se marcan task_key_checked_at=now() para no
+            // re-pedirlos hasta que venza el cooldown. Los transitorios (no están en `checked`)
+            // NO se marcan → reintentan. Solo toca filas aún sin key (no pisa una recién resuelta).
+            const toMark = checked.filter((tn) => !keyMap[tn]);
+            if (toMark.length > 0) {
+              const nowIso = new Date().toISOString();
+              const { error: markErr, count } = await supabase
+                .from("time_entries")
+                .update({ task_key_checked_at: nowIso }, { count: "exact" })
+                .eq("zoho_project_id", zpid)
+                .in("task_number", toMark)
+                .is("task_key", null);
+              if (markErr) throw new Error(markErr.message);
+              markedNoKey += count ?? 0;
+            }
             // fetchTaskKeysById nunca tira (per-id continue), así que un outage de Zoho durante
             // la fase por-id NO llegaría al catch. Se surfacea SOLO si TODOS los GETs fallaron
             // (outage sistemático), no ante un 429 transitorio suelto (evita falsas alarmas en
@@ -323,7 +346,7 @@ Deno.serve(async (req) => {
       await sleep(150);
     }
 
-    return json({ ok: true, processed, skipped, resolved, updatedRows, subtaskFetches, errors });
+    return json({ ok: true, processed, skipped, resolved, updatedRows, subtaskFetches, markedNoKey, errors });
   } catch (e) {
     return json({ ok: false, error: String(e) }, 500);
   }
