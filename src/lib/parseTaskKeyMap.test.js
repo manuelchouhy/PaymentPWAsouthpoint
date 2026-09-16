@@ -76,6 +76,16 @@ test('una task sin id se omite (no hay a qué anclar el key)', () => {
   assert.deepEqual(parseTaskKeyMap(tasks), { 'z-t1': 'PP1-T1' })
 })
 
+test('subtasks (slice 02): mismo shape normalizado {id,key,name} → mapea id→key igual', () => {
+  // Las subtasks de Zoho se normalizan a {id,key,name} igual que las top-level (ver
+  // fetchSubtaskKeys en la edge function), así que parseTaskKeyMap las cubre sin cambios.
+  const subtasks = [
+    { id: 'z-t6', key: 'PP1-T6', name: 'Task 2.1' },
+    { id: 'z-t7', key: 'PP1-T7', name: 'Task 2.3' },
+  ]
+  assert.deepEqual(parseTaskKeyMap(subtasks), { 'z-t6': 'PP1-T6', 'z-t7': 'PP1-T7' })
+})
+
 test('la copia espejo del edge function se comporta igual que la de src/ (guard anti-drift)', () => {
   const cases = [
     [{ id: 'z-t1', key: 'PP1-T1' }, { id: 'z-t5', key: 'PP1-T5' }],
