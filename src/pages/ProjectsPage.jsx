@@ -293,7 +293,9 @@ export function ProjectsPage() {
   }, [statusScoped, stagesByProject, buildOptions])
 
   // Grilla final: status scope + row-filter de Stage. Los manuales (sin zohoProjectId) nunca se
-  // ocultan por status (isActiveProject).
+  // ocultan por STATUS (isActiveProject); pero SÍ los oculta un filtro de Stage activo, porque
+  // no tienen stages (projectMatchesStages → false) — coherente con "mostrar sólo proyectos con
+  // el stage".
   const visible = useMemo(() => applyStageFilter(statusScoped), [applyStageFilter, statusScoped])
 
   const toggle = (key, value) =>

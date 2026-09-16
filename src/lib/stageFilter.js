@@ -36,6 +36,19 @@ export function normalizeTaskToStage(taskToStage) {
  * @param {Iterable<(string|number)>} selectedIds stage_id elegidos (Array o Set).
  * @returns {object[]}
  */
+export function filterEntriesByStage(entries = [], taskToStage, selectedIds) {
+  const list = Array.isArray(entries) ? entries : []
+  const selected = new Set()
+  for (const id of selectedIds ?? []) selected.add(String(id))
+  if (selected.size === 0) return list
+
+  const stageByTask = normalizeTaskToStage(taskToStage)
+  return list.filter((e) => {
+    const sid = stageByTask.get(String(e?.taskNumber ?? ''))
+    return sid != null && selected.has(sid)
+  })
+}
+
 /**
  * stage_id (string) de los stages de UN proyecto. `projectStages` es la lista que
  * `getAllStages()` guarda por proyecto (`[{ id, name, budgetHours }]`). Filas sin id se
@@ -59,7 +72,7 @@ export function projectStageIds(projectStages = []) {
  * llama cuando el filtro está inactivo); con `selectedIds` vacío devuelve false.
  *
  * @param {Array<{id?:(string|number)}>} projectStages
- * @param {Iterable<(string|number)>} selectedIds
+ * @param {Iterable<(string|number)>} selectedIds stage_id elegidos (Array o Set de ids).
  * @returns {boolean}
  */
 export function projectMatchesStages(projectStages, selectedIds) {
@@ -67,17 +80,4 @@ export function projectMatchesStages(projectStages, selectedIds) {
   for (const id of selectedIds ?? []) selected.add(String(id))
   if (selected.size === 0) return false
   return projectStageIds(projectStages).some((sid) => selected.has(sid))
-}
-
-export function filterEntriesByStage(entries = [], taskToStage, selectedIds) {
-  const list = Array.isArray(entries) ? entries : []
-  const selected = new Set()
-  for (const id of selectedIds ?? []) selected.add(String(id))
-  if (selected.size === 0) return list
-
-  const stageByTask = normalizeTaskToStage(taskToStage)
-  return list.filter((e) => {
-    const sid = stageByTask.get(String(e?.taskNumber ?? ''))
-    return sid != null && selected.has(sid)
-  })
 }
