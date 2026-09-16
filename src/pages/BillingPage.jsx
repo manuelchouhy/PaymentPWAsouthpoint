@@ -181,7 +181,8 @@ function ReadonlyRows({ rows, showProvider = true, onDetail }) {
                 )}
                 {row.project || '—'}
                 {(() => {
-                  const taskLabel = formatTaskLabel(row.task, row.taskKey)
+                  // Fallback al id largo si la key corta aún no se resolvió.
+                  const taskLabel = formatTaskLabel(row.task, row.taskKey || row.taskNumber)
                   return taskLabel ? <div className="cell-soft">{taskLabel}</div> : null
                 })()}
               </td>
@@ -1885,7 +1886,7 @@ export function BillingPage() {
                                                       // Rótulo compuesto una sola vez: el separador " · " y el
                                                       // gate del div se calculan sobre ESE rótulo (no sobre
                                                       // taskNumber), evitando "—" sueltos o separadores rotos.
-                                                      const taskLabel = formatTaskLabel(row.task, row.taskKey)
+                                                      const taskLabel = formatTaskLabel(row.task, row.taskKey || row.taskNumber)
                                                       return (taskLabel || sow) ? (
                                                         <div className="cell-soft">
                                                           {taskLabel}

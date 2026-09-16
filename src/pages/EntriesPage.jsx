@@ -730,7 +730,7 @@ export function EntriesPage() {
                             className="col-tasknum cell-mono"
                             title={entry.taskNumber || undefined}
                           >
-                            {entry.taskKey || '—'}
+                            {entry.taskKey || entry.taskNumber || '—'}
                           </td>
                           <td className="cell-mono">{entry.date ? formatDate(entry.date) : '—'}</td>
                           <td className="cell-mono">{entry.date ? formatWeek(entry.date) : '—'}</td>

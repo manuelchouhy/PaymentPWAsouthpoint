@@ -3,9 +3,9 @@ import { loginAsTestAdmin } from './helpers'
 
 /**
  * Feature task-key-display: la columna "Task #" muestra el CÓDIGO CORTO de Zoho (task.key,
- * ej. "PP1-T5"), NO el id interno largo. Cuando la key aún no se resolvió se muestra "—".
- * Ambos tests son de SOLO LECTURA. Regresión clave: nunca debe reaparecer el id largo
- * (numérico) ni el formato viejo "#id".
+ * ej. "PP1-T5"). Fallback: si la key aún no se resolvió, cae al id largo; "—" solo si no hay
+ * ninguno. Ambos tests son de SOLO LECTURA. Regresión clave: nunca debe reaparecer el formato
+ * viejo "#id" (con "#"). El id largo SÍ es un fallback aceptable (no es regresión).
  *
  * PRECONDICIÓN: requieren la migración 0050 aplicada (columna task_key) y sync-task-keys
  * corrido en el test DB, para que haya códigos cortos reales que mostrar. Los tests EXIGEN
@@ -32,13 +32,13 @@ test.describe('task-key-display · código corto junto al nombre', () => {
     for (let i = 0; i < count; i++) {
       const text = (await taskNumCells.nth(i).innerText()).trim()
       if (text && text !== '—') {
-        expect(text).toMatch(/^\S+$/) // token sin espacios (código corto)
-        expect(text).not.toMatch(/^\d{8,}$/) // REGRESIÓN: no el id largo numérico de Zoho
-        withKey++
+        expect(text).toMatch(/^\S+$/) // token sin espacios (código corto o id largo de fallback)
+        // Código corto real = tiene alguna letra (ej. "PP1-T5"); el id largo es solo dígitos.
+        if (/[A-Za-z]/.test(text)) withKey++
       }
     }
-    // Piso: al menos una celda con código corto real (si todo es "—", la feature no está
-    // poblada → FALLA, no falso verde). Ver PRECONDICIÓN en el docstring.
+    // Piso: al menos una celda con código corto REAL (no solo el fallback de id largo). Si
+    // todo cae al id largo o "—", la feature no está poblada → FALLA, no falso verde.
     expect(withKey).toBeGreaterThan(0)
     console.log(`[task-key] Entries: celdas Task # con código corto: ${withKey} de ${count}`)
   })
