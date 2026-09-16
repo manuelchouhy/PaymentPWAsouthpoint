@@ -7,10 +7,11 @@ import { loginAsTestAdmin } from './helpers'
  * Ambos tests son de SOLO LECTURA. Regresión clave: nunca debe reaparecer el id largo
  * (numérico) ni el formato viejo "#id".
  *
- * Caveat: son smoke tests contra la base de test viva; el wiring y el "—" de fallback
- * requieren la migración 0050 aplicada (columna task_key) y sync-task-keys corrido para
- * ver keys reales. El comportamiento fino de formatTaskLabel está cubierto por unit tests
- * (format.test.js); esto sólo confirma el cableado end-to-end y que NO se muestra el id largo.
+ * PRECONDICIÓN: requieren la migración 0050 aplicada (columna task_key) y sync-task-keys
+ * corrido en el test DB, para que haya códigos cortos reales que mostrar. Los tests EXIGEN
+ * al menos un código corto presente (piso > 0): si la columna existe pero está sin poblar,
+ * todo saldría "—" y el test DEBE fallar (no dar falso verde — justo la condición del revert
+ * previo de esta feature). El comportamiento fino de formatTaskLabel está en unit tests.
  */
 
 test.describe('task-key-display · código corto junto al nombre', () => {
@@ -36,6 +37,9 @@ test.describe('task-key-display · código corto junto al nombre', () => {
         withKey++
       }
     }
+    // Piso: al menos una celda con código corto real (si todo es "—", la feature no está
+    // poblada → FALLA, no falso verde). Ver PRECONDICIÓN en el docstring.
+    expect(withKey).toBeGreaterThan(0)
     console.log(`[task-key] Entries: celdas Task # con código corto: ${withKey} de ${count}`)
   })
 
@@ -48,13 +52,18 @@ test.describe('task-key-display · código corto junto al nombre', () => {
     await expect(labels.first()).toBeVisible()
     const count = await labels.count()
 
-    let withSep = 0
+    let withKey = 0
     for (let i = 0; i < count; i++) {
       const text = (await labels.nth(i).innerText()).trim()
       // REGRESIÓN: el formato viejo "#<id> · nombre" ya no se usa.
       expect(text.startsWith('#')).toBe(false)
-      if (text.includes(' · ')) withSep++
+      // Código corto de Zoho como primer token (ej. "PP1-T5" o "PP1-T5 · nombre"): shape
+      // <prefijo>-<algo>, sin espacios antes del separador.
+      if (/^[A-Za-z0-9]+-[A-Za-z0-9]\S*( · .+)?$/.test(text)) withKey++
     }
-    console.log(`[task-key] Billing: rótulos "<key> · <nombre>": ${withSep} de ${count} cell-soft`)
+    // Piso: al menos un rótulo con código corto real (si no hay ninguno, la feature no está
+    // poblada → FALLA, no falso verde). Ver PRECONDICIÓN en el docstring.
+    expect(withKey).toBeGreaterThan(0)
+    console.log(`[task-key] Billing: rótulos con código corto: ${withKey} de ${count} cell-soft`)
   })
 })
