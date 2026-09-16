@@ -124,7 +124,7 @@ async function missingTaskNumbers(supabase: any, zohoProjectId: string): Promise
   // de time_entries sin key podría dejar afuera task_numbers que solo aparecen pasadas las
   // 1000 filas → nunca se resolverían. Se recorre por páginas ordenadas hasta agotar.
   const PAGE = 1000;
-  for (let from = 0; ; from += PAGE) {
+  for (let from = 0; ; ) {
     const { data, error } = await supabase
       .from("time_entries")
       .select("task_number")
@@ -140,7 +140,10 @@ async function missingTaskNumbers(supabase: any, zohoProjectId: string): Promise
       const tn = String(row.task_number ?? "");
       if (tn) set.add(tn);
     }
-    if (rows.length < PAGE) break;
+    // Cortar SOLO en página vacía y avanzar por las filas REALES devueltas: robusto a que
+    // el max-rows del server sea menor que PAGE (con `rows.length < PAGE` cortaría de más).
+    if (rows.length === 0) break;
+    from += rows.length;
   }
   return [...set];
 }
