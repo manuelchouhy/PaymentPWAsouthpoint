@@ -48,6 +48,28 @@ test('lee taskNumber (camelCase, data demo) además de task_number', () => {
   assert.equal(out[0].taskNumber, '42')
 })
 
+test('taskKey: se toma del MISMO row que fija el taskNumber (homónimos no cruzan key↔id)', () => {
+  // El primer row con task_number fija AMBOS (id y key). Un row posterior con otra key no pisa.
+  const out = aggregateLoggedTasks([
+    row({ task: 'T', task_number: null, task_key: 'NO-DEBE-GANAR' }),
+    row({ task: 'T', task_number: '2001', task_key: 'PP1-T1' }),
+    row({ task: 'T', task_number: '9999', task_key: 'PP1-T9' }),
+  ])
+  assert.equal(out[0].taskNumber, '2001')
+  assert.equal(out[0].taskKey, 'PP1-T1')
+})
+
+test('taskKey: null cuando el row que fija el taskNumber aún no tiene key resuelta', () => {
+  const out = aggregateLoggedTasks([row({ task: 'T', task_number: '2001', task_key: '' })])
+  assert.equal(out[0].taskNumber, '2001')
+  assert.equal(out[0].taskKey, null)
+})
+
+test('taskKey: lee taskKey (camelCase, data demo) además de task_key', () => {
+  const out = aggregateLoggedTasks([{ task: 'T', taskNumber: '7', taskKey: 'PP1-T7', hours: 1, status: 'Approved', allocation: 'bill_to_client' }])
+  assert.equal(out[0].taskKey, 'PP1-T7')
+})
+
 test('descarta entries sin nombre de task', () => {
   const out = aggregateLoggedTasks([row({ task: '' }), row({ task: null }), row({ task: 'Real' })])
   assert.equal(out.length, 1)

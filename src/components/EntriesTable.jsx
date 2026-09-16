@@ -163,7 +163,7 @@ export function EntriesTable({
                   className="col-tasknum col-optional cell-mono"
                   title={entry.taskNumber || undefined}
                 >
-                  {entry.taskNumber || '—'}
+                  {entry.taskKey || '—'}
                 </td>
                 <td className="col-pop">
                   <CellPopButton

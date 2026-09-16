@@ -181,7 +181,7 @@ function ReadonlyRows({ rows, showProvider = true, onDetail }) {
                 )}
                 {row.project || '—'}
                 {(row.task || row.taskNumber) && (
-                  <div className="cell-soft">{formatTaskLabel(row.task, row.taskNumber)}</div>
+                  <div className="cell-soft">{formatTaskLabel(row.task, row.taskKey)}</div>
                 )}
               </td>
               <td className="cell-mono">{row.date ? formatDate(row.date) : '—'}</td>
@@ -1028,7 +1028,7 @@ export function BillingPage() {
       { header: 'Project #', key: 'projectNumber' },
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
-      { header: 'Task #', key: 'taskNumber' },
+      { header: 'Task #', key: 'taskKey' },
       { header: 'Date', key: 'date' },
       { header: 'Reason', key: 'reason' },
       { header: 'Hours', key: 'hours' },
@@ -1053,9 +1053,9 @@ export function BillingPage() {
             project: project.project,
             task: '',
             // Bucket "Sin cliente" agrega por proyecto (varios logs) → sin una fecha
-            // ni un task/id únicos que exportar. Task # explícito en '' por paridad con
-            // los otros push (la columna existe) y porque un id agregado sería engañoso.
-            taskNumber: '',
+            // ni un task/key únicos que exportar. Task # explícito en '' por paridad con
+            // los otros push (la columna existe) y porque un key agregado sería engañoso.
+            taskKey: '',
             date: '',
             reason: reasonLabel(project.reason),
             hours: project.hours,
@@ -1077,9 +1077,9 @@ export function BillingPage() {
                 projectNumber: row.projectNumber ?? '',
                 project: row.project,
                 task: row.task,
-                // id del task en columna aparte (como el export de Entries): trazable a
-                // Zoho sin romper el matching por nombre de la columna Task.
-                taskNumber: row.taskNumber ?? '',
+                // código corto del task en columna aparte (como el export de Entries), lo
+                // que se muestra en la grilla. El id largo queda en la app para joins.
+                taskKey: row.taskKey ?? '',
                 date: row.date ? formatDate(row.date) : '',
                 reason: '',
                 hours: row.hours,
@@ -1115,7 +1115,7 @@ export function BillingPage() {
       { header: 'Project #', key: 'projectNumber' },
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
-      { header: 'Task #', key: 'taskNumber' },
+      { header: 'Task #', key: 'taskKey' },
       { header: 'Date', key: 'date' },
       { header: 'Hours', key: 'hours' },
       { header: 'Entries', key: 'entries' },
@@ -1129,7 +1129,7 @@ export function BillingPage() {
         projectNumber: row.projectNumber ?? '',
         project: row.project || '',
         task: row.task || '',
-        taskNumber: row.taskNumber ?? '',
+        taskKey: row.taskKey ?? '',
         date: row.date ? formatDate(row.date) : '',
         hours: row.hours,
         entries: row.entries.length,
@@ -1877,7 +1877,7 @@ export function BillingPage() {
                                                     {row.project || '—'}
                                                     {(row.task || row.taskNumber || sow) && (
                                                       <div className="cell-soft">
-                                                        {formatTaskLabel(row.task, row.taskNumber)}
+                                                        {formatTaskLabel(row.task, row.taskKey)}
                                                         {(row.task || row.taskNumber) && sow && ' · '}
                                                         {sow}
                                                       </div>

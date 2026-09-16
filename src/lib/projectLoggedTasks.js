@@ -13,8 +13,9 @@ import { isConsumedAllocation } from './allocations.js'
  * un solo id (el primero). Es el mismo modelo por-nombre del resto de la app.
  *
  * @param {Array<{ task?: string, task_number?: (string|number|null), taskNumber?: (string|number|null),
+ *                 task_key?: (string|null), taskKey?: (string|null),
  *                 hours?: number|string, status?: string, allocation?: string }>} rows
- * @returns {Array<{ id: string, taskName: string, taskNumber: (string|null), hours: number, consumedHours: number }>}
+ * @returns {Array<{ id: string, taskName: string, taskNumber: (string|null), taskKey: (string|null), hours: number, consumedHours: number }>}
  */
 export function aggregateLoggedTasks(rows = []) {
   const byTask = new Map()
@@ -22,10 +23,16 @@ export function aggregateLoggedTasks(rows = []) {
     const name = row.task ?? ''
     if (!name) continue
     const acc =
-      byTask.get(name) ?? { id: name, taskName: name, taskNumber: null, hours: 0, consumedHours: 0 }
+      byTask.get(name) ?? { id: name, taskName: name, taskNumber: null, taskKey: null, hours: 0, consumedHours: 0 }
     if (acc.taskNumber == null) {
       const num = row.task_number ?? row.taskNumber
-      if (num != null && String(num) !== '') acc.taskNumber = String(num)
+      if (num != null && String(num) !== '') {
+        acc.taskNumber = String(num)
+        // taskKey (código corto de Zoho) tomado del MISMO row que fija el taskNumber, para
+        // no cruzar key↔id entre tasks homónimas. null si ese row aún no tiene key resuelta.
+        const key = row.task_key ?? row.taskKey
+        acc.taskKey = key != null && String(key) !== '' ? String(key) : null
+      }
     }
     const h = Number(row.hours) || 0
     acc.hours += h // total logged (cualquier estado/allocation)

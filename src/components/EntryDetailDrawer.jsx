@@ -86,8 +86,9 @@ export function EntryDetailDrawer({ entry, allocationLabel, billingStatus, onClo
             <dd>{entry.task || '—'}</dd>
           </div>
           <div className="drawer__fact">
-            <dt>Task number</dt>
-            <dd>{entry.taskNumber || '—'}</dd>
+            <dt>Task #</dt>
+            {/* Código corto de Zoho (task.key). El id largo queda en el tooltip para trazabilidad. */}
+            <dd title={entry.taskNumber || undefined}>{entry.taskKey || '—'}</dd>
           </div>
           <div className="drawer__fact">
             <dt>Date</dt>

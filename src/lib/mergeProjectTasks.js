@@ -14,8 +14,8 @@
  * de project_tasks (para asignarle un stage) o null si no está registrado.
  *
  * @param {Array<{id:(string|number), taskName:string, stageId:(string|number|null), estimatedHours?:number}>} registered
- * @param {Array<{taskName:string, taskNumber?:(string|null), hours?:number, consumedHours?:number}>} logged
- * @returns {Array<{taskId:(string|number|null), taskName:string, taskNumber:(string|null),
+ * @param {Array<{taskName:string, taskNumber?:(string|null), taskKey?:(string|null), hours?:number, consumedHours?:number}>} logged
+ * @returns {Array<{taskId:(string|number|null), taskName:string, taskNumber:(string|null), taskKey:(string|null),
  *   stageId:(string|number|null), estimatedHours:number, hours:number, consumedHours:number, registered:boolean}>}
  */
 // Clave de matcheo: trim + colapsar espacios internos + lowercase, para que "Backend ",
@@ -34,11 +34,16 @@ export function mergeProjectTasks(registered = [], logged = []) {
     if (acc) {
       acc.hours += Number(l.hours) || 0
       acc.consumedHours += Number(l.consumedHours) || 0
-      if (acc.taskNumber == null) acc.taskNumber = toNum(l.taskNumber)
+      // taskKey se fija junto al taskNumber (del mismo logueado) para no cruzar key↔id.
+      if (acc.taskNumber == null) {
+        acc.taskNumber = toNum(l.taskNumber)
+        acc.taskKey = toNum(l.taskKey)
+      }
     } else {
       loggedByKey.set(key, {
         taskName: l.taskName ?? '',
         taskNumber: toNum(l.taskNumber),
+        taskKey: toNum(l.taskKey),
         hours: Number(l.hours) || 0,
         consumedHours: Number(l.consumedHours) || 0,
       })
@@ -58,6 +63,7 @@ export function mergeProjectTasks(registered = [], logged = []) {
       taskId: r.id ?? null,
       taskName: name,
       taskNumber: toNum(l?.taskNumber),
+      taskKey: toNum(l?.taskKey),
       stageId: r.stageId ?? null,
       estimatedHours: Number(r.estimatedHours) || 0,
       hours: l ? Number(l.hours) || 0 : 0,
@@ -72,6 +78,7 @@ export function mergeProjectTasks(registered = [], logged = []) {
       taskId: null,
       taskName: l.taskName ?? '',
       taskNumber: toNum(l.taskNumber),
+      taskKey: toNum(l.taskKey),
       stageId: null,
       estimatedHours: 0,
       hours: Number(l.hours) || 0,

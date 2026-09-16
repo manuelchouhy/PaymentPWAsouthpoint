@@ -1188,7 +1188,7 @@ export async function getProjectLoggedTasks(projectName) {
     for (let guard = 0; guard < 500 /* tope de seguridad */; guard++) {
       const { data, error } = await supabase
         .from('time_entries')
-        .select('id, task, task_number, hours, status, allocation')
+        .select('id, task, task_number, task_key, hours, status, allocation')
         .eq('project', projectName)
         .gt('id', lastId)
         .order('id')

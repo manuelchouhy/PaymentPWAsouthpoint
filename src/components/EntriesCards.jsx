@@ -103,9 +103,9 @@ export function EntriesCards({
                     </span>
                   )}
                   {entry.taskNumber && (
-                    <span className="card__meta-item">
+                    <span className="card__meta-item" title={entry.taskNumber || undefined}>
                       <span className="card__meta-label">Task #</span>
-                      {entry.taskNumber}
+                      {entry.taskKey || '—'}
                     </span>
                   )}
                   <span className="card__meta-item">

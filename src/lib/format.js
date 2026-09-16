@@ -266,23 +266,23 @@ export function distinctWeekCount(isoDates = []) {
 }
 
 /**
- * Rótulo de un task para la fila de una hora: "#<id> · <nombre>" (el id adelante,
- * convención tipo ticket). El "#" distingue el id de Zoho del nombre, que en este
- * dominio suele empezar con un ordinal (ej. "5 - HSS APP..."), para que no se lea
- * como dos números. Si no hay id devuelve sólo el nombre; si no hay nombre, "#<id>";
- * si no hay ninguno, cadena vacía.
+ * Rótulo de un task para la fila de una hora: "<key> · <nombre>" (el código corto de
+ * Zoho adelante, ej. "PP1-T1 · Login design"). Feature task-key-display: se muestra el
+ * task.key legible, NO el id interno largo. Si no hay key devuelve sólo el nombre (el
+ * nombre ya identifica; no se antepone "—" al rótulo compuesto); si no hay nombre, la
+ * key sola; si no hay ninguno, "—" (fallback elegido por el usuario).
  * @param {?string} task nombre del task
- * @param {?string} taskNumber id del task (entry.taskNumber)
+ * @param {?string} taskKey código corto del task (entry.taskKey, ej. "PP1-T1")
  * @returns {string}
  */
-export function formatTaskLabel(task, taskNumber) {
-  // Coerción a String: taskNumber puede llegar como número si la columna de Zoho es
-  // numérica; el contrato promete string en todas las ramas (incl. "sólo el id").
+export function formatTaskLabel(task, taskKey) {
+  // Coerción a String: el contrato promete string en todas las ramas.
   const name = task == null ? '' : String(task)
-  const id = taskNumber == null ? '' : String(taskNumber)
-  if (id && name) return `#${id} · ${name}`
-  if (id) return `#${id}`
-  return name
+  const key = taskKey == null ? '' : String(taskKey)
+  if (key && name) return `${key} · ${name}`
+  if (key) return key
+  if (name) return name
+  return '—'
 }
 
 /**

@@ -475,7 +475,7 @@ export default function App() {
       { header: 'Project', key: 'project' },
       { header: 'Client', key: 'client' },
       { header: 'Task', key: 'task' },
-      { header: 'Task #', key: 'taskNumber' },
+      { header: 'Task #', key: 'taskKey' },
       { header: 'Description', key: 'description' },
       { header: 'Billing Status', key: 'billingStatus' },
       { header: 'Zoho Status', key: 'status' },

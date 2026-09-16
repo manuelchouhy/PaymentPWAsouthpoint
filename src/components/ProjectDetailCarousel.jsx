@@ -954,11 +954,12 @@ function StagesTasksSlide({ tree, loading, error, stagesError, expanded, onToggl
                     >
                       <span className="stage-tree__task-name">
                         <span className="stage-tree__task-name-text">{t.taskName || '—'}</span>
-                        {/* id del task (task_number de Zoho, el mismo de "Task #" en
-                            Entries). Es largo → mono, atenuado y truncado, con tooltip. */}
+                        {/* Código corto de Zoho (task.key, ej. "PP1-T5"), el mismo "Task #"
+                            que Entries. El id largo queda en el tooltip para trazabilidad.
+                            "—" cuando la key aún no se resolvió (feature task-key-display). */}
                         {t.taskNumber ? (
                           <span className="stage-tree__task-id" title={`Task #${t.taskNumber}`}>
-                            #{t.taskNumber}
+                            {t.taskKey || '—'}
                           </span>
                         ) : null}
                       </span>
