@@ -39,11 +39,13 @@ async function zohoGetStatus(url: string, token: string): Promise<{ status: numb
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
     try {
       const res = await fetch(url, { headers: { Authorization: "Zoho-oauthtoken " + token } });
-      if (res.status >= 500) {
+      // 5xx y 429 (rate-limit) = transitorios → backoff y reintento (honra el rate-limit en vez
+      // de martillar). El presupuesto de tiempo del caller acota el total bajo degradación.
+      if (res.status >= 500 || res.status === 429) {
         if (attempt < RETRY_DELAYS_MS.length) { await sleep(RETRY_DELAYS_MS[attempt]); continue; }
         return { status: res.status, data: null };
       }
-      if (!res.ok) return { status: res.status, data: null }; // 4xx (incl. 404/429)
+      if (!res.ok) return { status: res.status, data: null }; // 4xx (incl. 404)
       const text = await res.text();
       if (!text || !text.trim()) return { status: res.status, data: null };
       try { return { status: res.status, data: JSON.parse(text) }; }
@@ -142,13 +144,15 @@ async function resolveTaskKey(
   portalId: string, projectId: string, taskId: string, token: string,
 ): Promise<{ key: string | null; conclusive: boolean }> {
   const { status, data } = await zohoGetStatus(`${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/${taskId}/`, token);
+  // 200 = la request tuvo éxito → CONCLUYENTE (con o sin key). Incluso un 200 de forma inesperada
+  // se toma como "sin key" (no re-pedir): 200 no es transitorio, y dejarlo inconcluso lo re-pediría
+  // en cada corrida para siempre. Los transitorios reales (429/401/5xx/red) NO dan 200.
   if (status === 200) {
     const t = data?.tasks?.[0] ?? data?.task ?? (data?.id_string || data?.key ? data : null);
-    if (t) return { key: t.key ? String(t.key) : null, conclusive: true };
-    return { key: null, conclusive: false }; // 200 con forma inesperada → no envenenar
+    return { key: t?.key ? String(t.key) : null, conclusive: true };
   }
   if (status === 404) return { key: null, conclusive: true }; // tarea inexistente → nunca tendrá key
-  return { key: null, conclusive: false }; // 429/401/5xx/red → transitorio
+  return { key: null, conclusive: false }; // 429/401/5xx/red → transitorio, reintentar luego
 }
 
 const json = (body: unknown, status = 200) =>
@@ -207,6 +211,13 @@ Deno.serve(async (req) => {
     }
     if (need.size === 0) return json({ ok: true, needing: 0, attempted: 0, keysFound: 0, note: "nada que resolver" });
 
+    // Cuántos candidatos tiene cada proyecto: si son pocos, NO conviene paginar toda su lista de
+    // /tasks/ (hasta 50 páginas) para un puñado de lookups — sale más barato el GET por-tarea. El
+    // top-level sólo paga cuando amortiza (varios candidatos en el mismo proyecto).
+    const perProjectCount = new Map<string, number>();
+    for (const { pid } of need.values()) perProjectCount.set(pid, (perProjectCount.get(pid) ?? 0) + 1);
+    const MIN_FOR_TOPLEVEL = 3;
+
     // Top-level de cada proyecto pedido UNA vez (cache). null = no se pudo traer (transitorio) →
     // las tareas de ese proyecto van a resolveTaskKey igual, que decide conclusividad por tarea.
     const topLevelCache = new Map<string, Map<string, string> | null>();
@@ -227,14 +238,19 @@ Deno.serve(async (req) => {
     const MAX_RUN_MS = 100_000;
     const MAX_CONSEC_FAIL = 8;
     let consecFail = 0;
+    let stoppedEarly = false; // true si se cortó por tiempo o circuit-breaker (quedaron pendientes)
     let attempted = 0; // tareas con resultado CONCLUYENTE (se marcó checked_at)
     let keysFound = 0; // de ésas, cuántas tenían key
     for (const { taskId, pid } of need.values()) {
       if (Date.now() - startedAt > MAX_RUN_MS) {
         console.log("presupuesto de tiempo agotado; el resto en la próxima corrida");
+        stoppedEarly = true;
         break;
       }
-      let key: string | null = (await topLevelFor(pid))?.get(taskId) ?? null;
+      // Top-level sólo si el proyecto amortiza (>= MIN_FOR_TOPLEVEL candidatos); si no, directo al
+      // GET por-tarea (más barato que paginar toda la lista para 1-2 lookups).
+      let key: string | null =
+        (perProjectCount.get(pid) ?? 0) >= MIN_FOR_TOPLEVEL ? ((await topLevelFor(pid))?.get(taskId) ?? null) : null;
       let conclusive = key != null; // si el top-level lo trajo, es concluyente
       if (!conclusive) {
         try {
@@ -253,6 +269,7 @@ Deno.serve(async (req) => {
         // en vez de disparar los 300 requests igual.
         if (++consecFail >= MAX_CONSEC_FAIL) {
           console.log(`${MAX_CONSEC_FAIL} fallos seguidos resolviendo keys (¿Zoho 429/5xx?); se corta y reintenta en la próxima corrida`);
+          stoppedEarly = true;
           break;
         }
         continue;
@@ -274,8 +291,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`sync-task-keys: needing=${need.size} attempted=${attempted} keysFound=${keysFound}`);
-    return json({ ok: true, needing: need.size, attempted, keysFound });
+    console.log(`sync-task-keys: needing=${need.size} attempted=${attempted} keysFound=${keysFound} incomplete=${stoppedEarly}`);
+    // incomplete=true → se cortó por Zoho degradado/tiempo y quedaron pendientes (un monitor puede
+    // alertar por este flag; el status sigue 200 porque no es un fallo duro y hubo/ habrá progreso).
+    return json({ ok: true, needing: need.size, attempted, keysFound, incomplete: stoppedEarly });
   } catch (e) {
     const msg = String((e as Error)?.message ?? e);
     console.log("sync-task-keys error:", msg);
