@@ -4,7 +4,7 @@
 // sync de horas pero como INVOCACIÓN SEPARADA — si falla o tarda, NO afecta el sync de
 // horas ni el botón "Refresh now" (ese aislamiento es el motivo de tenerla aparte).
 //
-// Resuelve tasks TOP-LEVEL (slice 01) y SUBTASKS (slice 02, por padre con cota run-level).
+// Resuelve tasks TOP-LEVEL por listado (slice 01) y SUBTASKS por id directo (slice 02).
 //
 // El `key` es INMUTABLE: solo se pide a Zoho para los task_number que todavía no tienen
 // key. Tras la primera corrida, un proyecto ya resuelto cuesta solo una query liviana a
@@ -20,21 +20,23 @@ const ZOHO_V3 = "https://projectsapi.zoho.com/api/v3";
 const ZOHO_V1 = "https://projectsapi.zoho.com/restapi";
 const RANGE = 200; // page size de la Tasks API de Zoho (máx 200)
 const RETRY_DELAYS_MS = [500, 1500, 4000];
-// Cotas de GETs de subtasks (slice 02). La convergencia se completa en corridas sucesivas
-// (el key es inmutable → lo resuelto no se vuelve a pedir).
-//  - RUN: acota el total de GETs de subtasks de toda la corrida (para que no se eternice).
-//  - PROJECT: acota los GETs por proyecto, para que un proyecto con task_numbers que NUNCA
-//    resuelven (subtasks borradas/anidadas profundas) no drene el budget y deje sin subtasks a
-//    los proyectos siguientes (starvation).
+// Cotas de la resolución de subtasks por-id (slice 02). Cada task_number faltante se pide
+// directo por id (GET /tasks/{id}/). La convergencia se completa en corridas sucesivas (lo
+// resuelto sale de `missing`; el key es inmutable → no se vuelve a pedir).
+//  - RUN: total de GETs por-id de toda la corrida (para que no se eternice).
+//  - PROJECT: GETs por-id por proyecto, para que un proyecto con muchos ids irresolubles no
+//    drene el budget y deje a los proyectos siguientes sin turno (starvation).
+//  - TIME_BUDGET: tope de tiempo (wall-clock) para la fase de subtasks, así los reintentos con
+//    backoff (429/5xx) no empujan la corrida más allá del límite del edge runtime.
 const MAX_SUBTASK_FETCHES_PER_RUN = 250;
 const MAX_SUBTASK_FETCHES_PER_PROJECT = 50;
-const SUBTASK_GET_SPACING_MS = 120; // espaciado entre GETs de subtasks (anti rate-limit 429)
-// FOLLOW-UP CONOCIDO (negative-cache): sin persistir "task_number ya chequeado sin key", un
-// proyecto con task_numbers que NUNCA resuelven (subtask borrada, sin key, o anidada profunda)
-// re-consume su budget de subtasks CADA corrida y, por el orden de proyectos, puede dejar a los
-// de id alto sin turno. El budget (run+proyecto) acota el daño por corrida, pero el fix real es
-// una marca persistente (columna/tabla) para saltearlos con un cooldown. Requiere migración →
-// slice aparte, gated. Ver PRD task-key-display ("negative-cache").
+const SUBTASK_GET_SPACING_MS = 120; // espaciado entre GETs por-id (anti rate-limit 429)
+const SUBTASK_TIME_BUDGET_MS = 90_000; // deja margen bajo el wall-clock del edge (~150s)
+// FOLLOW-UP CONOCIDO (negative-cache): sin persistir "task_number ya chequeado sin key", un id
+// que NUNCA resuelve (task borrada, o sin key) se re-pide CADA corrida (1 GET) y, por el orden
+// de proyectos, puede consumir turno de otros. El budget (run+proyecto+tiempo) acota el daño por
+// corrida; el fix real es una marca persistente con cooldown (requiere migración) → slice aparte,
+// gated. Ver PRD task-key-display ("negative-cache").
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -130,66 +132,46 @@ async function fetchTopLevelTasks(portalId: string, projectId: string, token: st
   return out;
 }
 
-// SUBTASKS (slice 02): las subtasks de Zoho NO vienen en el listado top-level; se piden por
-// PADRE vía `/tasks/{parentId}/subtasks/` (shape confirmado por probe: lista bajo `tasks`,
-// item con id_string/key/name; 204 = sin subtasks). Se resuelve UN nivel (subtasks de las
-// top-level), que es lo verificado y el caso común ("Task 2.1" bajo "Stage II").
-//
-// LIMITACIÓN CONOCIDA (follow-up): las sub-subtasks ANIDADAS (subtask de una subtask) NO se
-// resuelven — el front cae al id largo para ellas. No se recursa sobre ids de subtask porque
-// no está verificado que `/subtasks/` los acepte como padre (evita quemar budget en GETs 4xx).
-//
-// Para cuando resuelve todas las `wanted` (early-exit) o agota `budget` (cota de GETs). Es
-// ADITIVO: un 204/vacío/4xx (zohoGet → null) o un fallo transitorio (429/5xx que tira tras
-// reintentos, atrapado acá) solo significa "nada que agregar de este padre", nunca aborta el
-// proyecto (a diferencia de la membresía, que es destructiva). Espacia los GETs para no
-// gatillar el rate-limit de Zoho. Devuelve las subtasks {id,key,name} y cuántos GETs consumió.
-async function fetchSubtaskKeys(
+// SUBTASKS (slice 02): las subtasks de Zoho NO vienen en el listado top-level. En vez de
+// barrer los `/subtasks/` de cada padre (coverage incompleto si hay muchos padres, y 204s
+// caros en padres sin hijos), se pide CADA task_number faltante DIRECTO por id vía
+// `GET /tasks/{id}/` (shape confirmado por probe: devuelve la task —top-level, subtask o
+// anidada— con su `key`). Ventajas: resuelve cualquier nivel de anidamiento, sin coverage
+// gaps, sin gastar GETs en padres childless, y CONVERGE (lo resuelto sale de `missing`, así
+// que la próxima corrida ataca los que faltan). Es ADITIVO: un 4xx/404 (task borrada) o un
+// fallo transitorio (429/5xx que tira tras reintentos) solo saltea ESE id, nunca aborta.
+// Espacia los GETs (anti-429). `budget` acota los GETs; `deadline` (epoch ms) corta por
+// tiempo para no pasarse del wall-clock del edge. Devuelve las tasks {id,key,name} y GETs.
+async function fetchTaskKeysById(
   portalId: string,
   projectId: string,
-  parentIds: string[],
-  wanted: Set<string>,
+  missingIds: string[],
   token: string,
   budget: number,
-): Promise<{ subtasks: { id: string; key: string | null; name: string }[]; fetches: number }> {
+  deadline: number,
+): Promise<{ resolved: { id: string; key: string | null; name: string }[]; fetches: number }> {
   const out: { id: string; key: string | null; name: string }[] = [];
-  const remaining = new Set(wanted);
   let fetches = 0;
-  for (const parentId of parentIds) {
-    if (fetches >= budget || remaining.size === 0) break; // cota de GETs / early-exit
-    if (!parentId) continue;
-    let index = 1;
-    let prevFirstId: string | null = null;
-    for (let page = 0; page < 100; page++) {
-      if (fetches >= budget || remaining.size === 0) break; // early-exit también por página
-      if (fetches > 0) await sleep(SUBTASK_GET_SPACING_MS); // espaciar los GETs (anti-429)
-      fetches++;
-      const url = `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/${parentId}/subtasks/?index=${index}&range=${RANGE}`;
-      let data: any;
-      try {
-        data = await zohoGet(url, token);
-      } catch {
-        break; // 429/5xx tras reintentos → saltear este padre (additivo), NO abortar el proyecto
-      }
-      // null = 204 (sin subtasks), body vacío, o 4xx → nada que agregar de este padre.
-      if (data == null) break;
-      const items: any[] = Array.isArray(data.tasks) ? data.tasks : [];
-      const firstId = items.length ? String(items[0].id_string || items[0].id || "") : "";
-      if (items.length > 0 && firstId === prevFirstId) break; // Zoho ignora paginación → cortar
-      prevFirstId = firstId;
-      for (const t of items) {
-        const id = String(t.id_string || t.id || "");
-        if (!id) continue;
-        out.push({ id, key: t.key ?? null, name: t.name ?? "" });
-        // Solo marcar resuelta si REALMENTE tiene key: una subtask sin key sigue faltando (no
-        // debe disparar el early-exit como si estuviera resuelta).
-        if (t.key != null && String(t.key) !== "") remaining.delete(id);
-      }
-      if (items.length < RANGE) break;
-      index += RANGE;
+  for (const id of missingIds) {
+    if (fetches >= budget || Date.now() >= deadline) break;
+    if (!id) continue;
+    if (fetches > 0) await sleep(SUBTASK_GET_SPACING_MS); // espaciar los GETs (anti-429)
+    fetches++;
+    const url = `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/${id}/`;
+    let data: any;
+    try {
+      data = await zohoGet(url, token);
+    } catch {
+      continue; // 429/5xx tras reintentos → reintentar en la próxima corrida (additivo)
+    }
+    if (data == null) continue; // 4xx/404 (task borrada) o body vacío → nada que resolver
+    // El detalle de una task viene bajo `tasks` (array de 1) según la API; se toleran variantes.
+    const task = Array.isArray(data.tasks) ? data.tasks[0] : (data.task ?? data);
+    if (task) {
+      out.push({ id: String(task.id_string || task.id || id), key: task.key ?? null, name: task.name ?? "" });
     }
   }
-  return { subtasks: out, fetches };
+  return { resolved: out, fetches };
 }
 
 // task_number distintos de un proyecto que TODAVÍA no tienen key (task_key IS NULL). Un
@@ -261,6 +243,7 @@ Deno.serve(async (req) => {
     let processed = 0, resolved = 0, updatedRows = 0, skipped = 0, subtaskFetches = 0;
     const errors: { projectId: string; error: string }[] = [];
     let subtaskBudget = MAX_SUBTASK_FETCHES_PER_RUN; // run-level, compartido entre proyectos
+    const subtaskDeadline = Date.now() + SUBTASK_TIME_BUDGET_MS; // corte por tiempo de la fase subtasks
 
     for (const p of projects) {
       const zpid = String(p.zoho_project_id);
@@ -277,23 +260,23 @@ Deno.serve(async (req) => {
         // subtasks. Se piden por padre (top-level) con cota run-level y early-exit, y su mapa
         // se FUSIONA en keyMap. Si se agota el budget, lo que quede sin resolver cae al próximo
         // run (el key es inmutable → converge).
-        const stillMissing = new Set(missing.filter((tn) => !keyMap[tn]));
-        if (stillMissing.size > 0 && subtaskBudget > 0) {
+        const stillMissing = missing.filter((tn) => !keyMap[tn]);
+        if (stillMissing.length > 0 && subtaskBudget > 0 && Date.now() < subtaskDeadline) {
           try {
-            const parentIds = tasks.map((t) => t.id).filter(Boolean);
             // Cap por proyecto además del run-level: un proyecto no drena todo el budget.
             const projectBudget = Math.min(subtaskBudget, MAX_SUBTASK_FETCHES_PER_PROJECT);
-            const { subtasks, fetches } = await fetchSubtaskKeys(
-              portalId, zpid, parentIds, stillMissing, token, projectBudget,
+            const { resolved: subResolved, fetches } = await fetchTaskKeysById(
+              portalId, zpid, stillMissing, token, projectBudget, subtaskDeadline,
             );
             subtaskBudget -= fetches;
             subtaskFetches += fetches;
-            // subMap solo tiene ids de subtasks (distintos de los top-level de keyMap) → merge directo.
-            Object.assign(keyMap, parseTaskKeyMap(subtasks));
+            // Ids resueltos por-id (distintos de los top-level de keyMap) → merge directo.
+            Object.assign(keyMap, parseTaskKeyMap(subResolved));
           } catch (e) {
-            // La resolución de subtasks es best-effort: si algo falla, NO se pierde el pase
-            // top-level (el UPDATE de abajo igual corre con las keys ya resueltas).
-            console.log(`subtasks proyecto ${zpid}:`, String(e));
+            // La resolución por-id es best-effort: si algo falla, NO se pierde el pase top-level
+            // (el UPDATE de abajo igual corre con las keys ya resueltas). Se registra para que un
+            // fallo SISTEMÁTICO sea visible en la respuesta (no queda solo en el log).
+            errors.push({ projectId: zpid, error: `subtasks: ${String(e)}` });
           }
         }
 
