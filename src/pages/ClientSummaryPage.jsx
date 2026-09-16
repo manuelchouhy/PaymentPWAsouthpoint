@@ -8,6 +8,8 @@ import { exportGrid } from '../lib/exportGrid'
 import { buildClientSummaryWeekly, weekLabel } from '../lib/clientSummaryWeekly'
 import { invoiceByEntryId } from '../lib/invoiceIndex'
 import { useSyncReload } from '../lib/useSyncReload'
+import { useStageFilter } from '../lib/useStageFilter'
+import { projectStageIds } from '../lib/stageFilter'
 import { filterClientSummary } from '../lib/clientSummaryFilter'
 import {
   chartTotals,
@@ -146,13 +148,53 @@ export function ClientSummaryPage() {
     return (entry) => byId.has(String(entry.id))
   }, [invoices])
 
-  // Toda la agregación semanal (consumed/overage/invoiced/cumulative/remaining por
-  // semana, budget del proyecto) vive en el motor puro clientSummaryWeekly. Agrupa
-  // por el cliente resuelto (resolvedClient).
-  const summary = useMemo(
+  // Filtro de Stage (ver "Filtro de Stage" en CONTEXT.md y ADR 0004): en Client Summary
+  // RECALCULA la fila al stage (budget del stage + consumed/semanal recortados). Necesita la
+  // membresía task→stage (withMembership). El budget por stage lo resuelve el motor desde el
+  // stagesByProject que ya carga la página; el hook aporta la selección, la membresía y el
+  // catálogo (para las opciones/rótulo). `projects` (crudo) da el projectNumber del prefijo.
+  const {
+    selectedStageIds,
+    stageFilterActive,
+    toggleStage,
+    clearStages,
+    taskToStage,
+    buildOptions,
+  } = useStageFilter({ withMembership: true, projects, reloadKey })
+
+  // Base SIN el filtro de Stage: alimenta las opciones de Stage (interlazado) y permite
+  // cambiar de stage aunque el elegido pertenezca a otro proyecto (si las opciones salieran
+  // de la vista ya recortada, un stage de otro proyecto desaparecería y no se podría pivotar).
+  const summaryBase = useMemo(
     () => buildClientSummaryWeekly({ projects: resolvedProjects, entries, crsByProject, stagesByProject, isInvoiced }),
     [resolvedProjects, entries, crsByProject, stagesByProject, isInvoiced],
   )
+
+  // Toda la agregación semanal (consumed/overage/invoiced/cumulative/remaining por
+  // semana, budget del proyecto) vive en el motor puro clientSummaryWeekly. Agrupa
+  // por el cliente resuelto (resolvedClient). Con stages elegidos, el motor RECALCULA la fila
+  // al stage (ADR 0004): sin stages, es idéntico a summaryBase.
+  const summary = useMemo(
+    () => buildClientSummaryWeekly({ projects: resolvedProjects, entries, crsByProject, stagesByProject, isInvoiced, taskToStage, selectedStageIds }),
+    [resolvedProjects, entries, crsByProject, stagesByProject, isInvoiced, taskToStage, selectedStageIds],
+  )
+
+  // Opciones del filtro de Stage: los stage_id de los proyectos que pasan los OTROS filtros
+  // (sobre summaryBase, sin stage), interlazado. buildOptions une los ya seleccionados fuera de
+  // scope y arma el rótulo con prefijo condicional por proyecto.
+  const { optionIds: stageOptionIds, getLabel: stageLabel } = useMemo(() => {
+    const scoped = filterClientSummary(summaryBase.clients, {
+      clients: selectedClients,
+      projectNumbers: selectedProjectNumbers,
+      projectNames: selectedProjectNames,
+      sows: selectedSows,
+    })
+    const present = new Set()
+    for (const p of scoped.flatMap((c) => c.projects)) {
+      for (const sid of projectStageIds(stagesByProject.get(String(p.id)))) present.add(sid)
+    }
+    return buildOptions([...present])
+  }, [summaryBase, selectedClients, selectedProjectNumbers, selectedProjectNames, selectedSows, stagesByProject, buildOptions])
 
   // Opciones INTERLAZADAS: cada dimensión deriva sus opciones de los clientes/proyectos
   // que pasan TODOS los OTROS filtros de proyecto (menos el propio), para que elegir un
@@ -250,13 +292,14 @@ export function ClientSummaryPage() {
     })
   }
 
-  const anyFilter = [
-    selectedClients,
-    selectedProjectNumbers,
-    selectedProjectNames,
-    selectedSows,
-    selectedWeeks,
-  ].some((a) => a.length > 0)
+  const anyFilter =
+    [
+      selectedClients,
+      selectedProjectNumbers,
+      selectedProjectNames,
+      selectedSows,
+      selectedWeeks,
+    ].some((a) => a.length > 0) || stageFilterActive
 
   function clearAllFilters() {
     setSelectedClients([])
@@ -264,6 +307,7 @@ export function ClientSummaryPage() {
     setSelectedProjectNames([])
     setSelectedSows([])
     setSelectedWeeks([])
+    clearStages()
   }
 
   function handleExport(format) {
@@ -385,6 +429,18 @@ export function ClientSummaryPage() {
                 selected={selectedWeeks}
                 onToggle={(v) => toggleIn(setSelectedWeeks, v)}
               />
+              {/* Filtro de Stage: RECALCULA la fila al stage (budget del stage +
+                  consumed/semanal recortados; proyectos sin el stage desaparecen). Ver ADR 0004.
+                  Opciones interlazadas; sólo aparece si hay stages en scope. */}
+              {stageOptionIds.length > 0 && (
+                <MultiSelectDropdown
+                  label="Stage"
+                  options={stageOptionIds}
+                  selected={[...selectedStageIds]}
+                  getLabel={stageLabel}
+                  onToggle={toggleStage}
+                />
+              )}
               {anyFilter && (
                 <button
                   type="button"
