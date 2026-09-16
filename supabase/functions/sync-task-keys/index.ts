@@ -113,18 +113,28 @@ async function fetchTopLevelTasks(portalId: string, projectId: string, token: st
 // proyecto que devuelve [] no gatilla ningún fetch a Zoho (clave de eficiencia: el key es
 // inmutable, lo ya resuelto no se vuelve a pedir).
 async function missingTaskNumbers(supabase: any, zohoProjectId: string): Promise<string[]> {
-  const { data, error } = await supabase
-    .from("time_entries")
-    .select("task_number")
-    .eq("zoho_project_id", zohoProjectId)
-    .is("task_key", null)
-    .not("task_number", "is", null)
-    .neq("task_number", "");
-  if (error) throw new Error(error.message);
   const set = new Set<string>();
-  for (const row of data ?? []) {
-    const tn = String(row.task_number ?? "");
-    if (tn) set.add(tn);
+  // Paginado explícito: PostgREST corta en 1000 filas por defecto. Un proyecto con miles
+  // de time_entries sin key podría dejar afuera task_numbers que solo aparecen pasadas las
+  // 1000 filas → nunca se resolverían. Se recorre por páginas ordenadas hasta agotar.
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("time_entries")
+      .select("task_number")
+      .eq("zoho_project_id", zohoProjectId)
+      .is("task_key", null)
+      .not("task_number", "is", null)
+      .neq("task_number", "")
+      .order("task_number", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
+    for (const row of rows) {
+      const tn = String(row.task_number ?? "");
+      if (tn) set.add(tn);
+    }
+    if (rows.length < PAGE) break;
   }
   return [...set];
 }
@@ -164,7 +174,13 @@ Deno.serve(async (req) => {
         // 3) UPDATE task_key SOLO para los task_number que faltaban y tienen key resuelta.
         for (const tn of missing) {
           const key = keyMap[tn];
-          if (!key) continue; // sin key top-level (puede ser subtask → slice 02) → queda "—"
+          // Sin key top-level: puede ser una SUBTASK (la resuelve la slice 02) → queda NULL
+          // ("—" en el front). LIMITACIÓN CONOCIDA/DIFERIDA: mientras un proyecto tenga
+          // task_numbers de subtask sin resolver, `missing` los sigue devolviendo y este
+          // proyecto re-pide sus tasks cada corrida sin progreso. El negative-cache que lo
+          // evitaría (marcar "ya chequeado") está diferido a la slice 02 por decisión del
+          // PRD; se cierra cuando la 02 resuelve esos task_numbers.
+          if (!key) continue;
           const { error: updErr, count } = await supabase
             .from("time_entries")
             .update({ task_key: key }, { count: "exact" })
@@ -172,8 +188,12 @@ Deno.serve(async (req) => {
             .eq("task_number", tn)
             .is("task_key", null);
           if (updErr) throw new Error(updErr.message);
-          resolved++;
-          updatedRows += count ?? 0;
+          // Solo contar como resuelto si el UPDATE tocó filas (evita inflar la métrica si
+          // otra corrida concurrente ya lo había llenado → count 0).
+          if ((count ?? 0) > 0) {
+            resolved++;
+            updatedRows += count ?? 0;
+          }
         }
         processed++;
       } catch (e) {
