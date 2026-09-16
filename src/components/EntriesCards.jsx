@@ -3,7 +3,7 @@ import { Avatar } from './Avatar'
 import { Checkbox } from './Checkbox'
 import { StatusBadge } from './StatusBadge'
 import { BillingBadge } from './BillingBadge'
-import { formatDate, formatHours, formatWeek, taskDisplayId } from '../lib/format'
+import { formatDate, formatHours, formatWeek } from '../lib/format'
 
 const cardVariants = {
   hidden: { opacity: 0, y: 12 },
@@ -103,10 +103,9 @@ export function EntriesCards({
                     </span>
                   )}
                   {entry.taskNumber && (
-                    <span className="card__meta-item" title={entry.taskNumber || undefined}>
+                    <span className="card__meta-item">
                       <span className="card__meta-label">Task #</span>
-                      {/* Key corto de Zoho (fallback al id largo). */}
-                      {taskDisplayId(entry.taskNumber, entry.taskKey)}
+                      {entry.taskNumber}
                     </span>
                   )}
                   <span className="card__meta-item">

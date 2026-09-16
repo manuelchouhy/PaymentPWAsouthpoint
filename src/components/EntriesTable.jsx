@@ -6,7 +6,7 @@ import { Checkbox } from './Checkbox'
 import { StatusBadge } from './StatusBadge'
 import { BillingBadge } from './BillingBadge'
 import { CellPopButton } from './CellPopButton'
-import { formatDate, formatHours, formatWeek, taskDisplayId } from '../lib/format'
+import { formatDate, formatHours, formatWeek } from '../lib/format'
 
 const rowVariants = {
   hidden: { opacity: 0, y: 8 },
@@ -163,8 +163,7 @@ export function EntriesTable({
                   className="col-tasknum col-optional cell-mono"
                   title={entry.taskNumber || undefined}
                 >
-                  {/* Key corto de Zoho (fallback al id largo); tooltip conserva el largo. */}
-                  {taskDisplayId(entry.taskNumber, entry.taskKey) || '—'}
+                  {entry.taskNumber || '—'}
                 </td>
                 <td className="col-pop">
                   <CellPopButton

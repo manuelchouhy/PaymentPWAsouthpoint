@@ -11,36 +11,12 @@ test('un task registrado toma consumido/id-de-Zoho del logueado con el mismo nom
     taskId: 7,
     taskName: 'Backend',
     taskNumber: '2236',
-    taskKey: null,
     stageId: 3,
     estimatedHours: 40,
     hours: 30,
     consumedHours: 25,
     registered: true,
   })
-})
-
-test('propaga el taskKey (corto de Zoho) del logueado al task mergeado, para display', () => {
-  const registered = [{ id: 7, taskName: 'Backend', stageId: 3, estimatedHours: 40 }]
-  const logged = [{ taskName: 'Backend', taskNumber: '2236', taskKey: 'HSS-I12', hours: 30, consumedHours: 25 }]
-  assert.equal(mergeProjectTasks(registered, logged)[0].taskKey, 'HSS-I12')
-  // Logueado sin registrar también conserva su key.
-  assert.equal(mergeProjectTasks([], logged)[0].taskKey, 'HSS-I12')
-})
-
-test('taskKey atado al taskNumber: dos logueados homónimos no cruzan key↔número', () => {
-  // "Backend" (número 111, sin key) y "Backend " (número 222, key 'HSS-9') colapsan por nombre;
-  // el par gana el primero → número 111 con key null, sin prestarle el key del task 222.
-  const out = mergeProjectTasks(
-    [],
-    [
-      { taskName: 'Backend', taskNumber: '111', taskKey: null, hours: 4, consumedHours: 4 },
-      { taskName: 'Backend ', taskNumber: '222', taskKey: 'HSS-9', hours: 6, consumedHours: 6 },
-    ],
-  )
-  assert.equal(out.length, 1)
-  assert.equal(out[0].taskNumber, '111')
-  assert.equal(out[0].taskKey, null) // NO 'HSS-9'
 })
 
 test('un task logueado SIN registrar aparece con stageId null (sin asignar) y registered=false', () => {

@@ -12,7 +12,6 @@ import {
   formatInvoicePeriod,
   distinctWeekCount,
   formatTaskLabel,
-  taskDisplayId,
 } from './format.js'
 
 // Las semanas de facturación van de DOMINGO a SÁBADO (no ISO lunes–domingo).
@@ -171,38 +170,6 @@ test('formatTaskLabel: sin nombre pero con id → "#id"', () => {
 test('formatTaskLabel: sin id ni nombre → cadena vacía', () => {
   assert.equal(formatTaskLabel('', ''), '')
   assert.equal(formatTaskLabel(null, undefined), '')
-})
-
-test('taskDisplayId: con key corto → devuelve el key (no el número largo)', () => {
-  // El key corto de Zoho es el que se muestra; el task_number largo queda para la lógica.
-  assert.equal(taskDisplayId('2236753000000193417', 'HSS-I12'), 'HSS-I12')
-})
-
-test('taskDisplayId: sin key → cae al task_number largo (sin regresión)', () => {
-  assert.equal(taskDisplayId('2236753000000193417', ''), '2236753000000193417')
-  assert.equal(taskDisplayId('2236753000000193417', null), '2236753000000193417')
-  assert.equal(taskDisplayId('2236753000000193417', undefined), '2236753000000193417')
-})
-
-test('taskDisplayId: sin key ni número → cadena vacía', () => {
-  assert.equal(taskDisplayId('', ''), '')
-  assert.equal(taskDisplayId(null, null), '')
-})
-
-test('taskDisplayId: coerción a string (key/número numéricos → string)', () => {
-  assert.equal(taskDisplayId(999, 42), '42')
-  assert.equal(typeof taskDisplayId(999, 42), 'string')
-})
-
-test('formatTaskLabel: con taskKey usa el corto como id mostrado', () => {
-  assert.equal(
-    formatTaskLabel('5 - HSS APP Development', '2236753000000193417', 'HSS-I12'),
-    '#HSS-I12 · 5 - HSS APP Development',
-  )
-})
-
-test('formatTaskLabel: sin taskKey (2 args) mantiene el comportamiento previo', () => {
-  assert.equal(formatTaskLabel('Login design', '123'), '#123 · Login design')
 })
 
 test('formatTaskLabel: taskNumber numérico devuelve string (contrato @returns string)', () => {

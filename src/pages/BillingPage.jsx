@@ -181,7 +181,7 @@ function ReadonlyRows({ rows, showProvider = true, onDetail }) {
                 )}
                 {row.project || '—'}
                 {(row.task || row.taskNumber) && (
-                  <div className="cell-soft">{formatTaskLabel(row.task, row.taskNumber, row.taskKey)}</div>
+                  <div className="cell-soft">{formatTaskLabel(row.task, row.taskNumber)}</div>
                 )}
               </td>
               <td className="cell-mono">{row.date ? formatDate(row.date) : '—'}</td>
@@ -1877,7 +1877,7 @@ export function BillingPage() {
                                                     {row.project || '—'}
                                                     {(row.task || row.taskNumber || sow) && (
                                                       <div className="cell-soft">
-                                                        {formatTaskLabel(row.task, row.taskNumber, row.taskKey)}
+                                                        {formatTaskLabel(row.task, row.taskNumber)}
                                                         {(row.task || row.taskNumber) && sow && ' · '}
                                                         {sow}
                                                       </div>
