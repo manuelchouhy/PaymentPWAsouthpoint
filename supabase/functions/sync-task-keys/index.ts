@@ -8,7 +8,8 @@
 //
 // El `key` es INMUTABLE: solo se pide a Zoho para los task_number que todavía no tienen
 // key. Tras la primera corrida, un proyecto ya resuelto cuesta solo una query liviana a
-// la DB (cero llamadas a Zoho). Auth/portal reusados de sync-time-logs. Requiere mig 0050.
+// la DB (cero llamadas a Zoho). Auth/portal reusados de sync-time-logs. Requiere migraciones
+// 0050 (task_key) y 0051 (task_key_checked_at, negative-cache) aplicadas ANTES de deployar.
 //
 // Env: ZOHO_CLIENT_ID/SECRET/REFRESH_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -175,9 +176,12 @@ async function fetchTaskKeysById(
   deadline: number,
 ): Promise<{ resolved: { id: string; key: string }[]; fetches: number; errored: number; noKey: string[] }> {
   const resolved: { id: string; key: string }[] = []; // 200 con task Y key
-  // `noKey` = ids con "sin key" DEFINITIVO (200 con task pero key null, o 404 task borrada).
-  // NO incluye transitorios (5xx/429) ni ambiguos (401/403/400, body vacío, tasks:[]) → esos NO
-  // se negative-cachean (se reintentan) para no suprimir 7 días una task válida por un blip.
+  // `noKey` = ids con "sin key" DEFINITIVO por-task: 404 (borrada), 200 con task pero key null, o
+  // 200 sin task (tasks:[]/body vacío = la task no existe bajo ese proyecto, como un 404). Estos
+  // se negative-cachean (con cooldown). NO incluye 5xx/429 (transitorios) ni 401/403/400 (auth/
+  // permiso/malformado: pueden ser RUN-WIDE, no per-task → cachearlos suprimiría en masa tasks
+  // válidas si el token falla a mitad de corrida). El cooldown recupera un 200-empty por eventual
+  // consistency dentro de RECHECK_COOLDOWN_DAYS.
   const noKey: string[] = [];
   let fetches = 0;
   let errored = 0; // GETs que fallaron por transitorio (5xx/429 agotados) → outage visible al caller
@@ -195,12 +199,13 @@ async function fetchTaskKeysById(
       continue; // 429/5xx tras reintentos → transitorio: ni resuelve ni cachea (reintenta)
     }
     if (status === 404) { noKey.push(id); continue; } // task borrada en Zoho → definitivo sin key
-    if (status < 200 || status >= 300) continue; // 401/403/400/etc: ambiguo → no cachear, no resolver
-    // 200: extraer la task. `tasks:[]` (o body sin task) = ambiguo (eventual consistency) → skip.
+    if (status < 200 || status >= 300) continue; // 401/403/400/etc: ambiguo run-wide → no cachear
+    // 200: extraer la task. `tasks:[]`/body sin task = la task no existe bajo ese proyecto (como
+    // un 404) → definitivo sin key (se cachea; el cooldown recupera un eventual-consistency raro).
     const task = Array.isArray(data?.tasks)
       ? (data.tasks.length ? data.tasks[0] : null)
       : (data?.task ?? data);
-    if (!task) continue;
+    if (!task) { noKey.push(id); continue; }
     const key = task.key != null && String(task.key) !== "" ? String(task.key) : null;
     // Se mapea por el id PEDIDO (`id`), no por el id_string devuelto: se pidió /tasks/{id}/.
     if (key) resolved.push({ id, key });
@@ -325,7 +330,9 @@ Deno.serve(async (req) => {
             // fetchTaskKeysById nunca tira (per-id continue), así que un outage de Zoho durante
             // la fase por-id NO llegaría al catch. Se surfacea SOLO si TODOS los GETs fallaron
             // (outage sistemático), no ante un 429 transitorio suelto (evita falsas alarmas).
-            if (fetches > 0 && errored === fetches) {
+            // Alarma de outage solo si TODOS fallaron Y hubo varios GETs (>=3): con 1 solo GET,
+            // errored===fetches sería un 429 transitorio suelto → falsa alarma.
+            if (fetches >= 3 && errored === fetches) {
               errors.push({ projectId: zpid, error: `subtasks: los ${errored} GET(s) fallaron (outage?)` });
             }
           } catch (e) {
