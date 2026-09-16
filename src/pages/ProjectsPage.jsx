@@ -13,6 +13,8 @@ import { projectSows, stageSows } from '../lib/projectSows'
 import { api } from '../lib/api'
 import { buildClientResolver } from '../lib/clientResolver'
 import { useSyncReloadKey } from '../lib/useSyncReload'
+import { useStageFilter } from '../lib/useStageFilter'
+import { projectMatchesStages, projectStageIds } from '../lib/stageFilter'
 import { clientFilterKey, clientFilterOptions, sortedUnique, OTHER_CLIENT } from '../lib/useEntryFilters'
 import { formatDate, formatHours } from '../lib/format'
 import { ContractBadge } from '../components/ContractBadge'
@@ -121,6 +123,19 @@ export function ProjectsPage() {
     () => new Set(clients.map((c) => c.clientName).filter(Boolean)),
     [clients],
   )
+
+  // Filtro de Stage (ver "Filtro de Stage" en CONTEXT.md): en Projects es un filtro de FILA
+  // (proyecto que TIENE el stage; la fila se muestra entera — decisión (A) del PRD). No hace
+  // falta la membresía task→stage (withMembership:false): sólo qué stages tiene cada proyecto,
+  // que sale de stagesByProject (getAllStages).
+  const {
+    selectedStageIds,
+    stageFilterActive,
+    toggleStage,
+    clearStages,
+    stagesByProject,
+    buildOptions,
+  } = useStageFilter({ withMembership: false, projects, reloadKey })
 
   // Aplica el filtro de status (activo/todos) a una lista de proyectos. Un solo
   // lugar para el criterio, así las opciones y la grilla no se desincronizan.
@@ -248,12 +263,40 @@ export function ProjectsPage() {
     return sortByExp(withClient.filter((p) => matchesProject(p)))
   }, [withClient, matchesProject])
 
-  // Grilla final: agrega el filtro de status (sólo activos salvo "Show all
-  // statuses"). Los manuales (sin zohoProjectId) nunca se ocultan (isActiveProject).
-  const visible = useMemo(
+  // Row-filter de Stage: proyecto que TIENE alguno de los stages elegidos (fila entera). Sin
+  // stages elegidos no filtra. Callback reusado por la grilla y por el empty-state.
+  const applyStageFilter = useCallback(
+    (list) =>
+      stageFilterActive
+        ? list.filter((p) => projectMatchesStages(stagesByProject.get(String(p.id)), selectedStageIds))
+        : list,
+    [stageFilterActive, stagesByProject, selectedStageIds],
+  )
+
+  // Proyectos que pasan TODOS los filtros de la barra + el status scope, ANTES del filtro de
+  // Stage. Base de las opciones de Stage (interlazado) — status-scoped como el resto de los
+  // dropdowns, para no ofrecer stages que dejarían la grilla en cero (invariante de la página).
+  const statusScoped = useMemo(
     () => applyStatusScope(filteredIgnoringActive),
     [filteredIgnoringActive, showAllStatuses],
   )
+
+  // Opciones del filtro de Stage: los stage_id de los proyectos en scope (statusScoped),
+  // interlazado. buildOptions une los ya seleccionados fuera de scope y arma el rótulo con
+  // prefijo condicional por proyecto.
+  const { optionIds: stageOptionIds, getLabel: stageLabel } = useMemo(() => {
+    const present = new Set()
+    for (const p of statusScoped) {
+      for (const sid of projectStageIds(stagesByProject.get(String(p.id)))) present.add(sid)
+    }
+    return buildOptions([...present])
+  }, [statusScoped, stagesByProject, buildOptions])
+
+  // Grilla final: status scope + row-filter de Stage. Los manuales (sin zohoProjectId) nunca se
+  // ocultan por STATUS (isActiveProject); pero SÍ los oculta un filtro de Stage activo, porque
+  // no tienen stages (projectMatchesStages → false) — coherente con "mostrar sólo proyectos con
+  // el stage".
+  const visible = useMemo(() => applyStageFilter(statusScoped), [applyStageFilter, statusScoped])
 
   const toggle = (key, value) =>
     setFilters((prev) => ({
@@ -529,6 +572,19 @@ export function ProjectsPage() {
                 selected={filters.leadDevelopers}
                 onToggle={(v) => toggle('leadDevelopers', v)}
               />
+              {/* Filtro de Stage (row-filter): muestra los proyectos que TIENEN el/los
+                  stage(s) elegido(s). Sus opciones salen de los proyectos que pasan los otros
+                  filtros (interlazado one-directional, igual que el resto de la familia: elegir
+                  un stage no reduce los otros dropdowns). Sólo aparece si hay stages en scope. */}
+              {stageOptionIds.length > 0 && (
+                <MultiSelectDropdown
+                  label="Stage"
+                  options={stageOptionIds}
+                  selected={[...selectedStageIds]}
+                  getLabel={stageLabel}
+                  onToggle={toggleStage}
+                />
+              )}
               <div className="filterfield">
                 <span className="filterfield__label">Due from</span>
                 <input
@@ -549,11 +605,11 @@ export function ProjectsPage() {
                   onChange={(e) => setFilters((p) => ({ ...p, expTo: e.target.value }))}
                 />
               </div>
-              {filtersActive ? (
+              {filtersActive || stageFilterActive ? (
                 <button
                   type="button"
                   className="btn btn--ghost filterbar__clear"
-                  onClick={() =>
+                  onClick={() => {
                     setFilters({
                       clients: [],
                       projectNames: [],
@@ -563,7 +619,8 @@ export function ProjectsPage() {
                       expFrom: '',
                       expTo: '',
                     })
-                  }
+                    clearStages()
+                  }}
                 >
                   Clear
                 </button>
@@ -590,7 +647,11 @@ export function ProjectsPage() {
 
           {visible.length === 0 ? (
             <div className="empty">
-              {!showAllStatuses && filteredIgnoringActive.length > 0
+              {/* Sólo culpar al status cuando prender "Show all statuses" REALMENTE traería
+                  filas dado el filtro de Stage actual: aplicamos el filtro de Stage sin el
+                  status scope; si eso tiene filas y la grilla no, la causa es el status. Si no,
+                  la causa es otro filtro (p. ej. Stage) y el mensaje genérico no engaña. */}
+              {!showAllStatuses && applyStageFilter(filteredIgnoringActive).length > 0
                 ? 'No active projects to display. Some are hidden by their status — turn on “Show all statuses” to see them.'
                 : 'No projects to display.'}
             </div>

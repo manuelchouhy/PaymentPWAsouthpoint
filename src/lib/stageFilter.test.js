@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { filterEntriesByStage } from './stageFilter.js'
+import { filterEntriesByStage, projectStageIds, projectMatchesStages } from './stageFilter.js'
 
 const E = (id, taskNumber) => ({ id, taskNumber })
 
@@ -40,4 +40,32 @@ test('taskNumber numérico y selectedIds string se matchean igual', () => {
   const taskToStage = { '1003': 7 } // stageId numérico en el mapa
   const out = filterEntriesByStage(entries, taskToStage, ['7'])
   assert.deepEqual(out.map((e) => e.id), [1])
+})
+
+// --- Row-filter de Projects: projectStageIds / projectMatchesStages -----------------
+const S = (id) => ({ id, name: `Stage ${id}`, budgetHours: null })
+
+test('projectMatchesStages: true si el proyecto tiene alguno de los stages elegidos', () => {
+  assert.equal(projectMatchesStages([S('S1'), S('S2')], ['S2']), true)
+})
+
+test('projectMatchesStages: false si el proyecto no tiene ninguno de los elegidos', () => {
+  assert.equal(projectMatchesStages([S('S1')], ['S2', 'S3']), false)
+})
+
+test('projectMatchesStages: false si el proyecto no tiene stages', () => {
+  assert.equal(projectMatchesStages([], ['S1']), false)
+  assert.equal(projectMatchesStages(undefined, ['S1']), false)
+})
+
+test('projectMatchesStages: false con selección vacía', () => {
+  assert.equal(projectMatchesStages([S('S1')], []), false)
+})
+
+test('projectMatchesStages: ids numéricos y string se matchean igual', () => {
+  assert.equal(projectMatchesStages([{ id: 7 }], ['7']), true)
+})
+
+test('projectStageIds: ids como string, ignora filas sin id', () => {
+  assert.deepEqual(projectStageIds([S('S1'), { name: 'x' }, S(9)]), ['S1', '9'])
 })

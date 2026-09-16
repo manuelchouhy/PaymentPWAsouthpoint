@@ -33,13 +33,16 @@ export function useStageFilter({ withMembership = false, projects = [], reloadKe
 
   useEffect(() => {
     let cancelled = false
-    api.projects
-      .getAllStages()
+    // Promise.resolve().then(() => api...()) para que un throw SÍNCRONO del data-layer (p. ej.
+    // notImplemented() del http-client, que tira al invocarse) se convierta en un rechazo
+    // atrapable por .catch, en vez de escapar del efecto y tumbar el commit de React.
+    Promise.resolve()
+      .then(() => api.projects.getAllStages())
       .then((map) => { if (!cancelled) setStagesByProject(map ?? new Map()) })
       .catch((error) => console.error('No se pudieron cargar los stages:', error))
     if (withMembership) {
-      api.projects
-        .getStageMembership()
+      Promise.resolve()
+        .then(() => api.projects.getStageMembership())
         .then((rows) => { if (!cancelled) setMembership(rows ?? []) })
         .catch((error) => console.error('No se pudo cargar la membresía de stages:', error))
     }
