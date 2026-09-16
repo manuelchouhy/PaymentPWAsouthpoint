@@ -65,8 +65,11 @@ async function zohoGet(url: string, token: string): Promise<any | null> {
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
     try {
       const res = await fetch(url, { headers: { Authorization: "Zoho-oauthtoken " + token } });
-      if (res.status >= 500) throw new Error(`Zoho HTTP ${res.status}`);
-      if (!res.ok) return null; // 4xx: no reintentar, degradar
+      // 5xx y 429 (throttle) son transitorios → reintentar con backoff (igual que
+      // getAccessToken). El spacing de 150ms reduce el 429 pero no lo garantiza, así que un
+      // 429 puntual hace backoff en vez de saltear el proyecto entero de una.
+      if (res.status >= 500 || res.status === 429) throw new Error(`Zoho HTTP ${res.status}`);
+      if (!res.ok) return null; // otros 4xx: no reintentar, degradar
       const text = await res.text();
       if (!text) return null;
       try { return JSON.parse(text); } catch { return null; }
@@ -87,7 +90,10 @@ async function fetchTopLevelTasks(portalId: string, projectId: string, token: st
   const out: { id: string; key: string | null; name: string }[] = [];
   const MAX_PAGES = 100; // guarda anti-loop (20k tasks)
   let index = 1;
-  let prevFirstId = "";
+  // Centinela null (no ""): si la 1ª página trae una task sin id_string/id, su firstId sería
+  // "" y con prevFirstId="" el guard de no-progreso rompería y DESCARTARÍA esa página. Con
+  // null la 1ª iteración nunca matchea; el anti-loop real lo cubre igual MAX_PAGES.
+  let prevFirstId: string | null = null;
   for (let page = 0; ; page++) {
     if (page >= MAX_PAGES) throw new Error(`demasiadas páginas de tasks (proyecto ${projectId})`);
     const url = `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/?index=${index}&range=${RANGE}`;
