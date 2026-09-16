@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -236,6 +236,9 @@ export function DashboardPage() {
     () => filterEntriesByStage(baseFiltered, taskToStage, selectedStageIds),
     [baseFiltered, taskToStage, selectedStageIds],
   )
+  // Clear estable (useCallback) como en Payments: evita pasarle una función nueva por render
+  // al EntryFilterBar. Limpia los filtros de la barra Y el filtro de Stage.
+  const onClearAll = useCallback(() => { clear(); clearStages() }, [clear, clearStages])
   // Client dropdown = maestro de clientes (mismo criterio que Billing/Entries/Projects):
   // lista todos los clientes de la página Clients + el centinela Others si aplica.
   const clientOptions = useMemo(
@@ -541,7 +544,7 @@ export function DashboardPage() {
             dimensions={filterDimensions}
             filters={filters}
             onToggle={toggleValue}
-            onClear={() => { clear(); clearStages() }}
+            onClear={onClearAll}
             isActive={isActive || stageFilterActive}
             title="Dashboard filters"
           >
