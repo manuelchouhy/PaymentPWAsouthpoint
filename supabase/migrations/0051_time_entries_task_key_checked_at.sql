@@ -25,3 +25,10 @@ alter table public.time_entries
 
 comment on column public.time_entries.task_key_checked_at is
   'Negative-cache de sync-task-keys: última vez que se chequeó este task_number contra Zoho sin encontrar key (respuesta definitiva). Evita re-pedir cada corrida los irresolubles; se reintenta al vencer el cooldown. NULL = nunca chequeado.';
+
+-- Índice PARCIAL para la query hot de sync-task-keys (missingTaskNumbers): por proyecto, filas
+-- SIN key filtrando por task_key_checked_at. El parcial (where task_key is null) mantiene el
+-- índice chico —solo las filas aún sin resolver— y cubre el filtro (zoho_project_id, checked_at).
+create index if not exists idx_time_entries_task_key_pending
+  on public.time_entries (zoho_project_id, task_key_checked_at)
+  where task_key is null;

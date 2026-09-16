@@ -299,7 +299,10 @@ Deno.serve(async (req) => {
         const topLevelIds = new Set(tasks.map((t) => t.id).filter(Boolean));
 
         // NEGATIVE-CACHE barato: un task_number que el listado top-level DEVOLVIÓ pero con key
-        // null es "sin key" DEFINITIVO sin gastar un GET → se marca directo (y NO va a by-id).
+        // null se marca directo, sin gastar un GET (y NO va a by-id). TRADEOFF: si Zoho asigna la
+        // key TARDE (o el listado la trajo null por eventual-consistency), queda cacheado; el
+        // cooldown (RECHECK_COOLDOWN_DAYS) lo re-intenta y lo recupera → el falso-cache dura a lo
+        // sumo el cooldown (mientras tanto el front cae al id largo, no rompe).
         const toMark = new Set<string>(missing.filter((tn) => topLevelIds.has(tn) && !keyMap[tn]));
 
         // 2b) SUBTASKS (slice 02): los task_number que NO están en el listado top-level pueden ser
@@ -331,22 +334,9 @@ Deno.serve(async (req) => {
           }
         }
 
-        // NEGATIVE-CACHE: marcar task_key_checked_at=now() en los "sin key" definitivos (top-level
-        // null-key + by-id noKey) para no re-pedirlos hasta que venza el cooldown. Solo toca filas
-        // aún sin key (no pisa una recién resuelta). Transitorios/ambiguos NO están en toMark.
-        if (toMark.size > 0) {
-          const nowIso = new Date().toISOString();
-          const { error: markErr, count } = await supabase
-            .from("time_entries")
-            .update({ task_key_checked_at: nowIso }, { count: "exact" })
-            .eq("zoho_project_id", zpid)
-            .in("task_number", [...toMark])
-            .is("task_key", null);
-          if (markErr) throw new Error(markErr.message);
-          markedNoKey += count ?? 0;
-        }
-
         // 3) UPDATE task_key para los task_number que faltaban y ya tienen key (top-level o subtask).
+        // Va PRIMERO: es el feature real. El negative-cache (marcado) es una optimización y va
+        // después, para que un fallo del marcado nunca aborte la escritura de las keys.
         for (const tn of missing) {
           const key = keyMap[tn];
           // Sin key ni top-level ni subtask (o budget de subtasks agotado este run): queda NULL
@@ -364,6 +354,31 @@ Deno.serve(async (req) => {
           if ((count ?? 0) > 0) {
             resolved++;
             updatedRows += count ?? 0;
+          }
+        }
+
+        // 4) NEGATIVE-CACHE (best-effort, DESPUÉS del paso 3): marcar task_key_checked_at=now() en
+        // los "sin key" definitivos (top-level null-key + by-id noKey) para no re-pedirlos hasta
+        // que venza el cooldown. Solo toca filas aún sin key. Un fallo acá NO pierde las keys ya
+        // escritas (solo se pierde la optimización → esos ids se reintentan la próxima corrida).
+        // Chunked: `.in()` con muchos ids armaría una URL/consulta ilimitada.
+        if (toMark.size > 0) {
+          try {
+            const nowIso = new Date().toISOString();
+            const ids = [...toMark];
+            const CHUNK = 200;
+            for (let i = 0; i < ids.length; i += CHUNK) {
+              const { error: markErr, count } = await supabase
+                .from("time_entries")
+                .update({ task_key_checked_at: nowIso }, { count: "exact" })
+                .eq("zoho_project_id", zpid)
+                .in("task_number", ids.slice(i, i + CHUNK))
+                .is("task_key", null);
+              if (markErr) throw new Error(markErr.message);
+              markedNoKey += count ?? 0;
+            }
+          } catch (e) {
+            errors.push({ projectId: zpid, error: `negative-cache: ${String(e)}` });
           }
         }
         processed++;
