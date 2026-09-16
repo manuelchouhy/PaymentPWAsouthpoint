@@ -23,9 +23,12 @@ import {
   clientFilterOptions,
   OTHER_CLIENT,
 } from '../lib/useEntryFilters'
+import { useStageFilter } from '../lib/useStageFilter'
+import { filterEntriesByStage } from '../lib/stageFilter'
 import { buildClientResolver } from '../lib/clientResolver'
 import { matchesProjectFilter } from '../lib/dashboardScope'
 import { EntryFilterBar } from '../components/EntryFilterBar'
+import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { BILLING_STATUSES } from '../lib/data'
 import { ContractsExpiringWidget } from '../components/dashboard/ContractsExpiringWidget'
 import { SupplierContractsWidget } from '../components/dashboard/SupplierContractsWidget'
@@ -193,6 +196,17 @@ export function DashboardPage() {
     [data, filterData],
   )
   const { filters, toggleValue, clear, isActive } = useEntryFilters()
+  // Filtro de Stage (ver "Filtro de Stage" en CONTEXT.md): dimensión de HORAS (task→stage),
+  // como Contractor/Status → aplica sólo a los widgets de horas, NO a los tiles de plata.
+  const {
+    selectedStageIds,
+    stageFilterActive,
+    toggleStage,
+    clearStages,
+    taskToStage,
+    stageOfEntry,
+    buildOptions,
+  } = useStageFilter({ withMembership: true, projects: filterData.projects, reloadKey })
   const masterNames = useMemo(
     () => new Set(filterData.clients.map((c) => c.clientName).filter(Boolean)),
     [filterData],
@@ -201,9 +215,26 @@ export function DashboardPage() {
     () => buildFilterOptions(enrichedEntries, filters, invoiceByEntryId, masterNames),
     [enrichedEntries, filters, invoiceByEntryId, masterNames],
   )
-  const filteredEntries = useMemo(
+  // Base de horas que pasan los filtros de la barra SIN el filtro de Stage (que se aplica
+  // encima). Alimenta las opciones de Stage (interlazado) y, tras aplicar Stage, los widgets.
+  const baseFiltered = useMemo(
     () => applyEntryFilters(enrichedEntries, filters, invoiceByEntryId, masterNames),
     [enrichedEntries, filters, invoiceByEntryId, masterNames],
+  )
+  // Opciones del filtro de Stage: los stage_id presentes en baseFiltered (interlazado, sin
+  // mirar el propio filtro de stage). buildOptions une los seleccionados fuera de scope.
+  const { optionIds: stageOptionIds, getLabel: stageLabel } = useMemo(() => {
+    const present = new Set()
+    for (const e of baseFiltered) {
+      const sid = stageOfEntry(e)
+      if (sid != null) present.add(String(sid))
+    }
+    return buildOptions([...present])
+  }, [baseFiltered, stageOfEntry, buildOptions])
+  // Horas que consumen los widgets: base + filtro de Stage encima (sin stages elegidos no filtra).
+  const filteredEntries = useMemo(
+    () => filterEntriesByStage(baseFiltered, taskToStage, selectedStageIds),
+    [baseFiltered, taskToStage, selectedStageIds],
   )
   // Client dropdown = maestro de clientes (mismo criterio que Billing/Entries/Projects):
   // lista todos los clientes de la página Clients + el centinela Others si aplica.
@@ -510,13 +541,26 @@ export function DashboardPage() {
             dimensions={filterDimensions}
             filters={filters}
             onToggle={toggleValue}
-            onClear={clear}
-            isActive={isActive}
+            onClear={() => { clear(); clearStages() }}
+            isActive={isActive || stageFilterActive}
             title="Dashboard filters"
-          />
-          {isActive && (
+          >
+            {/* Filtro de Stage, interlazado (opciones desde las horas que pasan los otros
+                filtros). Sólo aparece si el scope tiene stages con horas. Aplica sólo a los
+                widgets de horas. Ver "Filtro de Stage" en CONTEXT.md. */}
+            {stageOptionIds.length > 0 && (
+              <MultiSelectDropdown
+                label="Stage"
+                options={stageOptionIds}
+                selected={[...selectedStageIds]}
+                getLabel={stageLabel}
+                onToggle={toggleStage}
+              />
+            )}
+          </EntryFilterBar>
+          {(isActive || stageFilterActive) && (
             <p className="dash-filter-scope">
-              Client and Project filters scope the whole dashboard. Contractor and Status
+              Client and Project filters scope the whole dashboard. Contractor, Status and Stage
               apply to the hours widgets (the two donuts and hours totals); Contractor also
               filters Supplier Contracts. Supplier Contracts have no client, so the Client
               filter doesn’t affect them.
