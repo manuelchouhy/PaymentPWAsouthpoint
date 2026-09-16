@@ -266,11 +266,12 @@ export function distinctWeekCount(isoDates = []) {
 }
 
 /**
- * Rótulo de un task para la fila de una hora: "<key> · <nombre>" (el código corto de
- * Zoho adelante, ej. "PP1-T1 · Login design"). Feature task-key-display: se muestra el
- * task.key legible, NO el id interno largo. Si no hay key devuelve sólo el nombre (el
- * nombre ya identifica; no se antepone "—" al rótulo compuesto); si no hay nombre, la
- * key sola; si no hay ninguno, "—" (fallback elegido por el usuario).
+ * Rótulo COMPUESTO de un task para una fila: "<key> · <nombre>" (el código corto de Zoho
+ * adelante, ej. "PP1-T1 · Login design"). Feature task-key-display: se muestra el task.key
+ * legible, NO el id interno largo. Si no hay key devuelve sólo el nombre; si no hay nombre,
+ * la key sola; si no hay ninguno, cadena VACÍA (para no ensuciar rótulos combinados, ej.
+ * con el SOW). El fallback "—" NO vive acá: lo aplican las celdas standalone del
+ * identificador (Entries/árbol) con `taskKey || '—'`.
  * @param {?string} task nombre del task
  * @param {?string} taskKey código corto del task (entry.taskKey, ej. "PP1-T1")
  * @returns {string}
@@ -281,8 +282,7 @@ export function formatTaskLabel(task, taskKey) {
   const key = taskKey == null ? '' : String(taskKey)
   if (key && name) return `${key} · ${name}`
   if (key) return key
-  if (name) return name
-  return '—'
+  return name
 }
 
 /**

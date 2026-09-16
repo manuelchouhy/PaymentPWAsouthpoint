@@ -164,9 +164,9 @@ test('formatTaskLabel: sin key con nombre → sólo el nombre (no se antepone "�
   assert.equal(formatTaskLabel('Login design', undefined), 'Login design')
 })
 
-test('formatTaskLabel: sin key ni nombre → "—"', () => {
-  assert.equal(formatTaskLabel('', ''), '—')
-  assert.equal(formatTaskLabel(null, undefined), '—')
+test('formatTaskLabel: sin key ni nombre → cadena vacía (el "—" lo pone la celda standalone)', () => {
+  assert.equal(formatTaskLabel('', ''), '')
+  assert.equal(formatTaskLabel(null, undefined), '')
 })
 
 test('formatTaskLabel: la key se coerciona a string (contrato @returns string)', () => {

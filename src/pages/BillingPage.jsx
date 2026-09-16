@@ -180,7 +180,7 @@ function ReadonlyRows({ rows, showProvider = true, onDetail }) {
                   </span>
                 )}
                 {row.project || '—'}
-                {(row.task || row.taskNumber) && (
+                {formatTaskLabel(row.task, row.taskKey) && (
                   <div className="cell-soft">{formatTaskLabel(row.task, row.taskKey)}</div>
                 )}
               </td>
@@ -1880,13 +1880,19 @@ export function BillingPage() {
                                                   </td>
                                                   <td>
                                                     {row.project || '—'}
-                                                    {(row.task || row.taskNumber || sow) && (
-                                                      <div className="cell-soft">
-                                                        {formatTaskLabel(row.task, row.taskKey)}
-                                                        {(row.task || row.taskNumber) && sow && ' · '}
-                                                        {sow}
-                                                      </div>
-                                                    )}
+                                                    {(() => {
+                                                      // Rótulo compuesto una sola vez: el separador " · " y el
+                                                      // gate del div se calculan sobre ESE rótulo (no sobre
+                                                      // taskNumber), evitando "—" sueltos o separadores rotos.
+                                                      const taskLabel = formatTaskLabel(row.task, row.taskKey)
+                                                      return (taskLabel || sow) ? (
+                                                        <div className="cell-soft">
+                                                          {taskLabel}
+                                                          {taskLabel && sow && ' · '}
+                                                          {sow}
+                                                        </div>
+                                                      ) : null
+                                                    })()}
                                                   </td>
                                                   <td className="cell-mono">
                                                     {row.date ? formatDate(row.date) : '—'}
