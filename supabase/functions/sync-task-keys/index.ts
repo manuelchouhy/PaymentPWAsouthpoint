@@ -4,7 +4,7 @@
 // sync de horas pero como INVOCACIÓN SEPARADA — si falla o tarda, NO afecta el sync de
 // horas ni el botón "Refresh now" (ese aislamiento es el motivo de tenerla aparte).
 //
-// Este slice resuelve tasks TOP-LEVEL. Las subtasks son la slice 02.
+// Resuelve tasks TOP-LEVEL (slice 01) y SUBTASKS (slice 02, por padre con cota run-level).
 //
 // El `key` es INMUTABLE: solo se pide a Zoho para los task_number que todavía no tienen
 // key. Tras la primera corrida, un proyecto ya resuelto cuesta solo una query liviana a
@@ -20,6 +20,10 @@ const ZOHO_V3 = "https://projectsapi.zoho.com/api/v3";
 const ZOHO_V1 = "https://projectsapi.zoho.com/restapi";
 const RANGE = 200; // page size de la Tasks API de Zoho (máx 200)
 const RETRY_DELAYS_MS = [500, 1500, 4000];
+// Cota RUN-LEVEL de fetches de subtasks por corrida (slice 02): acota el fan-out de GETs
+// por-padre para que una corrida no se eternice. La convergencia se completa en corridas
+// sucesivas (el key es inmutable → lo resuelto no se vuelve a pedir).
+const MAX_SUBTASK_FETCHES_PER_RUN = 250;
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -115,6 +119,50 @@ async function fetchTopLevelTasks(portalId: string, projectId: string, token: st
   return out;
 }
 
+// SUBTASKS (slice 02): las subtasks de Zoho NO vienen en el listado top-level; se piden por
+// PADRE vía `/tasks/{parentId}/subtasks/` (shape confirmado: lista bajo `tasks`, item con
+// id_string/key/name; 204 = sin subtasks). Recorre los padres (top-level) resolviendo hasta
+// encontrar todas las `wanted` (los task_number que siguen sin key) o agotar `budget` (cota de
+// fetches por corrida, run-level). Es ADITIVO: un fetch fallido/204 (zohoGet → null) solo
+// significa "nada que agregar de este padre" y no aborta nada (a diferencia de la membresía,
+// que es destructiva). Devuelve las subtasks normalizadas {id,key,name} y cuántos fetches usó.
+async function fetchSubtaskKeys(
+  portalId: string,
+  projectId: string,
+  parentIds: string[],
+  wanted: Set<string>,
+  token: string,
+  budget: number,
+): Promise<{ subtasks: { id: string; key: string | null; name: string }[]; fetches: number }> {
+  const out: { id: string; key: string | null; name: string }[] = [];
+  const remaining = new Set(wanted);
+  let fetches = 0;
+  for (const parentId of parentIds) {
+    if (fetches >= budget || remaining.size === 0) break; // cota por corrida / early-exit
+    fetches++;
+    let index = 1;
+    let prevFirstId: string | null = null;
+    for (let page = 0; page < 100; page++) {
+      const url = `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/${parentId}/subtasks/?index=${index}&range=${RANGE}`;
+      const data = await zohoGet(url, token);
+      // null = 204 (sin subtasks), body vacío, o 4xx/fallo → nada que agregar de este padre.
+      if (data == null) break;
+      const items: any[] = Array.isArray(data.tasks) ? data.tasks : [];
+      const firstId = items.length ? String(items[0].id_string || items[0].id || "") : "";
+      if (items.length > 0 && firstId === prevFirstId) break; // Zoho ignora paginación → cortar
+      prevFirstId = firstId;
+      for (const t of items) {
+        const id = String(t.id_string || t.id || "");
+        out.push({ id, key: t.key ?? null, name: t.name ?? "" });
+        remaining.delete(id);
+      }
+      if (items.length < RANGE) break;
+      index += RANGE;
+    }
+  }
+  return { subtasks: out, fetches };
+}
+
 // task_number distintos de un proyecto que TODAVÍA no tienen key (task_key IS NULL). Un
 // proyecto que devuelve [] no gatilla ningún fetch a Zoho (clave de eficiencia: el key es
 // inmutable, lo ya resuelto no se vuelve a pedir).
@@ -181,8 +229,9 @@ Deno.serve(async (req) => {
       from += rows.length;
     }
 
-    let processed = 0, resolved = 0, updatedRows = 0, skipped = 0;
+    let processed = 0, resolved = 0, updatedRows = 0, skipped = 0, subtaskFetches = 0;
     const errors: { projectId: string; error: string }[] = [];
+    let subtaskBudget = MAX_SUBTASK_FETCHES_PER_RUN; // run-level, compartido entre proyectos
 
     for (const p of projects) {
       const zpid = String(p.zoho_project_id);
@@ -191,19 +240,33 @@ Deno.serve(async (req) => {
         const missing = await missingTaskNumbers(supabase, zpid);
         if (missing.length === 0) { skipped++; continue; }
 
-        // 2) Traer las tasks del proyecto y armar el mapa id→key (solo top-level en slice 01).
+        // 2) Traer las tasks TOP-LEVEL del proyecto y armar el mapa id→key.
         const tasks = await fetchTopLevelTasks(portalId, zpid, token);
         const keyMap = parseTaskKeyMap(tasks);
 
-        // 3) UPDATE task_key SOLO para los task_number que faltaban y tienen key resuelta.
+        // 2b) SUBTASKS (slice 02): los task_number que el top-level NO resolvió pueden ser
+        // subtasks. Se piden por padre (top-level) con cota run-level y early-exit, y su mapa
+        // se FUSIONA en keyMap. Si se agota el budget, lo que quede sin resolver cae al próximo
+        // run (el key es inmutable → converge).
+        const stillMissing = new Set(missing.filter((tn) => !keyMap[tn]));
+        if (stillMissing.size > 0 && subtaskBudget > 0) {
+          const parentIds = tasks.map((t) => t.id).filter(Boolean);
+          const { subtasks, fetches } = await fetchSubtaskKeys(
+            portalId, zpid, parentIds, stillMissing, token, subtaskBudget,
+          );
+          subtaskBudget -= fetches;
+          subtaskFetches += fetches;
+          const subMap = parseTaskKeyMap(subtasks);
+          for (const [id, key] of Object.entries(subMap)) {
+            if (keyMap[id] == null) keyMap[id] = key; // el top-level tiene prioridad
+          }
+        }
+
+        // 3) UPDATE task_key para los task_number que faltaban y ya tienen key (top-level o subtask).
         for (const tn of missing) {
           const key = keyMap[tn];
-          // Sin key top-level: puede ser una SUBTASK (la resuelve la slice 02) → queda NULL
-          // ("—" en el front). LIMITACIÓN CONOCIDA/DIFERIDA: mientras un proyecto tenga
-          // task_numbers de subtask sin resolver, `missing` los sigue devolviendo y este
-          // proyecto re-pide sus tasks cada corrida sin progreso. El negative-cache que lo
-          // evitaría (marcar "ya chequeado") está diferido a la slice 02 por decisión del
-          // PRD; se cierra cuando la 02 resuelve esos task_numbers.
+          // Sin key ni top-level ni subtask (o budget de subtasks agotado este run): queda NULL
+          // → en el front cae al id largo. Se reintenta en la próxima corrida.
           if (!key) continue;
           const { error: updErr, count } = await supabase
             .from("time_entries")
@@ -229,7 +292,7 @@ Deno.serve(async (req) => {
       await sleep(150);
     }
 
-    return json({ ok: true, processed, skipped, resolved, updatedRows, errors });
+    return json({ ok: true, processed, skipped, resolved, updatedRows, subtaskFetches, errors });
   } catch (e) {
     return json({ ok: false, error: String(e) }, 500);
   }
