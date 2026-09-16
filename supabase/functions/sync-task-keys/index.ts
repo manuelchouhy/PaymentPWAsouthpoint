@@ -8,7 +8,8 @@
 //
 // El `key` es INMUTABLE: solo se pide a Zoho para los task_number que todavía no tienen
 // key. Tras la primera corrida, un proyecto ya resuelto cuesta solo una query liviana a
-// la DB (cero llamadas a Zoho). Auth/portal reusados de sync-time-logs. Requiere mig 0050.
+// la DB (cero llamadas a Zoho). Auth/portal reusados de sync-time-logs. Requiere migraciones
+// 0050 (task_key) y 0051 (task_key_checked_at, negative-cache) aplicadas ANTES de deployar.
 //
 // Env: ZOHO_CLIENT_ID/SECRET/REFRESH_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -35,13 +36,12 @@ const SUBTASK_TIME_BUDGET_MS = 120_000; // deadline absoluto de la corrida; deja
 // bajo el wall-clock del edge (~150s). Es un tope de wall-clock, no un presupuesto exclusivo de
 // la fase subtasks: si el pase top-level ya consumió el tiempo, se saltea subtasks (correcto:
 // mejor no arrancar la fase por-id cerca del límite que morir a mitad de un UPDATE).
-// FOLLOW-UP CONOCIDO = SLICE 04 (negative-cache): sin persistir "task_number ya chequeado sin
-// key", un id que NUNCA resuelve (task borrada, o sin key) se re-pide CADA corrida (1 GET) y,
-// como el orden de proyectos es fijo (id asc), puede dejar a proyectos de id alto SIN turno de
-// subtasks de forma permanente (starvation), no solo por-corrida. Impacto atenuado: el front cae
-// al id largo para esas tasks (no rompe). El budget (run+proyecto+tiempo) acota el daño; el fix
-// real es una columna task_key_checked_at con cooldown (requiere migración) → SLICE 04, gated.
-// RECOMENDADO antes de dejar el cron horario a escala. Ver PRD task-key-display.
+// NEGATIVE-CACHE (slice 04): un task_number chequeado sin key (task borrada, o key null en Zoho)
+// se marca task_key_checked_at y no se re-pide hasta que vence este cooldown → corta el churn/
+// starvation. 1 día (cron horario → 1 probe/día en vez de 24 = 24x menos churn) es un balance:
+// corta el churn y a la vez recupera en ~1 día una key asignada TARDE en Zoho (caso común de un
+// feature de display), sin dejar el id largo una semana entera.
+const RECHECK_COOLDOWN_DAYS = 1;
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -106,6 +106,28 @@ async function zohoGet(url: string, token: string): Promise<any | null> {
   return null;
 }
 
+// Variante de zohoGet que DISTINGUE por status (para el negative-cache por-id): reintenta
+// 5xx/429 (transitorios) y, agotados, TIRA; para el resto devuelve { status, data } sin
+// colapsar 404/401/403/200 a un mismo null. Así el caller solo negative-cachea un "sin key"
+// DEFINITIVO (200 con task sin key, o 404), no un 401/403/blip transitorio. Espeja el patrón
+// de sync-stage-task-membership.
+async function zohoGetStatus(url: string, token: string): Promise<{ status: number; data: any | null }> {
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const res = await fetch(url, { headers: { Authorization: "Zoho-oauthtoken " + token } });
+      if (res.status >= 500 || res.status === 429) throw new Error(`Zoho HTTP ${res.status}`);
+      const text = await res.text();
+      let data: any = null;
+      if (text) { try { data = JSON.parse(text); } catch { data = null; } }
+      return { status: res.status, data };
+    } catch (e) {
+      if (attempt < RETRY_DELAYS_MS.length) { await sleep(RETRY_DELAYS_MS[attempt]); continue; }
+      throw e; // 5xx/429 agotados → transitorio (el caller lo cuenta como errored, NO cachea)
+    }
+  }
+  return { status: 0, data: null };
+}
+
 // Tasks TOP-LEVEL de un proyecto (paginado). Normaliza a { id, key, name }. Subtasks NO
 // vienen acá (son la slice 02). Espeja fetchTopLevelTasks de sync-project-stages.
 async function fetchTopLevelTasks(portalId: string, projectId: string, token: string) {
@@ -154,9 +176,15 @@ async function fetchTaskKeysById(
   token: string,
   budget: number,
   deadline: number,
-): Promise<{ resolved: { id: string; key: string | null }[]; fetches: number; errored: number }> {
-  // Solo {id,key}: parseTaskKeyMap ignora `name`, así que no se arrastra dato muerto.
-  const out: { id: string; key: string | null }[] = [];
+): Promise<{ resolved: { id: string; key: string }[]; fetches: number; errored: number; noKey: string[] }> {
+  const resolved: { id: string; key: string }[] = []; // 200 con task Y key
+  // `noKey` = ids con "sin key" DEFINITIVO por-task: 404 (borrada), 200 con task pero key null, o
+  // 200 sin task (tasks:[]/body vacío = la task no existe bajo ese proyecto, como un 404). Estos
+  // se negative-cachean (con cooldown). NO incluye 5xx/429 (transitorios) ni 401/403/400 (auth/
+  // permiso/malformado: pueden ser RUN-WIDE, no per-task → cachearlos suprimiría en masa tasks
+  // válidas si el token falla a mitad de corrida). El cooldown recupera un 200-empty por eventual
+  // consistency dentro de RECHECK_COOLDOWN_DAYS.
+  const noKey: string[] = [];
   let fetches = 0;
   let errored = 0; // GETs que fallaron por transitorio (5xx/429 agotados) → outage visible al caller
   for (const id of missingIds) {
@@ -165,27 +193,33 @@ async function fetchTaskKeysById(
     if (fetches > 0) await sleep(SUBTASK_GET_SPACING_MS); // espaciar los GETs (anti-429)
     fetches++;
     const url = `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/${id}/`;
-    let data: any;
+    let status: number, data: any;
     try {
-      data = await zohoGet(url, token);
+      ({ status, data } = await zohoGetStatus(url, token));
     } catch {
       errored++;
-      continue; // 429/5xx tras reintentos → reintentar en la próxima corrida (additivo)
+      continue; // 429/5xx tras reintentos → transitorio: ni resuelve ni cachea (reintenta)
     }
-    if (data == null) continue; // 4xx/404 (task borrada) o body vacío → nada que resolver
-    // El detalle de una task viene bajo `tasks` (array de 1) según la API; se toleran variantes.
-    const task = Array.isArray(data.tasks) ? data.tasks[0] : (data.task ?? data);
-    // Se mapea por el id PEDIDO (`id`), no por el id_string devuelto: se pidió /tasks/{id}/, así
-    // que la key es de ese id; keyMap[task_number] tiene que encontrarla en el paso 3.
-    if (task) out.push({ id, key: task.key ?? null });
+    if (status === 404) { noKey.push(id); continue; } // task borrada en Zoho → definitivo sin key
+    if (status < 200 || status >= 300) continue; // 401/403/400/etc: ambiguo run-wide → no cachear
+    // 200: extraer la task. `tasks:[]`/body sin task = la task no existe bajo ese proyecto (como
+    // un 404) → definitivo sin key (se cachea; el cooldown recupera un eventual-consistency raro).
+    const task = Array.isArray(data?.tasks)
+      ? (data.tasks.length ? data.tasks[0] : null)
+      : (data?.task ?? data);
+    if (!task) { noKey.push(id); continue; }
+    const key = task.key != null && String(task.key) !== "" ? String(task.key) : null;
+    // Se mapea por el id PEDIDO (`id`), no por el id_string devuelto: se pidió /tasks/{id}/.
+    if (key) resolved.push({ id, key });
+    else noKey.push(id); // 200 con task pero SIN key → definitivo sin key
   }
-  return { resolved: out, fetches, errored };
+  return { resolved, fetches, errored, noKey };
 }
 
-// task_number distintos de un proyecto que TODAVÍA no tienen key (task_key IS NULL). Un
-// proyecto que devuelve [] no gatilla ningún fetch a Zoho (clave de eficiencia: el key es
-// inmutable, lo ya resuelto no se vuelve a pedir).
-async function missingTaskNumbers(supabase: any, zohoProjectId: string): Promise<string[]> {
+// task_number distintos de un proyecto que TODAVÍA no tienen key (task_key IS NULL) Y que no
+// fueron chequeados-sin-key recientemente (negative-cache: task_key_checked_at NULL o más viejo
+// que `cutoffIso`). Un proyecto que devuelve [] no gatilla ningún fetch a Zoho.
+async function missingTaskNumbers(supabase: any, zohoProjectId: string, cutoffIso: string): Promise<string[]> {
   const set = new Set<string>();
   // Paginado explícito: PostgREST corta en 1000 filas por defecto. Un proyecto con miles
   // de time_entries sin key podría dejar afuera task_numbers que solo aparecen pasadas las
@@ -197,6 +231,11 @@ async function missingTaskNumbers(supabase: any, zohoProjectId: string): Promise
       .select("task_number")
       .eq("zoho_project_id", zohoProjectId)
       .is("task_key", null)
+      // Negative-cache: excluir los ya chequeados-sin-key dentro del cooldown. Los NULL (nunca
+      // chequeados) o vencidos vuelven a intentarse (recupera keys asignadas tarde en Zoho).
+      // cutoffIso viene de Date.toISOString() → sin comas/paréntesis, seguro dentro de .or()
+      // (verificado contra el REST). NO cambiar a un formato con comas o offset "+00:00".
+      .or(`task_key_checked_at.is.null,task_key_checked_at.lt.${cutoffIso}`)
       .not("task_number", "is", null)
       .neq("task_number", "")
       // Ordenar por id (PK ÚNICA), no por task_number (no-único): el offset paging necesita
@@ -248,45 +287,52 @@ Deno.serve(async (req) => {
       from += rows.length;
     }
 
-    let processed = 0, resolved = 0, updatedRows = 0, skipped = 0, subtaskFetches = 0;
+    let processed = 0, resolved = 0, updatedRows = 0, skipped = 0, subtaskFetches = 0, markedNoKey = 0, subtaskErrored = 0;
     const errors: { projectId: string; error: string }[] = [];
     let subtaskBudget = MAX_SUBTASK_FETCHES_PER_RUN; // run-level, compartido entre proyectos
     const subtaskDeadline = Date.now() + SUBTASK_TIME_BUDGET_MS; // corte por tiempo de la fase subtasks
+    // Cutoff del negative-cache: los task_number chequeados-sin-key después de este instante
+    // se saltean; los más viejos (o nunca chequeados) se reintentan.
+    const cutoffIso = new Date(Date.now() - RECHECK_COOLDOWN_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
     for (const p of projects) {
       const zpid = String(p.zoho_project_id);
       try {
-        // 1) ¿Qué task_number de este proyecto siguen sin key? Si ninguno, no se pide a Zoho.
-        const missing = await missingTaskNumbers(supabase, zpid);
+        // 1) ¿Qué task_number de este proyecto siguen sin key y no fueron chequeados hace poco?
+        const missing = await missingTaskNumbers(supabase, zpid, cutoffIso);
         if (missing.length === 0) { skipped++; continue; }
 
         // 2) Traer las tasks TOP-LEVEL del proyecto y armar el mapa id→key.
         const tasks = await fetchTopLevelTasks(portalId, zpid, token);
         const keyMap = parseTaskKeyMap(tasks);
+        const topLevelIds = new Set(tasks.map((t) => t.id).filter(Boolean));
 
-        // 2b) SUBTASKS (slice 02): los task_number que el listado top-level NO resolvió pueden ser
+        // NEGATIVE-CACHE barato: un task_number que el listado top-level DEVOLVIÓ pero con key
+        // null se marca directo, sin gastar un GET (y NO va a by-id). El listado es autoritativo
+        // para la key (en el sync real 862 keys salieron del listado y solo 44 necesitaron by-id),
+        // así que null en el listado = sin key. TRADEOFF: si Zoho asignara la key TARDE, el
+        // cooldown (RECHECK_COOLDOWN_DAYS) re-lista y la recupera → falso-cache dura ≤ cooldown
+        // (mientras tanto el front cae al id largo, no rompe).
+        const toMark = new Set<string>(missing.filter((tn) => topLevelIds.has(tn) && !keyMap[tn]));
+
+        // 2b) SUBTASKS (slice 02): los task_number que NO están en el listado top-level pueden ser
         // SUBTASKS (o tasks top-level que la paginación se perdió). Se piden DIRECTO por id
-        // (GET /tasks/{id}/), no barriendo padres. Se fusionan en keyMap antes del UPDATE. Si se
-        // agota el budget/tiempo, lo que quede cae al próximo run (el key es inmutable → converge).
-        const stillMissing = missing.filter((tn) => !keyMap[tn]);
+        // (GET /tasks/{id}/). Se fusionan en keyMap antes del UPDATE; los "sin key" definitivos
+        // (`noKey`) se suman al negative-cache. Si se agota budget/tiempo, lo que quede cae al
+        // próximo run (el key es inmutable → converge).
+        const stillMissing = missing.filter((tn) => !keyMap[tn] && !topLevelIds.has(tn));
         if (stillMissing.length > 0 && subtaskBudget > 0 && Date.now() < subtaskDeadline) {
           try {
             // Cap por proyecto además del run-level: un proyecto no drena todo el budget.
             const projectBudget = Math.min(subtaskBudget, MAX_SUBTASK_FETCHES_PER_PROJECT);
-            const { resolved: subResolved, fetches, errored } = await fetchTaskKeysById(
+            const { resolved: subResolved, fetches, errored, noKey } = await fetchTaskKeysById(
               portalId, zpid, stillMissing, token, projectBudget, subtaskDeadline,
             );
             subtaskBudget -= fetches;
             subtaskFetches += fetches;
-            // Ids resueltos por-id (distintos de los top-level de keyMap) → merge directo.
-            Object.assign(keyMap, parseTaskKeyMap(subResolved));
-            // fetchTaskKeysById nunca tira (per-id continue), así que un outage de Zoho durante
-            // la fase por-id NO llegaría al catch. Se surfacea SOLO si TODOS los GETs fallaron
-            // (outage sistemático), no ante un 429 transitorio suelto (evita falsas alarmas en
-            // el campo `errors` que miran los operadores).
-            if (fetches > 0 && errored === fetches) {
-              errors.push({ projectId: zpid, error: `subtasks: los ${errored} GET(s) fallaron (outage?)` });
-            }
+            subtaskErrored += errored; // acumulado RUN-LEVEL para detectar outage (ver abajo)
+            for (const r of subResolved) keyMap[r.id] = r.key; // ids de subtask (no colisionan)
+            for (const id of noKey) toMark.add(id); // sin key DEFINITIVO por-id → negative-cache
           } catch (e) {
             // Best-effort: un error inesperado no pierde el pase top-level (el UPDATE igual corre).
             errors.push({ projectId: zpid, error: `subtasks: ${String(e)}` });
@@ -294,6 +340,8 @@ Deno.serve(async (req) => {
         }
 
         // 3) UPDATE task_key para los task_number que faltaban y ya tienen key (top-level o subtask).
+        // Va PRIMERO: es el feature real. El negative-cache (marcado) es una optimización y va
+        // después, para que un fallo del marcado nunca aborte la escritura de las keys.
         for (const tn of missing) {
           const key = keyMap[tn];
           // Sin key ni top-level ni subtask (o budget de subtasks agotado este run): queda NULL
@@ -313,6 +361,31 @@ Deno.serve(async (req) => {
             updatedRows += count ?? 0;
           }
         }
+
+        // 4) NEGATIVE-CACHE (best-effort, DESPUÉS del paso 3): marcar task_key_checked_at=now() en
+        // los "sin key" definitivos (top-level null-key + by-id noKey) para no re-pedirlos hasta
+        // que venza el cooldown. Solo toca filas aún sin key. Un fallo acá NO pierde las keys ya
+        // escritas (solo se pierde la optimización → esos ids se reintentan la próxima corrida).
+        // Chunked: `.in()` con muchos ids armaría una URL/consulta ilimitada.
+        if (toMark.size > 0) {
+          try {
+            const nowIso = new Date().toISOString();
+            const ids = [...toMark];
+            const CHUNK = 200;
+            for (let i = 0; i < ids.length; i += CHUNK) {
+              const { error: markErr, count } = await supabase
+                .from("time_entries")
+                .update({ task_key_checked_at: nowIso }, { count: "exact" })
+                .eq("zoho_project_id", zpid)
+                .in("task_number", ids.slice(i, i + CHUNK))
+                .is("task_key", null);
+              if (markErr) throw new Error(markErr.message);
+              markedNoKey += count ?? 0;
+            }
+          } catch (e) {
+            errors.push({ projectId: zpid, error: `negative-cache: ${String(e)}` });
+          }
+        }
         processed++;
       } catch (e) {
         // Un proyecto que falla no tumba la corrida; nunca toca las horas. El key es
@@ -323,7 +396,16 @@ Deno.serve(async (req) => {
       await sleep(150);
     }
 
-    return json({ ok: true, processed, skipped, resolved, updatedRows, subtaskFetches, errors });
+    // Señal de outage RUN-LEVEL de la fase BY-ID (no per-proyecto, que sería ruidoso): si hubo
+    // varios GETs por-id en toda la corrida y TODOS fallaron, es un outage real. Nota: un outage
+    // que tumba también el pase TOP-LEVEL ya se ve por otro lado (cada proyecto tira en
+    // fetchTopLevelTasks → una entrada por proyecto en `errors`); esta alarma cubre el caso
+    // "top-level ok pero by-id todo falla". Con pocos GETs (o algunos ok) no se alarma.
+    if (subtaskFetches >= 3 && subtaskErrored === subtaskFetches) {
+      errors.push({ projectId: "(run)", error: `subtasks: los ${subtaskErrored} GET(s) por-id de la corrida fallaron (outage?)` });
+    }
+
+    return json({ ok: true, processed, skipped, resolved, updatedRows, subtaskFetches, markedNoKey, errors });
   } catch (e) {
     return json({ ok: false, error: String(e) }, 500);
   }
