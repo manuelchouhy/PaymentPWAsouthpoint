@@ -13,6 +13,8 @@ import { projectSows, stageSows } from '../lib/projectSows'
 import { api } from '../lib/api'
 import { buildClientResolver } from '../lib/clientResolver'
 import { useSyncReloadKey } from '../lib/useSyncReload'
+import { useStageFilter } from '../lib/useStageFilter'
+import { projectMatchesStages, projectStageIds } from '../lib/stageFilter'
 import { clientFilterKey, clientFilterOptions, sortedUnique, OTHER_CLIENT } from '../lib/useEntryFilters'
 import { formatDate, formatHours } from '../lib/format'
 import { ContractBadge } from '../components/ContractBadge'
@@ -121,6 +123,19 @@ export function ProjectsPage() {
     () => new Set(clients.map((c) => c.clientName).filter(Boolean)),
     [clients],
   )
+
+  // Filtro de Stage (ver "Filtro de Stage" en CONTEXT.md): en Projects es un filtro de FILA
+  // (proyecto que TIENE el stage; la fila se muestra entera — decisión (A) del PRD). No hace
+  // falta la membresía task→stage (withMembership:false): sólo qué stages tiene cada proyecto,
+  // que sale de stagesByProject (getAllStages).
+  const {
+    selectedStageIds,
+    stageFilterActive,
+    toggleStage,
+    clearStages,
+    stagesByProject,
+    buildOptions,
+  } = useStageFilter({ withMembership: false, projects, reloadKey })
 
   // Aplica el filtro de status (activo/todos) a una lista de proyectos. Un solo
   // lugar para el criterio, así las opciones y la grilla no se desincronizan.
@@ -248,12 +263,25 @@ export function ProjectsPage() {
     return sortByExp(withClient.filter((p) => matchesProject(p)))
   }, [withClient, matchesProject])
 
-  // Grilla final: agrega el filtro de status (sólo activos salvo "Show all
-  // statuses"). Los manuales (sin zohoProjectId) nunca se ocultan (isActiveProject).
-  const visible = useMemo(
-    () => applyStatusScope(filteredIgnoringActive),
-    [filteredIgnoringActive, showAllStatuses],
-  )
+  // Opciones del filtro de Stage: los stage_id de los proyectos que pasan los OTROS filtros
+  // (filteredIgnoringActive), interlazado como el resto. buildOptions une los ya seleccionados
+  // fuera de scope y arma el rótulo con prefijo condicional por proyecto.
+  const { optionIds: stageOptionIds, getLabel: stageLabel } = useMemo(() => {
+    const present = new Set()
+    for (const p of filteredIgnoringActive) {
+      for (const sid of projectStageIds(stagesByProject.get(String(p.id)))) present.add(sid)
+    }
+    return buildOptions([...present])
+  }, [filteredIgnoringActive, stagesByProject, buildOptions])
+
+  // Grilla final: agrega el filtro de status (sólo activos salvo "Show all statuses") y, si hay
+  // stages elegidos, el row-filter de Stage (proyecto que tiene alguno de esos stages; fila
+  // entera). Los manuales (sin zohoProjectId) nunca se ocultan por status (isActiveProject).
+  const visible = useMemo(() => {
+    const scoped = applyStatusScope(filteredIgnoringActive)
+    if (!stageFilterActive) return scoped
+    return scoped.filter((p) => projectMatchesStages(stagesByProject.get(String(p.id)), selectedStageIds))
+  }, [filteredIgnoringActive, showAllStatuses, stageFilterActive, stagesByProject, selectedStageIds])
 
   const toggle = (key, value) =>
     setFilters((prev) => ({
@@ -529,6 +557,17 @@ export function ProjectsPage() {
                 selected={filters.leadDevelopers}
                 onToggle={(v) => toggle('leadDevelopers', v)}
               />
+              {/* Filtro de Stage (row-filter): muestra los proyectos que TIENEN el/los
+                  stage(s) elegido(s). Interlazado; sólo aparece si hay stages en scope. */}
+              {stageOptionIds.length > 0 && (
+                <MultiSelectDropdown
+                  label="Stage"
+                  options={stageOptionIds}
+                  selected={[...selectedStageIds]}
+                  getLabel={stageLabel}
+                  onToggle={toggleStage}
+                />
+              )}
               <div className="filterfield">
                 <span className="filterfield__label">Due from</span>
                 <input
@@ -549,11 +588,11 @@ export function ProjectsPage() {
                   onChange={(e) => setFilters((p) => ({ ...p, expTo: e.target.value }))}
                 />
               </div>
-              {filtersActive ? (
+              {filtersActive || stageFilterActive ? (
                 <button
                   type="button"
                   className="btn btn--ghost filterbar__clear"
-                  onClick={() =>
+                  onClick={() => {
                     setFilters({
                       clients: [],
                       projectNames: [],
@@ -563,7 +602,8 @@ export function ProjectsPage() {
                       expFrom: '',
                       expTo: '',
                     })
-                  }
+                    clearStages()
+                  }}
                 >
                   Clear
                 </button>

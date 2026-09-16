@@ -36,6 +36,39 @@ export function normalizeTaskToStage(taskToStage) {
  * @param {Iterable<(string|number)>} selectedIds stage_id elegidos (Array o Set).
  * @returns {object[]}
  */
+/**
+ * stage_id (string) de los stages de UN proyecto. `projectStages` es la lista que
+ * `getAllStages()` guarda por proyecto (`[{ id, name, budgetHours }]`). Filas sin id se
+ * ignoran. Base del row-filter de Projects.
+ *
+ * @param {Array<{id?:(string|number)}>} projectStages
+ * @returns {string[]}
+ */
+export function projectStageIds(projectStages = []) {
+  const out = []
+  for (const s of Array.isArray(projectStages) ? projectStages : []) {
+    if (s?.id != null && s.id !== '') out.push(String(s.id))
+  }
+  return out
+}
+
+/**
+ * ¿El proyecto TIENE alguno de los stages elegidos? Row-filter de Projects (ver decisión (A)
+ * del PRD): un proyecto pasa si alguno de sus stages está seleccionado; la fila se muestra
+ * entera. Sin stages elegidos NO es responsabilidad de este helper decidir (el caller no lo
+ * llama cuando el filtro está inactivo); con `selectedIds` vacío devuelve false.
+ *
+ * @param {Array<{id?:(string|number)}>} projectStages
+ * @param {Iterable<(string|number)>} selectedIds
+ * @returns {boolean}
+ */
+export function projectMatchesStages(projectStages, selectedIds) {
+  const selected = new Set()
+  for (const id of selectedIds ?? []) selected.add(String(id))
+  if (selected.size === 0) return false
+  return projectStageIds(projectStages).some((sid) => selected.has(sid))
+}
+
 export function filterEntriesByStage(entries = [], taskToStage, selectedIds) {
   const list = Array.isArray(entries) ? entries : []
   const selected = new Set()
