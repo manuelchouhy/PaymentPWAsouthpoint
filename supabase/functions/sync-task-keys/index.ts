@@ -163,16 +163,28 @@ Deno.serve(async (req) => {
     const portalId = String(portals[0].id);
 
     // Solo proyectos linkeados a Zoho (los manuales no tienen tasks de Zoho que resolver).
-    const { data: projects, error: projErr } = await supabase
-      .from("projects")
-      .select("id, zoho_project_id")
-      .not("zoho_project_id", "is", null);
-    if (projErr) throw new Error(projErr.message);
+    // Paginado por la misma razón que missingTaskNumbers: PostgREST corta en 1000 filas por
+    // defecto, así que sin paginar un tenant con +1000 proyectos dejaría la cola sin procesar.
+    const projects: { id: any; zoho_project_id: any }[] = [];
+    for (let from = 0; ; ) {
+      const PAGE = 1000;
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, zoho_project_id")
+        .not("zoho_project_id", "is", null)
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error(error.message);
+      const rows = data ?? [];
+      for (const r of rows) projects.push(r);
+      if (rows.length === 0) break;
+      from += rows.length;
+    }
 
     let processed = 0, resolved = 0, updatedRows = 0, skipped = 0;
     const errors: { projectId: string; error: string }[] = [];
 
-    for (const p of projects ?? []) {
+    for (const p of projects) {
       const zpid = String(p.zoho_project_id);
       try {
         // 1) ¿Qué task_number de este proyecto siguen sin key? Si ninguno, no se pide a Zoho.
