@@ -4,13 +4,15 @@ import { mergeProjectTasks } from './mergeProjectTasks.js'
 
 test('un task registrado toma consumido/id-de-Zoho del logueado con el mismo nombre', () => {
   const registered = [{ id: 7, taskName: 'Backend', stageId: 3, estimatedHours: 40 }]
-  const logged = [{ taskName: 'Backend', taskNumber: '2236', hours: 30, consumedHours: 25 }]
+  const logged = [{ taskName: 'Backend', taskNumber: '2236', taskKey: 'PP1-T3', hours: 30, consumedHours: 25 }]
   const out = mergeProjectTasks(registered, logged)
   assert.equal(out.length, 1)
   assert.deepEqual(out[0], {
     taskId: 7,
     taskName: 'Backend',
     taskNumber: '2236',
+    // código corto de Zoho propagado desde el logueado (feature task-key-display).
+    taskKey: 'PP1-T3',
     stageId: 3,
     estimatedHours: 40,
     hours: 30,

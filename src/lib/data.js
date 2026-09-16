@@ -51,6 +51,7 @@ const MOCK_TIME_ENTRIES = [
     user: 'Florencia Sarasúa',
     client: 'HSS',
     taskNumber: '1001',
+    taskKey: 'HSS-T1',
     project: 'DOMO Development & IT Support',
     task: '5 - HSS Data Modeling ETL DOMO',
     description: 'Modelado de datos para el tablero de operaciones',
@@ -65,6 +66,7 @@ const MOCK_TIME_ENTRIES = [
     user: 'Florencia Sarasúa',
     client: 'HSS',
     taskNumber: '1002',
+    taskKey: 'HSS-T2',
     project: 'DOMO Development & IT Support',
     task: 'HSS Maintenance ETL/Dashboard',
     description: 'Mantenimiento de los flujos ETL nocturnos',
@@ -84,6 +86,7 @@ const MOCK_TIME_ENTRIES = [
     user: 'Florencia Sarasúa',
     client: 'Acme Analytics',
     taskNumber: '2001',
+    taskKey: 'AP1-T1',
     project: 'Analytics Platform',
     task: 'API Integration',
     description: 'Integración con la API de facturación',
@@ -98,6 +101,7 @@ const MOCK_TIME_ENTRIES = [
     user: 'Matías Sarasúa',
     client: 'HSS',
     taskNumber: '1003',
+    taskKey: 'HSS-T3',
     project: 'DOMO Development & IT Support',
     task: '5 - HSS APP Development DOMO',
     description: 'Desarrollo de la vista de aprobaciones',
@@ -112,6 +116,7 @@ const MOCK_TIME_ENTRIES = [
     user: 'Matías Sarasúa',
     client: 'HSS',
     taskNumber: '1003',
+    taskKey: 'HSS-T3',
     project: 'DOMO Development & IT Support',
     task: '5 - HSS APP Development DOMO',
     description: 'Corrección de bugs en el módulo de carga',
@@ -125,6 +130,8 @@ const MOCK_TIME_ENTRIES = [
     id: 'te-06',
     user: 'Matías Sarasúa',
     client: 'Acme Analytics',
+    // taskNumber 2002 SIN taskKey a propósito: ejercita el fallback "—" en el demo (una task
+    // cuyo código corto aún no se resolvió). Los demás mocks sí tienen taskKey.
     taskNumber: '2002',
     project: 'Analytics Platform',
     task: 'Development',
@@ -140,6 +147,7 @@ const MOCK_TIME_ENTRIES = [
     user: 'Diego Pérez',
     client: 'Acme Analytics',
     taskNumber: '2001',
+    taskKey: 'AP1-T1',
     project: 'Analytics Platform',
     task: 'API Integration',
     description: 'Conexión del pipeline de eventos',
@@ -154,6 +162,7 @@ const MOCK_TIME_ENTRIES = [
     user: 'Diego Pérez',
     client: 'Southpoint (interno)',
     taskNumber: '3001',
+    taskKey: 'VE1-T1',
     project: 'Internal Hours Allocation',
     task: 'Development',
     description: 'Refactor del servicio de autenticación',
@@ -168,6 +177,7 @@ const MOCK_TIME_ENTRIES = [
     user: 'Diego Pérez',
     client: 'HSS',
     taskNumber: '1002',
+    taskKey: 'HSS-T2',
     project: 'DOMO Development & IT Support',
     task: 'HSS Maintenance ETL/Dashboard',
     description: 'Soporte y monitoreo de dashboards',
@@ -182,6 +192,7 @@ const MOCK_TIME_ENTRIES = [
     user: 'Lucía Méndez',
     client: 'HSS',
     taskNumber: '1001',
+    taskKey: 'HSS-T1',
     project: 'DOMO Development & IT Support',
     task: '5 - HSS Data Modeling ETL DOMO',
     description: 'Diseño del modelo dimensional de ventas',
@@ -196,6 +207,7 @@ const MOCK_TIME_ENTRIES = [
     user: 'Lucía Méndez',
     client: 'Southpoint (interno)',
     taskNumber: '3001',
+    taskKey: 'VE1-T1',
     project: 'Internal Hours Allocation',
     task: 'Development',
     description: 'Capacitación interna del equipo',
@@ -210,6 +222,7 @@ const MOCK_TIME_ENTRIES = [
     user: 'Lucía Méndez',
     client: 'Acme Analytics',
     taskNumber: '2001',
+    taskKey: 'AP1-T1',
     project: 'Analytics Platform',
     task: 'API Integration',
     description: 'Pruebas de carga sobre los endpoints',
@@ -346,6 +359,10 @@ function rowToEntry(row) {
     client: row.client ?? '',
     task: row.task ?? '',
     taskNumber: row.task_number ?? '',
+    // Código corto legible de Zoho (task.key, ej. "PP1-T1"), lo que se MUESTRA en el front
+    // (feature task-key-display). Vacío hasta que sync-task-keys lo pueble → el front cae a
+    // "—". El taskNumber (id largo) se conserva para joins y tooltips.
+    taskKey: row.task_key ?? '',
     description: row.description ?? '',
     notes: row.notes ?? '',
     date: row.log_date,
@@ -409,7 +426,7 @@ export async function getTimeEntries() {
     // zoho_project_id habilita el join hora→proyecto por id de Zoho en
     // deriveEntriesClient (la columna la crea la migración 0030, ya aplicada).
     .select(
-      'id, zoho_log_id, user_name, project, zoho_project_id, client, task, task_number, description, notes, log_date, hours, status, allocation',
+      'id, zoho_log_id, user_name, project, zoho_project_id, client, task, task_number, task_key, description, notes, log_date, hours, status, allocation',
     )
     .order('log_date', { ascending: false })
 

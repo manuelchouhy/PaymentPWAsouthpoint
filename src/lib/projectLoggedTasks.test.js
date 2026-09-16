@@ -48,6 +48,46 @@ test('lee taskNumber (camelCase, data demo) además de task_number', () => {
   assert.equal(out[0].taskNumber, '42')
 })
 
+test('taskKey: se toma del MISMO row que fija el taskNumber (homónimos no cruzan key↔id)', () => {
+  // El primer row con task_number fija AMBOS (id y key). Un row posterior con otra key no pisa.
+  const out = aggregateLoggedTasks([
+    row({ task: 'T', task_number: null, task_key: 'NO-DEBE-GANAR' }),
+    row({ task: 'T', task_number: '2001', task_key: 'PP1-T1' }),
+    row({ task: 'T', task_number: '9999', task_key: 'PP1-T9' }),
+  ])
+  assert.equal(out[0].taskNumber, '2001')
+  assert.equal(out[0].taskKey, 'PP1-T1')
+})
+
+test('taskKey: null cuando el row que fija el taskNumber aún no tiene key resuelta', () => {
+  const out = aggregateLoggedTasks([row({ task: 'T', task_number: '2001', task_key: '' })])
+  assert.equal(out[0].taskNumber, '2001')
+  assert.equal(out[0].taskKey, null)
+})
+
+test('taskKey: se recupera de otro row del MISMO number aunque el primero no tuviera key (backfill)', () => {
+  const out = aggregateLoggedTasks([
+    row({ task: 'T', task_number: '2001', task_key: '' }), // fija el number, sin key aún
+    row({ task: 'T', task_number: '2001', task_key: 'PP1-T1' }), // mismo number, key resuelta
+  ])
+  assert.equal(out[0].taskNumber, '2001')
+  assert.equal(out[0].taskKey, 'PP1-T1')
+})
+
+test('taskKey: NO se toma de un row con OTRO number (homónimo renombrado no cruza key↔id)', () => {
+  const out = aggregateLoggedTasks([
+    row({ task: 'T', task_number: '2001', task_key: '' }), // number resuelto = 2001, sin key
+    row({ task: 'T', task_number: '9999', task_key: 'PP1-T9' }), // otro number → su key NO aplica
+  ])
+  assert.equal(out[0].taskNumber, '2001')
+  assert.equal(out[0].taskKey, null)
+})
+
+test('taskKey: lee taskKey (camelCase, data demo) además de task_key', () => {
+  const out = aggregateLoggedTasks([{ task: 'T', taskNumber: '7', taskKey: 'PP1-T7', hours: 1, status: 'Approved', allocation: 'bill_to_client' }])
+  assert.equal(out[0].taskKey, 'PP1-T7')
+})
+
 test('descarta entries sin nombre de task', () => {
   const out = aggregateLoggedTasks([row({ task: '' }), row({ task: null }), row({ task: 'Real' })])
   assert.equal(out.length, 1)

@@ -303,7 +303,10 @@ export function EntriesPage() {
       { header: 'User', key: 'user' },
       { header: 'Client', key: 'client' },
       { header: 'Task', key: 'task' },
-      { header: 'Task #', key: 'taskNumber' },
+      { header: 'Task #', key: 'taskKey' },
+      // Id largo de Zoho aparte: el CSV se usa para reconciliar contra Zoho, así que se
+      // conserva la llave estable además del código corto legible.
+      { header: 'Task ID', key: 'taskNumber' },
       { header: 'Date', key: 'date' },
       { header: 'Week', key: 'week' },
       { header: 'Hours', key: 'hours' },
@@ -320,6 +323,7 @@ export function EntriesPage() {
       project: entry.project ?? '',
       client: entry.client ?? '',
       task: entry.task ?? '',
+      taskKey: entry.taskKey ?? '',
       taskNumber: entry.taskNumber ?? '',
       date: entry.date ? formatDate(entry.date) : '',
       week: entry.date ? formatWeek(entry.date) : '',
@@ -726,7 +730,7 @@ export function EntriesPage() {
                             className="col-tasknum cell-mono"
                             title={entry.taskNumber || undefined}
                           >
-                            {entry.taskNumber || '—'}
+                            {entry.taskKey || entry.taskNumber || '—'}
                           </td>
                           <td className="cell-mono">{entry.date ? formatDate(entry.date) : '—'}</td>
                           <td className="cell-mono">{entry.date ? formatWeek(entry.date) : '—'}</td>

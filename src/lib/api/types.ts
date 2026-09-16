@@ -62,6 +62,9 @@ export interface TimeEntry {
   client: string
   task: string
   taskNumber: string
+  /** Código corto legible de Zoho (task.key, ej. "PP1-T1"). '' hasta que sync-task-keys lo
+   * pueble; es lo que se MUESTRA en la columna "Task #". El join sigue siendo por taskNumber. */
+  taskKey: string
   description: string
   notes: string
   date: string // ISO YYYY-MM-DD

@@ -145,38 +145,34 @@ test('el número de semana del mockup: WEEK - 35 · 2026', () => {
   assert.equal(sundayWeekYear('2026-08-23'), 2026)
 })
 
-// --- Rótulo de task (id · nombre) para las filas de hora -----------------------
+// --- Rótulo de task (código corto · nombre) para las filas de hora --------------
+// Feature task-key-display: se muestra el código corto de Zoho (task.key, ej. "PP1-T1"),
+// NO el id largo. Fallback "—" cuando no hay ni key ni nombre.
 
-test('formatTaskLabel: con id y nombre → "#id · nombre"', () => {
-  assert.equal(formatTaskLabel('Login design', '123'), '#123 · Login design')
+test('formatTaskLabel: con key y nombre → "key · nombre"', () => {
+  assert.equal(formatTaskLabel('Login design', 'PP1-T1'), 'PP1-T1 · Login design')
 })
 
-test('formatTaskLabel: el "#" distingue el id cuando el nombre empieza con un número', () => {
-  // Caso de dominio: nombres de task que empiezan con un ordinal (ej. "5 - HSS APP...").
-  assert.equal(formatTaskLabel('5 - HSS APP Development', '1003'), '#1003 · 5 - HSS APP Development')
+test('formatTaskLabel: con key sin nombre → sólo la key', () => {
+  assert.equal(formatTaskLabel('', 'PP1-T1'), 'PP1-T1')
+  assert.equal(formatTaskLabel(null, 'PP1-T1'), 'PP1-T1')
 })
 
-test('formatTaskLabel: sin id (taskNumber vacío) → sólo el nombre (sin #)', () => {
+test('formatTaskLabel: sin key con nombre → sólo el nombre (no se antepone "—")', () => {
   assert.equal(formatTaskLabel('Login design', ''), 'Login design')
   assert.equal(formatTaskLabel('Login design', null), 'Login design')
   assert.equal(formatTaskLabel('Login design', undefined), 'Login design')
 })
 
-test('formatTaskLabel: sin nombre pero con id → "#id"', () => {
-  assert.equal(formatTaskLabel('', '123'), '#123')
-  assert.equal(formatTaskLabel(null, '123'), '#123')
-})
-
-test('formatTaskLabel: sin id ni nombre → cadena vacía', () => {
+test('formatTaskLabel: sin key ni nombre → cadena vacía (el "—" lo pone la celda standalone)', () => {
   assert.equal(formatTaskLabel('', ''), '')
   assert.equal(formatTaskLabel(null, undefined), '')
 })
 
-test('formatTaskLabel: taskNumber numérico devuelve string (contrato @returns string)', () => {
-  const soloId = formatTaskLabel('', 123)
-  assert.equal(soloId, '#123')
-  assert.equal(typeof soloId, 'string')
-  assert.equal(formatTaskLabel('Login design', 123), '#123 · Login design')
+test('formatTaskLabel: la key se coerciona a string (contrato @returns string)', () => {
+  const soloKey = formatTaskLabel('', 'PP1-T1')
+  assert.equal(typeof soloKey, 'string')
+  assert.equal(formatTaskLabel('Login design', 'PP1-T1'), 'PP1-T1 · Login design')
 })
 
 test('formatMonth: acepta YYYY-MM y YYYY-MM-DD → "Mon YYYY"', () => {

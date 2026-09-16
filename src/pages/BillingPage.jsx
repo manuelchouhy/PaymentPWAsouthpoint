@@ -180,9 +180,11 @@ function ReadonlyRows({ rows, showProvider = true, onDetail }) {
                   </span>
                 )}
                 {row.project || '—'}
-                {(row.task || row.taskNumber) && (
-                  <div className="cell-soft">{formatTaskLabel(row.task, row.taskNumber)}</div>
-                )}
+                {(() => {
+                  // Fallback al id largo si la key corta aún no se resolvió.
+                  const taskLabel = formatTaskLabel(row.task, row.taskKey || row.taskNumber)
+                  return taskLabel ? <div className="cell-soft">{taskLabel}</div> : null
+                })()}
               </td>
               <td className="cell-mono">{row.date ? formatDate(row.date) : '—'}</td>
               <td className="col-num cell-mono">{formatHours(row.hours)}</td>
@@ -1028,7 +1030,9 @@ export function BillingPage() {
       { header: 'Project #', key: 'projectNumber' },
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
-      { header: 'Task #', key: 'taskNumber' },
+      { header: 'Task #', key: 'taskKey' },
+      // Id largo de Zoho aparte: el CSV se usa para reconciliar contra Zoho.
+      { header: 'Task ID', key: 'taskNumber' },
       { header: 'Date', key: 'date' },
       { header: 'Reason', key: 'reason' },
       { header: 'Hours', key: 'hours' },
@@ -1053,8 +1057,9 @@ export function BillingPage() {
             project: project.project,
             task: '',
             // Bucket "Sin cliente" agrega por proyecto (varios logs) → sin una fecha
-            // ni un task/id únicos que exportar. Task # explícito en '' por paridad con
-            // los otros push (la columna existe) y porque un id agregado sería engañoso.
+            // ni un task/key únicos que exportar. Task #/ID explícitos en '' por paridad con
+            // los otros push (las columnas existen) y porque un valor agregado sería engañoso.
+            taskKey: '',
             taskNumber: '',
             date: '',
             reason: reasonLabel(project.reason),
@@ -1077,8 +1082,8 @@ export function BillingPage() {
                 projectNumber: row.projectNumber ?? '',
                 project: row.project,
                 task: row.task,
-                // id del task en columna aparte (como el export de Entries): trazable a
-                // Zoho sin romper el matching por nombre de la columna Task.
+                // código corto (lo que muestra la grilla) + id largo aparte (reconciliación Zoho).
+                taskKey: row.taskKey ?? '',
                 taskNumber: row.taskNumber ?? '',
                 date: row.date ? formatDate(row.date) : '',
                 reason: '',
@@ -1115,7 +1120,8 @@ export function BillingPage() {
       { header: 'Project #', key: 'projectNumber' },
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
-      { header: 'Task #', key: 'taskNumber' },
+      { header: 'Task #', key: 'taskKey' },
+      { header: 'Task ID', key: 'taskNumber' },
       { header: 'Date', key: 'date' },
       { header: 'Hours', key: 'hours' },
       { header: 'Entries', key: 'entries' },
@@ -1129,6 +1135,7 @@ export function BillingPage() {
         projectNumber: row.projectNumber ?? '',
         project: row.project || '',
         task: row.task || '',
+        taskKey: row.taskKey ?? '',
         taskNumber: row.taskNumber ?? '',
         date: row.date ? formatDate(row.date) : '',
         hours: row.hours,
@@ -1875,13 +1882,19 @@ export function BillingPage() {
                                                   </td>
                                                   <td>
                                                     {row.project || '—'}
-                                                    {(row.task || row.taskNumber || sow) && (
-                                                      <div className="cell-soft">
-                                                        {formatTaskLabel(row.task, row.taskNumber)}
-                                                        {(row.task || row.taskNumber) && sow && ' · '}
-                                                        {sow}
-                                                      </div>
-                                                    )}
+                                                    {(() => {
+                                                      // Rótulo compuesto una sola vez: el separador " · " y el
+                                                      // gate del div se calculan sobre ESE rótulo (no sobre
+                                                      // taskNumber), evitando "—" sueltos o separadores rotos.
+                                                      const taskLabel = formatTaskLabel(row.task, row.taskKey || row.taskNumber)
+                                                      return (taskLabel || sow) ? (
+                                                        <div className="cell-soft">
+                                                          {taskLabel}
+                                                          {taskLabel && sow && ' · '}
+                                                          {sow}
+                                                        </div>
+                                                      ) : null
+                                                    })()}
                                                   </td>
                                                   <td className="cell-mono">
                                                     {row.date ? formatDate(row.date) : '—'}
