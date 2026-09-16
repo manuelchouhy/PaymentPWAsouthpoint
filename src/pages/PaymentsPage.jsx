@@ -19,7 +19,10 @@ import {
   applyEntryFilters,
   buildFilterOptions,
 } from '../lib/useEntryFilters'
+import { useStageFilter } from '../lib/useStageFilter'
+import { filterEntriesByStage } from '../lib/stageFilter'
 import { EntryFilterBar } from '../components/EntryFilterBar'
+import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
 import { WeekNavigator } from '../components/WeekNavigator'
 import { api } from '../lib/api'
 import { downloadPaymentReceipt } from '../lib/paymentReceipt'
@@ -335,6 +338,17 @@ export function PaymentsPage() {
   // y no vive en useEntryFilters (por eso paymentStatuses aparte). Filtra facturas y
   // grupos overage/sp_internal por las horas que contienen.
   const { filters, toggleValue, setField, clear, isActive } = useEntryFilters()
+  // Filtro de Stage (ver "Filtro de Stage" en CONTEXT.md): página de horas → filtra por
+  // atribución task→stage. Se integra en el matching de horas de Payments (matchingEntryIds).
+  const {
+    selectedStageIds,
+    stageFilterActive,
+    toggleStage,
+    clearStages,
+    taskToStage,
+    stageOfEntry,
+    buildOptions,
+  } = useStageFilter({ withMembership: true, projects, reloadKey })
   const [paymentStatuses, setPaymentStatuses] = useState([])
   const masterNames = useMemo(
     () => new Set(clients.map((c) => c.clientName).filter(Boolean)),
@@ -350,7 +364,7 @@ export function PaymentsPage() {
     filters.contractors.length > 0 ||
     Boolean(filters.weekStart)
 
-  const paymentFilterActive = isActive || paymentStatuses.length > 0
+  const paymentFilterActive = isActive || paymentStatuses.length > 0 || stageFilterActive
   // Callbacks estables + filters memoizado: así el EntryFilterBar (React.memo) no se
   // re-renderiza en renders no relacionados de la página.
   const onFilterToggle = useCallback(
@@ -368,7 +382,8 @@ export function PaymentsPage() {
   const onFilterClear = useCallback(() => {
     clear()
     setPaymentStatuses([])
-  }, [clear])
+    clearStages()
+  }, [clear, clearStages])
   const combinedFilters = useMemo(
     () => ({ ...filters, paymentStatuses }),
     [filters, paymentStatuses],
@@ -535,16 +550,29 @@ export function PaymentsPage() {
     () => buildFilterOptions(displayedEntries, filters, NO_INVOICE_MAP, masterNames),
     [displayedEntries, filters, masterNames],
   )
-  // Ids (string) de las horas MOSTRADAS que pasan el filtro de dimensiones. null = ninguna
-  // dimensión de horas activa → no se filtra por horas.
+  // Base de horas MOSTRADAS que pasan las dimensiones de la barra, SIN el filtro de Stage (que
+  // se aplica encima). Alimenta tanto las opciones de Stage (interlazado) como el matching.
+  const stageBase = useMemo(
+    () => applyEntryFilters(displayedEntries, filters, NO_INVOICE_MAP, masterNames),
+    [displayedEntries, filters, masterNames],
+  )
+  // Opciones del filtro de Stage: los stage_id presentes en stageBase (interlazado, sin mirar
+  // el propio filtro de stage). buildOptions une los ya seleccionados fuera de scope.
+  const { optionIds: stageOptionIds, getLabel: stageLabel } = useMemo(() => {
+    const present = new Set()
+    for (const e of stageBase) {
+      const sid = stageOfEntry(e)
+      if (sid != null) present.add(String(sid))
+    }
+    return buildOptions([...present])
+  }, [stageBase, stageOfEntry, buildOptions])
+  // Ids (string) de las horas MOSTRADAS que pasan el filtro de dimensiones Y el de Stage.
+  // null = ninguna dimensión de horas NI stage activo → no se filtra por horas.
   const matchingEntryIds = useMemo(() => {
-    if (!entryDimsActive) return null
-    return new Set(
-      applyEntryFilters(displayedEntries, filters, NO_INVOICE_MAP, masterNames).map((e) =>
-        String(e.id),
-      ),
-    )
-  }, [entryDimsActive, displayedEntries, filters, masterNames])
+    if (!entryDimsActive && !stageFilterActive) return null
+    const afterStage = filterEntriesByStage(stageBase, taskToStage, selectedStageIds)
+    return new Set(afterStage.map((e) => String(e.id)))
+  }, [entryDimsActive, stageFilterActive, stageBase, taskToStage, selectedStageIds])
   // Una factura/grupo pasa el filtro de horas si tiene al menos una hora mostrada que matchea.
   const passesEntryFilter = (entryIds) =>
     !matchingEntryIds || (entryIds ?? []).some((id) => matchingEntryIds.has(String(id)))
@@ -1041,6 +1069,18 @@ export function PaymentsPage() {
             isActive={paymentFilterActive}
             title="Payment filters"
           >
+            {/* Filtro de Stage, interlazado (opciones desde las horas mostradas que pasan los
+                otros filtros). Sólo aparece si el scope tiene stages con horas. Ver "Filtro de
+                Stage" en CONTEXT.md. */}
+            {stageOptionIds.length > 0 && (
+              <MultiSelectDropdown
+                label="Stage"
+                options={stageOptionIds}
+                selected={[...selectedStageIds]}
+                getLabel={stageLabel}
+                onToggle={toggleStage}
+              />
+            )}
             {weekNav}
           </EntryFilterBar>
 
