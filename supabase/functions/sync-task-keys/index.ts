@@ -103,6 +103,28 @@ async function zohoGet(url: string, token: string): Promise<any | null> {
   return null;
 }
 
+// Variante de zohoGet que DISTINGUE por status (para el negative-cache por-id): reintenta
+// 5xx/429 (transitorios) y, agotados, TIRA; para el resto devuelve { status, data } sin
+// colapsar 404/401/403/200 a un mismo null. Así el caller solo negative-cachea un "sin key"
+// DEFINITIVO (200 con task sin key, o 404), no un 401/403/blip transitorio. Espeja el patrón
+// de sync-stage-task-membership.
+async function zohoGetStatus(url: string, token: string): Promise<{ status: number; data: any | null }> {
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const res = await fetch(url, { headers: { Authorization: "Zoho-oauthtoken " + token } });
+      if (res.status >= 500 || res.status === 429) throw new Error(`Zoho HTTP ${res.status}`);
+      const text = await res.text();
+      let data: any = null;
+      if (text) { try { data = JSON.parse(text); } catch { data = null; } }
+      return { status: res.status, data };
+    } catch (e) {
+      if (attempt < RETRY_DELAYS_MS.length) { await sleep(RETRY_DELAYS_MS[attempt]); continue; }
+      throw e; // 5xx/429 agotados → transitorio (el caller lo cuenta como errored, NO cachea)
+    }
+  }
+  return { status: 0, data: null };
+}
+
 // Tasks TOP-LEVEL de un proyecto (paginado). Normaliza a { id, key, name }. Subtasks NO
 // vienen acá (son la slice 02). Espeja fetchTopLevelTasks de sync-project-stages.
 async function fetchTopLevelTasks(portalId: string, projectId: string, token: string) {
@@ -151,12 +173,12 @@ async function fetchTaskKeysById(
   token: string,
   budget: number,
   deadline: number,
-): Promise<{ resolved: { id: string; key: string | null }[]; fetches: number; errored: number; checked: string[] }> {
-  // Solo {id,key}: parseTaskKeyMap ignora `name`, así que no se arrastra dato muerto.
-  const out: { id: string; key: string | null }[] = [];
-  // `checked` = ids con respuesta DEFINITIVA de Zoho (200 o 4xx/404), NO los que fallaron por
-  // transitorio. El caller marca el negative-cache solo sobre estos (un 429 no debe marcar).
-  const checked: string[] = [];
+): Promise<{ resolved: { id: string; key: string }[]; fetches: number; errored: number; noKey: string[] }> {
+  const resolved: { id: string; key: string }[] = []; // 200 con task Y key
+  // `noKey` = ids con "sin key" DEFINITIVO (200 con task pero key null, o 404 task borrada).
+  // NO incluye transitorios (5xx/429) ni ambiguos (401/403/400, body vacío, tasks:[]) → esos NO
+  // se negative-cachean (se reintentan) para no suprimir 7 días una task válida por un blip.
+  const noKey: string[] = [];
   let fetches = 0;
   let errored = 0; // GETs que fallaron por transitorio (5xx/429 agotados) → outage visible al caller
   for (const id of missingIds) {
@@ -165,22 +187,26 @@ async function fetchTaskKeysById(
     if (fetches > 0) await sleep(SUBTASK_GET_SPACING_MS); // espaciar los GETs (anti-429)
     fetches++;
     const url = `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/${id}/`;
-    let data: any;
+    let status: number, data: any;
     try {
-      data = await zohoGet(url, token);
+      ({ status, data } = await zohoGetStatus(url, token));
     } catch {
       errored++;
-      continue; // 429/5xx tras reintentos → transitorio: NO se marca (reintenta próxima corrida)
+      continue; // 429/5xx tras reintentos → transitorio: ni resuelve ni cachea (reintenta)
     }
-    checked.push(id); // respuesta definitiva (haya key o no) → apto para el negative-cache
-    if (data == null) continue; // 4xx/404 (task borrada) o body vacío → chequeado, sin key
-    // El detalle de una task viene bajo `tasks` (array de 1) según la API; se toleran variantes.
-    const task = Array.isArray(data.tasks) ? data.tasks[0] : (data.task ?? data);
-    // Se mapea por el id PEDIDO (`id`), no por el id_string devuelto: se pidió /tasks/{id}/, así
-    // que la key es de ese id; keyMap[task_number] tiene que encontrarla en el paso 3.
-    if (task) out.push({ id, key: task.key ?? null });
+    if (status === 404) { noKey.push(id); continue; } // task borrada en Zoho → definitivo sin key
+    if (status < 200 || status >= 300) continue; // 401/403/400/etc: ambiguo → no cachear, no resolver
+    // 200: extraer la task. `tasks:[]` (o body sin task) = ambiguo (eventual consistency) → skip.
+    const task = Array.isArray(data?.tasks)
+      ? (data.tasks.length ? data.tasks[0] : null)
+      : (data?.task ?? data);
+    if (!task) continue;
+    const key = task.key != null && String(task.key) !== "" ? String(task.key) : null;
+    // Se mapea por el id PEDIDO (`id`), no por el id_string devuelto: se pidió /tasks/{id}/.
+    if (key) resolved.push({ id, key });
+    else noKey.push(id); // 200 con task pero SIN key → definitivo sin key
   }
-  return { resolved: out, fetches, errored, checked };
+  return { resolved, fetches, errored, noKey };
 }
 
 // task_number distintos de un proyecto que TODAVÍA no tienen key (task_key IS NULL) Y que no
@@ -270,43 +296,32 @@ Deno.serve(async (req) => {
         // 2) Traer las tasks TOP-LEVEL del proyecto y armar el mapa id→key.
         const tasks = await fetchTopLevelTasks(portalId, zpid, token);
         const keyMap = parseTaskKeyMap(tasks);
+        const topLevelIds = new Set(tasks.map((t) => t.id).filter(Boolean));
 
-        // 2b) SUBTASKS (slice 02): los task_number que el listado top-level NO resolvió pueden ser
+        // NEGATIVE-CACHE barato: un task_number que el listado top-level DEVOLVIÓ pero con key
+        // null es "sin key" DEFINITIVO sin gastar un GET → se marca directo (y NO va a by-id).
+        const toMark = new Set<string>(missing.filter((tn) => topLevelIds.has(tn) && !keyMap[tn]));
+
+        // 2b) SUBTASKS (slice 02): los task_number que NO están en el listado top-level pueden ser
         // SUBTASKS (o tasks top-level que la paginación se perdió). Se piden DIRECTO por id
-        // (GET /tasks/{id}/), no barriendo padres. Se fusionan en keyMap antes del UPDATE. Si se
-        // agota el budget/tiempo, lo que quede cae al próximo run (el key es inmutable → converge).
-        const stillMissing = missing.filter((tn) => !keyMap[tn]);
+        // (GET /tasks/{id}/). Se fusionan en keyMap antes del UPDATE; los "sin key" definitivos
+        // (`noKey`) se suman al negative-cache. Si se agota budget/tiempo, lo que quede cae al
+        // próximo run (el key es inmutable → converge).
+        const stillMissing = missing.filter((tn) => !keyMap[tn] && !topLevelIds.has(tn));
         if (stillMissing.length > 0 && subtaskBudget > 0 && Date.now() < subtaskDeadline) {
           try {
             // Cap por proyecto además del run-level: un proyecto no drena todo el budget.
             const projectBudget = Math.min(subtaskBudget, MAX_SUBTASK_FETCHES_PER_PROJECT);
-            const { resolved: subResolved, fetches, errored, checked } = await fetchTaskKeysById(
+            const { resolved: subResolved, fetches, errored, noKey } = await fetchTaskKeysById(
               portalId, zpid, stillMissing, token, projectBudget, subtaskDeadline,
             );
             subtaskBudget -= fetches;
             subtaskFetches += fetches;
-            // Ids resueltos por-id (distintos de los top-level de keyMap) → merge directo.
-            Object.assign(keyMap, parseTaskKeyMap(subResolved));
-            // NEGATIVE-CACHE: los ids con respuesta DEFINITIVA (`checked`) que siguen sin key
-            // (task borrada, o key null en Zoho) se marcan task_key_checked_at=now() para no
-            // re-pedirlos hasta que venza el cooldown. Los transitorios (no están en `checked`)
-            // NO se marcan → reintentan. Solo toca filas aún sin key (no pisa una recién resuelta).
-            const toMark = checked.filter((tn) => !keyMap[tn]);
-            if (toMark.length > 0) {
-              const nowIso = new Date().toISOString();
-              const { error: markErr, count } = await supabase
-                .from("time_entries")
-                .update({ task_key_checked_at: nowIso }, { count: "exact" })
-                .eq("zoho_project_id", zpid)
-                .in("task_number", toMark)
-                .is("task_key", null);
-              if (markErr) throw new Error(markErr.message);
-              markedNoKey += count ?? 0;
-            }
+            for (const r of subResolved) keyMap[r.id] = r.key; // ids de subtask (no colisionan)
+            for (const id of noKey) toMark.add(id); // sin key DEFINITIVO por-id → negative-cache
             // fetchTaskKeysById nunca tira (per-id continue), así que un outage de Zoho durante
             // la fase por-id NO llegaría al catch. Se surfacea SOLO si TODOS los GETs fallaron
-            // (outage sistemático), no ante un 429 transitorio suelto (evita falsas alarmas en
-            // el campo `errors` que miran los operadores).
+            // (outage sistemático), no ante un 429 transitorio suelto (evita falsas alarmas).
             if (fetches > 0 && errored === fetches) {
               errors.push({ projectId: zpid, error: `subtasks: los ${errored} GET(s) fallaron (outage?)` });
             }
@@ -314,6 +329,21 @@ Deno.serve(async (req) => {
             // Best-effort: un error inesperado no pierde el pase top-level (el UPDATE igual corre).
             errors.push({ projectId: zpid, error: `subtasks: ${String(e)}` });
           }
+        }
+
+        // NEGATIVE-CACHE: marcar task_key_checked_at=now() en los "sin key" definitivos (top-level
+        // null-key + by-id noKey) para no re-pedirlos hasta que venza el cooldown. Solo toca filas
+        // aún sin key (no pisa una recién resuelta). Transitorios/ambiguos NO están en toMark.
+        if (toMark.size > 0) {
+          const nowIso = new Date().toISOString();
+          const { error: markErr, count } = await supabase
+            .from("time_entries")
+            .update({ task_key_checked_at: nowIso }, { count: "exact" })
+            .eq("zoho_project_id", zpid)
+            .in("task_number", [...toMark])
+            .is("task_key", null);
+          if (markErr) throw new Error(markErr.message);
+          markedNoKey += count ?? 0;
         }
 
         // 3) UPDATE task_key para los task_number que faltaban y ya tienen key (top-level o subtask).
