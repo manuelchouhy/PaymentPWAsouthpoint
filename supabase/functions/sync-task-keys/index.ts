@@ -28,6 +28,13 @@ const RETRY_DELAYS_MS = [500, 1500, 4000];
 //    los proyectos siguientes (starvation).
 const MAX_SUBTASK_FETCHES_PER_RUN = 250;
 const MAX_SUBTASK_FETCHES_PER_PROJECT = 50;
+const SUBTASK_GET_SPACING_MS = 120; // espaciado entre GETs de subtasks (anti rate-limit 429)
+// FOLLOW-UP CONOCIDO (negative-cache): sin persistir "task_number ya chequeado sin key", un
+// proyecto con task_numbers que NUNCA resuelven (subtask borrada, sin key, o anidada profunda)
+// re-consume su budget de subtasks CADA corrida y, por el orden de proyectos, puede dejar a los
+// de id alto sin turno. El budget (run+proyecto) acota el daño por corrida, pero el fix real es
+// una marca persistente (columna/tabla) para saltearlos con un cooldown. Requiere migración →
+// slice aparte, gated. Ver PRD task-key-display ("negative-cache").
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -124,35 +131,38 @@ async function fetchTopLevelTasks(portalId: string, projectId: string, token: st
 }
 
 // SUBTASKS (slice 02): las subtasks de Zoho NO vienen en el listado top-level; se piden por
-// PADRE vía `/tasks/{parentId}/subtasks/` (shape confirmado: lista bajo `tasks`, item con
-// id_string/key/name; 204 = sin subtasks). Recorre el árbol en BFS empezando por los padres
-// top-level y encolando cada subtask encontrada como nuevo padre → así resuelve también
-// sub-subtasks anidadas. Para cuando resuelve todas las `wanted` (early-exit) o agota `budget`
-// (cota de GETs, no de padres). Es ADITIVO: un 204/vacío/4xx (zohoGet → null) o un fallo
-// transitorio (429/5xx que tira tras reintentos, atrapado acá) solo significa "nada que agregar
-// de este padre", nunca aborta el proyecto (a diferencia de la membresía, que es destructiva).
-// Devuelve las subtasks normalizadas {id,key,name} y cuántos GETs consumió.
+// PADRE vía `/tasks/{parentId}/subtasks/` (shape confirmado por probe: lista bajo `tasks`,
+// item con id_string/key/name; 204 = sin subtasks). Se resuelve UN nivel (subtasks de las
+// top-level), que es lo verificado y el caso común ("Task 2.1" bajo "Stage II").
+//
+// LIMITACIÓN CONOCIDA (follow-up): las sub-subtasks ANIDADAS (subtask de una subtask) NO se
+// resuelven — el front cae al id largo para ellas. No se recursa sobre ids de subtask porque
+// no está verificado que `/subtasks/` los acepte como padre (evita quemar budget en GETs 4xx).
+//
+// Para cuando resuelve todas las `wanted` (early-exit) o agota `budget` (cota de GETs). Es
+// ADITIVO: un 204/vacío/4xx (zohoGet → null) o un fallo transitorio (429/5xx que tira tras
+// reintentos, atrapado acá) solo significa "nada que agregar de este padre", nunca aborta el
+// proyecto (a diferencia de la membresía, que es destructiva). Espacia los GETs para no
+// gatillar el rate-limit de Zoho. Devuelve las subtasks {id,key,name} y cuántos GETs consumió.
 async function fetchSubtaskKeys(
   portalId: string,
   projectId: string,
-  rootParentIds: string[],
+  parentIds: string[],
   wanted: Set<string>,
   token: string,
   budget: number,
 ): Promise<{ subtasks: { id: string; key: string | null; name: string }[]; fetches: number }> {
   const out: { id: string; key: string | null; name: string }[] = [];
   const remaining = new Set(wanted);
-  const visited = new Set<string>();
-  const queue: string[] = [...rootParentIds];
   let fetches = 0;
-  while (queue.length > 0 && fetches < budget && remaining.size > 0) {
-    const parentId = queue.shift()!;
-    if (!parentId || visited.has(parentId)) continue;
-    visited.add(parentId);
+  for (const parentId of parentIds) {
+    if (fetches >= budget || remaining.size === 0) break; // cota de GETs / early-exit
+    if (!parentId) continue;
     let index = 1;
     let prevFirstId: string | null = null;
     for (let page = 0; page < 100; page++) {
-      if (fetches >= budget) break; // el budget cuenta GETs, no padres
+      if (fetches >= budget || remaining.size === 0) break; // early-exit también por página
+      if (fetches > 0) await sleep(SUBTASK_GET_SPACING_MS); // espaciar los GETs (anti-429)
       fetches++;
       const url = `${ZOHO_V1}/portal/${portalId}/projects/${projectId}/tasks/${parentId}/subtasks/?index=${index}&range=${RANGE}`;
       let data: any;
@@ -174,8 +184,6 @@ async function fetchSubtaskKeys(
         // Solo marcar resuelta si REALMENTE tiene key: una subtask sin key sigue faltando (no
         // debe disparar el early-exit como si estuviera resuelta).
         if (t.key != null && String(t.key) !== "") remaining.delete(id);
-        // Encolar la subtask como padre: sus hijas (sub-subtasks) pueden contener wanted.
-        if (!visited.has(id)) queue.push(id);
       }
       if (items.length < RANGE) break;
       index += RANGE;
