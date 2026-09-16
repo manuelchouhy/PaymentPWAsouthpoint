@@ -476,6 +476,8 @@ export default function App() {
       { header: 'Client', key: 'client' },
       { header: 'Task', key: 'task' },
       { header: 'Task #', key: 'taskKey' },
+      // Id largo de Zoho aparte (reconciliación con Zoho); la fila ya lo trae vía {...e}.
+      { header: 'Task ID', key: 'taskNumber' },
       { header: 'Description', key: 'description' },
       { header: 'Billing Status', key: 'billingStatus' },
       { header: 'Zoho Status', key: 'status' },

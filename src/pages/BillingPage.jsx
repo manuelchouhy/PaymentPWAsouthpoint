@@ -1029,6 +1029,8 @@ export function BillingPage() {
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
       { header: 'Task #', key: 'taskKey' },
+      // Id largo de Zoho aparte: el CSV se usa para reconciliar contra Zoho.
+      { header: 'Task ID', key: 'taskNumber' },
       { header: 'Date', key: 'date' },
       { header: 'Reason', key: 'reason' },
       { header: 'Hours', key: 'hours' },
@@ -1053,9 +1055,10 @@ export function BillingPage() {
             project: project.project,
             task: '',
             // Bucket "Sin cliente" agrega por proyecto (varios logs) → sin una fecha
-            // ni un task/key únicos que exportar. Task # explícito en '' por paridad con
-            // los otros push (la columna existe) y porque un key agregado sería engañoso.
+            // ni un task/key únicos que exportar. Task #/ID explícitos en '' por paridad con
+            // los otros push (las columnas existen) y porque un valor agregado sería engañoso.
             taskKey: '',
+            taskNumber: '',
             date: '',
             reason: reasonLabel(project.reason),
             hours: project.hours,
@@ -1077,9 +1080,9 @@ export function BillingPage() {
                 projectNumber: row.projectNumber ?? '',
                 project: row.project,
                 task: row.task,
-                // código corto del task en columna aparte (como el export de Entries), lo
-                // que se muestra en la grilla. El id largo queda en la app para joins.
+                // código corto (lo que muestra la grilla) + id largo aparte (reconciliación Zoho).
                 taskKey: row.taskKey ?? '',
+                taskNumber: row.taskNumber ?? '',
                 date: row.date ? formatDate(row.date) : '',
                 reason: '',
                 hours: row.hours,
@@ -1116,6 +1119,7 @@ export function BillingPage() {
       { header: 'Project', key: 'project' },
       { header: 'Task', key: 'task' },
       { header: 'Task #', key: 'taskKey' },
+      { header: 'Task ID', key: 'taskNumber' },
       { header: 'Date', key: 'date' },
       { header: 'Hours', key: 'hours' },
       { header: 'Entries', key: 'entries' },
@@ -1130,6 +1134,7 @@ export function BillingPage() {
         project: row.project || '',
         task: row.task || '',
         taskKey: row.taskKey ?? '',
+        taskNumber: row.taskNumber ?? '',
         date: row.date ? formatDate(row.date) : '',
         hours: row.hours,
         entries: row.entries.length,

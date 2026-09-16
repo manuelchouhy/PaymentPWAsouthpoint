@@ -304,6 +304,9 @@ export function EntriesPage() {
       { header: 'Client', key: 'client' },
       { header: 'Task', key: 'task' },
       { header: 'Task #', key: 'taskKey' },
+      // Id largo de Zoho aparte: el CSV se usa para reconciliar contra Zoho, así que se
+      // conserva la llave estable además del código corto legible.
+      { header: 'Task ID', key: 'taskNumber' },
       { header: 'Date', key: 'date' },
       { header: 'Week', key: 'week' },
       { header: 'Hours', key: 'hours' },
@@ -321,6 +324,7 @@ export function EntriesPage() {
       client: entry.client ?? '',
       task: entry.task ?? '',
       taskKey: entry.taskKey ?? '',
+      taskNumber: entry.taskNumber ?? '',
       date: entry.date ? formatDate(entry.date) : '',
       week: entry.date ? formatWeek(entry.date) : '',
       hours: Number(entry.hours) || 0,

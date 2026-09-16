@@ -24,15 +24,16 @@ export function aggregateLoggedTasks(rows = []) {
     if (!name) continue
     const acc =
       byTask.get(name) ?? { id: name, taskName: name, taskNumber: null, taskKey: null, hours: 0, consumedHours: 0 }
-    if (acc.taskNumber == null) {
-      const num = row.task_number ?? row.taskNumber
-      if (num != null && String(num) !== '') {
-        acc.taskNumber = String(num)
-        // taskKey (código corto de Zoho) tomado del MISMO row que fija el taskNumber, para
-        // no cruzar key↔id entre tasks homónimas. null si ese row aún no tiene key resuelta.
-        const key = row.task_key ?? row.taskKey
-        acc.taskKey = key != null && String(key) !== '' ? String(key) : null
-      }
+    const num = row.task_number ?? row.taskNumber
+    const numStr = num != null && String(num) !== '' ? String(num) : null
+    if (acc.taskNumber == null && numStr != null) acc.taskNumber = numStr
+    // taskKey (código corto de Zoho): se toma de CUALQUIER row cuyo number coincida con el
+    // taskNumber resuelto. La key es inmutable por number, así que no cruza key↔id con OTRO
+    // number (homónimo renombrado); y recupera la key aunque el primer row del number aún no
+    // la tuviera (ventana de backfill). null hasta que aparezca un row de ese number con key.
+    if (acc.taskKey == null && numStr != null && numStr === acc.taskNumber) {
+      const key = row.task_key ?? row.taskKey
+      if (key != null && String(key) !== '') acc.taskKey = String(key)
     }
     const h = Number(row.hours) || 0
     acc.hours += h // total logged (cualquier estado/allocation)

@@ -40,10 +40,13 @@ export function mergeProjectTasks(registered = [], logged = []) {
         acc.taskKey = toNum(l.taskKey)
       }
     } else {
+      const num = toNum(l.taskNumber)
       loggedByKey.set(key, {
         taskName: l.taskName ?? '',
-        taskNumber: toNum(l.taskNumber),
-        taskKey: toNum(l.taskKey),
+        taskNumber: num,
+        // taskKey atado al taskNumber también en la creación: sin number no se guarda key
+        // (evita un {taskNumber:null, taskKey:set} que un row posterior con number pisaría).
+        taskKey: num != null ? toNum(l.taskKey) : null,
         hours: Number(l.hours) || 0,
         consumedHours: Number(l.consumedHours) || 0,
       })
