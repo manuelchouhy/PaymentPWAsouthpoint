@@ -1160,14 +1160,15 @@ export async function getProjectTasks(projectId) {
  * proyecto" en el resto de la app — NO los task_name del scope del SOW (project_tasks),
  * que casi nunca se cargan y NO tienen FK con las horas. Ver getProjectTaskNames.
  *
- * Se agrupa por nombre de task; `taskNumber` es el id de la task en Zoho (time_entries.
- * task_number, el mismo de la columna "Task #" de Entries). `hours` suma TODAS las horas
- * cargadas (cualquier estado/allocation = "logged"). `consumedHours` es "consumido" con el
- * MISMO criterio que el resto de la app (clientSummaryWeekly): horas Approved de allocation
- * bill_to_client o sp_internal (el overage y lo no facturable NO se cuentan como consumido).
+ * Se agrupa por nombre de task; `taskNumber` es el id largo de la task en Zoho (time_entries.
+ * task_number) y `taskKey` el código corto legible (task.key, ej. "PP1-T1", lo que se MUESTRA
+ * en la columna "Task #"). `hours` suma TODAS las horas cargadas (cualquier estado/allocation
+ * = "logged"). `consumedHours` es "consumido" con el MISMO criterio que el resto de la app
+ * (clientSummaryWeekly): horas Approved de allocation bill_to_client o sp_internal (el overage
+ * y lo no facturable NO se cuentan como consumido).
  *
  * @param {string} projectName
- * @returns {Promise<Array<{ id: string, taskName: string, taskNumber: (string|null), hours: number, consumedHours: number }>>}
+ * @returns {Promise<Array<{ id: string, taskName: string, taskNumber: (string|null), taskKey: (string|null), hours: number, consumedHours: number }>>}
  */
 export async function getProjectLoggedTasks(projectName) {
   if (!projectName) return []
