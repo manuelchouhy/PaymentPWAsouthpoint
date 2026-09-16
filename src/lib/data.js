@@ -130,6 +130,8 @@ const MOCK_TIME_ENTRIES = [
     id: 'te-06',
     user: 'Matías Sarasúa',
     client: 'Acme Analytics',
+    // taskNumber 2002 SIN taskKey a propósito: ejercita el fallback "—" en el demo (una task
+    // cuyo código corto aún no se resolvió). Los demás mocks sí tienen taskKey.
     taskNumber: '2002',
     project: 'Analytics Platform',
     task: 'Development',

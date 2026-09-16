@@ -2,46 +2,44 @@ import { test, expect } from '@playwright/test'
 import { loginAsTestAdmin } from './helpers'
 
 /**
- * Slice 01 (lote WhatsApp 2026-09-10): el task id se muestra junto al nombre.
- * Ambos tests son de SOLO LECTURA (no escriben en la base). La base de test tiene
- * datos reales (entries con task id), así que exigen al menos un id presente en vez
- * de pasar en vacío — un grid vacío o roto debe fallar, no dar falso verde.
+ * Feature task-key-display: la columna "Task #" muestra el CÓDIGO CORTO de Zoho (task.key,
+ * ej. "PP1-T5"), NO el id interno largo. Cuando la key aún no se resolvió se muestra "—".
+ * Ambos tests son de SOLO LECTURA. Regresión clave: nunca debe reaparecer el id largo
+ * (numérico) ni el formato viejo "#id".
  *
- *  - Entries (/entries): columna "Task #" propia (siempre visible) con el id crudo.
- *  - Billing: rótulo del task en la fila de una hora con el formato "#id · nombre".
- *
- * Caveat: son smoke tests contra la base de test viva; asumen que la vista por
- * defecto (primera página de Entries / filtro "ready to bill" de Billing) tiene al
- * menos una fila con task id. El comportamiento fino de formatTaskLabel está cubierto
- * por unit tests (format.test.js); esto sólo confirma el cableado end-to-end.
+ * Caveat: son smoke tests contra la base de test viva; el wiring y el "—" de fallback
+ * requieren la migración 0050 aplicada (columna task_key) y sync-task-keys corrido para
+ * ver keys reales. El comportamiento fino de formatTaskLabel está cubierto por unit tests
+ * (format.test.js); esto sólo confirma el cableado end-to-end y que NO se muestra el id largo.
  */
 
-test.describe('Slice 01 · task id junto al nombre', () => {
-  test('Entries (/entries): columna "Task #" propia con el id del task', async ({ page }) => {
+test.describe('task-key-display · código corto junto al nombre', () => {
+  test('Entries (/entries): columna "Task #" con el código corto (nunca el id largo)', async ({ page }) => {
     await loginAsTestAdmin(page)
     await page.goto('/entries')
 
-    // Header de la columna nueva (siempre visible, no col-optional).
+    // Header de la columna (siempre visible, no col-optional).
     await expect(page.locator('th.col-tasknum')).toHaveText('Task #')
 
-    // La grilla tiene filas en la base de test → la primera celda Task # aparece.
+    // La grilla no está vacía/rota: la primera celda Task # aparece.
     const taskNumCells = page.locator('td.col-tasknum')
     await expect(taskNumCells.first()).toBeVisible()
     const count = await taskNumCells.count()
+    expect(count).toBeGreaterThan(0)
 
-    let withId = 0
+    let withKey = 0
     for (let i = 0; i < count; i++) {
       const text = (await taskNumCells.nth(i).innerText()).trim()
       if (text && text !== '—') {
-        expect(text).toMatch(/^\S+$/) // un id sin espacios
-        withId++
+        expect(text).toMatch(/^\S+$/) // token sin espacios (código corto)
+        expect(text).not.toMatch(/^\d{8,}$/) // REGRESIÓN: no el id largo numérico de Zoho
+        withKey++
       }
     }
-    expect(withId).toBeGreaterThan(0)
-    console.log(`[slice01] Entries: celdas Task # con id: ${withId} de ${count}`)
+    console.log(`[task-key] Entries: celdas Task # con código corto: ${withKey} de ${count}`)
   })
 
-  test('Billing: el rótulo del task usa "#id · nombre" cuando hay task id', async ({ page }) => {
+  test('Billing: el rótulo del task usa "<key> · <nombre>" (código corto, sin "#")', async ({ page }) => {
     await loginAsTestAdmin(page)
     await page.goto('/billing')
 
@@ -50,17 +48,13 @@ test.describe('Slice 01 · task id junto al nombre', () => {
     await expect(labels.first()).toBeVisible()
     const count = await labels.count()
 
-    let checked = 0
+    let withSep = 0
     for (let i = 0; i < count; i++) {
       const text = (await labels.nth(i).innerText()).trim()
-      if (text.startsWith('#')) {
-        // "#<id> · <nombre>" o sólo "#<id>": id sin espacios ni '·', y si hay
-        // separador, un nombre no vacío después.
-        expect(text).toMatch(/^#[^\s·]+( · .+)?$/)
-        checked++
-      }
+      // REGRESIÓN: el formato viejo "#<id> · nombre" ya no se usa.
+      expect(text.startsWith('#')).toBe(false)
+      if (text.includes(' · ')) withSep++
     }
-    expect(checked).toBeGreaterThan(0)
-    console.log(`[slice01] Billing: rótulos con task id: ${checked} de ${count} cell-soft`)
+    console.log(`[task-key] Billing: rótulos "<key> · <nombre>": ${withSep} de ${count} cell-soft`)
   })
 })

@@ -180,9 +180,10 @@ function ReadonlyRows({ rows, showProvider = true, onDetail }) {
                   </span>
                 )}
                 {row.project || '—'}
-                {formatTaskLabel(row.task, row.taskKey) && (
-                  <div className="cell-soft">{formatTaskLabel(row.task, row.taskKey)}</div>
-                )}
+                {(() => {
+                  const taskLabel = formatTaskLabel(row.task, row.taskKey)
+                  return taskLabel ? <div className="cell-soft">{taskLabel}</div> : null
+                })()}
               </td>
               <td className="cell-mono">{row.date ? formatDate(row.date) : '—'}</td>
               <td className="col-num cell-mono">{formatHours(row.hours)}</td>

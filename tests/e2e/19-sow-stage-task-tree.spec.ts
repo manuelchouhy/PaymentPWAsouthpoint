@@ -42,11 +42,14 @@ test('Projects & SOW: el slide "Stages & Tasks" muestra los tasks reales del pro
   expect(await taskRows.count()).toBeGreaterThan(0)
   // Nombre.
   await expect(tasksNode.locator('.stage-tree__task-name').first()).not.toHaveText('')
-  // Id del task (task_number de Zoho, prefijado con #). El span solo aparece si la task
-  // tiene task_number; "Proyecto Prueba" lo tiene, así que debe haber al menos uno.
+  // Código corto de Zoho (task.key, ej. "PP1-T5") o "—" si aún no se resolvió. El span solo
+  // aparece si la task tiene task_number; "Proyecto Prueba" lo tiene, así que hay al menos uno.
+  // Regresión: el texto visible ya NO usa el "#id" viejo (el id largo vive en el tooltip).
   const idSpans = tasksNode.locator('.stage-tree__task-id')
   expect(await idSpans.count()).toBeGreaterThan(0)
-  await expect(idSpans.first()).toContainText('#')
+  const idText = (await idSpans.first().innerText()).trim()
+  expect(idText.length).toBeGreaterThan(0)
+  expect(idText.startsWith('#')).toBe(false)
   // Horas consumidas: "Proyecto Prueba" tiene horas Approved bill_to_client, así que
   // ALGUNA task muestra consumido > 0 (verifica que la agregación de consumido corre, no
   // sólo que existe el texto "consumed"). Se busca en cualquier task, no la primera.
