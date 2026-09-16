@@ -169,7 +169,9 @@ Deno.serve(async (req) => {
     const token = await getAccessToken();
     const portals = await zohoGet(`${ZOHO_V3}/portals`, token);
     const portalId = portals?.[0]?.id;
-    if (!portalId) return json({ ok: false, error: "No portal found" }, 500);
+    // null puede ser transitorio (429/5xx/red agotados en zohoGet) o config real: el mensaje lo
+    // deja ambiguo a propósito para no afirmar "no existe" ante un blip. 503 = reintentable.
+    if (!portalId) return json({ ok: false, error: "Portal no disponible (posible Zoho transitorio; reintentar)" }, 503);
 
     // Candidatas: horas con task_key NULL, con proyecto (sin él no se puede pedir a Zoho ni gastar
     // presupuesto), que NUNCA se intentaron o cuyo último intento ya venció (TTL). Keyset por id +
@@ -217,9 +219,21 @@ Deno.serve(async (req) => {
     };
 
     const nowIso = new Date().toISOString();
+    // Cortes por si Zoho está degradado: un presupuesto de tiempo (para no exceder el wall-clock
+    // del edge function bajo 5xx con backoff) y un circuit-breaker de fallos seguidos (para no
+    // martillar 300 requests contra un 429/5xx sostenido resolviendo nada). Lo que quede se
+    // resuelve en la próxima corrida (nada se marcó checked → no se pierde).
+    const startedAt = Date.now();
+    const MAX_RUN_MS = 100_000;
+    const MAX_CONSEC_FAIL = 8;
+    let consecFail = 0;
     let attempted = 0; // tareas con resultado CONCLUYENTE (se marcó checked_at)
     let keysFound = 0; // de ésas, cuántas tenían key
     for (const { taskId, pid } of need.values()) {
+      if (Date.now() - startedAt > MAX_RUN_MS) {
+        console.log("presupuesto de tiempo agotado; el resto en la próxima corrida");
+        break;
+      }
       let key: string | null = (await topLevelFor(pid))?.get(taskId) ?? null;
       let conclusive = key != null; // si el top-level lo trajo, es concluyente
       if (!conclusive) {
@@ -234,7 +248,16 @@ Deno.serve(async (req) => {
       // Sólo se toca la DB si el resultado fue CONCLUYENTE: se marca checked_at (para no re-pedir)
       // y task_key si hay key. Un fallo transitorio NO marca nada → se reintenta en la próxima
       // corrida. Filtro por (task_number, proyecto) y task_key IS NULL (no pisa un valor bueno).
-      if (!conclusive) continue;
+      if (!conclusive) {
+        // Muchos inconcluyentes seguidos = Zoho degradado (429/5xx): cortar y reintentar luego,
+        // en vez de disparar los 300 requests igual.
+        if (++consecFail >= MAX_CONSEC_FAIL) {
+          console.log(`${MAX_CONSEC_FAIL} fallos seguidos resolviendo keys (¿Zoho 429/5xx?); se corta y reintenta en la próxima corrida`);
+          break;
+        }
+        continue;
+      }
+      consecFail = 0;
       const patch: Record<string, unknown> = { task_key_checked_at: nowIso };
       if (key) patch.task_key = key;
       const { error } = await supabase
