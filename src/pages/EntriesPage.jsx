@@ -5,6 +5,8 @@ import { AlertTriangle, Info } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatDate, formatHours, formatWeek } from '../lib/format'
 import { useEntryFilters, applyEntryFilters, buildFilterOptions, clientFilterOptions, OTHER_CLIENT, UNALLOCATED, ALLOCATED } from '../lib/useEntryFilters'
+import { useStageFilter } from '../lib/useStageFilter'
+import { filterEntriesByStage } from '../lib/stageFilter'
 import { deriveEntriesClient } from '../lib/entryClient'
 import { invoiceByEntryId as buildInvoiceByEntryId } from '../lib/invoiceIndex'
 import { isEntryFrozen, entryFrozenReason } from '../lib/entryFreeze'
@@ -112,6 +114,9 @@ export function EntriesPage() {
   // liste TODOS los clientes, no sólo los que hoy tienen horas resueltas.
   const [clients, setClients] = useState([])
   const [invoices, setInvoices] = useState([])
+  // Proyectos: se traen para derivar el cliente de cada hora, y se guardan además para
+  // resolver projectId→projectNumber en el rótulo del Filtro de Stage.
+  const [projects, setProjects] = useState([])
   // Pagos: para congelar las horas de overage ya pagadas (entryFreeze).
   const [payments, setPayments] = useState([])
   const [status, setStatus] = useState('loading')
@@ -161,6 +166,18 @@ export function EntriesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const { filters, toggleValue, setField, clear, isActive } = useEntryFilters(initialFilters)
+  // Filtro de Stage (ver "Filtro de Stage" en CONTEXT.md): página de horas → filtra las
+  // horas por atribución task→stage, así que carga la membresía. Se aplica encima de los
+  // otros filtros y sus opciones se interlazan con ellos.
+  const {
+    selectedStageIds,
+    stageFilterActive,
+    toggleStage,
+    clearStages,
+    taskToStage,
+    stageOfEntry,
+    buildOptions,
+  } = useStageFilter({ withMembership: true, projects, reloadKey })
 
   useEffect(() => {
     let cancelled = false
@@ -180,6 +197,7 @@ export function EntriesPage() {
         if (cancelled) return
         setEntries(deriveEntriesClient(entryRows, projectRows, clientRows))
         setClients(clientRows)
+        setProjects(projectRows)
         setInvoices(invoiceRows)
         setPayments(paymentRows)
         // Los datos se releyeron: una selección armada sobre la tanda anterior
@@ -229,8 +247,28 @@ export function EntriesPage() {
     [clients, options.clients],
   )
 
+  // Base compartida: horas que pasan los filtros de la barra SIN el filtro de Stage (que se
+  // aplica encima). La consumen tanto las opciones de Stage (interlazado) como `visible`.
+  const baseFiltered = useMemo(
+    () => applyEntryFilters(entries, filters, invoiceByEntryId, masterNames),
+    [entries, filters, invoiceByEntryId, masterNames],
+  )
+
+  // Opciones del filtro de Stage: los stage_id que aparecen en las horas que pasan los OTROS
+  // filtros (baseFiltered), interlazado como el resto. buildOptions une los ya seleccionados
+  // aunque el cruce los deje fuera de scope.
+  const { optionIds: stageOptionIds, getLabel: stageLabel } = useMemo(() => {
+    const present = new Set()
+    for (const e of baseFiltered) {
+      const sid = stageOfEntry(e)
+      if (sid != null) present.add(String(sid))
+    }
+    return buildOptions([...present])
+  }, [baseFiltered, stageOfEntry, buildOptions])
+
   const visible = useMemo(() => {
-    const filtered = applyEntryFilters(entries, filters, invoiceByEntryId, masterNames)
+    // El filtro de Stage se aplica ENCIMA de la base: sin stages elegidos no filtra.
+    const filtered = filterEntriesByStage(baseFiltered, taskToStage, selectedStageIds)
     // Las sin clasificar primero SIEMPRE — son las que hay que triagear, y si
     // se mezclaran con las ya clasificadas se perderían de vista. Dentro de
     // cada grupo, la más reciente primero.
@@ -240,7 +278,7 @@ export function EntriesPage() {
       if (aPending !== bPending) return aPending ? -1 : 1
       return (b.date ?? '').localeCompare(a.date ?? '')
     })
-  }, [entries, filters, invoiceByEntryId, masterNames])
+  }, [baseFiltered, taskToStage, selectedStageIds])
 
   // Al cambiar los filtros se vuelve a la primera tanda: mantener el "ver más"
   // acumulado de la búsqueda anterior mostraría un conteo que no se pidió.
@@ -255,7 +293,7 @@ export function EntriesPage() {
     // guardaron.
     setApplyError('')
     setApplyNotice(null)
-  }, [filters])
+  }, [filters, selectedStageIds])
 
   const page = visible.slice(0, visibleCount)
   const unallocatedCount = visible.filter((e) => e.allocation == null).length
@@ -546,12 +584,28 @@ export function EntriesPage() {
                 onToggle={(v) => toggleValue('allocations', v)}
                 getLabel={allocationLabel}
               />
+              {/* Filtro de Stage, interlazado (sus opciones salen de las horas que pasan los
+                  otros filtros). Sólo aparece si el scope tiene stages con horas. Ver
+                  "Filtro de Stage" en CONTEXT.md. */}
+              {stageOptionIds.length > 0 && (
+                <MultiSelectDropdown
+                  label="Stage"
+                  options={stageOptionIds}
+                  selected={[...selectedStageIds]}
+                  getLabel={stageLabel}
+                  onToggle={toggleStage}
+                />
+              )}
               {/* Navegador de semana year-aware: filtra por la semana física
                   exacta (filters.weekStart), a diferencia del input numérico
                   year-blind que usa Payments. Ver término "Week" en CONTEXT.md. */}
               <WeekNavigator value={filters.weekStart} onChange={(v) => setField('weekStart', v)} />
-              {isActive && (
-                <button type="button" className="btn btn--ghost filterbar__clear" onClick={clear}>
+              {(isActive || stageFilterActive) && (
+                <button
+                  type="button"
+                  className="btn btn--ghost filterbar__clear"
+                  onClick={() => { clear(); clearStages() }}
+                >
                   Clear
                 </button>
               )}

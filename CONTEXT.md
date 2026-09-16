@@ -137,6 +137,23 @@ Task (queda en `time_entries.task_number`) → se usa para **asociar/anclar** (e
 `zoho_task_id` del Stage). La **key legible** (`task.key`, ej. `PP1-T5`) es la que se
 **muestra** en el front. No se mezclan: se ancla por id largo, se muestra la key.
 
+**Filtro de Stage**:
+Filtro con rótulo "Stage" presente en todas las páginas que miran horas o
+proyectos. Como un Stage es interno a UN proyecto, sus **opciones se interlazan**
+con los otros filtros (sólo aparecen los Stages en scope) y se **des-ambiguan**
+prefijando con el proyecto (`PP1 · Stage 1`) **salvo** que el scope ya sea un solo
+proyecto, donde el prefijo se cae. Tiene **dos semánticas** a propósito, según lo
+que sea una fila en cada página:
+- **Páginas de horas** (Entries, Payments, Dashboard, Billing) y **Projects**:
+  **acota qué se ve**, no cambia los números. En las de horas deja las horas cuya
+  Task pertenece al Stage; en Projects deja los **proyectos que tienen** ese Stage
+  (la fila-proyecto se muestra entera).
+- **Client Summary**: además de acotar, **recalcula la fila al Stage** — Budget,
+  Consumed, Remaining, la grilla semanal y los gráficos pasan a reflejar sólo ese
+  Stage (Budget del Stage, no del proyecto entero). Ver ADR 0004.
+_Avoid_: pensar que el filtro de Stage siempre "sólo acota"; en Client Summary
+reescribe los números de la fila.
+
 **Mockup** (`.scratch/pantallas-nuevas-mockup.html`):
 Fuente de verdad **solo del diseño** (colores, tokens, layout, tipografía). No es
 fuente de verdad de comportamiento ni de semántica de dominio.
