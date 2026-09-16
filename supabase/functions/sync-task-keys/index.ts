@@ -38,8 +38,10 @@ const SUBTASK_TIME_BUDGET_MS = 120_000; // deadline absoluto de la corrida; deja
 // mejor no arrancar la fase por-id cerca del límite que morir a mitad de un UPDATE).
 // NEGATIVE-CACHE (slice 04): un task_number chequeado sin key (task borrada, o key null en Zoho)
 // se marca task_key_checked_at y no se re-pide hasta que vence este cooldown → corta el churn/
-// starvation. El cooldown deja recuperar keys asignadas TARDE en Zoho (se reintenta al vencer).
-const RECHECK_COOLDOWN_DAYS = 7;
+// starvation. 1 día (cron horario → 1 probe/día en vez de 24 = 24x menos churn) es un balance:
+// corta el churn y a la vez recupera en ~1 día una key asignada TARDE en Zoho (caso común de un
+// feature de display), sin dejar el id largo una semana entera.
+const RECHECK_COOLDOWN_DAYS = 1;
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -394,9 +396,11 @@ Deno.serve(async (req) => {
       await sleep(150);
     }
 
-    // Señal de outage RUN-LEVEL (no per-proyecto, que sería ruidoso): si hubo varios GETs por-id
-    // en toda la corrida y TODOS fallaron por transitorio, es un outage/token vencido real. Con
-    // pocos GETs (o algunos ok) no se alarma → sin falsas alarmas por un 429 suelto.
+    // Señal de outage RUN-LEVEL de la fase BY-ID (no per-proyecto, que sería ruidoso): si hubo
+    // varios GETs por-id en toda la corrida y TODOS fallaron, es un outage real. Nota: un outage
+    // que tumba también el pase TOP-LEVEL ya se ve por otro lado (cada proyecto tira en
+    // fetchTopLevelTasks → una entrada por proyecto en `errors`); esta alarma cubre el caso
+    // "top-level ok pero by-id todo falla". Con pocos GETs (o algunos ok) no se alarma.
     if (subtaskFetches >= 3 && subtaskErrored === subtaskFetches) {
       errors.push({ projectId: "(run)", error: `subtasks: los ${subtaskErrored} GET(s) por-id de la corrida fallaron (outage?)` });
     }
