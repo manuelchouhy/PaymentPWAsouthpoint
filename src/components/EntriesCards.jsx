@@ -105,7 +105,8 @@ export function EntriesCards({
                   {entry.taskNumber && (
                     <span className="card__meta-item" title={entry.taskNumber || undefined}>
                       <span className="card__meta-label">Task #</span>
-                      {entry.taskKey || entry.taskNumber || '—'}
+                      {/* Dentro del guard entry.taskNumber ya es truthy → el "—" no aplica acá. */}
+                      {entry.taskKey || entry.taskNumber}
                     </span>
                   )}
                   <span className="card__meta-item">
