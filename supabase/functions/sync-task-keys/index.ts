@@ -31,7 +31,10 @@ const RETRY_DELAYS_MS = [500, 1500, 4000];
 const MAX_SUBTASK_FETCHES_PER_RUN = 250;
 const MAX_SUBTASK_FETCHES_PER_PROJECT = 50;
 const SUBTASK_GET_SPACING_MS = 120; // espaciado entre GETs por-id (anti rate-limit 429)
-const SUBTASK_TIME_BUDGET_MS = 90_000; // deja margen bajo el wall-clock del edge (~150s)
+const SUBTASK_TIME_BUDGET_MS = 120_000; // deadline absoluto de la corrida; deja ~30s de margen
+// bajo el wall-clock del edge (~150s). Es un tope de wall-clock, no un presupuesto exclusivo de
+// la fase subtasks: si el pase top-level ya consumió el tiempo, se saltea subtasks (correcto:
+// mejor no arrancar la fase por-id cerca del límite que morir a mitad de un UPDATE).
 // FOLLOW-UP CONOCIDO = SLICE 04 (negative-cache): sin persistir "task_number ya chequeado sin
 // key", un id que NUNCA resuelve (task borrada, o sin key) se re-pide CADA corrida (1 GET) y,
 // como el orden de proyectos es fijo (id asc), puede dejar a proyectos de id alto SIN turno de
@@ -151,8 +154,9 @@ async function fetchTaskKeysById(
   token: string,
   budget: number,
   deadline: number,
-): Promise<{ resolved: { id: string; key: string | null; name: string }[]; fetches: number; errored: number }> {
-  const out: { id: string; key: string | null; name: string }[] = [];
+): Promise<{ resolved: { id: string; key: string | null }[]; fetches: number; errored: number }> {
+  // Solo {id,key}: parseTaskKeyMap ignora `name`, así que no se arrastra dato muerto.
+  const out: { id: string; key: string | null }[] = [];
   let fetches = 0;
   let errored = 0; // GETs que fallaron por transitorio (5xx/429 agotados) → outage visible al caller
   for (const id of missingIds) {
@@ -173,7 +177,7 @@ async function fetchTaskKeysById(
     const task = Array.isArray(data.tasks) ? data.tasks[0] : (data.task ?? data);
     // Se mapea por el id PEDIDO (`id`), no por el id_string devuelto: se pidió /tasks/{id}/, así
     // que la key es de ese id; keyMap[task_number] tiene que encontrarla en el paso 3.
-    if (task) out.push({ id, key: task.key ?? null, name: task.name ?? "" });
+    if (task) out.push({ id, key: task.key ?? null });
   }
   return { resolved: out, fetches, errored };
 }
@@ -260,13 +264,10 @@ Deno.serve(async (req) => {
         const tasks = await fetchTopLevelTasks(portalId, zpid, token);
         const keyMap = parseTaskKeyMap(tasks);
 
-        // 2b) SUBTASKS (slice 02): los task_number que el top-level NO resolvió pueden ser
-        // subtasks. Se piden por padre (top-level) con cota run-level y early-exit, y su mapa
-        // se FUSIONA en keyMap. Si se agota el budget, lo que quede sin resolver cae al próximo
-        // run (el key es inmutable → converge).
-        // Los task_number que el listado top-level NO resolvió pueden ser SUBTASKS (o tasks
-        // top-level que la paginación se perdió). Se piden DIRECTO por id (GET /tasks/{id}/),
-        // no barriendo padres. Se fusionan en keyMap antes del UPDATE.
+        // 2b) SUBTASKS (slice 02): los task_number que el listado top-level NO resolvió pueden ser
+        // SUBTASKS (o tasks top-level que la paginación se perdió). Se piden DIRECTO por id
+        // (GET /tasks/{id}/), no barriendo padres. Se fusionan en keyMap antes del UPDATE. Si se
+        // agota el budget/tiempo, lo que quede cae al próximo run (el key es inmutable → converge).
         const stillMissing = missing.filter((tn) => !keyMap[tn]);
         if (stillMissing.length > 0 && subtaskBudget > 0 && Date.now() < subtaskDeadline) {
           try {
@@ -280,9 +281,12 @@ Deno.serve(async (req) => {
             // Ids resueltos por-id (distintos de los top-level de keyMap) → merge directo.
             Object.assign(keyMap, parseTaskKeyMap(subResolved));
             // fetchTaskKeysById nunca tira (per-id continue), así que un outage de Zoho durante
-            // la fase por-id NO llegaría al catch. Se surfacea explícito para que un fallo
-            // sistemático (todas las tasks fallaron) sea visible en la respuesta, no invisible.
-            if (errored > 0) errors.push({ projectId: zpid, error: `subtasks: ${errored} GET(s) fallaron` });
+            // la fase por-id NO llegaría al catch. Se surfacea SOLO si TODOS los GETs fallaron
+            // (outage sistemático), no ante un 429 transitorio suelto (evita falsas alarmas en
+            // el campo `errors` que miran los operadores).
+            if (fetches > 0 && errored === fetches) {
+              errors.push({ projectId: zpid, error: `subtasks: los ${errored} GET(s) fallaron (outage?)` });
+            }
           } catch (e) {
             // Best-effort: un error inesperado no pierde el pase top-level (el UPDATE igual corre).
             errors.push({ projectId: zpid, error: `subtasks: ${String(e)}` });
