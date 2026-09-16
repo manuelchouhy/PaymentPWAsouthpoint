@@ -28,15 +28,29 @@ export function buildStageOptions({ presentStageIds = [], selectedIds = [], cata
     const k = String(id)
     if (catalog.has(k)) ids.add(k)
   }
-  const optionIds = [...ids].sort((a, b) => coll(nameOf(catalog, a), nameOf(catalog, b)))
+  const all = [...ids]
 
-  // ¿Las opciones abarcan más de un proyecto? Decide el prefijo del rótulo.
+  // ¿Las opciones abarcan más de un proyecto? Decide el prefijo del rótulo Y el orden.
   const projectIds = new Set()
-  for (const sid of optionIds) {
+  for (const sid of all) {
     const pid = catalog.get(sid)?.projectId
     if (pid != null) projectIds.add(String(pid))
   }
   const multiProject = projectIds.size > 1
+
+  const prefixOf = (sid) => {
+    const e = catalog.get(String(sid))
+    return e?.projectNumber ?? e?.projectId ?? ''
+  }
+  // En modo multi-proyecto el orden agrupa por proyecto (mismo criterio que el prefijo del
+  // rótulo) y desempata por nombre; si no, sólo por nombre.
+  const optionIds = all.sort((a, b) => {
+    if (multiProject) {
+      const byProject = coll(prefixOf(a), prefixOf(b))
+      if (byProject !== 0) return byProject
+    }
+    return coll(nameOf(catalog, a), nameOf(catalog, b))
+  })
 
   const getLabel = (sid) => {
     const entry = catalog.get(String(sid))

@@ -31,6 +31,10 @@ test('multi-stage une las horas de todos los stages elegidos', () => {
   assert.deepEqual(out.map((e) => e.id), [1, 3])
 })
 
+test('sin stages elegidos, un entries no-array devuelve [] (contrato: siempre array)', () => {
+  assert.deepEqual(filterEntriesByStage(null, {}, []), [])
+})
+
 test('taskNumber numérico y selectedIds string se matchean igual', () => {
   const entries = [{ id: 1, taskNumber: 1003 }, { id: 2, taskNumber: 1004 }]
   const taskToStage = { '1003': 7 } // stageId numérico en el mapa

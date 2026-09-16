@@ -177,7 +177,7 @@ export function EntriesPage() {
     taskToStage,
     stageOfEntry,
     buildOptions,
-  } = useStageFilter({ withMembership: true, projects })
+  } = useStageFilter({ withMembership: true, projects, reloadKey })
 
   useEffect(() => {
     let cancelled = false

@@ -35,6 +35,16 @@ test('rótulo con prefijo Project# cuando las opciones abarcan >1 proyecto', () 
   assert.equal(getLabel('S2'), 'PP2 · Stage 1')
 })
 
+test('en multi-proyecto el orden agrupa por proyecto, no por nombre pelado', () => {
+  const catalog = cat([
+    ['S1', 'Beta', 'p1', 'PP1'],
+    ['S2', 'Alpha', 'p2', 'PP2'],
+  ])
+  // Por nombre pelado sería [S2 'Alpha', S1 'Beta']; agrupado por proyecto es [PP1·Beta, PP2·Alpha].
+  const { optionIds } = buildStageOptions({ presentStageIds: ['S1', 'S2'], selectedIds: [], catalog })
+  assert.deepEqual(optionIds, ['S1', 'S2'])
+})
+
 test('rótulo sin prefijo cuando todas las opciones caen en un solo proyecto', () => {
   const catalog = cat([
     ['S1', 'Stage 1', 'p1', 'PP1'],

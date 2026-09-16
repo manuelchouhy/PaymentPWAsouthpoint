@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from './api'
 import { buildTaskToStage } from './stageHourAttribution'
 import { buildStageOptions } from './stageFilterOptions'
+import { normalizeTaskToStage } from './stageFilter'
 
 /**
  * Hook reusable del Filtro de Stage (ver "Filtro de Stage" en CONTEXT.md). Centraliza lo
@@ -15,13 +16,17 @@ import { buildStageOptions } from './stageFilterOptions'
  * Cada carga tiene su propio catch: un fallo deja la página SIN filtro de stage (catálogo
  * vacío → el dropdown no se muestra), nunca tira la pantalla — mismo criterio que Billing.
  *
- * @param {{ withMembership?: boolean, projects?: Array<{id:(string|number), projectNumber?:string}> }} [opts]
+ * @param {{ withMembership?: boolean, projects?: Array<{id:(string|number), projectNumber?:string}>,
+ *           reloadKey?: * }} [opts]
  *   - withMembership: si true, carga la membresía task→stage (páginas de horas y Client
  *     Summary). Projects no la necesita (filtra por fila de proyecto) → false.
  *   - projects: para resolver projectId→projectNumber en el rótulo. Sin esto, el prefijo cae
  *     al projectId.
+ *   - reloadKey: cambia cuando la página recarga tras un sync (useSyncReload). Al cambiar, el
+ *     hook re-trae stages y membresía, para no quedar con un mapa task→stage viejo que filtraría
+ *     de más las horas recién sincronizadas (mismo criterio que el resto de los datos de la página).
  */
-export function useStageFilter({ withMembership = false, projects = [] } = {}) {
+export function useStageFilter({ withMembership = false, projects = [], reloadKey } = {}) {
   const [stagesByProject, setStagesByProject] = useState(() => new Map())
   const [membership, setMembership] = useState([])
   const [selectedStageIds, setSelectedStageIds] = useState(() => new Set())
@@ -39,7 +44,7 @@ export function useStageFilter({ withMembership = false, projects = [] } = {}) {
         .catch((error) => console.error('No se pudo cargar la membresía de stages:', error))
     }
     return () => { cancelled = true }
-  }, [withMembership])
+  }, [withMembership, reloadKey])
 
   // projectId → projectNumber (para el prefijo del rótulo).
   const projectNumberById = useMemo(() => {
@@ -66,10 +71,13 @@ export function useStageFilter({ withMembership = false, projects = [] } = {}) {
   }, [stagesByProject, projectNumberById])
 
   const taskToStage = useMemo(() => buildTaskToStage(membership), [membership])
+  // Lookup normalizado (Map<string,string>) compartido con filterEntriesByStage: se arma UNA
+  // vez por cambio de membresía y lo reusan stageOfEntry (acá) y el filtro de horas.
+  const stageByTask = useMemo(() => normalizeTaskToStage(taskToStage), [taskToStage])
 
   const stageOfEntry = useCallback(
-    (entry) => taskToStage[String(entry?.taskNumber ?? '')] ?? null,
-    [taskToStage],
+    (entry) => stageByTask.get(String(entry?.taskNumber ?? '')) ?? null,
+    [stageByTask],
   )
 
   const toggleStage = useCallback((sid) => {
