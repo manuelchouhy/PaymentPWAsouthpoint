@@ -50,6 +50,16 @@ honesto.
   Remaining sin sentido (budget de un stage menos consumo de todo el proyecto).
   Descartada por incoherente.
 
+## Rollout
+
+Esta decisión y el término **Filtro de Stage** en CONTEXT.md describen el **diseño acordado**
+del filtro en todas las páginas; la implementación llega **por slices** (ver
+`.scratch/stage-filter-all-pages/`). Al momento de escribir este ADR sólo está cableado
+**Entries** (slice 01, con los módulos puros y el hook `useStageFilter`); Payments, Dashboard,
+Projects, el recálculo de Client Summary (esta decisión) y la migración de Billing son slices
+posteriores. Un lector no debe asumir que el recálculo de Client Summary ya existe hasta que
+aterrice su slice.
+
 ## Consequences
 
 - El filtro de Stage es el **único** filtro de la app que **reescribe los números** de

@@ -30,10 +30,14 @@ export function buildStageOptions({ presentStageIds = [], selectedIds = [], cata
   }
   const all = [...ids]
 
-  // ¿Las opciones abarcan más de un proyecto? Decide el prefijo del rótulo Y el orden.
+  // ¿El SCOPE abarca más de un proyecto? Decide el prefijo del rótulo Y el orden. Se mide sobre
+  // los stages PRESENTES (los que pasan los otros filtros), NO sobre la unión con los
+  // seleccionados: un stage seleccionado que quedó fuera de scope (p. ej. tras filtrar a un
+  // único proyecto) no debe reactivar el prefijo — la regla es "scope de un proyecto → sin
+  // prefijo" (ver "Filtro de Stage" en CONTEXT.md).
   const projectIds = new Set()
-  for (const sid of all) {
-    const pid = catalog.get(sid)?.projectId
+  for (const id of presentStageIds) {
+    const pid = catalog.get(String(id))?.projectId
     if (pid != null) projectIds.add(String(pid))
   }
   const multiProject = projectIds.size > 1

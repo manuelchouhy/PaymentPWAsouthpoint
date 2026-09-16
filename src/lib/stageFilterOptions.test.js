@@ -55,6 +55,17 @@ test('rótulo sin prefijo cuando todas las opciones caen en un solo proyecto', (
   assert.equal(getLabel('S2'), 'Stage 2')
 })
 
+test('un stage seleccionado fuera de scope NO reactiva el prefijo (scope 1 proyecto)', () => {
+  const catalog = cat([
+    ['S1', 'Stage 1', 'p1', 'PP1'],
+    ['S2', 'Stage 1', 'p2', 'PP2'],
+  ])
+  // Scope = sólo PP1 (present S1). S2 (PP2) quedó seleccionado pero fuera de scope.
+  const { optionIds, getLabel } = buildStageOptions({ presentStageIds: ['S1'], selectedIds: ['S2'], catalog })
+  assert.ok(optionIds.includes('S2')) // sigue apareciendo (unión)
+  assert.equal(getLabel('S1'), 'Stage 1') // sin prefijo: el scope es un solo proyecto
+})
+
 test('fallback de nombre cuando el catálogo no lo trae', () => {
   const catalog = new Map() // sin entradas
   const { getLabel } = buildStageOptions({ presentStageIds: [], selectedIds: ['S9'], catalog })
