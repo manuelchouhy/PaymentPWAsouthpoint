@@ -664,6 +664,13 @@ export function PaymentsPage() {
     // ENTERA (todos sus contractors) cuando pasa el filtro, así que el KPI cuenta igual —
     // todas las horas pendientes de las facturas mostradas — para que header y grilla no
     // divergan. "Filtrar por contractor" = ver las facturas que lo incluyen (enteras).
+    // LIMITACIÓN CONOCIDA (filtro de Stage): una factura puede contener horas de varios stages
+    // (un stage sólo particiona un proyecto, no una factura). Bajo un filtro de Stage la factura
+    // se muestra/cuenta ENTERA si toca el stage — no se recorta al stage — porque el pago es por
+    // línea entera de contractor (api.payments.create registra ic.hours; no hay pago por stage).
+    // Recortar el número engañaría sobre lo pagable. Los grupos overage/sp_internal SÍ se recortan
+    // (su pago es por horas puntuales). El recorte de facturas por stage queda habilitado cuando
+    // aterrice la feature de pago parcial de facturas por período (como overage/sp_internal).
     for (const r of filteredInvoiceRows) {
       if (!isPayable(r.inv.status)) continue
       pendingHours += r.contractors.reduce((s, ic) => s + (ic.paid ? 0 : Number(ic.hours) || 0), 0)
