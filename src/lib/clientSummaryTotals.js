@@ -5,8 +5,10 @@
  *  - La TABLA (fila-cabecera de cliente y fila Total) suma sobre las SEMANAS
  *    VISIBLES, así cuadra con las celdas Consumed/Overage mostradas aunque el
  *    filtro Week haya recortado filas.
- *  - Los GRÁFICOS son una foto de estado de budget: usan las horas ALL-TIME de
- *    cada proyecto (project.consumed/overage) y no dependen del filtro Week.
+ *  - Los GRÁFICOS suman consumed/overage/pending/invoiced sobre las SEMANAS
+ *    VISIBLES (igual que la tabla), así respetan el filtro Week; el `budget` y el
+ *    `remaining` quedan a nivel proyecto (el budget no es semanal). Sin filtro Week
+ *    (todas las semanas visibles) el total coincide con el all-time del proyecto.
  *
  * En ambos, `budget` suma solo proyectos con presupuesto cargado (hasBudget lo
  * marca) para no tratar un null como 0.
@@ -80,22 +82,28 @@ export function projectRowTotals(project) {
 }
 
 /**
- * Totales para los gráficos: horas ALL-TIME por proyecto. `remaining` se acumula
- * POR PROYECTO (max(0, budget − consumido all-time)) para no netear el consumo de
- * un proyecto contra el budget de otro.
+ * Totales para los gráficos: suma consumed/overage/pending/invoiced sobre las SEMANAS
+ * VISIBLES de cada proyecto (respeta el filtro Week, igual que la tabla). `budget` es el
+ * fijo del proyecto y `remaining` se acumula POR PROYECTO (max(0, budget − consumido de las
+ * semanas visibles)) para no netear el consumo de un proyecto contra el budget de otro.
+ * Sin filtro Week (todas las semanas presentes) el total coincide con el all-time del proyecto.
  */
 export function chartTotals(clients) {
   const t = { budget: 0, consumed: 0, overage: 0, pending: 0, invoiced: 0, remaining: 0, hasBudget: false }
   for (const group of clients) {
     for (const p of group.projects) {
-      t.consumed += p.consumed
-      t.overage += p.overage
-      t.pending += p.pending || 0
-      t.invoiced += p.invoiced || 0
+      let pConsumed = 0
+      for (const w of p.weeks ?? []) {
+        pConsumed += w.consumed || 0
+        t.consumed += w.consumed || 0
+        t.overage += w.overage || 0
+        t.pending += w.pending || 0
+        t.invoiced += w.invoiced || 0
+      }
       if (p.budget != null) {
         t.budget += p.budget
         t.hasBudget = true
-        t.remaining += Math.max(0, p.budget - p.consumed)
+        t.remaining += Math.max(0, p.budget - pConsumed)
       }
     }
   }

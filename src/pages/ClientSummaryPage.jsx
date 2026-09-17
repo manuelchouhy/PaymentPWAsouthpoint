@@ -289,9 +289,10 @@ export function ClientSummaryPage() {
   const clientTotals = useMemo(() => tableTotalsByClient(clients), [clients])
   const totals = useMemo(() => portfolioTotals(clientTotals), [clientTotals])
 
-  // Totales de los GRÁFICOS: foto de estado de budget con horas ALL-TIME por
-  // proyecto sobre el scope de PROYECTO (NO se recortan por el filtro Week).
-  const chartTotalsValue = useMemo(() => chartTotals(projectScoped), [projectScoped])
+  // Totales de los GRÁFICOS: se calculan sobre `clients` (YA filtrado por Week), así el consumo
+  // de los gráficos refleja la semana elegida igual que la tabla; el budget queda el total del
+  // proyecto (ver chartTotals). Sin filtro Week coincide con el all-time.
+  const chartTotalsValue = useMemo(() => chartTotals(clients), [clients])
 
   function toggleIn(setter, value) {
     setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]))
@@ -462,10 +463,11 @@ export function ClientSummaryPage() {
             </div>
           </section>
 
-          {/* Los gráficos dependen del scope de PROYECTO, no del filtro Week (que
-              solo achica la tabla): se muestran aunque el Week vacíe la grilla.
-              Van debajo de los filtros, antes de la grilla. */}
-          {projectScoped.length > 0 && <ClientSummaryCharts totals={chartTotalsValue} />}
+          {/* Los gráficos se calculan sobre `clients` (ya filtrado por Week), así que reflejan
+              la semana elegida igual que la tabla; el budget queda el total del proyecto. Se
+              esconden si el scope filtrado queda vacío. Van debajo de los filtros, antes de la
+              grilla. */}
+          {clients.length > 0 && <ClientSummaryCharts totals={chartTotalsValue} />}
 
           <div className="toolbar">
             <span className="toolbar__count">

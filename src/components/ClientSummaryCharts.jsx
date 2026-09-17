@@ -116,7 +116,8 @@ export function ClientSummaryCharts({ totals }) {
   return (
     <section className="cs-charts">
       <p className="state__hint">
-        Budget status across all periods — the Week filter narrows the table only, not these charts.
+        Consumed, overage and pending follow the active filters (including Week); Budget is the
+        project total. With a Week selected, the charts show that week’s hours against the full budget.
       </p>
       <div className="dash-main">
       <div className="dash-widget">
