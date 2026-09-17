@@ -1,4 +1,4 @@
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { TrendingUp } from 'lucide-react'
 import { HoursDonut } from './HoursDonut'
 
@@ -92,9 +92,15 @@ export function ClientSummaryCharts({ totals }) {
   // estado vacío. Con budget>0 y sin horas logueadas sigue habiendo porción
   // Remaining, así que el donut se dibuja (no cae a "No hour data").
   const donutTotal = donutData.reduce((sum, d) => sum + d.value, 0)
-  // Centro del donut = horas REALMENTE logueadas (consumed + overage), no la suma
-  // de las porciones (que incluye el remaining, que no son horas trabajadas).
+  // Horas REALMENTE logueadas (consumed + overage), no la suma de las porciones
+  // (que incluye el remaining, que no son horas trabajadas).
   const loggedHours = round1(consumed + overage)
+  // Centro del donut = el BUDGET TOTAL del scope cuando hay budget cargado: el donut
+  // ya reparte sus porciones sobre el budget (Consumed/Overage/Remaining suman el
+  // budget), así que el centro muestra ese total contra el que se mide. Sin budget
+  // cargado (ej. proyectos internos) NO hay total contra el que medir → se cae a las
+  // horas logueadas, para no mostrar un "0.0" engañoso.
+  const donutCenter = totals.hasBudget ? budget : loggedHours
   // Un solo criterio de "sin datos" para las dos gráficas, así no muestran estados
   // vacíos distintos lado a lado.
   const noData = budget === 0 && consumed === 0 && overage === 0 && pending === 0
@@ -120,7 +126,9 @@ export function ClientSummaryCharts({ totals }) {
           <p className="dash-widget__empty">No hour data available.</p>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={barData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            {/* top holgado (no 8): deja lugar para el número que va ENCIMA de la barra
+                más alta, que si no queda recortado contra el borde del gráfico. */}
+            <BarChart data={barData} margin={{ top: 24, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--line-strong)" vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 12, fill: 'var(--text)' }} tickLine={false} axisLine={{ stroke: 'var(--line-strong)' }} />
               <YAxis tick={{ fontSize: 12, fill: 'var(--text)' }} tickLine={false} axisLine={false} width={44} />
@@ -133,6 +141,14 @@ export function ClientSummaryCharts({ totals }) {
                 {barData.map((d) => (
                   <Cell key={d.name} fill={d.color} />
                 ))}
+                {/* Número encima de cada barra: su valor en horas (mismo redondeo a 1
+                    decimal que el tooltip y el resto de la app). */}
+                <LabelList
+                  dataKey="value"
+                  position="top"
+                  formatter={(v) => `${round1(v)} h`}
+                  style={{ fontSize: 11, fill: 'var(--text)', fontWeight: 600 }}
+                />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -146,7 +162,10 @@ export function ClientSummaryCharts({ totals }) {
         // donut, así que un scope solo-pending muestra "No hour data" acá aunque
         // el gráfico de barras sí dibuje su barra Pending.
         data={donutTotal === 0 ? [] : donutData}
-        total={loggedHours}
+        total={donutCenter}
+        // Rótulo del centro: dice QUÉ es el número. Con budget cargado el centro es el
+        // budget total → "Budget"; sin budget cae a las horas logueadas → "Hours".
+        unit={totals.hasBudget ? 'Budget (h)' : 'Hours'}
       />
       </div>
     </section>
