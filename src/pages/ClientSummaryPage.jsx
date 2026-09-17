@@ -19,6 +19,7 @@ import {
 } from '../lib/clientSummaryTotals'
 import { buildClientResolver } from '../lib/clientResolver'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
+import { WeekNavigator } from '../components/WeekNavigator'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { ClientSummaryCharts } from '../components/ClientSummaryCharts'
 import { sortedUnique } from '../lib/useEntryFilters'
@@ -77,7 +78,8 @@ export function ClientSummaryPage() {
   const [selectedProjectNumbers, setSelectedProjectNumbers] = useState([])
   const [selectedProjectNames, setSelectedProjectNames] = useState([])
   const [selectedSows, setSelectedSows] = useState([])
-  const [selectedWeeks, setSelectedWeeks] = useState([])
+  // Semana física seleccionada (ISO del domingo, year-aware) del WeekNavigator; '' = todas.
+  const [weekStart, setWeekStart] = useState('')
   // Proyectos con el desglose por semana desplegado. Colapsados por defecto (Set
   // vacío) para que la tabla arranque corta: 1 fila por proyecto con sus totales.
   const [expandedProjects, setExpandedProjects] = useState(() => new Set())
@@ -275,28 +277,11 @@ export function ClientSummaryPage() {
     [summary, selectedClients, selectedProjectNumbers, selectedProjectNames, selectedSows],
   )
 
-  // Opciones de Week: salen del scope YA recortado por Stage (projectScoped), no de la base.
-  // A diferencia de los dims de proyecto (Client/Project#/Project/SOW, one-directional para no
-  // colapsar al elegir un stage), Week es una dimensión de TIEMPO: ofrecer una semana cuyas
-  // horas viven sólo en un stage filtrado fuera daría una grilla vacía al elegirla. Así el
-  // Stage sí acota las semanas ofrecidas.
-  const weekOptions = useMemo(() => {
-    const byLabel = new Map()
-    for (const p of projectScoped.flatMap((c) => c.projects)) {
-      for (const w of p.weeks) byLabel.set(weekLabel(w), w.weekStart)
-    }
-    // ya elegida pero fuera del scope actual: se conserva para poder destildarla y se
-    // manda al final con una fecha-centinela lejana (orden determinístico por
-    // localeCompare de dígitos ASCII, a diferencia de un noncharacter U+FFFF).
-    for (const w of selectedWeeks) if (!byLabel.has(w)) byLabel.set(w, '9999-12-31')
-    return [...byLabel.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([label]) => label)
-  }, [projectScoped, selectedWeeks])
-
-  // La tabla aplica además el filtro Week sobre el scope de proyecto (recorta
-  // filas-semana y descarta proyectos/clientes sin semana visible).
+  // La tabla aplica además el filtro Week (WeekNavigator, semana física year-aware) sobre el
+  // scope de proyecto: recorta filas-semana y descarta proyectos/clientes sin la semana visible.
   const clients = useMemo(
-    () => filterClientSummary(projectScoped, { weeks: selectedWeeks }),
-    [projectScoped, selectedWeeks],
+    () => filterClientSummary(projectScoped, { weekStart }),
+    [projectScoped, weekStart],
   )
 
   // Totales de la TABLA (agregación pura, testeada en clientSummaryTotals): suman
@@ -328,15 +313,14 @@ export function ClientSummaryPage() {
       selectedProjectNumbers,
       selectedProjectNames,
       selectedSows,
-      selectedWeeks,
-    ].some((a) => a.length > 0) || stageFilterActive
+    ].some((a) => a.length > 0) || Boolean(weekStart) || stageFilterActive
 
   function clearAllFilters() {
     setSelectedClients([])
     setSelectedProjectNumbers([])
     setSelectedProjectNames([])
     setSelectedSows([])
-    setSelectedWeeks([])
+    setWeekStart('')
     clearStages()
   }
 
@@ -453,12 +437,9 @@ export function ClientSummaryPage() {
                 selected={selectedSows}
                 onToggle={(v) => toggleIn(setSelectedSows, v)}
               />
-              <MultiSelectDropdown
-                label="Week"
-                options={weekOptions}
-                selected={selectedWeeks}
-                onToggle={(v) => toggleIn(setSelectedWeeks, v)}
-              />
+              {/* Navegador de semana (year-aware), como en Entries/Payments/Billing: recorta la
+                  grilla a esa semana física. '' = todas. Reemplaza el multi-select de rótulos. */}
+              <WeekNavigator value={weekStart} onChange={setWeekStart} />
               {/* Filtro de Stage: RECALCULA la fila al stage (budget del stage +
                   consumed/semanal recortados; proyectos sin el stage desaparecen). Ver ADR 0004.
                   Opciones interlazadas. SIEMPRE visible, como los demás filtros: sin stages en el
