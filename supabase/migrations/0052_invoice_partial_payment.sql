@@ -24,6 +24,16 @@ begin;
 alter table public.payments
   add column if not exists supplier_invoice_number text;
 
+-- 1b) Backfill: los pagos legacy (0040) guardaron el supplier# en invoice_contractors. Se copia
+--     a payments para que el nuevo lugar canónico (payments.supplier_invoice_number) no quede
+--     NULL en el histórico.
+update public.payments p
+   set supplier_invoice_number = ic.supplier_invoice_number
+  from public.invoice_contractors ic
+ where ic.payment_id = p.id
+   and p.supplier_invoice_number is null
+   and ic.supplier_invoice_number is not null;
+
 -- 2) Trigger anti-solape: excluir la PROPIA factura del chequeo contra invoices. Un pago de
 --    factura (new.invoice_id no NULL) cubre por definición horas de invoices.entry_ids de SU
 --    factura; sin esta exclusión el trigger lo rechazaría. Los pagos invoice-less
@@ -132,8 +142,11 @@ begin
   end if;
 
   -- Pago del contractor CON entry_ids (el subconjunto) + supplier#. El trigger
-  -- payments_entry_ids_no_overlap valida que ninguna de esas horas esté ya cubierta por
-  -- otro pago (doble-pago) → mensaje claro si el usuario reintenta horas ya pagas.
+  -- payments_entry_ids_no_overlap valida que ninguna de esas horas esté ya cubierta por otro
+  -- pago (doble-pago) y rechaza el lote entero con OV001 si alguna hora ya está paga. El caller
+  -- (paymentsData, slice 03) mapea OV001 a un aviso de "ya pagado / recargá", igual que hace
+  -- con invoice_not_payable. La UI sólo ofrece horas pendientes, así que OV001 acá es sobre todo
+  -- una carrera concurrente.
   insert into payments (invoice_id, entry_ids, user_name, supplier_invoice_number,
                         payment_date, transfer_reference, bank_method, notes, back_dated, created_by)
   values (v_ic.invoice_id, p_entry_ids, v_ic.contractor, btrim(p_supplier_invoice_number),
@@ -142,14 +155,26 @@ begin
   returning * into v_payment;
 
   -- Flip a 'Paid' ATÓMICO por COBERTURA: todas las horas de la factura (invoices.entry_ids)
-  -- cubiertas por la unión de entry_ids de sus pagos. La factura está lockeada, así que el
-  -- cálculo es consistente aunque dos pagos entren casi a la vez.
+  -- cubiertas. v_covered une (a) los entry_ids de los pagos nuevos y (b) los entry_ids de las
+  -- líneas pagadas al modo LEGACY (0040: payment_id seteado, payments.entry_ids NULL), para que
+  -- una factura mixta (parte legacy, parte nueva) igual pueda llegar a Paid. La factura está
+  -- lockeada, así que el cálculo es consistente aunque dos pagos entren casi a la vez.
   select coalesce(array_agg(distinct e), '{}')
     into v_covered
-    from public.payments p, unnest(p.entry_ids) as e
-   where p.invoice_id = v_ic.invoice_id;
+    from (
+      select unnest(p.entry_ids) as e
+        from public.payments p
+       where p.invoice_id = v_ic.invoice_id
+      union
+      select unnest(icx.entry_ids) as e
+        from public.invoice_contractors icx
+       where icx.invoice_id = v_ic.invoice_id
+         and icx.payment_id is not null
+    ) s;
 
-  if v_inv_entry is not null and v_inv_entry <@ v_covered then
+  -- cardinality > 0 (no `is not null`): una factura con entry_ids = '{}' NO debe flipear, porque
+  -- '{}' <@ cualquier_cosa es TRUE y la marcaría Paid en el primer pago sin cubrir nada.
+  if cardinality(v_inv_entry) > 0 and v_inv_entry <@ v_covered then
     update invoices set status = 'Paid'
      where id = v_ic.invoice_id and status = 'Invoiced';
     insert into invoice_status_history (invoice_id, from_status, to_status, changed_by, note)
@@ -165,5 +190,66 @@ revoke all on function public.register_contractor_payment(
   bigint, bigint[], text, date, text, text, text, boolean, text) from public;
 grant execute on function public.register_contractor_payment(
   bigint, bigint[], text, date, text, text, text, boolean, text) to authenticated;
+
+-- 4) trace_view: atribuir el pago de CADA hora por payments.entry_ids (la hora que el pago
+--    cubre), no por invoice_contractors.payment_id — que la RPC nueva ya no setea, y que con
+--    pagos parciales no puede representar los N pagos de una línea. El supplier# pasa a leerse
+--    de payments (por pago). Sigue sin fan-out: cada time entry matchea a lo sumo un pago (los
+--    entry_ids no se solapan entre pagos, trigger 0037/0052). Los pagos legacy (entry_ids NULL)
+--    no matchean por hora; su atribución legacy vía ic.payment_id se pierde en la vista, pero en
+--    prod esas horas ya están en facturas Paid y la Traceability aún no está habilitada en la UI.
+drop view if exists public.trace_view;
+create or replace view public.trace_view
+  with (security_invoker = true)
+as
+  select
+    te.id                                       as time_entry_id,
+    te.zoho_log_id,
+    te.user_name,
+    te.log_date,
+    te.hours,
+    te.client,
+    te.project,
+    te.task,
+    te.description,
+    te.status                                   as zoho_status,
+    te.synced_at,
+    i.id                                        as invoice_id,
+    i.sp_invoice_number,
+    i.invoice_date,
+    i.status                                    as invoice_status,
+    i.payment_terms_days,
+    i.created_at                                as invoiced_at,
+    i.created_by                                as invoiced_by,
+    ic.contractor                               as invoice_contractor,
+    ic.hours                                    as contractor_hours,
+    coalesce(ca.amount_collected, 0)            as collected_amount,
+    ca.last_collection_date,
+    coalesce(ca.collection_count, 0)            as collection_count,
+    -- Pago que cubre ESTA hora (por entry_ids) + su supplier#.
+    p.id                                        as payment_id,
+    p.supplier_invoice_number,
+    p.payment_date,
+    p.transfer_reference,
+    p.bank_method,
+    p.notes                                     as payment_notes,
+    p.created_at                                as paid_at,
+    p.created_by                                as paid_by
+  from public.time_entries te
+  left join public.invoices i
+    on i.entry_ids @> array[te.id]
+  left join public.invoice_contractors ic
+    on ic.invoice_id = i.id
+   and ic.entry_ids @> array[te.id]
+  left join (
+    select
+      invoice_id,
+      sum(amount_received)  as amount_collected,
+      max(collection_date)  as last_collection_date,
+      count(*)              as collection_count
+    from public.collections
+    group by invoice_id
+  ) ca on ca.invoice_id = i.id
+  left join public.payments p on p.entry_ids @> array[te.id];
 
 commit;
