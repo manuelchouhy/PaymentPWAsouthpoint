@@ -171,9 +171,10 @@ export function ClientSummaryCharts({ totals }) {
         data={donutTotal === 0 ? [] : donutData}
         total={donutCenter}
         // Rótulo del centro: dice QUÉ es el número. Con budget (>0) el centro es el budget
-        // total → "Budget (h)"; sin budget cae a las horas logueadas → "Hours". Mismo
-        // criterio que donutCenter, para que número y rótulo nunca se contradigan.
-        unit={budget > 0 ? 'Budget (h)' : 'Hours'}
+        // total → "Budget"; sin budget cae a las horas logueadas → "Hours". Mismo criterio
+        // que donutCenter, para que número y rótulo nunca se contradigan. Sin "(h)": el CSS
+        // del rótulo es uppercase (.billing-dist__unit) y lo mostraría como "(H)".
+        unit={budget > 0 ? 'Budget' : 'Hours'}
       />
       </div>
     </section>
