@@ -1,3 +1,5 @@
+import { lookupById } from './invoiceCompletion.js'
+
 /**
  * Desglose de los PAGOS que cubren una línea de contractor (para el detalle read-only de una
  * factura Paid/parcial — slice 05, ADR 0005). Reconstruye cada pago parcial por su cobertura de
@@ -9,18 +11,31 @@
  * (0040, previos a 0052) tienen `entry_ids` NULL/vacío → no aportan filas (no se puede
  * reconstruir su cobertura por hora).
  *
- * @param {{ entryIds?: Array<string|number> }} contractor  la línea (invoice_contractor).
+ * Las horas por entry se calculan igual que `invoiceCompletion` (misma `lookupById` + fallback al
+ * PROMEDIO de la línea cuando un entry cubierto no está en el snapshot), para que la suma de los
+ * pagos cuadre con `paidHours`/`hours` de la línea y un pago real nunca muestre "0 h".
+ *
+ * @param {{ entryIds?: Array<string|number>, hours?: number }} contractor  la línea (invoice_contractor).
  * @param {Array<{ id?:any, entryIds?:Array<string|number>, supplierInvoiceNumber?:?string,
- *   paymentDate?:?string, createdAt?:?string }>} payments  todos los pagos conocidos.
- * @param {Map<string, number>} [hoursByEntryId]  entry_id → horas (para sumar las horas cubiertas).
+ *   paymentDate?:?string, createdAt?:?string }>} payments  pagos que cubren la línea (el caller pasa
+ *   el set ya filtrado — O(pagos de la línea)); igual se interseca de forma defensiva.
+ * @param {Map<string,number>|Record<string,number>} [hoursByEntryId]  entry_id → horas.
  * @returns {Array<{ id:any, supplierInvoiceNumber:?string, paymentDate:?string, createdAt:?string,
- *   hours:number, entryCount:number }>}  un ítem por pago que toca la línea, ordenado por fecha
- *   (desempate por createdAt).
+ *   hours:number }>}  un ítem por pago que toca la línea, ordenado por fecha (desempate por createdAt).
  */
 export function linePaymentBreakdown(contractor, payments, hoursByEntryId) {
-  const lineIds = new Set((contractor?.entryIds ?? []).map(String))
-  if (lineIds.size === 0) return []
-  const hours = hoursByEntryId ?? new Map()
+  const lineIdList = [...new Set((contractor?.entryIds ?? []).map(String))]
+  if (lineIdList.length === 0) return []
+  const lineIds = new Set(lineIdList)
+  const lineHours = Number(contractor?.hours) || 0
+  // Promedio por entry de la línea: fallback cuando un entry cubierto no está en el snapshot
+  // (mismo criterio que invoiceCompletion, para no subestimar ni mostrar 0 h en un pago real).
+  const avgPerEntry = lineIdList.length ? lineHours / lineIdList.length : 0
+  const hoursOf = (id) => {
+    if (hoursByEntryId == null) return avgPerEntry
+    const n = Number(lookupById(hoursByEntryId, id))
+    return Number.isFinite(n) ? n : avgPerEntry
+  }
   const rows = []
   for (const p of payments ?? []) {
     // Horas de ESTA línea que cubre el pago = intersección de sus entry_ids con la línea.
@@ -31,8 +46,7 @@ export function linePaymentBreakdown(contractor, payments, hoursByEntryId) {
       supplierInvoiceNumber: p.supplierInvoiceNumber ?? null,
       paymentDate: p.paymentDate ?? null,
       createdAt: p.createdAt ?? null,
-      hours: coveredHere.reduce((s, id) => s + (Number(hours.get(id)) || 0), 0),
-      entryCount: coveredHere.length,
+      hours: coveredHere.reduce((s, id) => s + hoursOf(id), 0),
     })
   }
   rows.sort(

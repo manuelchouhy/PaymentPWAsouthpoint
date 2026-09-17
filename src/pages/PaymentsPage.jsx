@@ -530,8 +530,10 @@ export function PaymentsPage() {
           entries: contractorEntries,
           unpaidEntries: entriesForIds(ic.unpaidEntryIds),
           // Desglose read-only de los pagos (parciales) que cubren la línea, para el detalle de
-          // facturas Paid/parcial (slice 05): horas cubiertas, supplier# y fecha por pago.
-          paymentsBreakdown: linePaymentBreakdown(ic, payments, hoursByEntryId),
+          // facturas Paid/parcial (slice 05): horas cubiertas, supplier# y fecha por pago. Se
+          // deriva de linePayments (los pagos ya filtrados a esta línea) para no re-escanear todos
+          // los pagos por contractor — O(pagos de la línea), no O(contractors × pagos).
+          paymentsBreakdown: linePaymentBreakdown(ic, linePayments, hoursByEntryId),
           weeks: formatWeekRange(summary.dateStart, summary.dateEnd),
         }
       })

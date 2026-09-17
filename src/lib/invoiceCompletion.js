@@ -43,7 +43,7 @@ import { paidEntryIdsFrom } from './paymentsGrouping.js'
  * por pérdida de precisión. Única fuente de esta normalización (la usan hoursOf y
  * contractorsLookup), para que no existan dos variantes que divergen.
  */
-function lookupById(source, id) {
+export function lookupById(source, id) {
   if (source == null) return undefined
   if (source instanceof Map) {
     const byStr = source.get(String(id))
