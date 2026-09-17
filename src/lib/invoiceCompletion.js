@@ -89,24 +89,30 @@ function completionFromPaidIds(contractors, paidIds, hoursByEntryId) {
     .map((c) => {
       const entryIds = c.entryIds
       const lineHours = Number(c.hours) || 0
-      const covered = (id) => paidIds.has(String(id))
-      const coveredByEntries = entryIds.filter(covered).map(String)
+      // Una sola pasada: partir los entry_ids en cubiertos / pendientes.
+      const coveredByEntries = []
+      const uncoveredByEntries = []
+      for (const id of entryIds) {
+        if (paidIds.has(String(id))) coveredByEntries.push(String(id))
+        else uncoveredByEntries.push(String(id))
+      }
       // paymentId es el pago POR FACTURA legacy (entry_ids NULL en el pago, así que la cobertura
       // por hora NO lo detecta). Cuenta como "línea entera paga" SÓLO cuando no hay ninguna
       // cobertura por entry_ids: con el modelo nuevo (ADR 0005) el pago parcial cubre entry_ids
       // y "paid" se deriva de la cobertura; si conviven, manda la cobertura para no ocultar las
       // horas que todavía faltan (aunque un pago parcial dejara paymentId seteado).
       const legacyWholeLine = c.paymentId != null && coveredByEntries.length === 0
-      const paid = legacyWholeLine || coveredByEntries.length === entryIds.length
-      const unpaidEntryIds = paid ? [] : entryIds.filter((id) => !covered(id)).map(String)
-      // Horas cubiertas: el total si la línea está paga; exactas por entry si hay lookup; si no,
-      // prorrateo uniforme sobre el total de la línea.
+      const paid = legacyWholeLine || uncoveredByEntries.length === 0
+      const unpaidEntryIds = paid ? [] : uncoveredByEntries
+      // Horas cubiertas: el total si la línea está paga; exactas por entry si hay lookup (capadas
+      // a lineHours por si las horas por entry no suman exacto al total); si no, prorrateo uniforme.
       let paidHours
       if (paid) paidHours = lineHours
       else if (hoursByEntryId != null) {
-        paidHours = coveredByEntries.reduce((s, id) => s + (hoursOf(id) ?? 0), 0)
+        const sum = coveredByEntries.reduce((s, id) => s + (hoursOf(id) ?? 0), 0)
+        paidHours = Math.min(sum, lineHours)
       } else {
-        paidHours = entryIds.length ? (lineHours * coveredByEntries.length) / entryIds.length : 0
+        paidHours = (lineHours * coveredByEntries.length) / entryIds.length
       }
       // Se PRESERVAN los campos originales (id, supplierInvoiceNumber, paymentId,
       // paymentDate) además de `paid`/`paidHours`/`unpaidEntryIds`, para que la UI pueda
@@ -121,11 +127,9 @@ function completionFromPaidIds(contractors, paidIds, hoursByEntryId) {
   // sólo las de las líneas 100% pagas.
   const paidHours = rows.reduce((sum, r) => sum + (Number(r.paidHours) || 0), 0)
 
-  // Cobertura parcial-aware: hay algo cubierto si alguna línea está paga o si a alguna le
-  // faltan MENOS horas de las que tiene (cobertura parcial). Sin nada cubierto → Invoiced;
-  // todo → Paid; en el medio → partial. Factura vacía (sin contractors) → Invoiced.
-  // Hay cobertura si a alguna línea le faltan MENOS horas de las que tiene (incluye las 100%
-  // pagas: unpaidEntryIds = [] < entryIds no vacío). Las filas ya vienen con entryIds no vacío.
+  // Parcial-aware: hay cobertura si a alguna línea le faltan MENOS horas de las que tiene (una
+  // línea 100% paga cae acá: unpaidEntryIds=[] < entryIds no vacío). Nada cubierto → Invoiced;
+  // todas las líneas pagas → Paid; en el medio → partial. Factura vacía → Invoiced.
   const anyCovered = rows.some((r) => r.unpaidEntryIds.length < r.entryIds.length)
   let status = 'Invoiced'
   if (totalCount > 0 && paidCount === totalCount) status = 'Paid'

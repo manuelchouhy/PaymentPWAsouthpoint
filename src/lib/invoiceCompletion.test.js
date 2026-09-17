@@ -277,3 +277,13 @@ test('invoiceCompletion: paymentId + cobertura PARCIAL por entry_ids → manda l
   assert.deepEqual(ana.unpaidEntryIds, ['2', '3'])
   assert.equal(ana.paidHours, 3)
 })
+
+test('invoiceCompletion: paidHours parcial se capa a las horas de la línea (por-entry no suma exacto)', () => {
+  // hoursByEntryId puede no sumar exacto a la hours de la línea (redondeos); el parcial no
+  // debe superar el total de la línea (progreso > 100%).
+  const contractors = [contractor('Ana', [1, 2, 3], 10)]
+  const hoursByEntryId = { 1: 6, 2: 6, 3: 1 } // suma 13, línea 10
+  const out = invoiceCompletion(contractors, [payment([1, 2])], hoursByEntryId) // cubre 12 crudo
+  assert.equal(out.contractors[0].paid, false)
+  assert.equal(out.contractors[0].paidHours, 10) // capado a lineHours, no 12
+})
