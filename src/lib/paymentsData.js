@@ -147,10 +147,10 @@ function rowToPayment(row) {
   }
 }
 
-// Columnas de un pago. Sin plata (amount_paid/currency/exchange_rate): el modelo es en
-// horas. El supplier# vive en invoice_contractors, no acá.
+// Columnas de un pago. Sin plata (amount_paid/currency/exchange_rate): el modelo es en horas.
+// El supplier# vive POR PAGO en payments.supplier_invoice_number (0052, pago parcial).
 const PAYMENT_COLUMNS =
-  'id, invoice_id, entry_ids, user_name, payment_date, transfer_reference, bank_method, notes, back_dated, created_at, created_by'
+  'id, invoice_id, entry_ids, user_name, supplier_invoice_number, payment_date, transfer_reference, bank_method, notes, back_dated, created_at, created_by'
 
 /** @returns {Promise<ContractorPayment[]>} */
 export async function getPayments() {
@@ -166,7 +166,12 @@ export async function getPayments() {
   return data.map(rowToPayment)
 }
 
-/** El pago asociado a una factura (o null). */
+/**
+ * UN pago (el más reciente) asociado a una factura, o null. ⚠️ Con pago parcial (ADR 0005) una
+ * factura tiene VARIOS pagos (por contractor y por período), así que esto devuelve uno arbitrario;
+ * NO usar como "el pago" de la factura. Sin consumidor vivo hoy; la UI de parciales (slice 05) lee
+ * la lista completa de payments, no esta función.
+ */
 export async function getPaymentByInvoice(invoiceId) {
   if (!isSupabaseConfigured) {
     return demoPayments.find((p) => p.invoiceId === invoiceId) ?? null
@@ -241,8 +246,9 @@ export async function createPayment(invoiceContractor, payload, createdBy) {
       createdBy: createdBy || null,
     }
     demoPayments = [payment, ...demoPayments]
-    const lineIds = new Set((invoiceContractor.entryIds ?? []).map(String))
-    const coversWholeLine = lineIds.size > 0 && [...lineIds].every((id) => entryIds.map(String).includes(id))
+    const paidSet = new Set(entryIds.map(String))
+    const lineIds = (invoiceContractor.entryIds ?? []).map(String)
+    const coversWholeLine = lineIds.length > 0 && lineIds.every((id) => paidSet.has(id))
     if (coversWholeLine) {
       markDemoInvoiceContractorPaid(invoiceContractor.id, {
         paymentId: payment.id,
@@ -269,14 +275,11 @@ export async function createPayment(invoiceContractor, payload, createdBy) {
   })
   if (error) {
     const msg = error.message ?? ''
-    // Carreras y estados: se mapean por el texto de la excepción de la RPC/trigger a un `code`
-    // estable, para dar un aviso claro + opción de recargar.
-    // OV001 = horas ya cubiertas por otro pago (doble-pago / carrera concurrente).
-    if (
-      msg.includes('contractor_already_paid') ||
-      msg.includes('entry_ids overlap') ||
-      msg.includes('already covered')
-    ) {
+    // OV001 = el trigger payments_entry_ids_no_overlap rechazó horas ya cubiertas por otro pago
+    // (doble-pago / carrera). Se matchea por el SQLSTATE propio (no por el texto), igual que
+    // createInvoicelessPayment, para no acoplarse a la redacción. `contractor_already_paid` es la
+    // excepción de la RPC (línea legacy ya paga) → mismo aviso.
+    if (error.code === 'OV001' || msg.includes('contractor_already_paid')) {
       const err = new Error('Those hours were already paid. Refresh to see the latest status.')
       err.code = 'already_paid'
       throw err
