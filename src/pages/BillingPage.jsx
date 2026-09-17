@@ -13,7 +13,8 @@ import { groupBillToClient, groupReadonly } from '../lib/billingGrouping'
 import { billingKpis } from '../lib/billingKpis'
 import { resolveProjectBudget } from '../lib/projectStageBudget'
 import { remainingBudgetHours } from '../lib/budgetRemaining'
-import { buildTaskToStage } from '../lib/stageHourAttribution'
+import { useStageFilter } from '../lib/useStageFilter'
+import { filterEntriesByStage } from '../lib/stageFilter'
 import {
   canBillSelection,
   billBlockReason,
@@ -226,13 +227,6 @@ export function BillingPage() {
   // el budget del cuadro #2 no es confiable (sin stages mostraría el base inflado
   // de un proyecto que sí los tiene) → se muestra "—".
   const [stagesLoaded, setStagesLoaded] = useState(false)
-  // Membresía subtask→stage (tabla stage_task_membership): filas crudas para armar el mapa
-  // task→stage (atribución de horas por stage) y el filtro de Stage. Catch propio: un fallo
-  // no tira la pantalla (queda sin filtro de stage). Sólo aplica a proyectos con stages de Zoho.
-  const [stageMembership, setStageMembership] = useState([])
-  // Stages seleccionados en el filtro (por stage_id, string). Filtra la grilla/KPIs a las
-  // horas cuyo task pertenece a esos stages (vía taskToStage). Vacío = no filtra por stage.
-  const [selectedStageIds, setSelectedStageIds] = useState(() => new Set())
   const [clients, setClients] = useState([])
   const [status, setStatus] = useState('loading')
   const [reloadKey, setReloadKey] = useState(0)
@@ -269,6 +263,20 @@ export function BillingPage() {
   // contra la data viva. Ver el render del drawer.
   const [detailRow, setDetailRow] = useState(null)
   const { filters, toggleValue, setField, clear, isActive } = useEntryFilters()
+  // Filtro de Stage: migrado a useStageFilter (fuente única compartida con las otras páginas).
+  // Se le INYECTA el stagesByProject que Billing ya carga para el cuadro #2 → no re-pide
+  // getAllStages. El hook trae la membresía task→stage y expone selección/opciones/rótulo. El
+  // catálogo y stageOfEntry alimentan además el cuadro de budget del stage activo (stageBudgetCard).
+  const {
+    selectedStageIds,
+    stageFilterActive,
+    toggleStage,
+    clearStages,
+    stageOfEntry,
+    taskToStage,
+    catalog: stageCatalog,
+    buildOptions: buildStageOptions,
+  } = useStageFilter({ withMembership: true, projects, reloadKey, stagesByProject })
 
   useEffect(() => {
     let cancelled = false
@@ -348,14 +356,7 @@ export function BillingPage() {
         if (!cancelled) setStagesLoaded(true)
       })
 
-    // Membresía task→stage (para atribuir horas por stage y el filtro de Stage). Aparte,
-    // con catch propio: un fallo deja el filtro sin opciones pero no rompe Billing.
-    Promise.resolve()
-      .then(() => api.projects.getStageMembership())
-      .then((rows) => {
-        if (!cancelled) setStageMembership(rows ?? [])
-      })
-      .catch((error) => console.error('No se pudo cargar la membresía de stages:', error))
+    // La membresía task→stage (para el filtro de Stage) la carga useStageFilter.
 
     Promise.all([api.timeEntries.list(), api.invoices.list(), api.clients.list(), api.payments.list()])
       .then(([entryRows, invoiceRows, clientRows, paymentRows]) => {
@@ -448,25 +449,8 @@ export function BillingPage() {
     [filters.weekStart, onWeekChange],
   )
 
-  // Mapa task(zoho id)→stage_id para atribuir horas por stage (membresía cargada).
-  const taskToStage = useMemo(() => buildTaskToStage(stageMembership), [stageMembership])
-  // Catálogo de stages: stage_id (string) → { name, projectId }, desde stagesByProject (que
-  // ya trae name). Rotula el filtro de Stage y dice a qué proyecto pertenece cada stage.
-  const stageCatalog = useMemo(() => {
-    const m = new Map()
-    for (const [pid, stages] of stagesByProject) {
-      for (const s of stages ?? []) m.set(String(s.id), { name: s.name ?? `Stage ${s.id}`, projectId: String(pid) })
-    }
-    return m
-  }, [stagesByProject])
-  // stage_id (string) de una entry vía su task, o null si su task no pertenece a un stage.
-  // Se resuelve sólo por taskNumber (id de tarea de Zoho): es único a nivel portal, así que
-  // no hay ambigüedad de proyecto aunque la membresía se guarde por (project_id, zoho_task_id).
-  const stageOfEntry = useCallback(
-    (entry) => taskToStage[String(entry.taskNumber ?? '')] ?? null,
-    [taskToStage],
-  )
-  const stageFilterActive = selectedStageIds.size > 0
+  // taskToStage, stageCatalog, stageOfEntry, selectedStageIds, toggleStage y stageFilterActive
+  // vienen de useStageFilter (arriba) — antes vivían inline acá.
 
   // Base compartida: horas que pasan los filtros de la barra (SIN el filtro de Stage, que se
   // aplica encima). Se memoiza UNA vez y la consumen tanto stageOptions como
@@ -488,50 +472,31 @@ export function BillingPage() {
     [clientOptions, options],
   )
 
-  // Opciones del filtro de Stage: los stage_id que aparecen en las horas que pasan los OTROS
-  // filtros (baseFiltered) — interlazado como el resto, sin mirar el propio filtro de stage.
-  // Se UNEN los ya seleccionados aunque el cruce los deje fuera de scope: si no, un stage
-  // tildado que queda sin horas desaparecería del dropdown y no se podría destildar (grilla
-  // en cero sin control visible). Ordenados por nombre.
-  const stageOptions = useMemo(() => {
-    const ids = new Set(selectedStageIds)
+  // Opciones y rótulo del filtro de Stage: interlazadas con los otros filtros (present = stages
+  // de baseFiltered) vía el módulo puro del hook. buildOptions une los ya seleccionados fuera de
+  // scope y arma el rótulo con prefijo condicional por proyecto (antes Billing usaba sólo el
+  // nombre; ahora consistente con las otras páginas).
+  const { optionIds: stageOptions, getLabel: stageLabel } = useMemo(() => {
+    const present = new Set()
     for (const e of baseFiltered) {
       const sid = stageOfEntry(e)
-      if (sid != null && stageCatalog.has(String(sid))) ids.add(String(sid))
+      if (sid != null) present.add(String(sid))
     }
-    return [...ids].sort((a, b) =>
-      (stageCatalog.get(a)?.name ?? '').localeCompare(stageCatalog.get(b)?.name ?? '', 'es', { numeric: true }),
-    )
-  }, [baseFiltered, selectedStageIds, stageOfEntry, stageCatalog])
-  const stageLabel = useCallback((sid) => stageCatalog.get(String(sid))?.name ?? `Stage ${sid}`, [stageCatalog])
-  const toggleStage = useCallback((sid) => {
-    setSelectedStageIds((prev) => {
-      const next = new Set(prev)
-      const k = String(sid)
-      if (next.has(k)) next.delete(k)
-      else next.add(k)
-      return next
-    })
-  }, [])
-  // Clear de la barra: limpia los filtros de useEntryFilters Y el filtro de Stage (que vive
-  // en estado local, aparte). Callback estable (buena práctica); nota: con el dropdown de
-  // Stage montado como children, la barra igual se re-renderiza, así que el React.memo de
-  // EntryFilterBar ya no la salta en Billing — no dependemos de eso.
+    return buildStageOptions([...present])
+  }, [baseFiltered, stageOfEntry, buildStageOptions])
+  // Clear de la barra: limpia los filtros de useEntryFilters Y el filtro de Stage (del hook).
   const clearAllFilters = useCallback(() => {
     clear()
-    setSelectedStageIds(new Set())
-  }, [clear])
+    clearStages()
+  }, [clear, clearStages])
 
-  // Todas las filas que pasan los filtros del usuario, sin mirar allocation. El filtro de
-  // Stage se aplica ACÁ (encima de baseFiltered): una hora pasa si su task pertenece a
-  // alguno de los stages elegidos (vía taskToStage). Sin stages elegidos, no filtra.
-  const filteredAllAllocations = useMemo(() => {
-    if (!stageFilterActive) return baseFiltered
-    return baseFiltered.filter((e) => {
-      const sid = stageOfEntry(e)
-      return sid != null && selectedStageIds.has(String(sid))
-    })
-  }, [baseFiltered, stageFilterActive, selectedStageIds, stageOfEntry])
+  // Todas las filas que pasan los filtros del usuario, sin mirar allocation. El filtro de Stage
+  // se aplica ACÁ (encima de baseFiltered) vía el helper puro compartido. Sin stages elegidos,
+  // no filtra.
+  const filteredAllAllocations = useMemo(
+    () => filterEntriesByStage(baseFiltered, taskToStage, selectedStageIds),
+    [baseFiltered, taskToStage, selectedStageIds],
+  )
 
   // La grilla y "Pending to bill" miran sólo horas facturables al cliente:
   // overage y SP internal no se le cobran a nadie acá (el overage se resuelve
