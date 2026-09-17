@@ -17,6 +17,12 @@ import { formatDate, formatHours } from '../lib/format'
  * @param {(mode:string)=>void} onPeriodMode
  * @param {Set<string>} paidEntryIds  horas ya pagadas (para el estado de cada fila).
  * @param {number} selectedCount      para el aviso "seleccioná al menos una".
+ * @param {boolean} [wholeLine]       modo línea-entera: hay horas pendientes NO cargadas en esta
+ *                                    vista (cap de sync), así que no se puede tildar un subconjunto
+ *                                    honesto — se paga la línea pendiente completa. Muestra una nota
+ *                                    en vez del selector por hora. Sólo lo usa el pago de factura.
+ * @param {number} [wholeLineHours]   horas totales que se pagarán en modo línea-entera (para la nota).
+ * @param {number} [unloadedCount]    cuántas horas pendientes no están cargadas (para la nota).
  */
 export function PeriodPaymentPicker({
   entries,
@@ -27,7 +33,28 @@ export function PeriodPaymentPicker({
   onPeriodMode,
   paidEntryIds,
   selectedCount,
+  wholeLine = false,
+  wholeLineHours,
+  unloadedCount,
 }) {
+  if (wholeLine) {
+    // No se puede ofrecer selección por período/hora: parte de las horas pendientes no están
+    // cargadas (fuera del cap de sync). Se paga la línea pendiente completa; el aviso es explícito
+    // para no dar la falsa impresión de un pago parcial (destildar lo visible no evita pagar lo
+    // no cargado). Ver handlePayContractor.
+    return (
+      <div className="overage-picker">
+        <span className="overage-picker__title">Hours to pay</span>
+        <p className="overage-picker__empty">
+          {unloadedCount > 0
+            ? `${unloadedCount} of this line's pending hours aren't loaded in this view, so a partial selection isn't possible here. `
+            : "This line's pending hours aren't fully loaded in this view, so a partial selection isn't possible here. "}
+          The full remaining line
+          {Number.isFinite(wholeLineHours) ? ` (${formatHours(wholeLineHours)} h)` : ''} will be paid.
+        </p>
+      </div>
+    )
+  }
   const isPending = (e) => entryPaymentStatus(e, paidEntryIds) === 'pending'
   // Buckets sólo en month/week (en 'total' la lista es plana, sin agrupar).
   const buckets = periodMode === 'total' ? [] : bucketEntriesByPeriod(entries, periodMode)

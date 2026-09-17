@@ -129,9 +129,10 @@ function rowToPayment(row) {
   return {
     id: row.id,
     invoiceId: row.invoice_id,
-    // Horas que cubre el pago (entry_ids) y a quién se le pagó (user_name). En un pago
-    // por-contractor bajo factura, entry_ids queda NULL (las horas viven en
-    // invoices.entry_ids / invoice_contractors); en overage/sp_internal trae las horas.
+    // Horas que cubre el pago (entry_ids) y a quién se le pagó (user_name). Con pago parcial
+    // (0052/ADR 0005) TODO pago lleva sus entry_ids: el pago por-contractor bajo factura cubre el
+    // subconjunto pagado (la RPC register_contractor_payment inserta p_entry_ids), y overage/
+    // sp_internal las horas del bucket. Sólo los pagos LEGACY (0040, previos a 0052) tienen NULL.
     entryIds: (row.entry_ids ?? []).map(String),
     userName: row.user_name ?? null,
     // Supplier invoice number POR PAGO (contractor → SouthPoint), 0052: con pago parcial una
