@@ -275,22 +275,14 @@ export function ClientSummaryPage() {
     [summary, selectedClients, selectedProjectNumbers, selectedProjectNames, selectedSows],
   )
 
-  // Scope de proyecto SIN el filtro de Stage: base de las opciones de Week (one-directional,
-  // como el resto de los dropdowns). La grilla usa projectScoped (stage-filtrado).
-  const projectScopedBase = useMemo(
-    () =>
-      filterClientSummary(summaryBase.clients, {
-        clients: selectedClients,
-        projectNumbers: selectedProjectNumbers,
-        projectNames: selectedProjectNames,
-        sows: selectedSows,
-      }),
-    [summaryBase, selectedClients, selectedProjectNumbers, selectedProjectNames, selectedSows],
-  )
-
+  // Opciones de Week: salen del scope YA recortado por Stage (projectScoped), no de la base.
+  // A diferencia de los dims de proyecto (Client/Project#/Project/SOW, one-directional para no
+  // colapsar al elegir un stage), Week es una dimensión de TIEMPO: ofrecer una semana cuyas
+  // horas viven sólo en un stage filtrado fuera daría una grilla vacía al elegirla. Así el
+  // Stage sí acota las semanas ofrecidas.
   const weekOptions = useMemo(() => {
     const byLabel = new Map()
-    for (const p of projectScopedBase.flatMap((c) => c.projects)) {
+    for (const p of projectScoped.flatMap((c) => c.projects)) {
       for (const w of p.weeks) byLabel.set(weekLabel(w), w.weekStart)
     }
     // ya elegida pero fuera del scope actual: se conserva para poder destildarla y se
@@ -298,7 +290,7 @@ export function ClientSummaryPage() {
     // localeCompare de dígitos ASCII, a diferencia de un noncharacter U+FFFF).
     for (const w of selectedWeeks) if (!byLabel.has(w)) byLabel.set(w, '9999-12-31')
     return [...byLabel.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([label]) => label)
-  }, [projectScopedBase, selectedWeeks])
+  }, [projectScoped, selectedWeeks])
 
   // La tabla aplica además el filtro Week sobre el scope de proyecto (recorta
   // filas-semana y descarta proyectos/clientes sin semana visible).
