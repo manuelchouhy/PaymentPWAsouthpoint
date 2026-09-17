@@ -12,7 +12,7 @@ import {
 } from '../lib/paymentsGrouping'
 import { invoiceCompletion } from '../lib/invoiceCompletion'
 import { entryPaymentStatus } from '../lib/entryPaymentStatus'
-import { bucketEntriesByPeriod, sumHours } from '../lib/paymentsPeriodBuckets'
+import { sumHours } from '../lib/paymentsPeriodBuckets'
 import { buildProjectIndex, deriveEntriesClient } from '../lib/entryClient'
 import {
   useEntryFilters,
@@ -36,6 +36,7 @@ import {
 } from '../lib/format'
 import { BillingBadge } from '../components/BillingBadge'
 import { RegisterPaymentModal } from '../components/RegisterPaymentModal'
+import { PeriodPaymentPicker } from '../components/PeriodPaymentPicker'
 import { Toast } from '../components/Toast'
 import { ExportDropdown } from '../components/ExportDropdown'
 import { exportGrid } from '../lib/exportGrid'
@@ -226,6 +227,30 @@ export function PaymentsPage() {
   // 'month' o 'week'. Sólo cambia cómo se AGRUPAN/seleccionan las horas; el pago sigue
   // siendo por los ids tildados. Ver src/lib/paymentsPeriodBuckets.js.
   const [payPeriodMode, setPayPeriodMode] = useState('total')
+  // Toggles del picker de pago (compartidos por el pago de factura y el invoice-less).
+  const togglePaySelected = useCallback((id) => {
+    setPaySelectedIds((prev) => {
+      const next = new Set(prev)
+      const k = String(id)
+      if (next.has(k)) next.delete(k)
+      else next.add(k)
+      return next
+    })
+  }, [])
+  const togglePaySelectedIds = useCallback((ids) => {
+    // Normaliza a String como togglePaySelected: el Set guarda ids-string (paySelectedIds.has
+    // se consulta siempre con String(e.id)); así el helper no depende de que el caller pre-stringifique.
+    const keys = ids.map(String)
+    setPaySelectedIds((prev) => {
+      const allSelected = keys.length > 0 && keys.every((k) => prev.has(k))
+      const next = new Set(prev)
+      for (const k of keys) {
+        if (allSelected) next.delete(k)
+        else next.add(k)
+      }
+      return next
+    })
+  }, [])
   const [entries, setEntries] = useState([])
   // Proyectos: sólo para mapear el NOMBRE de proyecto de la factura a su número
   // (columna "Project #" del encabezado). La factura guarda el proyecto como texto,
@@ -331,6 +356,20 @@ export function PaymentsPage() {
   }, [enrichedEntries])
   const entriesForIds = (entryIds) =>
     (entryIds ?? []).map((id) => entryById.get(String(id))).filter(Boolean)
+  // entry_id → horas, para que invoiceCompletion calcule paidHours EXACTO por cobertura parcial
+  // (sin esto prorratea). Se arma una vez desde las horas enriquecidas.
+  const hoursByEntryId = useMemo(() => {
+    const m = new Map()
+    for (const e of enrichedEntries) m.set(String(e.id), Number(e.hours) || 0)
+    return m
+  }, [enrichedEntries])
+  // entry_id → pago que lo cubre (índice armado UNA vez): así derivar supplier#/fecha/receipt por
+  // línea es O(entries) y no O(contractors × payments). entry_ids son únicos por pago (trigger).
+  const paymentByEntryId = useMemo(() => {
+    const m = new Map()
+    for (const p of payments) for (const id of p.entryIds ?? []) m.set(String(id), p)
+    return m
+  }, [payments])
 
   // --- Barra de filtros (misma que Billing) --------------------------------------
   // Dimensiones de horas (cliente/proyecto/#/contractor) sobre enrichedEntries, más
@@ -448,15 +487,47 @@ export function PaymentsPage() {
     const includePaid = showPaid || paymentStatuses.includes('Paid')
     for (const inv of invoices) {
       if (!(isPayable(inv.status) || (includePaid && inv.status === 'Paid'))) continue
-      const completion = invoiceCompletion(contractorsByInvoice.get(inv.id) ?? [], payments)
-      // Decora cada contractor una sola vez (acá, memoizado) con su desglose de horas
-      // y el rango de semanas: así el render no rejoinea/reagrega en cada toggle/toast.
+      const completion = invoiceCompletion(contractorsByInvoice.get(inv.id) ?? [], payments, hoursByEntryId)
+      // Decora cada contractor una sola vez (acá, memoizado) con su desglose de horas, el rango
+      // de semanas, y las horas PENDIENTES (unpaidEntries) que alimentan el picker de pago parcial.
       const contractors = completion.contractors.map((ic) => {
         const contractorEntries = entriesForIds(ic.entryIds)
         const summary = summarizeEntries(contractorEntries)
+        // Pagos que cubren la línea (vía el índice entry→pago). El supplier#, la fecha y el
+        // payment_id de la fila se DERIVAN de esos pagos (el supplier# vive por pago, 0052; ya no
+        // se muta invoice_contractors al pagar). Uno → ese; varios (parciales) → "N refs"; ninguno
+        // → el legacy de invoice_contractors. El desglose por pago va en el slice 05 (expand).
+        const linePayments = [
+          ...new Set((ic.entryIds ?? []).map((id) => paymentByEntryId.get(String(id))).filter(Boolean)),
+        ]
+        const lineSuppliers = [...new Set(linePayments.map((p) => p.supplierInvoiceNumber).filter(Boolean))]
+        const supplierInvoiceNumber =
+          lineSuppliers.length === 1
+            ? lineSuppliers[0]
+            : lineSuppliers.length > 1
+              ? `${lineSuppliers.length} refs`
+              : (ic.supplierInvoiceNumber ?? null)
+        // El pago más reciente que cubre la línea (para fecha de export y fallback de receipt).
+        // Desempate por createdAt (timestamp de inserción) entre pagos del MISMO día, para no
+        // elegir uno arbitrario por el orden de entry_ids. El desglose por pago llega en slice 05.
+        const newestPayment = linePayments
+          .slice()
+          .sort(
+            (a, b) =>
+              (a.paymentDate || '').localeCompare(b.paymentDate || '') ||
+              (a.createdAt || '').localeCompare(b.createdAt || ''),
+          )
+          .at(-1)
         return {
           ...ic,
+          supplierInvoiceNumber,
+          paymentDate: newestPayment?.paymentDate ?? ic.paymentDate ?? null,
+          // receiptPaymentId = pago para el recibo (derivado). Se mantiene ic.paymentId SIN pisar
+          // (es el flag legacy de invoice_contractors que el guard de createPayment usa; pisarlo
+          // con el pago derivado rompería "Pay remaining" en demo).
+          receiptPaymentId: newestPayment?.id ?? ic.paymentId ?? null,
           entries: contractorEntries,
+          unpaidEntries: entriesForIds(ic.unpaidEntryIds),
           weeks: formatWeekRange(summary.dateStart, summary.dateEnd),
         }
       })
@@ -489,7 +560,7 @@ export function PaymentsPage() {
       })
     }
     return rows
-  }, [invoices, contractorsByInvoice, payments, showPaid, paymentStatuses, warningBefore, entryById])
+  }, [invoices, contractorsByInvoice, payments, showPaid, paymentStatuses, warningBefore, entryById, hoursByEntryId, paymentByEntryId])
 
   // Horas invoice-less pendientes de pago, por contractor (overage / sp_internal).
   // El meta condensado (proyecto/cliente/semana) de cada grupo se computa acá, una vez,
@@ -673,7 +744,12 @@ export function PaymentsPage() {
     // aterrice la feature de pago parcial de facturas por período (como overage/sp_internal).
     for (const r of filteredInvoiceRows) {
       if (!isPayable(r.inv.status)) continue
-      pendingHours += r.contractors.reduce((s, ic) => s + (ic.paid ? 0 : Number(ic.hours) || 0), 0)
+      // Horas pendientes = por línea, las NO cubiertas (hours − paidHours); una línea
+      // parcialmente paga aporta sólo su resto, no el total.
+      pendingHours += r.contractors.reduce(
+        (s, ic) => s + (ic.paid ? 0 : Math.max(0, (Number(ic.hours) || 0) - (Number(ic.paidHours) || 0))),
+        0,
+      )
       if (r.dueDate) {
         if (r.alertLevel === 'overdue') overdue += 1
         if (r.daysUntilDue >= 0 && r.daysUntilDue <= 7) dueThisWeek += 1
@@ -703,41 +779,54 @@ export function PaymentsPage() {
   // pasa a Paid. Maneja carreras (already_paid / not_payable / stale) recargando.
   async function handlePayContractor(payload) {
     const { invoice: inv, ic } = payTargetContractor
+    // Modelo de selección (cap-independiente). Las horas de la línea se resuelven a entries CARGADAS
+    // (cap ~1000 de timeEntries.list); las que caen fuera del cap no se pueden mostrar ni tildar.
+    //  - Si TODAS las pendientes están cargadas: subconjunto libre = pendientes MENOS las destildadas.
+    //    Destildar todo deja 0 → el submit se deshabilita (sin sorpresa).
+    //  - Si hay pendientes NO cargadas: no se puede expresar un subconjunto honesto (destildar las
+    //    visibles no evita pagar las invisibles), así que se paga la línea pendiente ENTERA y el
+    //    modal/picker lo avisan explícitamente (whole-line). Esto preserva que una factura vieja
+    //    (fuera del cap) siga siendo pagable, sin el over-pago silencioso de un picker parcial falso.
+    const loadedUnpaid = ic.unpaidEntries ?? []
+    const allUnpaidIds = ic.unpaidEntryIds ?? []
+    const hasUnloadedUnpaid = allUnpaidIds.length > loadedUnpaid.length
+    const deselectedLoadedIds = new Set(
+      hasUnloadedUnpaid
+        ? []
+        : loadedUnpaid.filter((e) => !paySelectedIds.has(String(e.id))).map((e) => String(e.id)),
+    )
+    const selectedIds = allUnpaidIds.filter((id) => !deselectedLoadedIds.has(String(id)))
     try {
-      const { payment } = await api.payments.create(ic, payload, user?.email ?? null)
-      // Marca la fila del contractor como pagada localmente (payment_id + supplier#).
-      const nextContractors = (contractorsByInvoice.get(inv.id) ?? []).map((row) =>
-        row.id === ic.id
-          ? {
-              ...row,
-              paymentId: payment.id,
-              supplierInvoiceNumber: payload.supplierInvoiceNumber ?? row.supplierInvoiceNumber,
-              paymentDate: payload.paymentDate,
-            }
-          : row,
+      const { payment } = await api.payments.create(
+        ic,
+        { ...payload, entryIds: selectedIds },
+        user?.email ?? null,
       )
-      setInvoiceContractors((prev) =>
-        prev.map((row) => {
-          const hit = nextContractors.find((n) => n.id === row.id)
-          return hit ?? row
-        }),
+      // El pago (con sus entry_ids) entra al estado; invoiceRows recomputa por COBERTURA la
+      // línea (paid/paidHours) y la factura, así que no se muta invoice_contractors a mano.
+      const nextPayments = [payment, ...payments]
+      setPayments(nextPayments)
+      // ¿La factura quedó 100% cubierta? Se recomputa con el pago nuevo (la RPC ya la flipeó en
+      // prod; acá se refleja en el estado local).
+      const completion = invoiceCompletion(
+        contractorsByInvoice.get(inv.id) ?? [],
+        nextPayments,
+        hoursByEntryId,
       )
-      setPayments((prev) => [payment, ...prev])
-      // Si con este pago quedaron todas las filas pagas, la RPC ya flipeó la factura a
-      // Paid: reflejarlo en el estado local.
-      const nextPaidIds = paidEntryIdsFrom([payment, ...payments])
-      const allPaid = nextContractors
-        .filter((row) => (row.entryIds?.length ?? 0) > 0)
-        .every(
-          (row) =>
-            row.paymentId != null ||
-            (row.entryIds ?? []).every((id) => nextPaidIds.has(String(id))),
-        )
-      if (allPaid) {
-        setInvoices((prev) =>
-          prev.map((i) => (i.id === inv.id ? { ...i, status: 'Paid' } : i)),
-        )
+      const nowPaid = completion.status === 'Paid'
+      if (nowPaid) {
+        setInvoices((prev) => prev.map((i) => (i.id === inv.id ? { ...i, status: 'Paid' } : i)))
       }
+      // Horas pagadas para toast/audit = remanente total de la línea (hours − paidHours,
+      // cap-independiente) menos las horas de las entries CARGADAS que se destildaron. Coincide
+      // con lo que realmente cubre el pago (unpaidEntryIds − destildadas), incluidas las no cargadas.
+      const deselectedHours = (ic.unpaidEntries ?? [])
+        .filter((e) => deselectedLoadedIds.has(String(e.id)))
+        .reduce((s, e) => s + (Number(e.hours) || 0), 0)
+      const paidHours = Math.max(
+        0,
+        (Number(ic.hours) || 0) - (Number(ic.paidHours) || 0) - deselectedHours,
+      )
       api.audit.log({
         actorEmail: user?.email,
         actorRole: profile?.roles?.[0] ?? null,
@@ -749,15 +838,16 @@ export function PaymentsPage() {
           spInvoiceNumber: inv.spInvoiceNumber,
           contractor: ic.contractor,
           supplierInvoiceNumber: payload.supplierInvoiceNumber,
-          hours: ic.hours,
+          hours: paidHours,
+          entryIds: selectedIds.map(String),
           paymentDate: payload.paymentDate,
         },
       })
       setPayTargetContractor(null)
       setToast({
         id: Date.now(),
-        message: `${ic.contractor} paid — ${formatHours(ic.hours)} h${
-          allPaid ? ` · ${inv.spInvoiceNumber ?? 'invoice'} → Paid` : ''
+        message: `${ic.contractor} paid — ${formatHours(paidHours)} h${
+          nowPaid ? ` · ${inv.spInvoiceNumber ?? 'invoice'} → Paid` : ''
         }`,
       })
     } catch (error) {
@@ -808,8 +898,10 @@ export function PaymentsPage() {
   }
 
   function handleDownload(inv, ic) {
+    // Recibo del pago que cubre la línea (el más reciente si hubo varios parciales — el recibo
+    // por pago individual llega en el slice 05). receiptPaymentId es el derivado de los pagos.
     const payment =
-      payments.find((p) => p.id === ic.paymentId) ??
+      payments.find((p) => p.id === ic.receiptPaymentId) ??
       payments.find(
         (p) => p.invoiceId === inv.id && p.userName === ic.contractor,
       )
@@ -835,6 +927,7 @@ export function PaymentsPage() {
       { header: 'Contractor', key: 'contractor' },
       { header: 'Supplier Invoice #', key: 'supplierInvoice' },
       { header: 'Hours', key: 'hours' },
+      { header: 'Paid Hours', key: 'paidHours' },
       { header: 'Contractor Status', key: 'contractorStatus' },
       { header: 'Invoice Status', key: 'invoiceStatus' },
       { header: 'Payment Due', key: 'dueDate' },
@@ -851,7 +944,10 @@ export function PaymentsPage() {
         contractor: ic.contractor,
         supplierInvoice: ic.supplierInvoiceNumber ?? '',
         hours: Number(ic.hours) || 0,
-        contractorStatus: ic.paid ? 'Paid' : 'Pending',
+        paidHours: Number(ic.paidHours) || 0,
+        // Estado por cobertura: Paid (todo cubierto), Partial (algo pagado pero no todo),
+        // Pending (nada). Antes mostraba sólo Paid/Pending y ocultaba los parciales.
+        contractorStatus: ic.paid ? 'Paid' : (Number(ic.paidHours) || 0) > 0 ? 'Partial' : 'Pending',
         invoiceStatus: r.inv.status,
         dueDate: r.dueDate ?? '',
         paymentDate: ic.paymentDate ?? '',
@@ -1215,10 +1311,17 @@ export function PaymentsPage() {
                                 />
                               </td>
                               <td className="cell-mono">{ic.supplierInvoiceNumber ?? '—'}</td>
-                              <td className="col-num cell-mono">{formatHours(ic.hours)} h</td>
+                              <td className="col-num cell-mono">
+                                {/* Progreso parcial: "pagadas / total" mientras no esté 100% paga. */}
+                                {!ic.paid && (ic.paidHours ?? 0) > 0
+                                  ? `${formatHours(ic.paidHours)} / ${formatHours(ic.hours)} h`
+                                  : `${formatHours(ic.hours)} h`}
+                              </td>
                               <td>
                                 {ic.paid ? (
                                   <span className="badge badge--ok">Paid</span>
+                                ) : (ic.paidHours ?? 0) > 0 ? (
+                                  <span className="badge badge--tobill">Partial</span>
                                 ) : (
                                   <span className="cell-pop-empty">Pending</span>
                                 )}
@@ -1228,9 +1331,15 @@ export function PaymentsPage() {
                                   <button
                                     type="button"
                                     className="btn btn--pay btn--row"
-                                    onClick={() => setPayTargetContractor({ invoice: r.inv, ic })}
+                                    onClick={() => {
+                                      // Abre el picker sobre las horas PENDIENTES cargadas de la
+                                      // línea, preseleccionadas (Total por defecto).
+                                      setPaySelectedIds(new Set((ic.unpaidEntries ?? []).map((e) => String(e.id))))
+                                      setPayPeriodMode('total')
+                                      setPayTargetContractor({ invoice: r.inv, ic })
+                                    }}
                                   >
-                                    Register Payment
+                                    {(ic.paidHours ?? 0) > 0 ? 'Pay remaining' : 'Register Payment'}
                                   </button>
                                 ) : ic.paid ? (
                                   <button
@@ -1277,28 +1386,69 @@ export function PaymentsPage() {
       )}
 
       <AnimatePresence>
-        {payTargetContractor && (
-          <RegisterPaymentModal
-            key={`payc-${payTargetContractor.ic.id}`}
-            requireSupplierNumber
-            title="Register contractor payment"
-            submitLabel="Register payment"
-            summaryName={payTargetContractor.ic.contractor}
-            summaryMeta={`${payTargetContractor.invoice.spInvoiceNumber ?? 'Invoice'} · ${
-              payTargetContractor.invoice.project ?? '—'
-            }`}
-            summaryFigure={`${formatHours(payTargetContractor.ic.hours)} h`}
-            summaryFigureLabel="Hours to pay"
-            footerNote={
-              <>
-                Registers this contractor’s payment. The invoice moves to{' '}
-                <strong>Paid</strong> once every contractor is paid.
-              </>
-            }
-            onClose={() => setPayTargetContractor(null)}
-            onConfirm={handlePayContractor}
-          />
-        )}
+        {payTargetContractor &&
+          (() => {
+            const ic = payTargetContractor.ic
+            const inv = payTargetContractor.invoice
+            // El picker muestra TODAS las entries CARGADAS de la línea (pagadas read-only vía
+            // paidEntryIds), como el de overage/sp_internal. El usuario sólo puede EXCLUIR horas
+            // cargadas; lo que se paga es la línea pendiente COMPLETA menos lo destildado
+            // (cap-independiente — ver handlePayContractor). Fig/count reflejan ESO, no sólo lo cargado.
+            const loadedUnpaid = ic.unpaidEntries ?? []
+            const allUnpaidIds = ic.unpaidEntryIds ?? []
+            const allEntries = ic.entries ?? [] // siempre asignado en invoiceRows; [] defensivo.
+            // Hay horas pendientes NO cargadas (fuera del cap) → sólo pago de línea entera (ver
+            // handlePayContractor). Si todo está cargado, subconjunto libre por destildado.
+            const hasUnloadedUnpaid = allUnpaidIds.length > loadedUnpaid.length
+            const deselectedLoaded = hasUnloadedUnpaid
+              ? []
+              : loadedUnpaid.filter((e) => !paySelectedIds.has(String(e.id)))
+            const deselectedIds = new Set(deselectedLoaded.map((e) => String(e.id)))
+            // Ids reales a pagar = pendientes totales (cap-independiente) menos cargadas destildadas.
+            const payIds = allUnpaidIds.filter((id) => !deselectedIds.has(String(id)))
+            const selectedCount = payIds.length
+            const totalUnpaid = allUnpaidIds.length
+            // Horas a pagar = remanente total (hours − paidHours) menos lo destildado cargado.
+            const remainingHours = Math.max(0, (Number(ic.hours) || 0) - (Number(ic.paidHours) || 0))
+            const selHours = Math.max(0, remainingHours - sumHours(deselectedLoaded))
+            const unloadedCount = allUnpaidIds.length - loadedUnpaid.length
+            return (
+              <RegisterPaymentModal
+                key={`payc-${ic.id}`}
+                requireSupplierNumber
+                title="Register contractor payment"
+                submitLabel="Register payment"
+                extraValid={selectedCount > 0}
+                summaryName={ic.contractor}
+                summaryMeta={`${inv.spInvoiceNumber ?? 'Invoice'} · ${inv.project ?? '—'} · ${selectedCount} of ${totalUnpaid} ${totalUnpaid === 1 ? 'entry' : 'entries'}`}
+                summaryFigure={`${formatHours(selHours)} h`}
+                summaryFigureLabel="Hours to pay (selected)"
+                extraContent={
+                  <PeriodPaymentPicker
+                    entries={allEntries}
+                    selectedIds={paySelectedIds}
+                    onToggleId={togglePaySelected}
+                    onToggleIds={togglePaySelectedIds}
+                    periodMode={payPeriodMode}
+                    onPeriodMode={setPayPeriodMode}
+                    paidEntryIds={paidEntryIds}
+                    selectedCount={selectedCount}
+                    wholeLine={hasUnloadedUnpaid}
+                    wholeLineHours={selHours}
+                    unloadedCount={unloadedCount}
+                  />
+                }
+                footerNote={
+                  <>
+                    Registers this contractor’s payment for the selected hours. The invoice moves
+                    to <strong>Paid</strong> once all its hours are covered.
+                  </>
+                }
+                onClose={() => setPayTargetContractor(null)}
+                onConfirm={handlePayContractor}
+              />
+            )
+          })()}
       </AnimatePresence>
 
       <AnimatePresence>
@@ -1314,63 +1464,6 @@ export function PaymentsPage() {
             // sumHours: suma con guard NaN, el MISMO criterio que los totales de bucket
             // (una hora mal tipada mostraría 'NaN h' en el summary del modal).
             const selHours = sumHours(selected)
-            const toggle = (id) =>
-              setPaySelectedIds((prev) => {
-                const next = new Set(prev)
-                const k = String(id)
-                if (next.has(k)) next.delete(k)
-                else next.add(k)
-                return next
-              })
-
-            // Buckets de período (Total / By month / By week): sólo AGRUPAN las horas
-            // para poder tildarlas de a un mes/semana; el pago sigue siendo por los ids
-            // tildados (paySelectedIds). En 'total' la lista es plana y NO se agrupa
-            // (bucketEntriesByPeriod sólo se llama en month/week, no en cada render de total).
-            const buckets =
-              payPeriodMode === 'total'
-                ? []
-                : bucketEntriesByPeriod(payTarget.entries, payPeriodMode)
-            // Tilda/destilda de una vez las pendientes de un bucket (ids ya calculados):
-            // si están todas seleccionadas, las saca; si no, las agrega.
-            const toggleBucketIds = (ids) =>
-              setPaySelectedIds((prev) => {
-                const allSelected = ids.length > 0 && ids.every((id) => prev.has(id))
-                const next = new Set(prev)
-                for (const id of ids) {
-                  if (allSelected) next.delete(id)
-                  else next.add(id)
-                }
-                return next
-              })
-            // Fila de una hora (reusada en modo plano y agrupado).
-            const renderEntryRow = (e) => {
-              const status = entryPaymentStatus(e, paidEntryIds)
-              const isPaid = status === 'paid'
-              return (
-                <li key={e.id}>
-                  <label
-                    className={`overage-picker__row${isPaid ? ' overage-picker__row--paid' : ''}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={paySelectedIds.has(String(e.id))}
-                      disabled={isPaid}
-                      onChange={() => toggle(e.id)}
-                    />
-                    <span className="overage-picker__desc">
-                      {e.project || '—'}
-                      {e.task ? ` · ${e.task}` : ''}
-                      {e.date ? ` · ${formatDate(e.date)}` : ''}
-                    </span>
-                    <span className="overage-picker__hours">{formatHours(e.hours)} h</span>
-                    {/* Indicador pasivo: pointer-events:none (CSS) deja pasar el click al
-                        <label>, así clickear el badge de una fila pendiente la togglea. */}
-                    <span className={`badge badge--${status}`}>{isPaid ? 'Paid' : 'Pending'}</span>
-                  </label>
-                </li>
-              )
-            }
             return (
               <RegisterPaymentModal
                 key={`${payTarget.allocation}-${payTarget.user}`}
@@ -1384,81 +1477,16 @@ export function PaymentsPage() {
                 summaryFigure={`${formatHours(selHours)} h`}
                 summaryFigureLabel={`${label.cap} hours (selected)`}
                 extraContent={
-                  <div className="overage-picker">
-                    {/* Modo de pago: Total (todo, como siempre), por Mes o por Semana. Sólo
-                        cambia el agrupado/selección; el pago es por las horas tildadas. */}
-                    <div
-                      className="overage-picker__modes"
-                      role="group"
-                      aria-label="Pay by period"
-                    >
-                      {[
-                        ['total', 'Total'],
-                        ['month', 'By month'],
-                        ['week', 'By week'],
-                      ].map(([mode, modeLabel]) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          className={`overage-picker__mode${payPeriodMode === mode ? ' is-active' : ''}`}
-                          aria-pressed={payPeriodMode === mode}
-                          onClick={() => setPayPeriodMode(mode)}
-                        >
-                          {modeLabel}
-                        </button>
-                      ))}
-                    </div>
-                    <span className="overage-picker__title">Hours to pay</span>
-                    {payPeriodMode === 'total' ? (
-                      <ul className="overage-picker__list">
-                        {payTarget.entries.map(renderEntryRow)}
-                      </ul>
-                    ) : (
-                      buckets.map((bucket) => {
-                        // Pendientes del bucket calculadas UNA vez (las pagadas van
-                        // read-only). El header muestra las horas PENDIENTES (lo pagable),
-                        // no bucket.hours —que incluye las ya pagadas y sobreestimaría lo
-                        // que el "seleccionar todo" del bucket realmente tilda—.
-                        const pending = bucket.entries.filter(isPending)
-                        const pendIds = pending.map((e) => String(e.id))
-                        const pendHours = sumHours(pending)
-                        const allSel = pendIds.length > 0 && pendIds.every((id) => paySelectedIds.has(id))
-                        const someSel = pendIds.some((id) => paySelectedIds.has(id))
-                        // Sin pendientes (bucket todo pagado): el "seleccionar todo" no hace
-                        // nada, así que la cabecera no debe parecer clickeable.
-                        const empty = pendIds.length === 0
-                        return (
-                          <div key={bucket.key} className="overage-picker__bucket">
-                            <label
-                              className={`overage-picker__bucket-head${empty ? ' overage-picker__bucket-head--empty' : ''}`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={allSel}
-                                // Indeterminado cuando hay algunas (no todas) tildadas.
-                                ref={(el) => {
-                                  if (el) el.indeterminate = !allSel && someSel
-                                }}
-                                // Sin pendientes (todo pagado) no hay nada que tildar.
-                                disabled={empty}
-                                onChange={() => toggleBucketIds(pendIds)}
-                              />
-                              <span className="overage-picker__bucket-label">{bucket.label}</span>
-                              <span className="overage-picker__bucket-hours">
-                                {formatHours(pendHours)} h
-                              </span>
-                            </label>
-                            <ul className="overage-picker__list">
-                              {bucket.entries.map(renderEntryRow)}
-                            </ul>
-                          </div>
-                        )
-                      })
-                    )}
-                    {selected.length === 0 && (
-                      <span className="field__error">Select at least one hour to pay.</span>
-                    )}
-                  </div>
+                  <PeriodPaymentPicker
+                    entries={payTarget.entries}
+                    selectedIds={paySelectedIds}
+                    onToggleId={togglePaySelected}
+                    onToggleIds={togglePaySelectedIds}
+                    periodMode={payPeriodMode}
+                    onPeriodMode={setPayPeriodMode}
+                    paidEntryIds={paidEntryIds}
+                    selectedCount={selected.length}
+                  />
                 }
                 footerNote={
                   <>
