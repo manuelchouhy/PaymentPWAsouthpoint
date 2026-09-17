@@ -1,9 +1,17 @@
 -- 0052 — Pago PARCIAL de facturas por período (ADR 0005).
 --
--- ⚠️ DRAFT / gated. Probar en un BRANCH de Supabase con smoke SQL. NO aplicar a prod
--- sin aprobación humana, y SÓLO junto con el slice 03 (paymentsData) — la firma de
--- register_contractor_payment cambia (agrega p_entry_ids), así que el caller viejo
--- (8 args) fallaría con PGRST202 hasta que 03 lo reescriba. Es un slice apilado.
+-- ⚠️ DRAFT / gated. Validada con smoke SQL en transacción con ROLLBACK (branching Pro no
+-- disponible). NO aplicar a prod sin aprobación humana, y SÓLO junto con el slice 03
+-- (paymentsData) — la firma de register_contractor_payment cambia (agrega p_entry_ids), así
+-- que el caller viejo (8 args) fallaría con PGRST202 hasta que 03 lo reescriba. Es un slice
+-- apilado. La UI que lee supplier#/payment de invoice_contractors (getInvoiceContractors)
+-- pasa a leerlos de `payments` en el slice 04/05 (esas columnas de invoice_contractors quedan
+-- vestigiales para el pago parcial).
+--
+-- PREREQUISITO: requiere 0039-0042 aplicadas (invoice_contractors, RPC por-contractor,
+-- drop de columnas de plata, trace_view por-contractor). Verificado aplicado en el proyecto
+-- (list_migrations: 0040/0041/0042 presentes). No re-dropea overloads de 0036 porque 0040 ya
+-- los eliminó (queda un solo overload de register_contractor_payment antes de esta migración).
 --
 -- Qué cambia:
 --   1. payments.supplier_invoice_number: el supplier# pasa a vivir POR PAGO (antes
@@ -119,6 +127,18 @@ begin
    for update;
   if v_ic.id is null then
     raise exception 'invoice_contractor_not_found' using errcode = 'P0002';
+  end if;
+  -- Una línea pagada al modo LEGACY (0040: payment_id seteado, payments.entry_ids NULL) NO se
+  -- puede volver a pagar: sus horas no viven en ningún payments.entry_ids, así que el trigger
+  -- anti-solape no las ve y sin este guard se doble-pagarían.
+  if v_ic.payment_id is not null then
+    raise exception 'contractor_already_paid' using errcode = 'P0001';
+  end if;
+  -- Línea sin entry_ids (fila legacy anómala: el CHECK nonempty de 0040 es NOT VALID): sin esto,
+  -- `p_entry_ids <@ NULL` = NULL y el subset check de abajo no dispararía, dejando pagar horas
+  -- que no pertenecen a la línea.
+  if v_ic.entry_ids is null or cardinality(v_ic.entry_ids) = 0 then
+    raise exception 'invoice_contractor_no_entries' using errcode = 'P0001';
   end if;
   if p_supplier_invoice_number is null or btrim(p_supplier_invoice_number) = '' then
     raise exception 'supplier invoice number is required' using errcode = 'P0001';
