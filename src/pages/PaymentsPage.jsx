@@ -513,7 +513,10 @@ export function PaymentsPage() {
           ...ic,
           supplierInvoiceNumber,
           paymentDate: newestPayment?.paymentDate ?? ic.paymentDate ?? null,
-          paymentId: newestPayment?.id ?? ic.paymentId ?? null,
+          // receiptPaymentId = pago para el recibo (derivado). Se mantiene ic.paymentId SIN pisar
+          // (es el flag legacy de invoice_contractors que el guard de createPayment usa; pisarlo
+          // con el pago derivado rompería "Pay remaining" en demo).
+          receiptPaymentId: newestPayment?.id ?? ic.paymentId ?? null,
           entries: contractorEntries,
           unpaidEntries: entriesForIds(ic.unpaidEntryIds),
           weeks: formatWeekRange(summary.dateStart, summary.dateEnd),
@@ -767,13 +770,18 @@ export function PaymentsPage() {
   // pasa a Paid. Maneja carreras (already_paid / not_payable / stale) recargando.
   async function handlePayContractor(payload) {
     const { invoice: inv, ic } = payTargetContractor
-    // Horas SELECCIONADAS de las pendientes CARGADAS de esta línea (las que el picker muestra).
-    // Igual que el flujo overage/sp_internal, se opera sobre entries cargadas (mismo cap de
-    // sync ~1000); una hora fuera del cap no es individualmente pagable por el picker, y
-    // display/selección/pago quedan consistentes.
-    const selectedIds = (ic.unpaidEntries ?? [])
+    // Selección de horas a pagar. Las pendientes CARGADAS son las que el picker muestra/tilda.
+    // Si el usuario dejó TODAS las cargadas tildadas ("Total"), se paga la línea COMPLETA
+    // (ic.unpaidEntryIds, cap-independiente) — sin regresión respecto del pago whole-line viejo,
+    // que cubría horas aunque estuvieran fuera del cap de sync. Si destildó algo (parcial por
+    // período/manual), se paga sólo el subconjunto cargado seleccionado.
+    const loadedUnpaid = ic.unpaidEntries ?? []
+    const selectedLoaded = loadedUnpaid
       .filter((e) => paySelectedIds.has(String(e.id)))
       .map((e) => e.id)
+    const allLoadedSelected =
+      loadedUnpaid.length > 0 && selectedLoaded.length === loadedUnpaid.length
+    const selectedIds = allLoadedSelected ? (ic.unpaidEntryIds ?? []) : selectedLoaded
     try {
       const { payment } = await api.payments.create(
         ic,
@@ -795,7 +803,12 @@ export function PaymentsPage() {
       if (nowPaid) {
         setInvoices((prev) => prev.map((i) => (i.id === inv.id ? { ...i, status: 'Paid' } : i)))
       }
-      const paidHours = selectedIds.reduce((s, id) => s + (hoursByEntryId.get(String(id)) || 0), 0)
+      // Horas pagadas para toast/audit. Si se pagó la línea completa, los ids fuera del cap de
+      // sync no están en hoursByEntryId; se usa el remanente exacto de invoiceCompletion
+      // (hours − paidHours). Si fue parcial, se suman las horas de los ids seleccionados (cargados).
+      const paidHours = allLoadedSelected
+        ? Math.max(0, (Number(ic.hours) || 0) - (Number(ic.paidHours) || 0))
+        : selectedIds.reduce((s, id) => s + (hoursByEntryId.get(String(id)) || 0), 0)
       api.audit.log({
         actorEmail: user?.email,
         actorRole: profile?.roles?.[0] ?? null,
@@ -867,8 +880,10 @@ export function PaymentsPage() {
   }
 
   function handleDownload(inv, ic) {
+    // Recibo del pago que cubre la línea (el más reciente si hubo varios parciales — el recibo
+    // por pago individual llega en el slice 05). receiptPaymentId es el derivado de los pagos.
     const payment =
-      payments.find((p) => p.id === ic.paymentId) ??
+      payments.find((p) => p.id === ic.receiptPaymentId) ??
       payments.find(
         (p) => p.invoiceId === inv.id && p.userName === ic.contractor,
       )
@@ -894,6 +909,7 @@ export function PaymentsPage() {
       { header: 'Contractor', key: 'contractor' },
       { header: 'Supplier Invoice #', key: 'supplierInvoice' },
       { header: 'Hours', key: 'hours' },
+      { header: 'Paid Hours', key: 'paidHours' },
       { header: 'Contractor Status', key: 'contractorStatus' },
       { header: 'Invoice Status', key: 'invoiceStatus' },
       { header: 'Payment Due', key: 'dueDate' },
@@ -910,7 +926,10 @@ export function PaymentsPage() {
         contractor: ic.contractor,
         supplierInvoice: ic.supplierInvoiceNumber ?? '',
         hours: Number(ic.hours) || 0,
-        contractorStatus: ic.paid ? 'Paid' : 'Pending',
+        paidHours: Number(ic.paidHours) || 0,
+        // Estado por cobertura: Paid (todo cubierto), Partial (algo pagado pero no todo),
+        // Pending (nada). Antes mostraba sólo Paid/Pending y ocultaba los parciales.
+        contractorStatus: ic.paid ? 'Paid' : (Number(ic.paidHours) || 0) > 0 ? 'Partial' : 'Pending',
         invoiceStatus: r.inv.status,
         dueDate: r.dueDate ?? '',
         paymentDate: ic.paymentDate ?? '',
@@ -1353,9 +1372,13 @@ export function PaymentsPage() {
           (() => {
             const ic = payTargetContractor.ic
             const inv = payTargetContractor.invoice
-            // Entries pendientes CARGADAS de la línea (lo que el picker muestra/pagable).
+            // Entries pendientes CARGADAS de la línea = lo pagable/seleccionable.
             // Selección/hours/validación miden sobre ESTO, así display y pago coinciden.
             const pending = ic.unpaidEntries ?? []
+            // El picker muestra TODAS las entries de la línea (pagadas read-only vía paidEntryIds),
+            // como el picker de overage/sp_internal — no sólo las pendientes. Fallback a pending
+            // si por algún motivo no vinieran decoradas.
+            const allEntries = ic.entries ?? pending
             const selectedEntries = pending.filter((e) => paySelectedIds.has(String(e.id)))
             const selectedCount = selectedEntries.length
             const selHours = sumHours(selectedEntries)
@@ -1372,7 +1395,7 @@ export function PaymentsPage() {
                 summaryFigureLabel="Hours to pay (selected)"
                 extraContent={
                   <PeriodPaymentPicker
-                    entries={pending}
+                    entries={allEntries}
                     selectedIds={paySelectedIds}
                     onToggleId={togglePaySelected}
                     onToggleIds={togglePaySelectedIds}
