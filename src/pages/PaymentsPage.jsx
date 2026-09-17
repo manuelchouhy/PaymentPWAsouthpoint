@@ -360,6 +360,13 @@ export function PaymentsPage() {
     for (const e of enrichedEntries) m.set(String(e.id), Number(e.hours) || 0)
     return m
   }, [enrichedEntries])
+  // entry_id → pago que lo cubre (índice armado UNA vez): así derivar supplier#/fecha/receipt por
+  // línea es O(entries) y no O(contractors × payments). entry_ids son únicos por pago (trigger).
+  const paymentByEntryId = useMemo(() => {
+    const m = new Map()
+    for (const p of payments) for (const id of p.entryIds ?? []) m.set(String(id), p)
+    return m
+  }, [payments])
 
   // --- Barra de filtros (misma que Billing) --------------------------------------
   // Dimensiones de horas (cliente/proyecto/#/contractor) sobre enrichedEntries, más
@@ -483,28 +490,30 @@ export function PaymentsPage() {
       const contractors = completion.contractors.map((ic) => {
         const contractorEntries = entriesForIds(ic.entryIds)
         const summary = summarizeEntries(contractorEntries)
-        // Supplier# de la fila derivado de los PAGOS que cubren la línea (el supplier# vive por
-        // pago, 0052). Uno → ese; varios (pagos parciales con distinto comprobante) → "N refs";
-        // ninguno → el legacy de invoice_contractors (facturas viejas). El desglose por pago va
-        // en el slice 05 (expand).
-        const lineIds = new Set((ic.entryIds ?? []).map(String))
-        const lineSuppliers = [
-          ...new Set(
-            payments
-              .filter((p) => (p.entryIds ?? []).some((id) => lineIds.has(String(id))))
-              .map((p) => p.supplierInvoiceNumber)
-              .filter(Boolean),
-          ),
+        // Pagos que cubren la línea (vía el índice entry→pago). El supplier#, la fecha y el
+        // payment_id de la fila se DERIVAN de esos pagos (el supplier# vive por pago, 0052; ya no
+        // se muta invoice_contractors al pagar). Uno → ese; varios (parciales) → "N refs"; ninguno
+        // → el legacy de invoice_contractors. El desglose por pago va en el slice 05 (expand).
+        const linePayments = [
+          ...new Set((ic.entryIds ?? []).map((id) => paymentByEntryId.get(String(id))).filter(Boolean)),
         ]
+        const lineSuppliers = [...new Set(linePayments.map((p) => p.supplierInvoiceNumber).filter(Boolean))]
         const supplierInvoiceNumber =
           lineSuppliers.length === 1
             ? lineSuppliers[0]
             : lineSuppliers.length > 1
               ? `${lineSuppliers.length} refs`
               : (ic.supplierInvoiceNumber ?? null)
+        // El pago más reciente que cubre la línea (para fecha de export y fallback de receipt).
+        const newestPayment = linePayments
+          .slice()
+          .sort((a, b) => (a.paymentDate || '').localeCompare(b.paymentDate || ''))
+          .at(-1)
         return {
           ...ic,
           supplierInvoiceNumber,
+          paymentDate: newestPayment?.paymentDate ?? ic.paymentDate ?? null,
+          paymentId: newestPayment?.id ?? ic.paymentId ?? null,
           entries: contractorEntries,
           unpaidEntries: entriesForIds(ic.unpaidEntryIds),
           weeks: formatWeekRange(summary.dateStart, summary.dateEnd),
@@ -539,7 +548,7 @@ export function PaymentsPage() {
       })
     }
     return rows
-  }, [invoices, contractorsByInvoice, payments, showPaid, paymentStatuses, warningBefore, entryById, hoursByEntryId])
+  }, [invoices, contractorsByInvoice, payments, showPaid, paymentStatuses, warningBefore, entryById, hoursByEntryId, paymentByEntryId])
 
   // Horas invoice-less pendientes de pago, por contractor (overage / sp_internal).
   // El meta condensado (proyecto/cliente/semana) de cada grupo se computa acá, una vez,
@@ -758,10 +767,13 @@ export function PaymentsPage() {
   // pasa a Paid. Maneja carreras (already_paid / not_payable / stale) recargando.
   async function handlePayContractor(payload) {
     const { invoice: inv, ic } = payTargetContractor
-    // Horas SELECCIONADAS que pertenecen a las pendientes de ESTA línea. Se usan los
-    // unpaidEntryIds COMPLETOS (de invoiceCompletion, no sólo las entries cargadas en memoria),
-    // así "Total" cubre todo aunque haya horas fuera del cap de sync.
-    const selectedIds = (ic.unpaidEntryIds ?? []).filter((id) => paySelectedIds.has(String(id)))
+    // Horas SELECCIONADAS de las pendientes CARGADAS de esta línea (las que el picker muestra).
+    // Igual que el flujo overage/sp_internal, se opera sobre entries cargadas (mismo cap de
+    // sync ~1000); una hora fuera del cap no es individualmente pagable por el picker, y
+    // display/selección/pago quedan consistentes.
+    const selectedIds = (ic.unpaidEntries ?? [])
+      .filter((e) => paySelectedIds.has(String(e.id)))
+      .map((e) => e.id)
     try {
       const { payment } = await api.payments.create(
         ic,
@@ -1283,10 +1295,9 @@ export function PaymentsPage() {
                                     type="button"
                                     className="btn btn--pay btn--row"
                                     onClick={() => {
-                                      // Abre el picker sobre las horas PENDIENTES de la línea,
-                                      // preseleccionadas TODAS (unpaidEntryIds completo → "Total"
-                                      // cubre también horas fuera del cap de sync). Total por defecto.
-                                      setPaySelectedIds(new Set((ic.unpaidEntryIds ?? []).map(String)))
+                                      // Abre el picker sobre las horas PENDIENTES cargadas de la
+                                      // línea, preseleccionadas (Total por defecto).
+                                      setPaySelectedIds(new Set((ic.unpaidEntries ?? []).map((e) => String(e.id))))
                                       setPayPeriodMode('total')
                                       setPayTargetContractor({ invoice: r.inv, ic })
                                     }}
@@ -1342,13 +1353,12 @@ export function PaymentsPage() {
           (() => {
             const ic = payTargetContractor.ic
             const inv = payTargetContractor.invoice
-            // pending = entries pendientes CARGADAS (para el picker/checkboxes). El conteo de
-            // selección se mide sobre unpaidEntryIds COMPLETO (incluye horas fuera del cap), así
-            // "Total" es válido aunque no todas estén cargadas para mostrar.
+            // Entries pendientes CARGADAS de la línea (lo que el picker muestra/pagable).
+            // Selección/hours/validación miden sobre ESTO, así display y pago coinciden.
             const pending = ic.unpaidEntries ?? []
-            const totalUnpaid = ic.unpaidEntryIds ?? []
-            const selectedCount = totalUnpaid.filter((id) => paySelectedIds.has(String(id))).length
-            const selHours = sumHours(pending.filter((e) => paySelectedIds.has(String(e.id))))
+            const selectedEntries = pending.filter((e) => paySelectedIds.has(String(e.id)))
+            const selectedCount = selectedEntries.length
+            const selHours = sumHours(selectedEntries)
             return (
               <RegisterPaymentModal
                 key={`payc-${ic.id}`}
@@ -1357,7 +1367,7 @@ export function PaymentsPage() {
                 submitLabel="Register payment"
                 extraValid={selectedCount > 0}
                 summaryName={ic.contractor}
-                summaryMeta={`${inv.spInvoiceNumber ?? 'Invoice'} · ${inv.project ?? '—'} · ${selectedCount} of ${totalUnpaid.length} ${totalUnpaid.length === 1 ? 'entry' : 'entries'}`}
+                summaryMeta={`${inv.spInvoiceNumber ?? 'Invoice'} · ${inv.project ?? '—'} · ${selectedCount} of ${pending.length} ${pending.length === 1 ? 'entry' : 'entries'}`}
                 summaryFigure={`${formatHours(selHours)} h`}
                 summaryFigureLabel="Hours to pay (selected)"
                 extraContent={
