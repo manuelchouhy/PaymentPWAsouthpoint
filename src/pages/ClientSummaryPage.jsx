@@ -463,9 +463,10 @@ export function ClientSummaryPage() {
             </div>
           </section>
 
-          {/* Los gráficos dependen del scope de PROYECTO, no del filtro Week (que
-              solo achica la tabla): se muestran aunque el Week vacíe la grilla.
-              Van debajo de los filtros, antes de la grilla. */}
+          {/* Los gráficos se calculan sobre `clients` (ya filtrado por Week), así que reflejan
+              la semana elegida igual que la tabla; el budget queda el total del proyecto. Se
+              esconden si el scope filtrado queda vacío. Van debajo de los filtros, antes de la
+              grilla. */}
           {clients.length > 0 && <ClientSummaryCharts totals={chartTotalsValue} />}
 
           <div className="toolbar">
