@@ -219,7 +219,7 @@ export async function createPayment(invoiceContractor, payload, createdBy) {
     throw err
   }
   // Horas a cubrir: las seleccionadas (bucket de período) o toda la línea ("Total"). bigint[] en
-  // la DB: se descartan ids no numéricos (igual que createInvoice/createInvoicelessPayment).
+  // la DB: se descartan ids no numéricos (igual que createInvoice/createOveragePayment).
   // entry_ids = time_entries.id (serial/identity interno, ~1.6M hoy), NO el zoho_log_id: está muy
   // por debajo de 2^53, así que Number() no pierde precisión.
   const rawIds = payload.entryIds ?? invoiceContractor.entryIds ?? []
@@ -277,8 +277,10 @@ export async function createPayment(invoiceContractor, payload, createdBy) {
       createdBy: createdBy || null,
     }
     demoPayments = [payment, ...demoPayments]
-    const paidSet = new Set(idStrs)
-    const coversWholeLine = lineIds.length > 0 && lineIds.every((id) => paidSet.has(id))
+    // Cobertura ACUMULADA (todos los pagos demo, ya incluido el recién agregado): una línea
+    // pagada en varios parciales igual se marca paga por link al completar el último.
+    const covered = paidEntryIdsFrom(demoPayments)
+    const coversWholeLine = lineIds.length > 0 && lineIds.every((id) => covered.has(id))
     if (coversWholeLine) {
       markDemoInvoiceContractorPaid(invoiceContractor.id, {
         paymentId: payment.id,
@@ -307,7 +309,7 @@ export async function createPayment(invoiceContractor, payload, createdBy) {
     const msg = error.message ?? ''
     // OV001 = el trigger payments_entry_ids_no_overlap rechazó horas ya cubiertas por otro pago
     // (doble-pago / carrera). Se matchea por el SQLSTATE propio (no por el texto), igual que
-    // createInvoicelessPayment, para no acoplarse a la redacción. `contractor_already_paid` es la
+    // createOveragePayment, para no acoplarse a la redacción. `contractor_already_paid` es la
     // excepción de la RPC (línea legacy ya paga) → mismo aviso.
     if (error.code === 'OV001' || msg.includes('contractor_already_paid')) {
       const err = new Error('Those hours were already paid. Refresh to see the latest status.')
