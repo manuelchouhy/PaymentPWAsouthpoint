@@ -303,3 +303,17 @@ test('invoiceCompletion: entry cubierto ausente del hoursByEntryId cae al promed
   // 1 → 5 (exacto); 2 → 3 (promedio). Total 8, bajo el cap (12).
   assert.equal(out.contractors[0].paidHours, 8)
 })
+
+test('invoiceCompletion: cobertura parcial con hours 0/null igual reporta partial (no depende de horas)', () => {
+  const contractors = [{ contractor: 'Ana', entryIds: [1, 2], hours: null }]
+  const out = invoiceCompletion(contractors, [payment([1])]) // 1 cubierta, 2 no
+  assert.equal(out.status, 'partial') // hay cobertura aunque las horas sean 0/null
+  assert.deepEqual(out.contractors[0].unpaidEntryIds, ['2'])
+})
+
+test('invoiceCompletion: entryIds de salida deduplicado y consistente con unpaidEntryIds', () => {
+  const contractors = [contractor('Ana', [1, 1, 2], 6)]
+  const out = invoiceCompletion(contractors, [])
+  assert.deepEqual(out.contractors[0].entryIds, ['1', '2']) // deduplicado
+  assert.deepEqual(out.contractors[0].unpaidEntryIds, ['1', '2'])
+})

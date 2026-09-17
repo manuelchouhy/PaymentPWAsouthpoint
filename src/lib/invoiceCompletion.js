@@ -135,8 +135,11 @@ function completionFromPaidIds(contractors, paidIds, hoursByEntryId) {
       }
       // Se PRESERVAN los campos originales (id, supplierInvoiceNumber, paymentId,
       // paymentDate) además de `paid`/`paidHours`/`unpaidEntryIds`, para que la UI pueda
-      // pagar/mostrar cada fila sin re-buscar la fila invoice_contractors original.
-      return { ...c, entryIds, hours: lineHours, paid, paidHours, unpaidEntryIds }
+      // pagar/mostrar cada fila sin re-buscar la fila invoice_contractors original. `entryIds`
+      // se emite DEDUPLICADO (string) para que sea consistente con `unpaidEntryIds` (evita que
+      // un flujo de pago que itere entryIds mande un id repetido, y que anyCovered compare
+      // longitudes de sets distintos).
+      return { ...c, entryIds: [...seen], hours: lineHours, paid, paidHours, unpaidEntryIds }
     })
 
   const totalCount = rows.length
@@ -146,11 +149,11 @@ function completionFromPaidIds(contractors, paidIds, hoursByEntryId) {
   // sólo las de las líneas 100% pagas.
   const paidHours = rows.reduce((sum, r) => sum + (Number(r.paidHours) || 0), 0)
 
-  // Parcial-aware: hay cobertura si alguna línea está paga (paidCount) o si hay horas cubiertas
-  // (paidHours > 0). No se compara contra entryIds.length crudo (los entry_ids se deduplican, así
-  // que una línea con ids repetidos y NADA pago no debe leerse como 'partial'). Nada cubierto →
-  // Invoiced; todas las líneas pagas → Paid; en el medio → partial. Factura vacía → Invoiced.
-  const anyCovered = paidCount > 0 || paidHours > 0
+  // Parcial-aware: hay cobertura si a alguna línea le faltan MENOS entry_ids de los que tiene
+  // (una línea 100% paga cae acá). Como `entryIds` y `unpaidEntryIds` ahora están ambos
+  // deduplicados, la comparación es precisa aun con `hours` 0/null (no depende de paidHours).
+  // Nada cubierto → Invoiced; todas las líneas pagas → Paid; en el medio → partial.
+  const anyCovered = rows.some((r) => r.unpaidEntryIds.length < r.entryIds.length)
   let status = 'Invoiced'
   if (totalCount > 0 && paidCount === totalCount) status = 'Paid'
   else if (anyCovered) status = 'partial'
