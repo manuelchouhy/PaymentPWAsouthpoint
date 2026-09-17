@@ -45,12 +45,14 @@ test('invoiceCompletion: todos pagados → Paid', () => {
 })
 
 test('invoiceCompletion: un contractor pago PARCIAL de sus horas NO cuenta como pagado', () => {
-  // Ana tiene [1,2]; un pago cubre sólo 1. No está pagada hasta cubrir TODAS.
+  // Ana tiene [1,2]; un pago cubre sólo 1. La LÍNEA no está paga hasta cubrir TODAS, pero la
+  // factura sí refleja cobertura PARCIAL (pago parcial por período, ADR 0005): status 'partial'.
   const contractors = [contractor('Ana', [1, 2], 8)]
   const out = invoiceCompletion(contractors, [payment([1])])
-  assert.equal(out.status, 'Invoiced')
-  assert.equal(out.paidCount, 0)
+  assert.equal(out.status, 'partial') // antes 'Invoiced'; ahora la cobertura parcial cuenta
+  assert.equal(out.paidCount, 0) // ninguna línea 100% paga
   assert.equal(out.contractors[0].paid, false)
+  assert.deepEqual(out.contractors[0].unpaidEntryIds, ['2']) // la 1 quedó cubierta
 })
 
 test('invoiceCompletion: 1 solo contractor se comporta como el flujo viejo (Invoiced↔Paid)', () => {
@@ -210,4 +212,48 @@ test('payableInvoicesByContractor: desempate por id es numérico (2 antes de 10)
 
 test('payableInvoicesByContractor: entradas nulas → []', () => {
   assert.deepEqual(payableInvoicesByContractor(undefined, undefined, undefined), [])
+})
+
+// --- Cobertura PARCIAL por contractor (pago parcial por período) --------------------
+test('invoiceCompletion: cobertura parcial de una línea → paidHours preciso + unpaidEntryIds', () => {
+  const contractors = [contractor('Ana', [1, 2, 3], 10)]
+  const hoursByEntryId = { 1: 2, 2: 3, 3: 5 } // total 10
+  const payments = [payment([1, 2])] // cubre 2+3 = 5h; falta la 3 (5h)
+  const out = invoiceCompletion(contractors, payments, hoursByEntryId)
+  const ana = out.contractors[0]
+  assert.equal(ana.paid, false) // no todas cubiertas
+  assert.equal(ana.paidHours, 5) // 2h + 3h (entries 1 y 2)
+  assert.deepEqual(ana.unpaidEntryIds, ['3'])
+  assert.equal(out.status, 'partial')
+  assert.equal(out.paidHours, 5) // agregado incluye el parcial
+})
+
+test('invoiceCompletion: cobertura TOTAL de la línea → paid, unpaidEntryIds vacío, paidHours=total', () => {
+  const contractors = [contractor('Ana', [1, 2, 3], 10)]
+  const hoursByEntryId = { 1: 2, 2: 3, 3: 5 }
+  const out = invoiceCompletion(contractors, [payment([1, 2, 3])], hoursByEntryId)
+  const ana = out.contractors[0]
+  assert.equal(ana.paid, true)
+  assert.deepEqual(ana.unpaidEntryIds, [])
+  assert.equal(ana.paidHours, 10)
+  assert.equal(out.status, 'Paid')
+})
+
+test('invoiceCompletion: paymentId (pago línea entera sin entry_ids) → paid, sin pendientes', () => {
+  // El pago por factura viejo deja entry_ids NULL; la línea trae paymentId. Debe contar paga.
+  const contractors = [{ contractor: 'Ana', entryIds: [1, 2], hours: 8, paymentId: 'pay-1' }]
+  const out = invoiceCompletion(contractors, [], { 1: 4, 2: 4 })
+  const ana = out.contractors[0]
+  assert.equal(ana.paid, true)
+  assert.deepEqual(ana.unpaidEntryIds, [])
+  assert.equal(ana.paidHours, 8)
+})
+
+test('invoiceCompletion: sin hoursByEntryId, paidHours parcial se prorratea sobre el total', () => {
+  const contractors = [contractor('Ana', [1, 2, 3, 4], 12)] // 3h por entry (prorrateo)
+  const out = invoiceCompletion(contractors, [payment([1, 2])]) // 2 de 4 cubiertos
+  const ana = out.contractors[0]
+  assert.equal(ana.paid, false)
+  assert.equal(ana.paidHours, 6) // 12 * 2/4
+  assert.deepEqual(ana.unpaidEntryIds, ['3', '4'])
 })

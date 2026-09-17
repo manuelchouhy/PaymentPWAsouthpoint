@@ -44,8 +44,8 @@ import { paidEntryIdsFrom } from './paymentsGrouping.js'
  *   status:'Invoiced'|'partial'|'Paid',
  * }}
  */
-export function invoiceCompletion(contractors, payments) {
-  return completionFromPaidIds(contractors, paidEntryIdsFrom(payments))
+export function invoiceCompletion(contractors, payments, hoursByEntryId) {
+  return completionFromPaidIds(contractors, paidEntryIdsFrom(payments), hoursByEntryId)
 }
 
 /**
@@ -55,7 +55,18 @@ export function invoiceCompletion(contractors, payments) {
  * @param {Array<{contractor:string, entryIds:Array<string|number>, hours:number}>} contractors
  * @param {Set<string>} paidIds
  */
-function completionFromPaidIds(contractors, paidIds) {
+function completionFromPaidIds(contractors, paidIds, hoursByEntryId) {
+  // Lookup de horas por entry_id (Map u objeto plano), opcional. Con él, paidHours por línea
+  // es la suma EXACTA de las horas de los entry_ids cubiertos (pago parcial por período). Sin
+  // él, se prorratea uniformemente sobre el total de la línea (aproximación cuando el caller
+  // no tiene el desglose por hora, p. ej. payableInvoicesByContractor desde la capa de datos).
+  const hoursOf = (id) => {
+    if (hoursByEntryId == null) return null
+    const v = hoursByEntryId instanceof Map ? hoursByEntryId.get(String(id)) : hoursByEntryId[String(id)]
+    const n = Number(v)
+    return Number.isFinite(n) ? n : null
+  }
+
   // Sólo filas facturables reales: con al menos un entry_id. Una fila sin entry_ids es
   // un dato anómalo (el builder invoiceContractors.js nunca la crea) y se DESCARTA: no
   // aporta horas y, si contara, una sola fila glitch dejaría la factura en 'partial'
@@ -64,28 +75,44 @@ function completionFromPaidIds(contractors, paidIds) {
     .filter((c) => (c?.entryIds ?? []).length > 0)
     .map((c) => {
       const entryIds = c.entryIds
-      // Pagado si: la fila tiene payment_id (lo setea la RPC register_contractor_payment;
-      // el pago POR FACTURA lleva entry_ids NULL, así que NO se detecta por cobertura de
-      // horas — sólo por este link) O todas sus horas están cubiertas por algún pago (caso
-      // overage/demo, donde el pago sí trae los entry_ids). Backward-compatible: si la fila
-      // no trae paymentId (undefined), cae al chequeo por entry_ids como antes.
-      const paid = c.paymentId != null || entryIds.every((id) => paidIds.has(String(id)))
+      const lineHours = Number(c.hours) || 0
+      const covered = (id) => paidIds.has(String(id))
+      // El link paymentId (pago POR FACTURA con entry_ids NULL) marca la línea entera como
+      // paga: no hay cobertura por hora que mirar, así que TODAS sus horas cuentan como pagas.
+      const wholeLinePaid = c.paymentId != null
+      const coveredEntryIds = wholeLinePaid ? entryIds.map(String) : entryIds.filter(covered).map(String)
+      const unpaidEntryIds = wholeLinePaid ? [] : entryIds.filter((id) => !covered(id)).map(String)
+      // Pagado si: pago por factura (paymentId) O todas sus horas cubiertas por algún pago.
+      const paid = wholeLinePaid || unpaidEntryIds.length === 0
+      // Horas cubiertas: exactas si hay lookup por entry; si no, prorrateo uniforme (o el
+      // total si la línea está entera paga, para no perder precisión en el caso común).
+      let paidHours
+      if (paid) paidHours = lineHours
+      else if (hoursByEntryId != null) {
+        paidHours = coveredEntryIds.reduce((s, id) => s + (hoursOf(id) ?? 0), 0)
+      } else {
+        paidHours = entryIds.length ? (lineHours * coveredEntryIds.length) / entryIds.length : 0
+      }
       // Se PRESERVAN los campos originales (id, supplierInvoiceNumber, paymentId,
-      // paymentDate) además de `paid`, para que la UI pueda pagar/mostrar cada fila sin
-      // re-buscar la fila invoice_contractors original.
-      return { ...c, entryIds, hours: Number(c.hours) || 0, paid }
+      // paymentDate) además de `paid`/`paidHours`/`unpaidEntryIds`, para que la UI pueda
+      // pagar/mostrar cada fila sin re-buscar la fila invoice_contractors original.
+      return { ...c, entryIds, hours: lineHours, paid, paidHours, unpaidEntryIds }
     })
 
   const totalCount = rows.length
   const paidCount = rows.filter((r) => r.paid).length
   const totalHours = rows.reduce((sum, r) => sum + r.hours, 0)
-  const paidHours = rows.reduce((sum, r) => sum + (r.paid ? r.hours : 0), 0)
+  // Agregado partial-aware: suma las horas cubiertas de cada línea (incluye parciales), no
+  // sólo las de las líneas 100% pagas.
+  const paidHours = rows.reduce((sum, r) => sum + (Number(r.paidHours) || 0), 0)
 
-  // Sin contractors pagados → Invoiced; todos → Paid; en el medio → partial. Con la
-  // factura vacía (sin contractors) queda Invoiced: no hay nada que completar.
+  // Cobertura parcial-aware: hay algo cubierto si alguna línea está paga o si a alguna le
+  // faltan MENOS horas de las que tiene (cobertura parcial). Sin nada cubierto → Invoiced;
+  // todo → Paid; en el medio → partial. Factura vacía (sin contractors) → Invoiced.
+  const anyCovered = rows.some((r) => r.paid || r.unpaidEntryIds.length < r.entryIds.length)
   let status = 'Invoiced'
   if (totalCount > 0 && paidCount === totalCount) status = 'Paid'
-  else if (paidCount > 0) status = 'partial'
+  else if (anyCovered) status = 'partial'
 
   return { contractors: rows, paidCount, totalCount, totalHours, paidHours, status }
 }
