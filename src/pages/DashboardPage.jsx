@@ -551,15 +551,15 @@ export function DashboardPage() {
             {/* Filtro de Stage, interlazado (opciones desde las horas que pasan los otros
                 filtros). Sólo aparece si el scope tiene stages con horas. Aplica sólo a los
                 widgets de horas. Ver "Filtro de Stage" en CONTEXT.md. */}
-            {stageOptionIds.length > 0 && (
-              <MultiSelectDropdown
-                label="Stage"
-                options={stageOptionIds}
-                selected={[...selectedStageIds]}
-                getLabel={stageLabel}
-                onToggle={toggleStage}
-              />
-            )}
+            {/* Siempre visible (como los demás filtros); sin stages en el scope muestra "All"
+                y "No options". Ver "Filtro de Stage" en CONTEXT.md. */}
+            <MultiSelectDropdown
+              label="Stage"
+              options={stageOptionIds}
+              selected={[...selectedStageIds]}
+              getLabel={stageLabel}
+              onToggle={toggleStage}
+            />
           </EntryFilterBar>
           {(isActive || stageFilterActive) && (
             <p className="dash-filter-scope">
