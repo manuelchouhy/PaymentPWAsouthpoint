@@ -183,16 +183,21 @@ export function buildClientSummaryWeekly({
       budget = effectiveBudgetHours(chosenSum, crsByProject.get(String(project.id)) ?? [])
       effectiveTotalBudget = budget
     } else {
-      // Budget contra el que se mide el consumo = el del STAGE ACTIVO si el proyecto tiene
-      // stages internos; si no, la base + CRs (idéntico a antes). `totalBudget` (suma de stages,
-      // o la base sin stages) viaja como referencia. Ver projectStageBudget.js.
+      // Sin filtro de Stage, el budget contra el que se mide el consumo es el BUDGET COMPLETO del
+      // proyecto: el total EFECTIVO = suma de los budgets de sus stages + CRs aprobados (o base +
+      // CRs si no tiene stages). NO el stage activo — el budget por stage sólo aplica bajo el
+      // filtro de Stage (rama `if (stageActive)` arriba). Así el consumo total del proyecto se
+      // mide contra su budget total y no queda "en overage" falso por comparar todo el consumo
+      // contra un solo stage. Ver projectStageBudget.js (effectiveTotal) y la memoria
+      // client-summary-revert-full-budget. `totalBudget` de la fila = el mismo total (no hay
+      // vista parcial/total en esta rama).
       const resolved = resolveProjectBudget(
         project,
         projectStages,
         crsByProject.get(String(project.id)) ?? [],
       )
-      budget = resolved.activeBudget
-      effectiveTotalBudget = resolved.totalBudget
+      budget = resolved.effectiveTotal
+      effectiveTotalBudget = resolved.effectiveTotal
     }
 
     // Semanas del proyecto, en orden cronológico, con cumulative/remaining. Se CLONA cada objeto
