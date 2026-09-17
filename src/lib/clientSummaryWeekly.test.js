@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildClientSummaryWeekly } from './clientSummaryWeekly.js'
+import { buildClientSummaryWeekly, entryCountsForConsumption } from './clientSummaryWeekly.js'
 
 // Helper: proyecto mínimo.
 const project = (over = {}) => ({
@@ -427,4 +427,187 @@ test('un proyecto sin entries aparece igual, con weeks vacías y consumed 0', ()
   assert.equal(proj.consumed, 0)
   assert.equal(proj.overage, 0)
   assert.equal(proj.budget, 120)
+})
+
+// --- Filtro de Stage: recálculo de la fila al stage (ADR 0004) ----------------------
+test('filtro de stage: budget = budget del stage y consumed recortado a sus horas', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project({ id: 7 })],
+    entries: [
+      entry({ taskNumber: 'T1', hours: 10 }), // task del stage 1
+      entry({ taskNumber: 'T2', hours: 30 }), // task del stage 2
+    ],
+    crsByProject: new Map(),
+    stagesByProject: new Map([['7', [{ id: 1, budgetHours: 100 }, { id: 2, budgetHours: 60 }]]]),
+    taskToStage: { T1: '1', T2: '2' },
+    selectedStageIds: ['1'],
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.budget, 100) // budget del stage 1, no el activo/total
+  assert.equal(proj.consumed, 10) // sólo las horas del stage 1
+})
+
+test('filtro de stage multi-stage: budget y consumed son la suma de los stages elegidos', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project({ id: 7 })],
+    entries: [
+      entry({ taskNumber: 'T1', hours: 10 }), // stage 1
+      entry({ taskNumber: 'T2', hours: 30 }), // stage 2
+      entry({ taskNumber: 'T3', hours: 5 }), // stage 3 (no elegido)
+    ],
+    crsByProject: new Map(),
+    stagesByProject: new Map([['7', [
+      { id: 1, budgetHours: 100 },
+      { id: 2, budgetHours: 60 },
+      { id: 3, budgetHours: 20 },
+    ]]]),
+    taskToStage: { T1: '1', T2: '2', T3: '3' },
+    selectedStageIds: ['1', '2'],
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.budget, 160) // 100 + 60
+  assert.equal(proj.consumed, 40) // 10 + 30 (no la del stage 3)
+})
+
+test('filtro de stage: un proyecto sin el stage elegido NO produce fila, y su cliente desaparece', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [
+      project({ id: 7, projectName: 'Con', customerName: 'HSS' }),
+      project({ id: 8, projectName: 'Sin', customerName: 'Otro' }),
+    ],
+    entries: [
+      entry({ project: 'Con', taskNumber: 'T1', hours: 10 }),
+      entry({ project: 'Sin', taskNumber: 'T9', hours: 99 }),
+    ],
+    crsByProject: new Map(),
+    stagesByProject: new Map([
+      ['7', [{ id: 1, budgetHours: 100 }]],
+      ['8', [{ id: 2, budgetHours: 50 }]],
+    ]),
+    taskToStage: { T1: '1', T9: '2' },
+    selectedStageIds: ['1'],
+  })
+  // Sólo el cliente del proyecto con stage 1 (HSS/Con); "Otro" desaparece por completo.
+  assert.equal(clients.length, 1)
+  assert.equal(clients[0].client, 'HSS')
+  assert.equal(clients[0].projects.length, 1)
+  assert.equal(clients[0].projects[0].projectName, 'Con')
+})
+
+test('filtro de stage: grilla semanal y remaining coherentes con el subconjunto del stage', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project({ id: 7 })],
+    entries: [
+      entry({ taskNumber: 'T1', date: '2026-08-05', hours: 10 }), // stage 1, semana A
+      entry({ taskNumber: 'T1', date: '2026-08-12', hours: 15 }), // stage 1, semana B
+      entry({ taskNumber: 'T2', date: '2026-08-05', hours: 99 }), // stage 2 (fuera)
+    ],
+    crsByProject: new Map(),
+    stagesByProject: new Map([['7', [{ id: 1, budgetHours: 100 }, { id: 2, budgetHours: 60 }]]]),
+    taskToStage: { T1: '1', T2: '2' },
+    selectedStageIds: ['1'],
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.weeks.length, 2) // sólo semanas con horas del stage 1
+  assert.deepEqual(
+    proj.weeks.map((w) => [w.consumed, w.cumulative, w.remaining]),
+    [[10, 10, 90], [15, 25, 75]], // budget 100 del stage 1; nada del stage 2
+  )
+})
+
+test('filtro de stage: totalBudget = suma de los stages ELEGIDOS (no todos)', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project({ id: 7 })],
+    entries: [entry({ taskNumber: 'T1', hours: 10 })],
+    crsByProject: new Map(),
+    stagesByProject: new Map([['7', [
+      { id: 1, budgetHours: 100 },
+      { id: 2, budgetHours: 60 },
+      { id: 3, budgetHours: 20 },
+    ]]]),
+    taskToStage: { T1: '1' },
+    selectedStageIds: ['1'],
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.budget, 100)
+  assert.equal(proj.totalBudget, 100) // no 180: el "total" no incluye stages filtrados fuera
+})
+
+test('filtro de stage: stage sin budget configurado → budget null y remaining en blanco', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project({ id: 7 })],
+    entries: [entry({ taskNumber: 'T1', hours: 10 })],
+    crsByProject: new Map(),
+    stagesByProject: new Map([['7', [{ id: 1, budgetHours: null }, { id: 2, budgetHours: 60 }]]]),
+    taskToStage: { T1: '1' },
+    selectedStageIds: ['1'],
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.budget, null) // stage sin budget → sin budget vigente (como la rama sin-filtro)
+  assert.equal(proj.weeks[0].remaining, null) // remaining en blanco, no 0 - consumido
+})
+
+test('filtro de stage: budget usa normBudget (ignora "", negativos, boolean, array)', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project({ id: 7 })],
+    entries: [entry({ taskNumber: 'T1', hours: 10 })],
+    crsByProject: new Map(),
+    // stage 1 con budget inválido ('') → debe tratarse como "sin budget" (null), no 0.
+    stagesByProject: new Map([['7', [{ id: 1, budgetHours: '' }]]]),
+    taskToStage: { T1: '1' },
+    selectedStageIds: ['1'],
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.budget, null) // '' no es un budget → null → remaining en blanco
+  assert.equal(proj.weeks[0].remaining, null)
+})
+
+test('filtro de stage: dos proyectos con el MISMO nombre, stages distintos, no mezclan consumo', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [
+      project({ id: 7, projectName: 'Alpha', customerName: 'HSS' }),
+      project({ id: 8, projectName: 'Alpha', customerName: 'HSS' }),
+    ],
+    entries: [
+      entry({ project: 'Alpha', taskNumber: 'T1', hours: 10 }), // task del stage 1 (dueño id7)
+      entry({ project: 'Alpha', taskNumber: 'T2', hours: 20 }), // task del stage 2 (dueño id8)
+    ],
+    crsByProject: new Map(),
+    stagesByProject: new Map([
+      ['7', [{ id: 1, budgetHours: 100 }]],
+      ['8', [{ id: 2, budgetHours: 50 }]],
+    ]),
+    taskToStage: { T1: '1', T2: '2' },
+    selectedStageIds: ['1', '2'],
+  })
+  const projs = clients[0].projects
+  const byId = new Map(projs.map((p) => [String(p.id), p]))
+  // Cada proyecto ve SÓLO el consumo de su propio stage (no la suma 30).
+  assert.equal(byId.get('7').consumed, 10)
+  assert.equal(byId.get('7').budget, 100)
+  assert.equal(byId.get('8').consumed, 20)
+  assert.equal(byId.get('8').budget, 50)
+})
+
+test('entryCountsForConsumption: sólo Approved consumed/overage y Pending-consumed cuentan', () => {
+  assert.equal(entryCountsForConsumption({ status: 'Approved', allocation: 'bill_to_client' }), true)
+  assert.equal(entryCountsForConsumption({ status: 'Approved', allocation: 'overage' }), true)
+  assert.equal(entryCountsForConsumption({ status: 'Pending', allocation: 'bill_to_client' }), true)
+  assert.equal(entryCountsForConsumption({ status: 'Rejected', allocation: 'bill_to_client' }), false)
+  assert.equal(entryCountsForConsumption({ status: 'Pending', allocation: 'overage' }), false) // overage pending no
+  assert.equal(entryCountsForConsumption({ status: 'Approved', allocation: null }), false) // sin clasificar
+})
+
+test('filtro de stage: budget incluye los change requests expand_budget aprobados (como la vista sin filtrar)', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project({ id: 7 })],
+    entries: [entry({ taskNumber: 'T1', hours: 10 })],
+    crsByProject: new Map([['7', [{ status: 'approved', type: 'expand_budget', deltaHours: 40 }]]]),
+    stagesByProject: new Map([['7', [{ id: 1, budgetHours: 100 }]]]),
+    taskToStage: { T1: '1' },
+    selectedStageIds: ['1'],
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.budget, 140) // 100 del stage + 40 del CR aprobado
+  assert.equal(proj.weeks[0].remaining, 130) // 140 - 10
 })
