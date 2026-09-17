@@ -149,6 +149,10 @@ function rowToPayment(row) {
 
 // Columnas de un pago. Sin plata (amount_paid/currency/exchange_rate): el modelo es en horas.
 // El supplier# vive POR PAGO en payments.supplier_invoice_number (0052, pago parcial).
+// ⚠️ ORDEN DE DEPLOY: supplier_invoice_number sólo existe tras aplicar la migración 0052. Este
+// frontend NO se puede deployar antes que la migración: payments.list() lo lee y varias páginas
+// (Payments/Billing/Dashboard/Entries) fallarían con "column does not exist". Deployar la feature
+// atómica: migración 0052 PRIMERO, luego el frontend (slices 03/04/05).
 const PAYMENT_COLUMNS =
   'id, invoice_id, entry_ids, user_name, supplier_invoice_number, payment_date, transfer_reference, bank_method, notes, back_dated, created_at, created_by'
 
@@ -216,6 +220,8 @@ export async function createPayment(invoiceContractor, payload, createdBy) {
   }
   // Horas a cubrir: las seleccionadas (bucket de período) o toda la línea ("Total"). bigint[] en
   // la DB: se descartan ids no numéricos (igual que createInvoice/createInvoicelessPayment).
+  // entry_ids = time_entries.id (serial/identity interno, ~1.6M hoy), NO el zoho_log_id: está muy
+  // por debajo de 2^53, así que Number() no pierde precisión.
   const rawIds = payload.entryIds ?? invoiceContractor.entryIds ?? []
   const entryIds = [...new Set(rawIds.map(Number).filter(Number.isFinite))]
   if (entryIds.length === 0) {
@@ -228,6 +234,14 @@ export async function createPayment(invoiceContractor, payload, createdBy) {
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 300))
     // Demo: replica los guards de la RPC/trigger para no divergir de prod.
+    // Línea ya paga al modo legacy (payment_id seteado; sus horas pueden no estar en ningún
+    // entry_ids de pago) → no se re-paga (prod: contractor_already_paid). Cubre el caso de un
+    // pago demo con entryIds:[] (MOCK_PAYMENTS) que paidEntryIdsFrom no vería.
+    if (invoiceContractor.paymentId != null) {
+      const err = new Error('Those hours were already paid. Refresh to see the latest status.')
+      err.code = 'already_paid'
+      throw err
+    }
     const idStrs = entryIds.map(String)
     const lineIds = (invoiceContractor.entryIds ?? []).map(String)
     // Subset: las horas a pagar deben pertenecer a la línea (prod: entry_ids_not_in_line).
@@ -312,10 +326,11 @@ export async function createPayment(invoiceContractor, payload, createdBy) {
       err.code = 'stale'
       throw err
     }
+    // Guards de la RPC que el cliente NO chequea antes (supplier# y entry_ids no-vacío sí se
+    // validan arriba, así que esos mensajes no llegan acá): fecha faltante, subconjunto fuera de
+    // la línea, o línea sin entry_ids.
     if (
-      msg.includes('supplier invoice number is required') ||
       msg.includes('payment_date required') ||
-      msg.includes('entry_ids required') ||
       msg.includes('entry_ids_not_in_line') ||
       msg.includes('invoice_contractor_no_entries')
     ) {
