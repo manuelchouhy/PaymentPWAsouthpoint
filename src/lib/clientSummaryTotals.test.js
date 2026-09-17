@@ -8,7 +8,7 @@ import {
 } from './clientSummaryTotals.js'
 import { buildClientSummaryWeekly } from './clientSummaryWeekly.js'
 
-const wk = (consumed, overage = 0, pending = 0) => ({ consumed, overage, pending, cumulative: consumed, remaining: 0 })
+const wk = (consumed, overage = 0, pending = 0, invoiced = 0) => ({ consumed, overage, pending, invoiced, cumulative: consumed, remaining: 0 })
 
 function sample() {
   return [
@@ -52,29 +52,40 @@ test('portfolioTotals suma el mapa por-cliente', () => {
   assert.equal(totals.hasBudget, true)
 })
 
-test('chartTotals usa horas all-time del proyecto y remaining por-proyecto', () => {
+test('chartTotals suma las semanas visibles y remaining por-proyecto', () => {
   const t = chartTotals(sample())
-  assert.equal(t.consumed, 35) // 30 + 5 (all-time de cada proyecto)
+  assert.equal(t.consumed, 35) // (20+10) + 5 de las semanas visibles
   assert.equal(t.overage, 2)
   assert.equal(t.budget, 120)
   assert.equal(t.remaining, 90) // max(0, 120-30); el proyecto sin budget no aporta
 })
 
-test('chartTotals suma pending all-time por proyecto', () => {
+test('chartTotals respeta el recorte de semanas (filtro Week): consumed de la semana, budget completo', () => {
+  // Una sola semana visible del proyecto (como deja el filtro Week): el gráfico refleja ESA
+  // semana, no el all-time; el budget queda el total del proyecto.
+  const clients = [{ client: 'HSS', projects: [{ id: 1, budget: 120, weeks: [wk(10, 2)] }] }]
+  const t = chartTotals(clients)
+  assert.equal(t.consumed, 10)
+  assert.equal(t.overage, 2)
+  assert.equal(t.budget, 120)
+  assert.equal(t.remaining, 110) // max(0, 120-10)
+})
+
+test('chartTotals suma pending de las semanas visibles', () => {
   const clients = [
     { client: 'HSS', projects: [
-      { id: 1, budget: 120, consumed: 30, overage: 0, pending: 12, weeks: [] },
-      { id: 2, budget: null, consumed: 0, overage: 0, pending: 5, weeks: [] },
+      { id: 1, budget: 120, weeks: [wk(0, 0, 12)] },
+      { id: 2, budget: null, weeks: [wk(0, 0, 5)] },
     ] },
   ]
   assert.equal(chartTotals(clients).pending, 17)
 })
 
-test('chartTotals suma invoiced all-time por proyecto (subconjunto de consumed)', () => {
+test('chartTotals suma invoiced de las semanas visibles (subconjunto de consumed)', () => {
   const clients = [
     { client: 'HSS', projects: [
-      { id: 1, budget: 120, consumed: 30, overage: 0, invoiced: 18, weeks: [] },
-      { id: 2, budget: null, consumed: 5, overage: 0, invoiced: 5, weeks: [] },
+      { id: 1, budget: 120, weeks: [wk(30, 0, 0, 18)] },
+      { id: 2, budget: null, weeks: [wk(5, 0, 0, 5)] },
     ] },
   ]
   const t = chartTotals(clients)
@@ -82,8 +93,8 @@ test('chartTotals suma invoiced all-time por proyecto (subconjunto de consumed)'
   assert.ok(t.invoiced <= t.consumed) // 23 <= 35
 })
 
-test('chartTotals: invoiced default 0 si el proyecto no lo trae', () => {
-  const t = chartTotals([{ client: 'X', projects: [{ id: 1, budget: 10, consumed: 4, overage: 0, weeks: [] }] }])
+test('chartTotals: invoiced default 0 si la semana no lo trae', () => {
+  const t = chartTotals([{ client: 'X', projects: [{ id: 1, budget: 10, weeks: [{ consumed: 4, overage: 0, pending: 0 }] }] }])
   assert.equal(t.invoiced, 0)
 })
 
@@ -92,8 +103,8 @@ test('chartTotals no netea el sobreconsumo de un proyecto contra otro', () => {
     {
       client: 'X',
       projects: [
-        { id: 1, budget: 100, consumed: 40, overage: 0, weeks: [] },
-        { id: 2, budget: 50, consumed: 80, overage: 30, weeks: [] }, // sobre budget
+        { id: 1, budget: 100, weeks: [wk(40)] },
+        { id: 2, budget: 50, weeks: [wk(80, 30)] }, // sobre budget
       ],
     },
   ]
@@ -103,7 +114,7 @@ test('chartTotals no netea el sobreconsumo de un proyecto contra otro', () => {
 })
 
 test('sin budget cargado, hasBudget=false y remaining 0', () => {
-  const t = chartTotals([{ client: 'X', projects: [{ id: 1, budget: null, consumed: 10, overage: 0, weeks: [] }] }])
+  const t = chartTotals([{ client: 'X', projects: [{ id: 1, budget: null, weeks: [wk(10)] }] }])
   assert.equal(t.hasBudget, false)
   assert.equal(t.remaining, 0)
 })
