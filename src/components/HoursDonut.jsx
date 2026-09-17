@@ -12,11 +12,16 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
  * horas y el de Billing sólo las facturables (por eso sus centros pueden diferir — es
  * correcto). No lo cambies a un sum(data) al "simplificar".
  *
+ * `unit` es el rótulo bajo el número del centro (default "Hours"). Se deja configurable
+ * para que un caller cuyo centro NO son horas trabajadas (ej. Client Summary, donde el
+ * centro es el budget total) pueda decir qué representa el número. Los callers que no lo
+ * pasan mantienen "Hours" (Dashboard), así el cambio es retrocompatible.
+ *
  * @param {{ icon?: React.ReactNode, title: string,
  *           data: { key: string, name: string, value: number, color: string }[],
- *           total: number }} props
+ *           total: number, unit?: string }} props
  */
-export function HoursDonut({ icon, title, data, total }) {
+export function HoursDonut({ icon, title, data, total, unit = 'Hours' }) {
   return (
     <div className="dash-widget">
       <div className="dash-widget__head">
@@ -61,7 +66,7 @@ export function HoursDonut({ icon, title, data, total }) {
             </ResponsiveContainer>
             <div className="billing-dist__center" aria-hidden="true">
               <span className="billing-dist__total">{total.toFixed(1)}</span>
-              <span className="billing-dist__unit">Hours</span>
+              <span className="billing-dist__unit">{unit}</span>
             </div>
           </div>
           {/* Leyenda a la derecha con las horas de cada categoría. */}
