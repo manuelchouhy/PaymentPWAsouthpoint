@@ -11,6 +11,7 @@ import {
   summarizeEntries,
 } from '../lib/paymentsGrouping'
 import { invoiceCompletion } from '../lib/invoiceCompletion'
+import { linePaymentBreakdown } from '../lib/linePaymentBreakdown'
 import { entryPaymentStatus } from '../lib/entryPaymentStatus'
 import { sumHours } from '../lib/paymentsPeriodBuckets'
 import { buildProjectIndex, deriveEntriesClient } from '../lib/entryClient'
@@ -528,6 +529,9 @@ export function PaymentsPage() {
           receiptPaymentId: newestPayment?.id ?? ic.paymentId ?? null,
           entries: contractorEntries,
           unpaidEntries: entriesForIds(ic.unpaidEntryIds),
+          // Desglose read-only de los pagos (parciales) que cubren la línea, para el detalle de
+          // facturas Paid/parcial (slice 05): horas cubiertas, supplier# y fecha por pago.
+          paymentsBreakdown: linePaymentBreakdown(ic, payments, hoursByEntryId),
           weeks: formatWeekRange(summary.dateStart, summary.dateEnd),
         }
       })
@@ -1356,6 +1360,29 @@ export function PaymentsPage() {
                             {open && (
                               <tr id={detailId} className="pay-detail-row">
                                 <td colSpan={5}>
+                                  {/* Desglose read-only de los pagos (parciales) que cubren la
+                                      línea — visible también en facturas Paid (ADR 0005, slice 05).
+                                      Un solo pago ("Total") aparece como una fila = total. */}
+                                  {ic.paymentsBreakdown?.length > 0 && (
+                                    <div className="pay-breakdown">
+                                      <span className="pay-breakdown__title">Payments</span>
+                                      <ul className="pay-breakdown__list">
+                                        {ic.paymentsBreakdown.map((p) => (
+                                          <li key={p.id} className="pay-breakdown__row">
+                                            <span className="pay-breakdown__supplier cell-mono">
+                                              {p.supplierInvoiceNumber ?? '—'}
+                                            </span>
+                                            <span className="pay-breakdown__date cell-soft">
+                                              {p.paymentDate ? formatDate(p.paymentDate) : '—'}
+                                            </span>
+                                            <span className="pay-breakdown__hours cell-mono">
+                                              {formatHours(p.hours)} h
+                                            </span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
                                   <EntryBreakdown entries={ic.entries} />
                                 </td>
                               </tr>

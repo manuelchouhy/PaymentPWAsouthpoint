@@ -2655,6 +2655,39 @@ th.col-pop { text-align: center; }
   color: var(--text-faint);
 }
 
+/* Desglose read-only de pagos por línea (facturas Paid/parcial). */
+.pay-breakdown {
+  margin-bottom: 10px;
+}
+.pay-breakdown__title {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 4px;
+}
+.pay-breakdown__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pay-breakdown__row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: baseline;
+  font-size: 13px;
+}
+.pay-breakdown__hours {
+  text-align: right;
+}
+
 .overage-picker__list {
   list-style: none;
   margin: 0;
