@@ -51,6 +51,7 @@ update public.payments p
 create or replace function public.payments_entry_ids_no_overlap()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 declare
   r record;
@@ -253,15 +254,18 @@ as
     coalesce(ca.amount_collected, 0)            as collected_amount,
     ca.last_collection_date,
     coalesce(ca.collection_count, 0)            as collection_count,
-    -- Pago que cubre ESTA hora (por entry_ids) + su supplier#.
-    p.id                                        as payment_id,
-    p.supplier_invoice_number,
-    p.payment_date,
-    p.transfer_reference,
-    p.bank_method,
-    p.notes                                     as payment_notes,
-    p.created_at                                as paid_at,
-    p.created_by                                as paid_by
+    -- Pago que cubre ESTA hora + su supplier#. Dos joins SEPARADOS (no un OR, que anularía el
+    -- índice GIN): pn = pago nuevo por entry_ids (usa payments_entry_ids_gin); pl = pago legacy
+    -- 0040 por link ic.payment_id (usa la PK). Son mutuamente excluyentes por hora (una línea es
+    -- legacy-paga O nueva-paga, nunca ambas), así que el COALESCE toma el que exista.
+    coalesce(pn.id, pl.id)                                    as payment_id,
+    coalesce(pn.supplier_invoice_number, pl.supplier_invoice_number) as supplier_invoice_number,
+    coalesce(pn.payment_date, pl.payment_date)                as payment_date,
+    coalesce(pn.transfer_reference, pl.transfer_reference)    as transfer_reference,
+    coalesce(pn.bank_method, pl.bank_method)                  as bank_method,
+    coalesce(pn.notes, pl.notes)                              as payment_notes,
+    coalesce(pn.created_at, pl.created_at)                    as paid_at,
+    coalesce(pn.created_by, pl.created_by)                    as paid_by
   from public.time_entries te
   left join public.invoices i
     on i.entry_ids @> array[te.id]
@@ -277,9 +281,8 @@ as
     from public.collections
     group by invoice_id
   ) ca on ca.invoice_id = i.id
-  left join public.payments p
-    on (p.entry_ids @> array[te.id])     -- pago nuevo (por entry_ids)
-    or (p.id = ic.payment_id);           -- pago legacy 0040 (entry_ids NULL, link por fila)
+  left join public.payments pn on pn.entry_ids @> array[te.id]  -- pago nuevo (GIN)
+  left join public.payments pl on pl.id = ic.payment_id;        -- pago legacy 0040 (PK)
 
 -- 5) Actualiza el comment de payments.entry_ids: con el pago parcial, los pagos POR FACTURA ya
 --    NO dejan entry_ids NULL — llevan el subconjunto cubierto. Invierte la nota de 0035.
