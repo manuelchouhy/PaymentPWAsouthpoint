@@ -10,12 +10,13 @@
  * el estado real `Paid` lo decide la RPC en la base (esta derivación es para MOSTRAR
  * el progreso y decidir qué contractors ofrecer a pago, no para escribir el status).
  *
- * Un contractor se considera PAGADO cuando su fila tiene `paymentId` (lo setea la RPC
- * register_contractor_payment al pagar; el pago por factura lleva entry_ids NULL, así que
- * este link es la única señal en ese caso) O cuando TODAS sus horas (entry_ids) están
- * cubiertas por algún pago — se reutiliza `paidEntryIdsFrom` (por entry_ids), la misma
- * base del anti doble-pago (trigger 0037). El match por entry_ids no depende de la grafía
- * del contractor; el `paymentId` cubre el caso del pago por factura (sin entry_ids).
+ * Un contractor se considera PAGADO cuando TODAS sus horas (entry_ids) están cubiertas por
+ * pagos — se reutiliza `paidEntryIdsFrom` (por entry_ids), la misma base del anti doble-pago
+ * (trigger 0037). Con pago parcial por período (ADR 0005), la cobertura puede ser de un
+ * subconjunto: la línea queda PARCIALMENTE paga (ver `paidHours`/`unpaidEntryIds`). El link
+ * `paymentId` de la fila es el pago POR FACTURA legacy (entry_ids NULL en el pago, no
+ * detectable por cobertura) y cuenta como línea entera paga SÓLO cuando no hay ninguna
+ * cobertura por entry_ids; si conviven, manda la cobertura (paymentId vestigial en parcial).
  *
  * `payments` puede ser la lista COMPLETA de pagos del sistema, no hace falta pre-filtrar
  * a esta factura: los entry_ids son únicos por hora (una hora pertenece a UNA factura),
@@ -34,6 +35,25 @@
  */
 
 import { paidEntryIdsFrom } from './paymentsGrouping.js'
+
+/**
+ * Lee un valor por id de un Map u objeto plano, probando la clave String y la numérica. La
+ * clave numérica sólo se usa si round-trip‑ea exacto (`String(Number(id)) === String(id)`): así
+ * un id grande (> 2^53, escala Zoho) que Number() redondearía no matchea la clave de OTRO id
+ * por pérdida de precisión. Única fuente de esta normalización (la usan hoursOf y
+ * contractorsLookup), para que no existan dos variantes que divergen.
+ */
+function lookupById(source, id) {
+  if (source == null) return undefined
+  if (source instanceof Map) {
+    const byStr = source.get(String(id))
+    if (byStr !== undefined) return byStr
+    const num = Number(id)
+    return Number.isFinite(num) && String(num) === String(id) ? source.get(num) : undefined
+  }
+  // Objeto plano: obj[5] y obj['5'] son la misma clave, así que alcanza con String.
+  return source[String(id)]
+}
 
 /**
  * @param {Array<{contractor:string, entryIds:Array<string|number>, hours:number}>} contractors  invoice_contractors de la factura
@@ -66,17 +86,7 @@ function completionFromPaidIds(contractors, paidIds, hoursByEntryId) {
   // no tiene el desglose por hora, p. ej. payableInvoicesByContractor desde la capa de datos).
   const hoursOf = (id) => {
     if (hoursByEntryId == null) return null
-    // Se prueba la clave String y la numérica: el map puede venir keyed por number o string
-    // (mismo criterio que contractorsLookup). Sin esto, un Map([[1,2]]) no matchearía y
-    // devolvería 0 silenciosamente, subestimando paidHours.
-    let v
-    if (hoursByEntryId instanceof Map) {
-      v = hoursByEntryId.get(String(id))
-      if (v === undefined) v = hoursByEntryId.get(Number(id))
-    } else {
-      v = hoursByEntryId[String(id)]
-    }
-    const n = Number(v)
+    const n = Number(lookupById(hoursByEntryId, id))
     return Number.isFinite(n) ? n : null
   }
 
@@ -89,13 +99,19 @@ function completionFromPaidIds(contractors, paidIds, hoursByEntryId) {
     .map((c) => {
       const entryIds = c.entryIds
       const lineHours = Number(c.hours) || 0
-      // Una sola pasada: partir los entry_ids en cubiertos / pendientes.
+      // Una sola pasada: partir los entry_ids ÚNICOS en cubiertos / pendientes. Se deduplica
+      // (`seen`) para no doble-contar un id repetido en la fila (defensivo; no debería pasar).
       const coveredByEntries = []
       const uncoveredByEntries = []
-      for (const id of entryIds) {
-        if (paidIds.has(String(id))) coveredByEntries.push(String(id))
-        else uncoveredByEntries.push(String(id))
+      const seen = new Set()
+      for (const rawId of entryIds) {
+        const id = String(rawId)
+        if (seen.has(id)) continue
+        seen.add(id)
+        if (paidIds.has(id)) coveredByEntries.push(id)
+        else uncoveredByEntries.push(id)
       }
+      const uniqueCount = seen.size
       // paymentId es el pago POR FACTURA legacy (entry_ids NULL en el pago, así que la cobertura
       // por hora NO lo detecta). Cuenta como "línea entera paga" SÓLO cuando no hay ninguna
       // cobertura por entry_ids: con el modelo nuevo (ADR 0005) el pago parcial cubre entry_ids
@@ -112,7 +128,7 @@ function completionFromPaidIds(contractors, paidIds, hoursByEntryId) {
         const sum = coveredByEntries.reduce((s, id) => s + (hoursOf(id) ?? 0), 0)
         paidHours = Math.min(sum, lineHours)
       } else {
-        paidHours = (lineHours * coveredByEntries.length) / entryIds.length
+        paidHours = uniqueCount ? (lineHours * coveredByEntries.length) / uniqueCount : 0
       }
       // Se PRESERVAN los campos originales (id, supplierInvoiceNumber, paymentId,
       // paymentDate) además de `paid`/`paidHours`/`unpaidEntryIds`, para que la UI pueda
@@ -138,28 +154,11 @@ function completionFromPaidIds(contractors, paidIds, hoursByEntryId) {
   return { contractors: rows, paidCount, totalCount, totalHours, paidHours, status }
 }
 
-// Getter contractors-de-una-factura que acepta tanto un Map como un objeto plano
-// (según cómo la capa de datos entregue invoice_contractors por factura). Prueba la
-// clave cruda y su String, porque invoice.id puede venir number o string.
+// Getter contractors-de-una-factura que acepta tanto un Map como un objeto plano (según cómo
+// la capa de datos entregue invoice_contractors por factura). Reusa lookupById (String/Number
+// con guarda de precisión) para no perder el match ni colisionar por ids grandes.
 function contractorsLookup(contractorsByInvoice) {
-  if (contractorsByInvoice instanceof Map) {
-    // El Map lo arma la capa de datos y puede estar keyed por el id numérico de la
-    // base o por su String. invoice.id también puede venir number o string, así que
-    // se prueban las tres formas (cruda, String, Number) para no perder el match.
-    return (id) => {
-      const num = Number(id)
-      // Sólo se prueba la clave numérica si el id round-trip‑ea exacto: así un id
-      // string enorme (> 2^53) que Number() redondearía no matchea la clave de OTRA
-      // factura por pérdida de precisión.
-      const byNum =
-        Number.isFinite(num) && String(num) === String(id) ? contractorsByInvoice.get(num) : undefined
-      return contractorsByInvoice.get(id) ?? contractorsByInvoice.get(String(id)) ?? byNum ?? []
-    }
-  }
-  // Objeto plano: sus claves ya son strings (obj[5] y obj['5'] son la misma), así que
-  // alcanza con probar cruda y String.
-  const obj = contractorsByInvoice ?? {}
-  return (id) => obj[id] ?? obj[String(id)] ?? []
+  return (id) => lookupById(contractorsByInvoice, id) ?? []
 }
 
 /**
