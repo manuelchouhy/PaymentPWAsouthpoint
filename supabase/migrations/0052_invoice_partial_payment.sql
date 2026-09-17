@@ -144,9 +144,17 @@ begin
   if p_supplier_invoice_number is null or btrim(p_supplier_invoice_number) = '' then
     raise exception 'supplier invoice number is required' using errcode = 'P0001';
   end if;
+  -- payment_date es NOT NULL en payments: se valida acá para dar P0001 (que el caller mapea a un
+  -- mensaje claro) en vez de un 23502 crudo al insertar.
+  if p_payment_date is null then
+    raise exception 'payment_date required' using errcode = 'P0001';
+  end if;
   if p_entry_ids is null or cardinality(p_entry_ids) = 0 then
     raise exception 'entry_ids required' using errcode = 'P0001';
   end if;
+  -- Normaliza (dedup) las horas a pagar: evita guardar entry_ids repetidos en payments (que un
+  -- consumidor que cuente por longitud/unnest sin distinct doble-contaría).
+  p_entry_ids := (select array_agg(distinct e) from unnest(p_entry_ids) as e);
   -- El subconjunto a pagar debe pertenecer a la línea del contractor.
   if not (p_entry_ids <@ v_ic.entry_ids) then
     raise exception 'entry_ids_not_in_line' using errcode = 'P0001';
@@ -281,8 +289,12 @@ as
     from public.collections
     group by invoice_id
   ) ca on ca.invoice_id = i.id
-  left join public.payments pn on pn.entry_ids @> array[te.id]  -- pago nuevo (GIN)
-  left join public.payments pl on pl.id = ic.payment_id;        -- pago legacy 0040 (PK)
+  -- pn: pago nuevo por entry_ids, ACOTADO a la misma factura (pn.invoice_id = i.id) para no
+  -- traer pagos invoice-less (overage/sp_internal, invoice_id NULL) a trace_view — que 0042 no
+  -- mostraba. pl: pago legacy 0040 por link ic.payment_id.
+  left join public.payments pn
+    on pn.invoice_id = i.id and pn.entry_ids @> array[te.id]
+  left join public.payments pl on pl.id = ic.payment_id;
 
 -- 5) Actualiza el comment de payments.entry_ids: con el pago parcial, los pagos POR FACTURA ya
 --    NO dejan entry_ids NULL — llevan el subconjunto cubierto. Invierte la nota de 0035.
