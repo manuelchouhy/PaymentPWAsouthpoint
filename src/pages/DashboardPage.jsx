@@ -29,6 +29,7 @@ import { buildClientResolver } from '../lib/clientResolver'
 import { matchesProjectFilter } from '../lib/dashboardScope'
 import { EntryFilterBar } from '../components/EntryFilterBar'
 import { MultiSelectDropdown } from '../components/MultiSelectDropdown'
+import { WeekNavigator } from '../components/WeekNavigator'
 import { BILLING_STATUSES } from '../lib/data'
 import { ContractsExpiringWidget } from '../components/dashboard/ContractsExpiringWidget'
 import { SupplierContractsWidget } from '../components/dashboard/SupplierContractsWidget'
@@ -195,7 +196,7 @@ export function DashboardPage() {
     () => (data ? deriveEntriesClient(data.entries, filterData.projects, filterData.clients) : []),
     [data, filterData],
   )
-  const { filters, toggleValue, clear, isActive } = useEntryFilters()
+  const { filters, toggleValue, setField, clear, isActive } = useEntryFilters()
   // Filtro de Stage (ver "Filtro de Stage" en CONTEXT.md): dimensión de HORAS (task→stage),
   // como Contractor/Status → aplica sólo a los widgets de horas, NO a los tiles de plata.
   const {
@@ -559,11 +560,17 @@ export function DashboardPage() {
               getLabel={stageLabel}
               onToggle={toggleStage}
             />
+            {/* Navegador de semana (year-aware), como en Entries/Payments/Billing: filtra las
+                horas mostradas por su semana física. Aplica a los widgets de horas. */}
+            <WeekNavigator
+              value={filters.weekStart}
+              onChange={(v) => setField('weekStart', v)}
+            />
           </EntryFilterBar>
           {(isActive || stageFilterActive) && (
             <p className="dash-filter-scope">
-              Client and Project filters scope the whole dashboard. Contractor, Status and Stage
-              apply to the hours widgets (the two donuts and hours totals); Contractor also
+              Client and Project filters scope the whole dashboard. Contractor, Status, Stage and
+              Week apply to the hours widgets (the two donuts and hours totals); Contractor also
               filters Supplier Contracts. Supplier Contracts have no client, so the Client
               filter doesn’t affect them.
             </p>

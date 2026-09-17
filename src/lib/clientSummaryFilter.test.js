@@ -63,3 +63,26 @@ test('no muta la entrada (recorte de semanas produce objetos nuevos)', () => {
   filterClientSummary(input, { weeks: [weekLabel(wk(31, '2026-08-02'))] })
   assert.equal(input[0].projects[0].weeks.length, 2)
 })
+
+test('filtro weekStart recorta a esa semana física (year-aware) y descarta el resto', () => {
+  const out = filterClientSummary(sample(), { weekStart: '2026-08-09' })
+  // Proyecto 1 queda solo con la semana del 2026-08-09 (W32); proyecto 2 (sin esa semana)
+  // y Acme (sin semanas) se descartan.
+  assert.deepEqual(ids(out), [1])
+  assert.equal(out[0].projects[0].weeks.length, 1)
+  assert.equal(out[0].projects[0].weeks[0].weekStart, '2026-08-09')
+})
+
+test('weekStart sin match en el scope vacía el resultado', () => {
+  assert.deepEqual(filterClientSummary(sample(), { weekStart: '2026-12-27' }), [])
+})
+
+test('weekStart tiene precedencia sobre weeks si vienen ambos', () => {
+  // weeks pide W31 pero weekStart pide la semana de W32 → manda weekStart.
+  const out = filterClientSummary(sample(), {
+    weeks: [weekLabel(wk(31, '2026-08-02'))],
+    weekStart: '2026-08-09',
+  })
+  assert.deepEqual(ids(out), [1])
+  assert.equal(out[0].projects[0].weeks[0].weekStart, '2026-08-09')
+})

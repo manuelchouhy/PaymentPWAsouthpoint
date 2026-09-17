@@ -14,9 +14,11 @@ import { weekLabel } from './clientSummaryWeekly.js'
 /**
  * @param {object[]} clients  summary.clients del motor
  * @param {{ clients?: string[], projectNumbers?: string[], projectNames?: string[],
- *           sows?: string[], weeks?: string[] }} filters  cada uno una lista de
- *           valores seleccionados (vacío = sin filtrar). `weeks` son rótulos
- *           (weekLabel), únicos por semana física.
+ *           sows?: string[], weeks?: string[], weekStart?: string }} filters  cada categoría de
+ *           lista es vacío = sin filtrar. Filtros de semana (excluyentes, se usa uno u otro):
+ *           `weeks` = rótulos (weekLabel), únicos por semana física (multi-select legacy);
+ *           `weekStart` = una semana física (ISO del domingo, year-aware) del WeekNavigator —
+ *           matchea `w.weekStart`. Si se pasan ambos, manda `weekStart`.
  * @returns {object[]} clientes filtrados (nuevos objetos donde hubo recorte)
  */
 export function filterClientSummary(clients, filters = {}) {
@@ -26,9 +28,13 @@ export function filterClientSummary(clients, filters = {}) {
     projectNames = [],
     sows = [],
     weeks = [],
+    weekStart = '',
   } = filters
 
-  const weekActive = weeks.length > 0
+  // Filtro de semana: por weekStart (semana física exacta) si vino, si no por rótulos.
+  const byWeekStart = Boolean(weekStart)
+  const weekActive = byWeekStart || weeks.length > 0
+  const weekMatch = (w) => (byWeekStart ? w.weekStart === weekStart : weeks.includes(weekLabel(w)))
   const sowMatch = (p) => {
     if (!sows.length) return true
     return (p.sowNumbers ?? []).some((s) => sows.includes(s))
@@ -42,7 +48,7 @@ export function filterClientSummary(clients, filters = {}) {
       if (projectNumbers.length && !projectNumbers.includes(p.projectNumber)) continue
       if (projectNames.length && !projectNames.includes(p.projectName)) continue
       if (!sowMatch(p)) continue
-      const wk = weekActive ? p.weeks.filter((w) => weeks.includes(weekLabel(w))) : p.weeks
+      const wk = weekActive ? p.weeks.filter(weekMatch) : p.weeks
       if (weekActive && wk.length === 0) continue
       projects.push(wk === p.weeks ? p : { ...p, weeks: wk })
     }
