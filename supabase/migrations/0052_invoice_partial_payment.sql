@@ -116,7 +116,7 @@ as $$
 declare
   v_ic        invoice_contractors;
   v_status    text;
-  v_inv_entry bigint[];
+  v_line_ids  bigint[];
   v_covered   bigint[];
   v_payment   payments;
 begin
@@ -152,7 +152,7 @@ begin
   end if;
 
   -- La factura padre debe estar Invoiced (pagable). Lock para el flip atómico.
-  select status, entry_ids into v_status, v_inv_entry
+  select status into v_status
     from invoices where id = v_ic.invoice_id for update;
   if v_status is null then
     raise exception 'invoice_not_found' using errcode = 'P0002';
@@ -174,11 +174,9 @@ begin
           coalesce(p_back_dated, false), p_created_by)
   returning * into v_payment;
 
-  -- Flip a 'Paid' ATÓMICO por COBERTURA: todas las horas de la factura (invoices.entry_ids)
-  -- cubiertas. v_covered une (a) los entry_ids de los pagos nuevos y (b) los entry_ids de las
-  -- líneas pagadas al modo LEGACY (0040: payment_id seteado, payments.entry_ids NULL), para que
-  -- una factura mixta (parte legacy, parte nueva) igual pueda llegar a Paid. La factura está
-  -- lockeada, así que el cálculo es consistente aunque dos pagos entren casi a la vez.
+  -- Horas CUBIERTAS de la factura: unión de (a) entry_ids de los pagos nuevos y (b) entry_ids de
+  -- las líneas pagadas al modo LEGACY (0040: payment_id seteado, payments.entry_ids NULL) — así
+  -- una factura mixta (parte legacy, parte nueva) igual puede llegar a Paid.
   select coalesce(array_agg(distinct e), '{}')
     into v_covered
     from (
@@ -192,9 +190,18 @@ begin
          and icx.payment_id is not null
     ) s;
 
-  -- cardinality > 0 (no `is not null`): una factura con entry_ids = '{}' NO debe flipear, porque
-  -- '{}' <@ cualquier_cosa es TRUE y la marcaría Paid en el primer pago sin cubrir nada.
-  if cardinality(v_inv_entry) > 0 and v_inv_entry <@ v_covered then
+  -- Horas PAGABLES de la factura = unión de los entry_ids de sus líneas de contractor. Se usa
+  -- esto (no invoices.entry_ids) para el flip: es lo que realmente se paga, y así un drift entre
+  -- invoices.entry_ids y las líneas no deja la factura atascada en Invoiced.
+  select coalesce(array_agg(distinct e), '{}')
+    into v_line_ids
+    from public.invoice_contractors icx, unnest(icx.entry_ids) as e
+   where icx.invoice_id = v_ic.invoice_id;
+
+  -- Flip a 'Paid' ATÓMICO: todas las horas pagables cubiertas. cardinality > 0 evita que una
+  -- factura sin líneas ('{}' <@ cualquier_cosa = TRUE) flipee sin cubrir nada. La factura está
+  -- lockeada, así que el cálculo es consistente aunque dos pagos entren casi a la vez.
+  if cardinality(v_line_ids) > 0 and v_line_ids <@ v_covered then
     update invoices set status = 'Paid'
      where id = v_ic.invoice_id and status = 'Invoiced';
     insert into invoice_status_history (invoice_id, from_status, to_status, changed_by, note)
@@ -270,6 +277,16 @@ as
     from public.collections
     group by invoice_id
   ) ca on ca.invoice_id = i.id
-  left join public.payments p on p.entry_ids @> array[te.id];
+  left join public.payments p
+    on (p.entry_ids @> array[te.id])     -- pago nuevo (por entry_ids)
+    or (p.id = ic.payment_id);           -- pago legacy 0040 (entry_ids NULL, link por fila)
+
+-- 5) Actualiza el comment de payments.entry_ids: con el pago parcial, los pagos POR FACTURA ya
+--    NO dejan entry_ids NULL — llevan el subconjunto cubierto. Invierte la nota de 0035.
+comment on column public.payments.entry_ids is
+  'Horas cubiertas por el pago (bigint[]). overage/sp_internal: sus horas. Pagos por factura: '
+  'el subconjunto cubierto (pago parcial por período, 0052). Pagos legacy por factura (0040) '
+  'quedaron con NULL. La clasificación overage vs factura se hace por invoice_id, NO por si '
+  'entry_ids es NULL.';
 
 commit;
