@@ -585,10 +585,9 @@ export function EntriesPage() {
                 getLabel={allocationLabel}
               />
               {/* Filtro de Stage, interlazado (sus opciones salen de las horas que pasan los
-                  otros filtros). Sólo aparece si el scope tiene stages con horas. Ver
-                  "Filtro de Stage" en CONTEXT.md. */}
-              {/* Siempre visible (como los demás filtros); sin stages en el scope muestra "All"
-                  y "No options". Ver "Filtro de Stage" en CONTEXT.md. */}
+                  otros filtros). SIEMPRE visible, como los demás filtros: sin stages en el scope
+                  el botón muestra "All" y el desplegable "No options". Ver "Filtro de Stage" en
+                  CONTEXT.md. */}
               <MultiSelectDropdown
                 label="Stage"
                 options={stageOptionIds}

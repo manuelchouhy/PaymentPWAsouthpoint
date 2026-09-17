@@ -575,9 +575,8 @@ export function ProjectsPage() {
               {/* Filtro de Stage (row-filter): muestra los proyectos que TIENEN el/los
                   stage(s) elegido(s). Sus opciones salen de los proyectos que pasan los otros
                   filtros (interlazado one-directional, igual que el resto de la familia: elegir
-                  un stage no reduce los otros dropdowns). Sólo aparece si hay stages en scope. */}
-              {/* Siempre visible (como los demás filtros); sin stages en el scope muestra "All"
-                  y "No options". Ver "Filtro de Stage" en CONTEXT.md. */}
+                  un stage no reduce los otros dropdowns). SIEMPRE visible, como los demás filtros:
+                  sin stages en el scope el botón muestra "All" y el desplegable "No options". */}
               <MultiSelectDropdown
                 label="Stage"
                 options={stageOptionIds}
