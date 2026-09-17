@@ -5,7 +5,7 @@ import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatHours } from '../lib/format'
 import { exportGrid } from '../lib/exportGrid'
-import { buildClientSummaryWeekly, weekLabel } from '../lib/clientSummaryWeekly'
+import { buildClientSummaryWeekly, weekLabel, entryCountsForConsumption } from '../lib/clientSummaryWeekly'
 import { invoiceByEntryId } from '../lib/invoiceIndex'
 import { useSyncReload } from '../lib/useSyncReload'
 import { useStageFilter } from '../lib/useStageFilter'
@@ -188,6 +188,10 @@ export function ClientSummaryPage() {
   const stagesWithHours = useMemo(() => {
     const s = new Set()
     for (const e of entries) {
+      // Mismo criterio de inclusión que el motor: una hora Rejected / overage-Pending / de una
+      // allocation no consumida no cuenta, así que su stage no debe ofrecerse (si no, elegirlo
+      // mostraría consumed 0 contra el budget del stage — el silent-zero que queremos evitar).
+      if (!entryCountsForConsumption(e)) continue
       const sid = stageOfEntry(e)
       if (sid != null) s.add(String(sid))
     }
@@ -221,15 +225,19 @@ export function ClientSummaryPage() {
   // incompatibles entre sí pueden aún vaciar la tabla; el Clear los limpia). Se reusa
   // el mismo filterClientSummary que la tabla; los valores ya elegidos se unen siempre
   // (para poder destildarlos).
+  // Las opciones de los dropdowns (Client/Project#/Project/SOW/Week) se derivan de summaryBase
+  // (SIN el filtro de Stage), no de summary: así elegir un Stage no colapsa los otros filtros
+  // (el filtro de Stage es one-directional, como el resto de la familia). La GRILLA y los
+  // gráficos sí usan summary (recalculado al stage).
   const optionScope = useCallback(
     (except) =>
-      filterClientSummary(summary.clients, {
+      filterClientSummary(summaryBase.clients, {
         clients: except === 'clients' ? [] : selectedClients,
         projectNumbers: except === 'projectNumbers' ? [] : selectedProjectNumbers,
         projectNames: except === 'projectNames' ? [] : selectedProjectNames,
         sows: except === 'sows' ? [] : selectedSows,
       }),
-    [summary, selectedClients, selectedProjectNumbers, selectedProjectNames, selectedSows],
+    [summaryBase, selectedClients, selectedProjectNumbers, selectedProjectNames, selectedSows],
   )
   const scopeProjects = useCallback((except) => optionScope(except).flatMap((c) => c.projects), [optionScope])
 
@@ -267,9 +275,22 @@ export function ClientSummaryPage() {
     [summary, selectedClients, selectedProjectNumbers, selectedProjectNames, selectedSows],
   )
 
+  // Scope de proyecto SIN el filtro de Stage: base de las opciones de Week (one-directional,
+  // como el resto de los dropdowns). La grilla usa projectScoped (stage-filtrado).
+  const projectScopedBase = useMemo(
+    () =>
+      filterClientSummary(summaryBase.clients, {
+        clients: selectedClients,
+        projectNumbers: selectedProjectNumbers,
+        projectNames: selectedProjectNames,
+        sows: selectedSows,
+      }),
+    [summaryBase, selectedClients, selectedProjectNumbers, selectedProjectNames, selectedSows],
+  )
+
   const weekOptions = useMemo(() => {
     const byLabel = new Map()
-    for (const p of projectScoped.flatMap((c) => c.projects)) {
+    for (const p of projectScopedBase.flatMap((c) => c.projects)) {
       for (const w of p.weeks) byLabel.set(weekLabel(w), w.weekStart)
     }
     // ya elegida pero fuera del scope actual: se conserva para poder destildarla y se
@@ -277,7 +298,7 @@ export function ClientSummaryPage() {
     // localeCompare de dígitos ASCII, a diferencia de un noncharacter U+FFFF).
     for (const w of selectedWeeks) if (!byLabel.has(w)) byLabel.set(w, '9999-12-31')
     return [...byLabel.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([label]) => label)
-  }, [projectScoped, selectedWeeks])
+  }, [projectScopedBase, selectedWeeks])
 
   // La tabla aplica además el filtro Week sobre el scope de proyecto (recorta
   // filas-semana y descarta proyectos/clientes sin semana visible).

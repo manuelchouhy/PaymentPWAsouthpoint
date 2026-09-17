@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildClientSummaryWeekly } from './clientSummaryWeekly.js'
+import { buildClientSummaryWeekly, entryCountsForConsumption } from './clientSummaryWeekly.js'
 
 // Helper: proyecto mínimo.
 const project = (over = {}) => ({
@@ -587,4 +587,13 @@ test('filtro de stage: dos proyectos con el MISMO nombre, stages distintos, no m
   assert.equal(byId.get('7').budget, 100)
   assert.equal(byId.get('8').consumed, 20)
   assert.equal(byId.get('8').budget, 50)
+})
+
+test('entryCountsForConsumption: sólo Approved consumed/overage y Pending-consumed cuentan', () => {
+  assert.equal(entryCountsForConsumption({ status: 'Approved', allocation: 'bill_to_client' }), true)
+  assert.equal(entryCountsForConsumption({ status: 'Approved', allocation: 'overage' }), true)
+  assert.equal(entryCountsForConsumption({ status: 'Pending', allocation: 'bill_to_client' }), true)
+  assert.equal(entryCountsForConsumption({ status: 'Rejected', allocation: 'bill_to_client' }), false)
+  assert.equal(entryCountsForConsumption({ status: 'Pending', allocation: 'overage' }), false) // overage pending no
+  assert.equal(entryCountsForConsumption({ status: 'Approved', allocation: null }), false) // sin clasificar
 })

@@ -34,6 +34,20 @@ export function weekLabel(week) {
 }
 
 /**
+ * ¿Esta hora cuenta para la agregación de Client Summary? Es el MISMO criterio de inclusión que
+ * usa el motor abajo: allocation consumida (bill_to_client/sp_internal) u overage, y status
+ * Approved (consumed/overage) o Pending de una allocation consumida. Se exporta para que el
+ * cálculo de "qué stages tienen horas" (opciones del filtro de Stage en la página) use el mismo
+ * criterio y no ofrezca un stage cuyas horas el motor descarta (Rejected, overage Pending, etc.).
+ */
+export function entryCountsForConsumption(e) {
+  if (!isConsumedAllocation(e.allocation) && e.allocation !== 'overage') return false
+  const isApproved = e.status === 'Approved'
+  const isPending = e.status === 'Pending' && isConsumedAllocation(e.allocation)
+  return isApproved || isPending
+}
+
+/**
  * Nombre de cliente con el que se agrupa un proyecto. Prefiere `resolvedClient`
  * (cliente resuelto por buildClientResolver: cadena manual→grupo→legacy, que la
  * página anota antes de llamar al motor); si no viene, cae al texto legacy
@@ -100,13 +114,11 @@ export function buildClientSummaryWeekly({
   // Internal, sin budget). overage se contabiliza aparte. Ver CONTEXT.md ("Consumed"
   // y "SP internal") y docs/adr/0002.
   for (const e of entries) {
-    if (!isConsumedAllocation(e.allocation) && e.allocation !== 'overage') continue
-    // Se procesan: Approved (consumed/overage) y Pending de una allocation "consumed"
-    // (horas aún sin aprobar en Zoho). Las Rejected, cualquier otro estado y overage
-    // Pending se descartan.
-    const isApproved = e.status === 'Approved'
+    // Se procesan: Approved (consumed/overage) y Pending de una allocation "consumed" (horas
+    // aún sin aprobar en Zoho). Las Rejected, cualquier otro estado y overage Pending se
+    // descartan. Mismo criterio que exporta entryCountsForConsumption (lo reusa la página).
+    if (!entryCountsForConsumption(e)) continue
     const isPending = e.status === 'Pending' && isConsumedAllocation(e.allocation)
-    if (!isApproved && !isPending) continue
     // Filtro de Stage: sólo horas cuya Task pertenece a alguno de los stages elegidos
     // (atribución por taskNumber → stage). Sin filtro activo no se descarta nada.
     let sid = null
