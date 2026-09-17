@@ -47,8 +47,8 @@ export function PeriodPaymentPicker({
         <span className="overage-picker__title">Hours to pay</span>
         <p className="overage-picker__empty">
           {unloadedCount > 0
-            ? `${unloadedCount} of this line's pending hours aren't loaded in this view, so a partial selection isn't possible here. `
-            : "This line's pending hours aren't fully loaded in this view, so a partial selection isn't possible here. "}
+            ? `${unloadedCount} of this line's pending ${unloadedCount === 1 ? 'entry' : 'entries'} aren't loaded in this view, so a partial selection isn't possible here. `
+            : "This line's pending entries aren't fully loaded in this view, so a partial selection isn't possible here. "}
           The full remaining line
           {Number.isFinite(wholeLineHours) ? ` (${formatHours(wholeLineHours)} h)` : ''} will be paid.
         </p>
@@ -104,12 +104,10 @@ export function PeriodPaymentPicker({
       </div>
       <span className="overage-picker__title">Hours to pay</span>
       {entries.length === 0 ? (
-        // Sin horas cargadas en esta vista (p. ej. una factura vieja fuera del cap de sync): no hay
-        // filas individuales para tildar. El pago cubre igual la línea pendiente completa; el
-        // resumen del modal muestra las horas/entries a pagar.
-        <p className="overage-picker__empty">
-          No individual hours loaded in this view. The full remaining line will be paid.
-        </p>
+        // Sin horas para tildar. El caso de FACTURA con horas no cargadas usa la rama wholeLine de
+        // arriba (con su nota específica), así que acá sólo cae el picker invoice-less (overage/
+        // sp_internal) sin horas pendientes: mensaje neutro (no hay "línea" que pagar).
+        <p className="overage-picker__empty">No hours to pay in this view.</p>
       ) : periodMode === 'total' ? (
         <ul className="overage-picker__list">{entries.map(renderEntryRow)}</ul>
       ) : (
