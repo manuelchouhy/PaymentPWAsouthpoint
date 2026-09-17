@@ -123,12 +123,15 @@ function completionFromPaidIds(contractors, paidIds, hoursByEntryId) {
       // Horas cubiertas: el total si la línea está paga; exactas por entry si hay lookup (capadas
       // a lineHours por si las horas por entry no suman exacto al total); si no, prorrateo uniforme.
       let paidHours
+      const avgPerEntry = uniqueCount ? lineHours / uniqueCount : 0
       if (paid) paidHours = lineHours
       else if (hoursByEntryId != null) {
-        const sum = coveredByEntries.reduce((s, id) => s + (hoursOf(id) ?? 0), 0)
+        // Exacto por entry; un entry cubierto AUSENTE del lookup cae al promedio de la línea
+        // (no a 0), para no subestimar cuando el map viene de otro snapshot. Capado a lineHours.
+        const sum = coveredByEntries.reduce((s, id) => s + (hoursOf(id) ?? avgPerEntry), 0)
         paidHours = Math.min(sum, lineHours)
       } else {
-        paidHours = uniqueCount ? (lineHours * coveredByEntries.length) / uniqueCount : 0
+        paidHours = avgPerEntry * coveredByEntries.length
       }
       // Se PRESERVAN los campos originales (id, supplierInvoiceNumber, paymentId,
       // paymentDate) además de `paid`/`paidHours`/`unpaidEntryIds`, para que la UI pueda
@@ -143,10 +146,11 @@ function completionFromPaidIds(contractors, paidIds, hoursByEntryId) {
   // sólo las de las líneas 100% pagas.
   const paidHours = rows.reduce((sum, r) => sum + (Number(r.paidHours) || 0), 0)
 
-  // Parcial-aware: hay cobertura si a alguna línea le faltan MENOS horas de las que tiene (una
-  // línea 100% paga cae acá: unpaidEntryIds=[] < entryIds no vacío). Nada cubierto → Invoiced;
-  // todas las líneas pagas → Paid; en el medio → partial. Factura vacía → Invoiced.
-  const anyCovered = rows.some((r) => r.unpaidEntryIds.length < r.entryIds.length)
+  // Parcial-aware: hay cobertura si alguna línea está paga (paidCount) o si hay horas cubiertas
+  // (paidHours > 0). No se compara contra entryIds.length crudo (los entry_ids se deduplican, así
+  // que una línea con ids repetidos y NADA pago no debe leerse como 'partial'). Nada cubierto →
+  // Invoiced; todas las líneas pagas → Paid; en el medio → partial. Factura vacía → Invoiced.
+  const anyCovered = paidCount > 0 || paidHours > 0
   let status = 'Invoiced'
   if (totalCount > 0 && paidCount === totalCount) status = 'Paid'
   else if (anyCovered) status = 'partial'

@@ -287,3 +287,19 @@ test('invoiceCompletion: paidHours parcial se capa a las horas de la línea (por
   assert.equal(out.contractors[0].paid, false)
   assert.equal(out.contractors[0].paidHours, 10) // capado a lineHours, no 12
 })
+
+test('invoiceCompletion: línea con entry_ids repetidos y NADA pago → Invoiced (no partial)', () => {
+  const contractors = [contractor('Ana', [1, 1], 8)] // id repetido, defensivo
+  const out = invoiceCompletion(contractors, [])
+  assert.equal(out.status, 'Invoiced')
+  assert.equal(out.paidHours, 0)
+  assert.equal(out.contractors[0].paid, false)
+})
+
+test('invoiceCompletion: entry cubierto ausente del hoursByEntryId cae al promedio de la línea', () => {
+  const contractors = [contractor('Ana', [1, 2, 3, 4], 12)] // avg 3/entry
+  const hoursByEntryId = { 1: 5 } // faltan 2,3,4
+  const out = invoiceCompletion(contractors, [payment([1, 2])], hoursByEntryId) // cubre 1 y 2
+  // 1 → 5 (exacto); 2 → 3 (promedio). Total 8, bajo el cap (12).
+  assert.equal(out.contractors[0].paidHours, 8)
+})
