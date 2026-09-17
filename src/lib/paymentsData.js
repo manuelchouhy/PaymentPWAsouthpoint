@@ -227,14 +227,31 @@ export async function createPayment(invoiceContractor, payload, createdBy) {
 
   if (!isSupabaseConfigured) {
     await new Promise((r) => setTimeout(r, 300))
-    // Demo: el pago cubre las horas SELECCIONADAS (entry_ids). El avance a Paid y el progreso
-    // parcial los deriva la UI recomputando invoiceCompletion sobre los pagos locales (por
-    // cobertura de entry_ids), así que NO se marca la fila como paga por link salvo cobertura
-    // total de la línea (para preservar el display demo del caso "Total").
+    // Demo: replica los guards de la RPC/trigger para no divergir de prod.
+    const idStrs = entryIds.map(String)
+    const lineIds = (invoiceContractor.entryIds ?? []).map(String)
+    // Subset: las horas a pagar deben pertenecer a la línea (prod: entry_ids_not_in_line).
+    const lineSet = new Set(lineIds)
+    if (!idStrs.every((id) => lineSet.has(id))) {
+      const err = new Error('Invalid payment (hours not in this contractor line).')
+      err.code = 'validation'
+      throw err
+    }
+    // Anti doble-pago: ninguna hora ya cubierta por otro pago (prod: trigger OV001). Mismo
+    // criterio que createOveragePayment demo (paidEntryIdsFrom sobre los pagos locales).
+    const alreadyPaid = paidEntryIdsFrom(demoPayments)
+    if (idStrs.some((id) => alreadyPaid.has(id))) {
+      const err = new Error('Those hours were already paid. Refresh to see the latest status.')
+      err.code = 'already_paid'
+      throw err
+    }
+    // El pago cubre las horas SELECCIONADAS. El avance a Paid y el progreso parcial los deriva la
+    // UI recomputando invoiceCompletion por cobertura de entry_ids; sólo se marca la fila paga
+    // por link si cubre TODA la línea (para preservar el display demo del caso "Total").
     const payment = {
       id: `pay-demo-${Date.now()}`,
       invoiceId: invoiceContractor.invoiceId,
-      entryIds: entryIds.map(String),
+      entryIds: idStrs,
       userName: invoiceContractor.contractor,
       supplierInvoiceNumber: supplier,
       paymentDate: payload.paymentDate,
@@ -246,8 +263,7 @@ export async function createPayment(invoiceContractor, payload, createdBy) {
       createdBy: createdBy || null,
     }
     demoPayments = [payment, ...demoPayments]
-    const paidSet = new Set(entryIds.map(String))
-    const lineIds = (invoiceContractor.entryIds ?? []).map(String)
+    const paidSet = new Set(idStrs)
     const coversWholeLine = lineIds.length > 0 && lineIds.every((id) => paidSet.has(id))
     if (coversWholeLine) {
       markDemoInvoiceContractorPaid(invoiceContractor.id, {
