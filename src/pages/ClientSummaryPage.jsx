@@ -476,7 +476,14 @@ export function ClientSummaryPage() {
 
           {clients.length === 0 ? (
             <div className="empty">
-              {weekStart
+              {/* El hint de semana sólo si Week es lo ÚNICO activo; si además hay Stage/Client/etc.
+                  el vacío puede venir de esos, y culpar a la semana desorientaría. */}
+              {weekStart &&
+              !stageFilterActive &&
+              selectedClients.length === 0 &&
+              selectedProjectNumbers.length === 0 &&
+              selectedProjectNames.length === 0 &&
+              selectedSows.length === 0
                 ? 'No hours in the selected week. Clear the Week filter or pick another week.'
                 : 'No projects to summarise.'}
             </div>
