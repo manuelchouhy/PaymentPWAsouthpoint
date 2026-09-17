@@ -575,16 +575,15 @@ export function ProjectsPage() {
               {/* Filtro de Stage (row-filter): muestra los proyectos que TIENEN el/los
                   stage(s) elegido(s). Sus opciones salen de los proyectos que pasan los otros
                   filtros (interlazado one-directional, igual que el resto de la familia: elegir
-                  un stage no reduce los otros dropdowns). Sólo aparece si hay stages en scope. */}
-              {stageOptionIds.length > 0 && (
-                <MultiSelectDropdown
-                  label="Stage"
-                  options={stageOptionIds}
-                  selected={[...selectedStageIds]}
-                  getLabel={stageLabel}
-                  onToggle={toggleStage}
-                />
-              )}
+                  un stage no reduce los otros dropdowns). SIEMPRE visible, como los demás filtros:
+                  sin stages en el scope el botón muestra "All" y el desplegable "No options". */}
+              <MultiSelectDropdown
+                label="Stage"
+                options={stageOptionIds}
+                selected={[...selectedStageIds]}
+                getLabel={stageLabel}
+                onToggle={toggleStage}
+              />
               <div className="filterfield">
                 <span className="filterfield__label">Due from</span>
                 <input

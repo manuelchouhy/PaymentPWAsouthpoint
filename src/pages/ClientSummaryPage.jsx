@@ -461,16 +461,15 @@ export function ClientSummaryPage() {
               />
               {/* Filtro de Stage: RECALCULA la fila al stage (budget del stage +
                   consumed/semanal recortados; proyectos sin el stage desaparecen). Ver ADR 0004.
-                  Opciones interlazadas; sólo aparece si hay stages en scope. */}
-              {stageOptionIds.length > 0 && (
-                <MultiSelectDropdown
-                  label="Stage"
-                  options={stageOptionIds}
-                  selected={[...selectedStageIds]}
-                  getLabel={stageLabel}
-                  onToggle={toggleStage}
-                />
-              )}
+                  Opciones interlazadas. SIEMPRE visible, como los demás filtros: sin stages en el
+                  scope el botón muestra "All" y el desplegable "No options". */}
+              <MultiSelectDropdown
+                label="Stage"
+                options={stageOptionIds}
+                selected={[...selectedStageIds]}
+                getLabel={stageLabel}
+                onToggle={toggleStage}
+              />
               {anyFilter && (
                 <button
                   type="button"

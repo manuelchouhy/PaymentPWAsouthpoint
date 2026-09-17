@@ -585,17 +585,16 @@ export function EntriesPage() {
                 getLabel={allocationLabel}
               />
               {/* Filtro de Stage, interlazado (sus opciones salen de las horas que pasan los
-                  otros filtros). Sólo aparece si el scope tiene stages con horas. Ver
-                  "Filtro de Stage" en CONTEXT.md. */}
-              {stageOptionIds.length > 0 && (
-                <MultiSelectDropdown
-                  label="Stage"
-                  options={stageOptionIds}
-                  selected={[...selectedStageIds]}
-                  getLabel={stageLabel}
-                  onToggle={toggleStage}
-                />
-              )}
+                  otros filtros). SIEMPRE visible, como los demás filtros: sin stages en el scope
+                  el botón muestra "All" y el desplegable "No options". Ver "Filtro de Stage" en
+                  CONTEXT.md. */}
+              <MultiSelectDropdown
+                label="Stage"
+                options={stageOptionIds}
+                selected={[...selectedStageIds]}
+                getLabel={stageLabel}
+                onToggle={toggleStage}
+              />
               {/* Navegador de semana year-aware: filtra por la semana física
                   exacta (filters.weekStart), a diferencia del input numérico
                   year-blind que usa Payments. Ver término "Week" en CONTEXT.md. */}
