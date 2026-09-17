@@ -597,3 +597,17 @@ test('entryCountsForConsumption: sólo Approved consumed/overage y Pending-consu
   assert.equal(entryCountsForConsumption({ status: 'Pending', allocation: 'overage' }), false) // overage pending no
   assert.equal(entryCountsForConsumption({ status: 'Approved', allocation: null }), false) // sin clasificar
 })
+
+test('filtro de stage: budget incluye los change requests expand_budget aprobados (como la vista sin filtrar)', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project({ id: 7 })],
+    entries: [entry({ taskNumber: 'T1', hours: 10 })],
+    crsByProject: new Map([['7', [{ status: 'approved', type: 'expand_budget', deltaHours: 40 }]]]),
+    stagesByProject: new Map([['7', [{ id: 1, budgetHours: 100 }]]]),
+    taskToStage: { T1: '1' },
+    selectedStageIds: ['1'],
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.budget, 140) // 100 del stage + 40 del CR aprobado
+  assert.equal(proj.weeks[0].remaining, 130) // 140 - 10
+})

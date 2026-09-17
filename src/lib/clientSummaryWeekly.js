@@ -23,6 +23,7 @@
 
 import { sundayWeek, sundayWeekYear, weekStartISO } from './format.js'
 import { resolveProjectBudget, normBudget } from './projectStageBudget.js'
+import { effectiveBudgetHours } from './effectiveBudget.js'
 import { isConsumedAllocation } from './allocations.js'
 import { normalizeTaskToStage } from './stageFilter.js'
 
@@ -171,13 +172,15 @@ export function buildClientSummaryWeekly({
       // Filtro de Stage (ADR 0004): un proyecto sin ninguno de los stages elegidos NO produce
       // fila (desaparece; su cliente también si se queda sin proyectos). El budget de la fila
       // pasa a ser la SUMA de los budget_hours (normalizados con normBudget, misma regla que
-      // resolveProjectBudget) de los stages elegidos que pertenecen a este proyecto. Si ninguno
-      // tiene budget válido, budget = null (→ remaining en blanco), igual que la rama sin-filtro.
-      // `totalBudget` (el "/ N total" de referencia) se recalcula también a los stages elegidos.
+      // resolveProjectBudget) de los stages elegidos, MÁS los change requests expand_budget
+      // aprobados del proyecto — igual que activeBudget en la rama sin-filtro (effectiveBudgetHours),
+      // para que el mismo número no cambie al filtrar por el stage activo. Si ninguno de los stages
+      // elegidos tiene budget válido, budget = null (→ remaining en blanco, como sin-filtro).
       const chosen = projectStages.filter((s) => selectedStages.has(String(s.id)))
       if (chosen.length === 0) continue
       const budgets = chosen.map((s) => normBudget(s.budgetHours)).filter((n) => n != null)
-      budget = budgets.length ? budgets.reduce((sum, n) => sum + n, 0) : null
+      const chosenSum = budgets.length ? budgets.reduce((sum, n) => sum + n, 0) : null
+      budget = effectiveBudgetHours(chosenSum, crsByProject.get(String(project.id)) ?? [])
       effectiveTotalBudget = budget
     } else {
       // Budget contra el que se mide el consumo = el del STAGE ACTIVO si el proyecto tiene
