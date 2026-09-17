@@ -22,7 +22,7 @@
  */
 
 import { sundayWeek, sundayWeekYear, weekStartISO } from './format.js'
-import { resolveProjectBudget } from './projectStageBudget.js'
+import { resolveProjectBudget, normBudget } from './projectStageBudget.js'
 import { isConsumedAllocation } from './allocations.js'
 import { normalizeTaskToStage } from './stageFilter.js'
 
@@ -81,6 +81,15 @@ export function buildClientSummaryWeekly({
   for (const id of selectedStageIds ?? []) selectedStages.add(String(id))
   const stageActive = selectedStages.size > 0
   const stageByTask = stageActive ? normalizeTaskToStage(taskToStage) : null
+  // stage_id → projectId dueño (desde stagesByProject). Bajo filtro, las horas se atribuyen al
+  // proyecto DUEÑO del stage de su task (por id), no por el nombre de proyecto de la entry: así
+  // dos proyectos con el mismo nombre pero stages distintos no mezclan su consumo.
+  const stageToProject = new Map()
+  if (stageActive) {
+    for (const [pid, stages] of stagesByProject) {
+      for (const s of stages ?? []) stageToProject.set(String(s.id), String(pid))
+    }
+  }
 
   // Horas por (nombre de proyecto → weekStart) separadas en consumed/overage.
   // Se keyea por NOMBRE de proyecto (entry.project), igual que la página: es la
@@ -100,22 +109,24 @@ export function buildClientSummaryWeekly({
     if (!isApproved && !isPending) continue
     // Filtro de Stage: sólo horas cuya Task pertenece a alguno de los stages elegidos
     // (atribución por taskNumber → stage). Sin filtro activo no se descarta nada.
+    let sid = null
     if (stageActive) {
-      const sid = stageByTask.get(String(e.taskNumber ?? ''))
+      sid = stageByTask.get(String(e.taskNumber ?? ''))
       if (sid == null || !selectedStages.has(sid)) continue
     }
-    const name = e.project ?? ''
-    // Una entry sin nombre de proyecto no se puede atribuir a ningún proyecto:
-    // se descarta (igual que la página, que la bucketeaba bajo '' y nunca la
-    // leía). Evita además que un proyecto con projectName vacío se las apropie.
-    if (!name) continue
+    // Clave del bucket: bajo filtro de stage, el proyecto DUEÑO del stage de la task (id), para
+    // no mezclar dos proyectos con el mismo nombre; sin filtro, el NOMBRE de proyecto (única
+    // clave con la que la entry se ata al proyecto). Una entry que no resuelve a ninguna clave
+    // (sin nombre, o cuyo stage no tiene proyecto dueño conocido) se descarta.
+    const bucketKey = stageActive ? stageToProject.get(sid) : (e.project ?? '')
+    if (bucketKey == null || bucketKey === '') continue
     const weekStart = weekStartISO(e.date ?? '')
     if (!weekStart) continue
     const hours = Number(e.hours) || 0
-    let weeks = byProjectWeek.get(name)
+    let weeks = byProjectWeek.get(bucketKey)
     if (!weeks) {
       weeks = new Map()
-      byProjectWeek.set(name, weeks)
+      byProjectWeek.set(bucketKey, weeks)
     }
     const acc = weeks.get(weekStart) ?? {
       weekStart,
@@ -141,38 +152,39 @@ export function buildClientSummaryWeekly({
   for (const project of projects) {
     const clientName = groupNameOf(project)
     const projectStages = stagesByProject.get(String(project.id)) ?? []
-    // Budget contra el que se mide el consumo = el del STAGE ACTIVO si el proyecto
-    // tiene stages internos; si no, la base + CRs (idéntico a antes). `totalBudget`
-    // (suma de stages, o la base sin stages) viaja como referencia. Ver
-    // projectStageBudget.js y el PRD stage-budget-hours.
-    const { activeBudget, totalBudget } = resolveProjectBudget(
-      project,
-      projectStages,
-      crsByProject.get(String(project.id)) ?? [],
-    )
-    let budget = activeBudget
-    let effectiveTotalBudget = totalBudget
 
-    // Filtro de Stage (ADR 0004): un proyecto sin ninguno de los stages elegidos NO produce
-    // fila (desaparece; su cliente también si se queda sin proyectos). El budget de la fila
-    // pasa a ser la SUMA de los budget_hours de los stages elegidos que pertenecen a este
-    // proyecto (no el activo ni el total). Si ninguno de los stages elegidos tiene budget
-    // configurado, budget = null (→ remaining en blanco), igual que la rama sin-filtro para un
-    // proyecto sin budget. `totalBudget` (el "/ N total" de referencia) se recalcula también a
-    // los stages elegidos, para no mostrar un total que incluye stages filtrados fuera.
+    let budget
+    let effectiveTotalBudget
     if (stageActive) {
+      // Filtro de Stage (ADR 0004): un proyecto sin ninguno de los stages elegidos NO produce
+      // fila (desaparece; su cliente también si se queda sin proyectos). El budget de la fila
+      // pasa a ser la SUMA de los budget_hours (normalizados con normBudget, misma regla que
+      // resolveProjectBudget) de los stages elegidos que pertenecen a este proyecto. Si ninguno
+      // tiene budget válido, budget = null (→ remaining en blanco), igual que la rama sin-filtro.
+      // `totalBudget` (el "/ N total" de referencia) se recalcula también a los stages elegidos.
       const chosen = projectStages.filter((s) => selectedStages.has(String(s.id)))
       if (chosen.length === 0) continue
-      const budgeted = chosen.filter((s) => s.budgetHours != null)
-      budget = budgeted.length ? budgeted.reduce((sum, s) => sum + (Number(s.budgetHours) || 0), 0) : null
+      const budgets = chosen.map((s) => normBudget(s.budgetHours)).filter((n) => n != null)
+      budget = budgets.length ? budgets.reduce((sum, n) => sum + n, 0) : null
       effectiveTotalBudget = budget
+    } else {
+      // Budget contra el que se mide el consumo = el del STAGE ACTIVO si el proyecto tiene
+      // stages internos; si no, la base + CRs (idéntico a antes). `totalBudget` (suma de stages,
+      // o la base sin stages) viaja como referencia. Ver projectStageBudget.js.
+      const resolved = resolveProjectBudget(
+        project,
+        projectStages,
+        crsByProject.get(String(project.id)) ?? [],
+      )
+      budget = resolved.activeBudget
+      effectiveTotalBudget = resolved.totalBudget
     }
 
-    // Semanas del proyecto, en orden cronológico, con cumulative/remaining.
-    // Se CLONA cada objeto de semana: dos proyectos con el mismo projectName
-    // comparten el mismo bucket, y sin el clon la mutación de cumulative/
-    // remaining de uno pisaría la del otro (apuntan al mismo objeto).
-    const weekMap = byProjectWeek.get(project.projectName)
+    // Semanas del proyecto, en orden cronológico, con cumulative/remaining. Se CLONA cada objeto
+    // de semana: dos proyectos con el mismo projectName comparten el mismo bucket, y sin el clon
+    // la mutación de cumulative/remaining de uno pisaría la del otro. Clave del bucket: bajo
+    // filtro de stage es el id del proyecto (bucketeo por dueño del stage); si no, el nombre.
+    const weekMap = byProjectWeek.get(stageActive ? String(project.id) : project.projectName)
     const weeks = weekMap ? [...weekMap.values()].map((w) => ({ ...w })) : []
     weeks.sort((a, b) => a.weekStart.localeCompare(b.weekStart))
     // Una sola pasada: cumulative/remaining por semana y los totales del proyecto.

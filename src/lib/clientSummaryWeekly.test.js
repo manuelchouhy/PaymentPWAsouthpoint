@@ -546,3 +546,45 @@ test('filtro de stage: stage sin budget configurado → budget null y remaining 
   assert.equal(proj.budget, null) // stage sin budget → sin budget vigente (como la rama sin-filtro)
   assert.equal(proj.weeks[0].remaining, null) // remaining en blanco, no 0 - consumido
 })
+
+test('filtro de stage: budget usa normBudget (ignora "", negativos, boolean, array)', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [project({ id: 7 })],
+    entries: [entry({ taskNumber: 'T1', hours: 10 })],
+    crsByProject: new Map(),
+    // stage 1 con budget inválido ('') → debe tratarse como "sin budget" (null), no 0.
+    stagesByProject: new Map([['7', [{ id: 1, budgetHours: '' }]]]),
+    taskToStage: { T1: '1' },
+    selectedStageIds: ['1'],
+  })
+  const proj = clients[0].projects[0]
+  assert.equal(proj.budget, null) // '' no es un budget → null → remaining en blanco
+  assert.equal(proj.weeks[0].remaining, null)
+})
+
+test('filtro de stage: dos proyectos con el MISMO nombre, stages distintos, no mezclan consumo', () => {
+  const { clients } = buildClientSummaryWeekly({
+    projects: [
+      project({ id: 7, projectName: 'Alpha', customerName: 'HSS' }),
+      project({ id: 8, projectName: 'Alpha', customerName: 'HSS' }),
+    ],
+    entries: [
+      entry({ project: 'Alpha', taskNumber: 'T1', hours: 10 }), // task del stage 1 (dueño id7)
+      entry({ project: 'Alpha', taskNumber: 'T2', hours: 20 }), // task del stage 2 (dueño id8)
+    ],
+    crsByProject: new Map(),
+    stagesByProject: new Map([
+      ['7', [{ id: 1, budgetHours: 100 }]],
+      ['8', [{ id: 2, budgetHours: 50 }]],
+    ]),
+    taskToStage: { T1: '1', T2: '2' },
+    selectedStageIds: ['1', '2'],
+  })
+  const projs = clients[0].projects
+  const byId = new Map(projs.map((p) => [String(p.id), p]))
+  // Cada proyecto ve SÓLO el consumo de su propio stage (no la suma 30).
+  assert.equal(byId.get('7').consumed, 10)
+  assert.equal(byId.get('7').budget, 100)
+  assert.equal(byId.get('8').consumed, 20)
+  assert.equal(byId.get('8').budget, 50)
+})
