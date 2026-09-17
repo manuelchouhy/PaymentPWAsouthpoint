@@ -19,6 +19,18 @@ Estado de una factura dentro de su ciclo de vida: **Pending → Invoiced →
 Collected → Paid**. Aplica a una factura ya creada, no a horas sueltas.
 _Avoid_: usar "Pending" para referirse a horas "to bill" (son cosas distintas).
 
+**Pago a contractor / Cobertura**:
+Pagar a un contractor es **cubrir horas** (sus `entry_ids`), no montos. Un pago puede
+cubrir **todas** las horas de la línea de un contractor o **un subconjunto** — típicamente
+un **período** (mes o semana). Una **línea de contractor** de una factura está **paga**
+cuando **todas** sus horas están cubiertas por pagos (si no, está **parcialmente paga**), y
+una factura llega a **Paid** cuando **todas** las horas de **todos** sus contractors están
+cubiertas. Una hora ya cubierta no se re-paga. Mismo criterio para las horas invoice-less
+(overage / SP internal), que ya se pagan por período.
+_Avoid_: pensar "pago = línea entera"; una línea puede pagarse en varios pagos por período.
+El progreso parcial NO es un Billing Status nuevo — la factura sigue **Invoiced** hasta que
+la cobertura es total.
+
 **Budget**:
 Horas **estimadas** de un proyecto: el estimado de la SOW más los change requests
 aprobados. Es un total del proyecto (no un valor por semana) y **crece cuando se
