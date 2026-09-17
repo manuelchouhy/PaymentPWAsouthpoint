@@ -589,14 +589,10 @@ export function ClientSummaryPage() {
                                     : '—'}
                                 </td>
                                 <td className="cell-soft">{project.zohoStatus || '—'}</td>
-                                {/* Budget = el del stage activo si el proyecto tiene stages;
-                                    el total (suma de stages) va como referencia cuando difiere. */}
-                                <td className={hoursCellClass(pt.budget)}>
-                                  {hoursOrDash(pt.budget)}
-                                  {pt.totalBudget != null && pt.totalBudget !== pt.budget && (
-                                    <span className="cell-soft"> / {formatHours(pt.totalBudget)} total</span>
-                                  )}
-                                </td>
+                                {/* Budget = el budget COMPLETO del proyecto (total efectivo). Sin
+                                    filtro de Stage no hay vista parcial/total; el filtro de Stage
+                                    recalcula el budget al/los stage(s) elegido(s). */}
+                                <td className={hoursCellClass(pt.budget)}>{hoursOrDash(pt.budget)}</td>
                                 <td className={hoursCellClass(pt.consumed)}>{formatHours(pt.consumed)}</td>
                                 <td className={hoursCellClass(pt.pending)}>{formatHours(pt.pending)}</td>
                                 <td className={hoursCellClass(pt.cumulative)}>{formatHours(pt.cumulative)}</td>

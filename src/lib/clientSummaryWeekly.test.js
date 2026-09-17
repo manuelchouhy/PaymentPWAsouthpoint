@@ -44,7 +44,11 @@ test('agrupa cliente → proyecto → semana con consumed y budget', () => {
   assert.equal(proj.weeks[0].overage, 0)
 })
 
-test('proyecto con stages: budget de la fila = stage activo; totalBudget = suma', () => {
+// Sin filtro de Stage, la fila mide contra el BUDGET COMPLETO del proyecto (total efectivo =
+// suma de stages + CRs, o base + CRs sin stages), NO contra el stage activo. El budget por
+// stage sólo aplica bajo el filtro de Stage (tests más abajo). Ver memoria
+// client-summary-revert-full-budget.
+test('proyecto con stages (sin filtro): budget = total efectivo del proyecto (suma de stages), no el stage activo', () => {
   const result = buildClientSummaryWeekly({
     projects: [project({ id: 7, baseBudgetHours: 999, activeStageId: 2 })],
     entries: [entry({ hours: 10 })],
@@ -57,11 +61,11 @@ test('proyecto con stages: budget de la fila = stage activo; totalBudget = suma'
     ]),
   })
   const proj = result.clients[0].projects[0]
-  assert.equal(proj.budget, 60) // stage activo, no la base (999)
-  assert.equal(proj.totalBudget, 160) // suma de stages
+  assert.equal(proj.budget, 160) // suma de stages (100+60), no el stage activo (60) ni la base (999)
+  assert.equal(proj.totalBudget, 160)
 })
 
-test('proyecto con stages: remaining se mide contra el stage activo, no contra el total', () => {
+test('proyecto con stages (sin filtro): remaining se mide contra el budget completo, no contra el stage activo', () => {
   const result = buildClientSummaryWeekly({
     projects: [project({ id: 7, activeStageId: 2 })],
     entries: [entry({ hours: 70 })], // consumo total del proyecto
@@ -74,11 +78,11 @@ test('proyecto con stages: remaining se mide contra el stage activo, no contra e
     ]),
   })
   const proj = result.clients[0].projects[0]
-  // remaining = activeBudget(60) - consumido(70) = -10 (no 160 - 70 = 90).
-  assert.equal(proj.weeks[0].remaining, -10)
+  // remaining = budget completo (160) - consumido (70) = 90 (no contra el stage activo 60).
+  assert.equal(proj.weeks[0].remaining, 90)
 })
 
-test('proyecto con stages pero sin activo marcado: budget null y remaining en blanco', () => {
+test('proyecto con stages sin activo marcado (sin filtro): budget = suma de stages igual (no depende del activo)', () => {
   const result = buildClientSummaryWeekly({
     projects: [project({ id: 7, activeStageId: null })],
     entries: [entry({ hours: 40 })],
@@ -91,9 +95,20 @@ test('proyecto con stages pero sin activo marcado: budget null y remaining en bl
     ]),
   })
   const proj = result.clients[0].projects[0]
-  assert.equal(proj.budget, null) // ningún stage activo → sin budget vigente
-  assert.equal(proj.totalBudget, 160) // el total (suma) igual se conoce
-  assert.equal(proj.weeks[0].remaining, null) // remaining en blanco, no un número engañoso
+  assert.equal(proj.budget, 160) // total efectivo; ya no depende del stage activo
+  assert.equal(proj.totalBudget, 160)
+  assert.equal(proj.weeks[0].remaining, 120) // 160 - 40
+})
+
+test('proyecto con stages (sin filtro): el budget completo incluye los change requests expand_budget aprobados', () => {
+  const result = buildClientSummaryWeekly({
+    projects: [project({ id: 7, activeStageId: 1 })],
+    entries: [entry({ hours: 10 })],
+    crsByProject: new Map([['7', [{ status: 'approved', type: 'expand_budget', deltaHours: 40 }]]]),
+    stagesByProject: new Map([['7', [{ id: 1, budgetHours: 100 }, { id: 2, budgetHours: 60 }]]]),
+  })
+  const proj = result.clients[0].projects[0]
+  assert.equal(proj.budget, 200) // (100 + 60) suma de stages + 40 del CR aprobado
 })
 
 test('proyecto sin stages: totalBudget = base (comportamiento previo intacto)', () => {
