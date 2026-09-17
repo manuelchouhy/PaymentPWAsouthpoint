@@ -76,7 +76,14 @@ export function PeriodPaymentPicker({
         ))}
       </div>
       <span className="overage-picker__title">Hours to pay</span>
-      {periodMode === 'total' ? (
+      {entries.length === 0 ? (
+        // Sin horas cargadas en esta vista (p. ej. una factura vieja fuera del cap de sync): no hay
+        // filas individuales para tildar. El pago cubre igual la línea pendiente completa; el
+        // resumen del modal muestra las horas/entries a pagar.
+        <p className="overage-picker__empty">
+          No individual hours loaded in this view. The full remaining line will be paid.
+        </p>
+      ) : periodMode === 'total' ? (
         <ul className="overage-picker__list">{entries.map(renderEntryRow)}</ul>
       ) : (
         buckets.map((bucket) => {

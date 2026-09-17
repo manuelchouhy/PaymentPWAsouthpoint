@@ -238,12 +238,15 @@ export function PaymentsPage() {
     })
   }, [])
   const togglePaySelectedIds = useCallback((ids) => {
+    // Normaliza a String como togglePaySelected: el Set guarda ids-string (paySelectedIds.has
+    // se consulta siempre con String(e.id)); así el helper no depende de que el caller pre-stringifique.
+    const keys = ids.map(String)
     setPaySelectedIds((prev) => {
-      const allSelected = ids.length > 0 && ids.every((id) => prev.has(id))
+      const allSelected = keys.length > 0 && keys.every((k) => prev.has(k))
       const next = new Set(prev)
-      for (const id of ids) {
-        if (allSelected) next.delete(id)
-        else next.add(id)
+      for (const k of keys) {
+        if (allSelected) next.delete(k)
+        else next.add(k)
       }
       return next
     })
@@ -770,18 +773,20 @@ export function PaymentsPage() {
   // pasa a Paid. Maneja carreras (already_paid / not_payable / stale) recargando.
   async function handlePayContractor(payload) {
     const { invoice: inv, ic } = payTargetContractor
-    // Selección de horas a pagar. Las pendientes CARGADAS son las que el picker muestra/tilda.
-    // Si el usuario dejó TODAS las cargadas tildadas ("Total"), se paga la línea COMPLETA
-    // (ic.unpaidEntryIds, cap-independiente) — sin regresión respecto del pago whole-line viejo,
-    // que cubría horas aunque estuvieran fuera del cap de sync. Si destildó algo (parcial por
-    // período/manual), se paga sólo el subconjunto cargado seleccionado.
-    const loadedUnpaid = ic.unpaidEntries ?? []
-    const selectedLoaded = loadedUnpaid
-      .filter((e) => paySelectedIds.has(String(e.id)))
-      .map((e) => e.id)
-    const allLoadedSelected =
-      loadedUnpaid.length > 0 && selectedLoaded.length === loadedUnpaid.length
-    const selectedIds = allLoadedSelected ? (ic.unpaidEntryIds ?? []) : selectedLoaded
+    // Modelo de selección: se paga la línea pendiente COMPLETA (ic.unpaidEntryIds, cap-independiente)
+    // MENOS las horas CARGADAS que el usuario destildó explícitamente en el picker. Esto unifica los
+    // tres casos sin depender del cap de sync: (a) línea 100% fuera del cap → nada cargado que
+    // destildar → paga toda la línea (como el pago whole-line viejo); (b) todo cargado y tildado →
+    // paga todo lo pendiente; (c) parcial → paga lo pendiente menos lo destildado. El picker sólo
+    // puede EXCLUIR horas cargadas; las no cargadas van incluidas.
+    const deselectedLoadedIds = new Set(
+      (ic.unpaidEntries ?? [])
+        .filter((e) => !paySelectedIds.has(String(e.id)))
+        .map((e) => String(e.id)),
+    )
+    const selectedIds = (ic.unpaidEntryIds ?? []).filter(
+      (id) => !deselectedLoadedIds.has(String(id)),
+    )
     try {
       const { payment } = await api.payments.create(
         ic,
@@ -803,12 +808,16 @@ export function PaymentsPage() {
       if (nowPaid) {
         setInvoices((prev) => prev.map((i) => (i.id === inv.id ? { ...i, status: 'Paid' } : i)))
       }
-      // Horas pagadas para toast/audit. Si se pagó la línea completa, los ids fuera del cap de
-      // sync no están en hoursByEntryId; se usa el remanente exacto de invoiceCompletion
-      // (hours − paidHours). Si fue parcial, se suman las horas de los ids seleccionados (cargados).
-      const paidHours = allLoadedSelected
-        ? Math.max(0, (Number(ic.hours) || 0) - (Number(ic.paidHours) || 0))
-        : selectedIds.reduce((s, id) => s + (hoursByEntryId.get(String(id)) || 0), 0)
+      // Horas pagadas para toast/audit = remanente total de la línea (hours − paidHours,
+      // cap-independiente) menos las horas de las entries CARGADAS que se destildaron. Coincide
+      // con lo que realmente cubre el pago (unpaidEntryIds − destildadas), incluidas las no cargadas.
+      const deselectedHours = (ic.unpaidEntries ?? [])
+        .filter((e) => deselectedLoadedIds.has(String(e.id)))
+        .reduce((s, e) => s + (Number(e.hours) || 0), 0)
+      const paidHours = Math.max(
+        0,
+        (Number(ic.hours) || 0) - (Number(ic.paidHours) || 0) - deselectedHours,
+      )
       api.audit.log({
         actorEmail: user?.email,
         actorRole: profile?.roles?.[0] ?? null,
@@ -1372,16 +1381,21 @@ export function PaymentsPage() {
           (() => {
             const ic = payTargetContractor.ic
             const inv = payTargetContractor.invoice
-            // Entries pendientes CARGADAS de la línea = lo pagable/seleccionable.
-            // Selección/hours/validación miden sobre ESTO, así display y pago coinciden.
-            const pending = ic.unpaidEntries ?? []
-            // El picker muestra TODAS las entries de la línea (pagadas read-only vía paidEntryIds),
-            // como el picker de overage/sp_internal — no sólo las pendientes. Fallback a pending
-            // si por algún motivo no vinieran decoradas.
-            const allEntries = ic.entries ?? pending
-            const selectedEntries = pending.filter((e) => paySelectedIds.has(String(e.id)))
-            const selectedCount = selectedEntries.length
-            const selHours = sumHours(selectedEntries)
+            // El picker muestra TODAS las entries CARGADAS de la línea (pagadas read-only vía
+            // paidEntryIds), como el de overage/sp_internal. El usuario sólo puede EXCLUIR horas
+            // cargadas; lo que se paga es la línea pendiente COMPLETA menos lo destildado
+            // (cap-independiente — ver handlePayContractor). Fig/count reflejan ESO, no sólo lo cargado.
+            const loadedUnpaid = ic.unpaidEntries ?? []
+            const allEntries = ic.entries ?? loadedUnpaid
+            const deselectedLoaded = loadedUnpaid.filter((e) => !paySelectedIds.has(String(e.id)))
+            const deselectedIds = new Set(deselectedLoaded.map((e) => String(e.id)))
+            // Ids reales a pagar = pendientes totales (cap-independiente) menos cargadas destildadas.
+            const payIds = (ic.unpaidEntryIds ?? []).filter((id) => !deselectedIds.has(String(id)))
+            const selectedCount = payIds.length
+            const totalUnpaid = (ic.unpaidEntryIds ?? []).length
+            // Horas a pagar = remanente total (hours − paidHours) menos lo destildado cargado.
+            const remainingHours = Math.max(0, (Number(ic.hours) || 0) - (Number(ic.paidHours) || 0))
+            const selHours = Math.max(0, remainingHours - sumHours(deselectedLoaded))
             return (
               <RegisterPaymentModal
                 key={`payc-${ic.id}`}
@@ -1390,7 +1404,7 @@ export function PaymentsPage() {
                 submitLabel="Register payment"
                 extraValid={selectedCount > 0}
                 summaryName={ic.contractor}
-                summaryMeta={`${inv.spInvoiceNumber ?? 'Invoice'} · ${inv.project ?? '—'} · ${selectedCount} of ${pending.length} ${pending.length === 1 ? 'entry' : 'entries'}`}
+                summaryMeta={`${inv.spInvoiceNumber ?? 'Invoice'} · ${inv.project ?? '—'} · ${selectedCount} of ${totalUnpaid} ${totalUnpaid === 1 ? 'entry' : 'entries'}`}
                 summaryFigure={`${formatHours(selHours)} h`}
                 summaryFigureLabel="Hours to pay (selected)"
                 extraContent={
